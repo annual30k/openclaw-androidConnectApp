@@ -1,0 +1,103 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">ClawLink</string>
+
+    <!-- Auth -->
+    <string name="login_title">Login</string>
+    <string name="login_email">Email</string>
+    <string name="login_password">Password</string>
+    <string name="login_server_url">Server URL</string>
+    <string name="login_button">Login</string>
+    <string name="login_register">Register</string>
+    <string name="login_forgot_password">Forgot Password?</string>
+    <string name="pairing_title">Pair Gateway</string>
+    <string name="pairing_gateway_id">Gateway ID</string>
+    <string name="pairing_access_code">Access Code</string>
+    <string name="pairing_button">Pair</string>
+
+    <!-- Main -->
+    <string name="main_title">ClawLink</string>
+    <string name="main_no_gateway">No gateway connected</string>
+    <string name="main_tap_select">Tap to select a gateway</string>
+    <string name="quick_actions">Quick Actions</string>
+    <string name="gateway_details">Gateway Details</string>
+
+    <!-- Navigation -->
+    <string name="nav_chat">Chat</string>
+    <string name="nav_models">Models</string>
+    <string name="nav_skills">Skills</string>
+    <string name="nav_tasks">Tasks</string>
+
+    <!-- Chat -->
+    <string name="chat_title">Chat</string>
+    <string name="chat_placeholder">Type a message...</string>
+    <string name="chat_send">Send</string>
+    <string name="chat_new_session">New session</string>
+    <string name="chat_sessions">Sessions</string>
+    <string name="chat_empty">Start a conversation</string>
+    <string name="chat_thinking">Thinking…</string>
+    <string name="chat_toggle_tools">Toggle tool messages</string>
+
+    <!-- Gateways -->
+    <string name="gateways_title">Gateways</string>
+    <string name="gateways_empty">No gateways found</string>
+    <string name="gateways_empty_hint">Make sure your relay server is running</string>
+    <string name="gateways_refresh">Refresh</string>
+    <string name="gateways_switch">Switch Gateway</string>
+
+    <!-- Models -->
+    <string name="models_title">Models</string>
+    <string name="models_empty">No models available</string>
+    <string name="models_context">Context: %s tokens</string>
+    <string name="models_selected">Selected</string>
+
+    <!-- Skills -->
+    <string name="skills_title">Skills (%1$d/%2$d)</string>
+    <string name="skills_empty">No skills found</string>
+    <string name="skills_commands">Commands:</string>
+
+    <!-- Tasks -->
+    <string name="tasks_title">Tasks</string>
+    <string name="tasks_active">Active</string>
+    <string name="tasks_paused">Paused</string>
+    <string name="tasks_empty">No tasks yet</string>
+    <string name="tasks_create">Create Task</string>
+    <string name="tasks_delete">Delete</string>
+    <string name="tasks_next">Next: %s</string>
+    <string name="tasks_last_result">Last Result</string>
+    <string name="tasks_created">Created</string>
+    <string name="tasks_schedule">Schedule</string>
+
+    <!-- Create Task Dialog -->
+    <string name="task_dialog_title">Create Task</string>
+    <string name="task_dialog_title_label">Title</string>
+    <string name="task_dialog_prompt_label">Prompt</string>
+    <string name="task_dialog_every_label">Every</string>
+    <string name="task_dialog_unit_label">Unit</string>
+    <string name="task_dialog_create">Create</string>
+    <string name="task_dialog_cancel">Cancel</string>
+
+    <!-- Settings -->
+    <string name="settings_title">Settings</string>
+    <string name="settings_account">Account</string>
+    <string name="settings_email">Email</string>
+    <string name="settings_gateway">Gateway</string>
+    <string name="settings_server">Server</string>
+    <string name="settings_preferences">Preferences</string>
+    <string name="settings_advanced">Advanced Settings</string>
+    <string name="settings_advanced_subtitle">Logs, backups, gateway maintenance</string>
+    <string name="settings_help">Help &amp; Usage Guide</string>
+    <string name="settings_help_subtitle">How to use PocketClaw</string>
+    <string name="settings_logout">Logout</string>
+    <string name="settings_session">Session</string>
+
+    <!-- General -->
+    <string name="back">Back</string>
+    <string name="refresh">Refresh</string>
+    <string name="dismiss">Dismiss</string>
+    <string name="cancel">Cancel</string>
+    <string name="save">Save</string>
+    <string name="delete">Delete</string>
+    <string name="ok">OK</string>
+    <string name="no_gateway_selected">Not set</string>
+</resources>

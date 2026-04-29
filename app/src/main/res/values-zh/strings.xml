@@ -1,0 +1,103 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">ClawLink</string>
+
+    <!-- Auth -->
+    <string name="login_title">登录</string>
+    <string name="login_email">邮箱</string>
+    <string name="login_password">密码</string>
+    <string name="login_server_url">服务器地址</string>
+    <string name="login_button">登录</string>
+    <string name="login_register">注册</string>
+    <string name="login_forgot_password">忘记密码？</string>
+    <string name="pairing_title">配对网关</string>
+    <string name="pairing_gateway_id">网关 ID</string>
+    <string name="pairing_access_code">配对码</string>
+    <string name="pairing_button">配对</string>
+
+    <!-- Main -->
+    <string name="main_title">ClawLink</string>
+    <string name="main_no_gateway">未连接网关</string>
+    <string name="main_tap_select">点击选择网关</string>
+    <string name="quick_actions">快捷操作</string>
+    <string name="gateway_details">网关详情</string>
+
+    <!-- Navigation -->
+    <string name="nav_chat">对话</string>
+    <string name="nav_models">模型</string>
+    <string name="nav_skills">技能</string>
+    <string name="nav_tasks">任务</string>
+
+    <!-- Chat -->
+    <string name="chat_title">对话</string>
+    <string name="chat_placeholder">输入消息…</string>
+    <string name="chat_send">发送</string>
+    <string name="chat_new_session">新会话</string>
+    <string name="chat_sessions">会话</string>
+    <string name="chat_empty">开始一段对话</string>
+    <string name="chat_thinking">思考中…</string>
+    <string name="chat_toggle_tools">切换工具消息</string>
+
+    <!-- Gateways -->
+    <string name="gateways_title">网关</string>
+    <string name="gateways_empty">未找到网关</string>
+    <string name="gateways_empty_hint">请确认中继服务器正在运行</string>
+    <string name="gateways_refresh">刷新</string>
+    <string name="gateways_switch">切换网关</string>
+
+    <!-- Models -->
+    <string name="models_title">模型</string>
+    <string name="models_empty">暂无可用模型</string>
+    <string name="models_context">上下文：%s tokens</string>
+    <string name="models_selected">已选</string>
+
+    <!-- Skills -->
+    <string name="skills_title">技能（%1$d/%2$d）</string>
+    <string name="skills_empty">未找到技能</string>
+    <string name="skills_commands">命令：</string>
+
+    <!-- Tasks -->
+    <string name="tasks_title">任务</string>
+    <string name="tasks_active">活跃</string>
+    <string name="tasks_paused">已暂停</string>
+    <string name="tasks_empty">暂无任务</string>
+    <string name="tasks_create">创建任务</string>
+    <string name="tasks_delete">删除</string>
+    <string name="tasks_next">下次：%s</string>
+    <string name="tasks_last_result">上次结果</string>
+    <string name="tasks_created">创建时间</string>
+    <string name="tasks_schedule">调度</string>
+
+    <!-- Create Task Dialog -->
+    <string name="task_dialog_title">创建任务</string>
+    <string name="task_dialog_title_label">标题</string>
+    <string name="task_dialog_prompt_label">提示词</string>
+    <string name="task_dialog_every_label">间隔</string>
+    <string name="task_dialog_unit_label">单位</string>
+    <string name="task_dialog_create">创建</string>
+    <string name="task_dialog_cancel">取消</string>
+
+    <!-- Settings -->
+    <string name="settings_title">设置</string>
+    <string name="settings_account">账户</string>
+    <string name="settings_email">邮箱</string>
+    <string name="settings_gateway">网关</string>
+    <string name="settings_server">服务器</string>
+    <string name="settings_preferences">偏好设置</string>
+    <string name="settings_advanced">高级设置</string>
+    <string name="settings_advanced_subtitle">日志、备份、网关维护</string>
+    <string name="settings_help">帮助与使用指南</string>
+    <string name="settings_help_subtitle">如何使用 PocketClaw</string>
+    <string name="settings_logout">退出登录</string>
+    <string name="settings_session">会话</string>
+
+    <!-- General -->
+    <string name="back">返回</string>
+    <string name="refresh">刷新</string>
+    <string name="dismiss">关闭</string>
+    <string name="cancel">取消</string>
+    <string name="save">保存</string>
+    <string name="delete">删除</string>
+    <string name="ok">确定</string>
+    <string name="no_gateway_selected">未设置</string>
+</resources>
