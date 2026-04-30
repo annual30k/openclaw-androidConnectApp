@@ -15,9 +15,12 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Computer
+import androidx.compose.material.icons.filled.Dashboard
+import androidx.compose.material.icons.filled.Extension
 import androidx.compose.material.icons.filled.Help
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Logout
+import androidx.compose.material.icons.filled.Task
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
@@ -53,6 +56,10 @@ fun SettingsScreen(
     wsClient: RelayWebSocketClient,
     notificationPort: NotificationPort,
     onBack: () -> Unit,
+    onNavigateToGateways: () -> Unit,
+    onNavigateToModels: () -> Unit,
+    onNavigateToSkills: () -> Unit,
+    onNavigateToTasks: () -> Unit,
     onNavigateToAdvanced: () -> Unit,
     onNavigateToHelp: () -> Unit,
     onLogout: () -> Unit
@@ -105,8 +112,54 @@ fun SettingsScreen(
             }
 
             ClawLinkSectionHeader(
-                title = "Preferences",
-                subtitle = "Behavior and support surfaces."
+                title = "Features",
+                subtitle = "Open the same work surfaces available on iOS."
+            )
+
+            ClawLinkCard(modifier = Modifier.fillMaxWidth()) {
+                Column {
+                    SettingsNavigationRow(
+                        icon = Icons.Default.Computer,
+                        title = "Gateways",
+                        subtitle = "Switch hosts and inspect connection status",
+                        onClick = onNavigateToGateways
+                    )
+                    HorizontalDivider(modifier = Modifier.padding(start = 56.dp))
+                    SettingsNavigationRow(
+                        icon = Icons.Default.Task,
+                        title = "Tasks",
+                        subtitle = "Create, pause, and review scheduled work",
+                        onClick = onNavigateToTasks
+                    )
+                    HorizontalDivider(modifier = Modifier.padding(start = 56.dp))
+                    SettingsNavigationRow(
+                        icon = Icons.Default.Extension,
+                        title = "Skills",
+                        subtitle = "Toggle assistant capabilities and slash commands",
+                        onClick = onNavigateToSkills
+                    )
+                }
+            }
+
+            ClawLinkSectionHeader(
+                title = "AI",
+                subtitle = "Models and conversation controls."
+            )
+
+            ClawLinkCard(modifier = Modifier.fillMaxWidth()) {
+                Column {
+                    SettingsNavigationRow(
+                        icon = Icons.Default.Dashboard,
+                        title = "Models",
+                        subtitle = "Choose the active model for the gateway",
+                        onClick = onNavigateToModels
+                    )
+                }
+            }
+
+            ClawLinkSectionHeader(
+                title = "Management",
+                subtitle = "Maintenance and support surfaces."
             )
 
             ClawLinkCard(modifier = Modifier.fillMaxWidth()) {

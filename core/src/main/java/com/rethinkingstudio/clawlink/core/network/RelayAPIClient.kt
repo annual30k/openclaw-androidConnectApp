@@ -83,11 +83,14 @@ class RelayAPIClient(
                 setBody(body)
             }
         }
-        if (response.status == HttpStatusCode.Unauthorized) throw RelayAPIError.Unauthorized
-        if (response.status == HttpStatusCode.NotFound) throw RelayAPIError.GatewayNotFound
         if (response.status.value >= 400) {
             val errorBody = try { response.body<APIErrorResponse>() } catch (_: Exception) { null }
-            throw RelayAPIError.fromStatusCode(response.status.value, errorBody?.error)
+            throw RelayAPIError.fromStatusCode(
+                code = response.status.value,
+                body = errorBody?.error,
+                remainingAttempts = errorBody?.remainingAttempts,
+                retryAfterSeconds = errorBody?.retryAfterSeconds
+            )
         }
         return response.body()
     }
@@ -98,10 +101,22 @@ class RelayAPIClient(
 
     // ── Auth ─────────────────────────────────────────────────────────────
 
-    suspend fun register(name: String, email: String, password: String, deviceId: String): SessionCredentials {
+    sealed class RegistrationResult {
+        data class Authenticated(val credentials: SessionCredentials) : RegistrationResult()
+        data class VerificationRequired(val email: String, val expiresAt: String?) : RegistrationResult()
+    }
+
+    suspend fun register(name: String, email: String, password: String, deviceId: String): RegistrationResult {
         val req = AuthRequest(name = name, email = email, password = password, deviceId = deviceId)
-        val response: LoginResponse = request(APIEndpoints.Auth.register, req)
-        return SessionCredentials(accessToken = response.accessToken, relayBaseURL = baseUrl)
+        val response: RegisterResponse = request(APIEndpoints.Auth.register, req)
+        val token = response.accessToken
+        return if (!token.isNullOrBlank()) {
+            RegistrationResult.Authenticated(SessionCredentials(accessToken = token, relayBaseURL = baseUrl))
+        } else if (response.verificationRequired == true) {
+            RegistrationResult.VerificationRequired(email = response.email ?: email, expiresAt = response.expiresAt)
+        } else {
+            throw RelayAPIError.InvalidResponse
+        }
     }
 
     suspend fun verifyEmail(email: String, code: String, deviceId: String): SessionCredentials {

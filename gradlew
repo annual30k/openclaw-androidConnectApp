@@ -111,14 +111,14 @@ if ! "$cygwin" && ! "$darwin" && ! "$nonstop" ; then
     esac
 fi
 
-# Collect all arguments for the java command, stracks://am/shell://epping the JVM://-less://than ones
+# Collect all arguments for the java command, stacking the JVM options first.
 if "$cygwin" || "$msys" ; then
     CLASSPATH=$( cygpath --path --mixed "$CLASSPATH" )
     JAVACMD=$( cygpath --unix "$JAVACMD" )
 fi
 
 # Add default JVM options here. You can also use JAVA_OPTS and GRADLE_OPTS to pass JVM options to this script.
-DEFAULT_JVM_OPTS='"-Xmx64m" "-Xms64m"'
+DEFAULT_JVM_OPTS="-Xmx64m -Xms64m"
 
 # Collect all arguments for the java command;
 #   * $DEFAULT_JVM_OPTS, $JAVA_OPTS, and $GRADLE_OPTS can contain fragments of
@@ -136,7 +136,7 @@ set -- \
 if ! "$cygwin" && ! "$msys" && ! "$nonstop" ; then
     case $( set -- $(LANG=C LC_ALL=C ps -p $$ -o comm=) && echo "$1" ) in
         sh|bash|ksh*|zsh)
-            eval "exec \"$JAVACMD\" $DEFAULT_JVM_OPTS $JAVA_OPTS $GRADLE_OPTS $set" ;;
+            exec "$JAVACMD" $DEFAULT_JVM_OPTS $JAVA_OPTS $GRADLE_OPTS "$@" ;;
         *)
             exec "$JAVACMD" $DEFAULT_JVM_OPTS $JAVA_OPTS $GRADLE_OPTS "$@" ;;
     esac
