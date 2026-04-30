@@ -56,15 +56,28 @@
 
     <string name="chat_send">Send</string>
 
+    <string name="chat_new">New</string>
     <string name="chat_new_session">New session</string>
+    <string name="chat_skills_extension">Skills</string>
+    <string name="chat_add_gateway_placeholder">Please add a gateway</string>
 
     <string name="chat_sessions">Sessions</string>
 
     <string name="chat_empty">Start a conversation</string>
+    <string name="chat_empty_detail">Use text, slash commands, model selection, or the iOS-style composer dock below.</string>
 
     <string name="chat_thinking">Thinking…</string>
 
     <string name="chat_toggle_tools">Toggle tool messages</string>
+    <string name="chat_current_session">Current Session</string>
+    <string name="chat_main_session">Main Session</string>
+    <string name="chat_switching_session">Switching session</string>
+    <string name="chat_syncing_history">Syncing chat history…</string>
+    <string name="chat_uploading_attachment">Uploading attachment…</string>
+    <string name="chat_tool_activity">Tool activity</string>
+    <string name="chat_voice_message">Voice message</string>
+    <string name="chat_attachment">Attachment</string>
+    <string name="chat_hold_to_talk">Hold to talk</string>
 
 
     
@@ -77,6 +90,25 @@
     <string name="gateways_refresh">Refresh</string>
 
     <string name="gateways_switch">Switch Gateway</string>
+    <string name="gateways_list_title">Gateway List</string>
+    <string name="gateway_status_unpaired">Unpaired</string>
+    <string name="gateway_status_online">Online</string>
+    <string name="gateway_status_offline">Offline</string>
+    <string name="gateway_status_disconnected">Disconnected</string>
+    <string name="gateway_unpaired_host">No Host Paired</string>
+    <string name="gateway_context_usage_empty">Context 0/0 (0%)</string>
+    <string name="gateway_last_seen">Last seen: %s</string>
+    <string name="gateway_last_model">Last model: %s</string>
+    <string name="gateway_sync_models">Syncing models…</string>
+    <string name="gateway_no_models">No models reported by the selected gateway.</string>
+    <string name="gateway_usage_guide_prompt">Install the agent, generate a pairing code, and run the service in the background. You can always come back and check this guide again.</string>
+    <string name="gateway_connectivity_prompt">Please ensure the relay is logged in and the desktop gateway is connected.</string>
+    <string name="gateway_usage_guide_title">First-time usage guide</string>
+    <string name="gateway_usage_guide_button">View instructions</string>
+    <string name="gateway_no_host_title">No host paired</string>
+    <string name="gateway_no_host_detail">You are on the main page, but chat, models, skills, and tasks require a host to be paired first.</string>
+    <string name="gateway_no_host_hint">No host is paired with this account. Please pair one first.</string>
+    <string name="gateway_open_settings">Open Settings</string>
 
 
     
@@ -670,7 +702,9 @@ Tap the button below to refresh manually.</string>
     <string name="common_action_clear_search">Clear Search</string>
 
     <string name="common_action_delete">Delete</string>
+    <string name="common_action_close">Close</string>
     <string name="common_action_create">Create</string>
+    <string name="common_not_selected">Not selected</string>
     <string name="common_action_restart">Restart</string>
 
     <string name="common_action_done">Done</string>

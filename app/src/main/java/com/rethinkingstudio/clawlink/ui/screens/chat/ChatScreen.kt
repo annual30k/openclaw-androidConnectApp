@@ -86,6 +86,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
@@ -196,7 +197,7 @@ fun ChatScreen(
         if (uris.isEmpty()) return@rememberLauncherForActivityResult
         val activeGatewayId = gatewayId
         if (activeGatewayId == null) {
-            composerNotice = "Select a gateway before attaching files."
+            composerNotice = context.getString(R.string.gateway_unpaired_host)
             return@rememberLauncherForActivityResult
         }
         scope.launch {
@@ -442,9 +443,9 @@ private fun ChatTopBar(
         else -> ChatColors.offline
     }
     val statusText = when {
-        !hasGateway -> "待绑定"
-        gateway?.aggregateStatus == AggregateStatus.online -> "在线"
-        else -> "未连接"
+        !hasGateway -> stringResource(R.string.gateway_status_unpaired)
+        gateway?.aggregateStatus == AggregateStatus.online -> stringResource(R.string.gateway_status_online)
+        else -> stringResource(R.string.gateway_status_disconnected)
     }
 
     Row(
@@ -461,7 +462,7 @@ private fun ChatTopBar(
     ) {
         CircleHeaderButton(
             icon = if (onBack == null) Icons.Default.Refresh else Icons.AutoMirrored.Filled.ArrowBack,
-            label = if (onBack == null) "刷新" else "返回",
+            label = if (onBack == null) stringResource(R.string.gateways_refresh) else stringResource(R.string.common_action_back),
             onClick = onBack ?: onRefresh
         )
 
@@ -476,7 +477,7 @@ private fun ChatTopBar(
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
                     Text(
-                        gateway?.displayName ?: "未绑定主机",
+                        gateway?.displayName ?: stringResource(R.string.gateway_unpaired_host),
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                         style = MaterialTheme.typography.titleMedium,
@@ -487,7 +488,7 @@ private fun ChatTopBar(
                 }
                 if (hasGateway) {
                     Text(
-                        gateway?.contextUsage?.takeIf { it.isNotBlank() } ?: "上下文 0/0（0%）",
+                        gateway?.contextUsage?.takeIf { it.isNotBlank() } ?: stringResource(R.string.gateway_context_usage_empty),
                         style = MaterialTheme.typography.labelMedium,
                         color = ChatColors.secondaryText,
                         fontWeight = FontWeight.Bold
@@ -510,7 +511,7 @@ private fun ChatTopBar(
             }
         }
 
-        CircleHeaderButton(Icons.Default.Settings, "设置", onSettings)
+        CircleHeaderButton(Icons.Default.Settings, stringResource(R.string.settings_title), onSettings)
     }
 }
 
@@ -572,9 +573,9 @@ private fun GatewaySheetOverlay(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    CircleHeaderButton(Icons.Default.Close, "关闭", onDismiss)
-                    Text("网关列表", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Black, color = Color.Black)
-                    CircleHeaderButton(Icons.Default.Refresh, "刷新", onRefresh)
+                    CircleHeaderButton(Icons.Default.Close, stringResource(R.string.common_action_close), onDismiss)
+                    Text(stringResource(R.string.gateways_list_title), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Black, color = Color.Black)
+                    CircleHeaderButton(Icons.Default.Refresh, stringResource(R.string.gateways_refresh), onRefresh)
                 }
 
                 if (isLoading) {
@@ -624,11 +625,11 @@ private fun GatewaySheetCard(gateway: GatewaySummary, selected: Boolean, onClick
             Row(horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.Top) {
                 Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     Text(gateway.displayName, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Black, color = Color.Black)
-                    Text("最近登录 ${gateway.lastSeenAt}", style = MaterialTheme.typography.bodySmall, color = ChatColors.secondaryText, fontWeight = FontWeight.Bold)
-                    Text("最近使用模型  ${gateway.currentModel.ifBlank { "未选择" }}", style = MaterialTheme.typography.bodySmall, color = ChatColors.secondaryText, fontWeight = FontWeight.Bold)
+                    Text(stringResource(R.string.gateway_last_seen, gateway.lastSeenAt), style = MaterialTheme.typography.bodySmall, color = ChatColors.secondaryText, fontWeight = FontWeight.Bold)
+                    Text(stringResource(R.string.gateway_last_model, gateway.currentModel.ifBlank { stringResource(R.string.common_not_selected) }), style = MaterialTheme.typography.bodySmall, color = ChatColors.secondaryText, fontWeight = FontWeight.Bold)
                     Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Text("当前会话", style = MaterialTheme.typography.bodySmall, color = ChatColors.secondaryText, fontWeight = FontWeight.Bold)
-                        Text("主会话", style = MaterialTheme.typography.bodySmall, color = ChatColors.linkBlue, fontWeight = FontWeight.Black)
+                        Text(stringResource(R.string.chat_current_session), style = MaterialTheme.typography.bodySmall, color = ChatColors.secondaryText, fontWeight = FontWeight.Bold)
+                        Text(stringResource(R.string.chat_main_session), style = MaterialTheme.typography.bodySmall, color = ChatColors.linkBlue, fontWeight = FontWeight.Black)
                         Icon(Icons.Default.ExpandMore, null, tint = Color(0xFF8B8F98), modifier = Modifier.size(18.dp))
                     }
                 }
@@ -658,7 +659,7 @@ private fun StatusPill(status: AggregateStatus) {
                     .clip(CircleShape)
                     .background(if (online) ChatColors.online else ChatColors.offline)
             )
-            Text(if (online) "在线" else "离线", color = if (online) ChatColors.online else ChatColors.offline, fontWeight = FontWeight.Bold)
+            Text(if (online) stringResource(R.string.gateway_status_online) else stringResource(R.string.gateway_status_offline), color = if (online) ChatColors.online else ChatColors.offline, fontWeight = FontWeight.Bold)
         }
     }
 }
@@ -730,15 +731,15 @@ private fun ModelPickerPanel(
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Icon(Icons.Default.SmartToy, null, tint = MaterialTheme.colorScheme.primary)
-                Text("Model", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                Text(stringResource(R.string.nav_models), style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
             }
             if (isLoading) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
-                    Text("Syncing models…", style = MaterialTheme.typography.bodySmall)
+                    Text(stringResource(R.string.gateway_sync_models), style = MaterialTheme.typography.bodySmall)
                 }
             } else if (models.isEmpty()) {
-                Text("No models reported by the selected gateway.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(stringResource(R.string.gateway_no_models), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             } else {
                 models.take(10).forEach { model ->
                     ModelRow(model = model, selected = model.modelId == selectedModel?.modelId, onClick = { onSelect(model) })
@@ -767,7 +768,7 @@ private fun ModelRow(model: ModelItem, selected: Boolean, onClick: () -> Unit) {
                 Text(model.displayName, maxLines = 1, overflow = TextOverflow.Ellipsis, fontWeight = FontWeight.SemiBold)
                 Text(model.subtitle, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
-            if (model.isDefault) Text("Default", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.tertiary, fontWeight = FontWeight.Bold)
+            if (model.isDefault) Text(stringResource(R.string.models_selected), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.tertiary, fontWeight = FontWeight.Bold)
             if (selected) Icon(Icons.Default.CheckCircle, null, tint = MaterialTheme.colorScheme.primary)
         }
     }
@@ -789,7 +790,7 @@ private fun StatusBanner(text: String, isError: Boolean, onDismiss: () -> Unit) 
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
             Text(text, modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodySmall)
-            TextButton(onClick = onDismiss) { Text("Dismiss") }
+            TextButton(onClick = onDismiss) { Text(stringResource(R.string.common_action_close)) }
         }
     }
 }
@@ -809,12 +810,12 @@ private fun UsageGuidePromptCard(onOpenUsageGuide: (() -> Unit)?) {
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.Top) {
                 IconBadge(Icons.Default.Description)
                 Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
-                    Text("首次使用先看说明", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Black, color = Color.Black)
-                    Text("安装 Agent、生成配对码、后台运行服务，随时可以回来再看一遍。", style = MaterialTheme.typography.bodyMedium, color = ChatColors.secondaryText)
+                    Text(stringResource(R.string.gateway_usage_guide_title), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Black, color = Color.Black)
+                    Text(stringResource(R.string.gateway_usage_guide_prompt), style = MaterialTheme.typography.bodyMedium, color = ChatColors.secondaryText)
                 }
             }
             FullWidthCardButton(
-                text = "查看使用说明",
+                text = stringResource(R.string.gateway_usage_guide_button),
                 icon = Icons.Default.Description,
                 onClick = onOpenUsageGuide ?: {}
             )
@@ -837,13 +838,13 @@ private fun EmptyGatewayCard(onOpenSettings: (() -> Unit)?) {
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.Top) {
                 IconBadge(Icons.Default.Settings)
                 Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
-                    Text("当前没有绑定主机", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Black, color = Color.Black)
-                    Text("你已经回到正常页面，只是聊天、模型、技能和任务都要等绑定主机后才会可用。", style = MaterialTheme.typography.bodyMedium, color = ChatColors.secondaryText)
+                    Text(stringResource(R.string.gateway_no_host_title), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Black, color = Color.Black)
+                    Text(stringResource(R.string.gateway_no_host_detail), style = MaterialTheme.typography.bodyMedium, color = ChatColors.secondaryText)
                 }
             }
-            Text("当前账号还没有绑定主机，请先配对。", style = MaterialTheme.typography.bodyMedium, color = ChatColors.secondaryText, fontWeight = FontWeight.Bold)
+            Text(stringResource(R.string.gateway_no_host_hint), style = MaterialTheme.typography.bodyMedium, color = ChatColors.secondaryText, fontWeight = FontWeight.Bold)
             FullWidthCardButton(
-                text = "打开设置",
+                text = stringResource(R.string.gateway_open_settings),
                 icon = Icons.Default.Settings,
                 onClick = onOpenSettings ?: {}
             )
@@ -886,7 +887,7 @@ private fun EmptyGatewaySheetState() {
         ) {
             Icon(Icons.Default.Settings, null, tint = ChatColors.secondaryText, modifier = Modifier.size(36.dp))
             Text("暂无网关", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Black, color = Color.Black)
-            Text("请确认 Relay 已登录，并且桌面端网关已连接。", style = MaterialTheme.typography.bodySmall, color = ChatColors.secondaryText)
+            Text(stringResource(R.string.gateway_connectivity_prompt), style = MaterialTheme.typography.bodySmall, color = ChatColors.secondaryText)
         }
     }
 }
@@ -909,15 +910,15 @@ private fun ChatWelcomeCards(
                         .clip(RoundedCornerShape(18.dp))
                 )
                 Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Text("Start a conversation", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                    Text("Use text, slash commands, model selection, or the iOS-style composer dock below.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(stringResource(R.string.chat_empty), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                    Text(stringResource(R.string.chat_empty_detail), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
         }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
-            QuickActionChip("Commands", Icons.Default.Terminal, Modifier.weight(1f), onShowCommands)
-            QuickActionChip("Model", Icons.Default.SmartToy, Modifier.weight(1f), onOpenModelPicker)
-            QuickActionChip("New", Icons.Default.Add, Modifier.weight(1f), onNewSession)
+            QuickActionChip(stringResource(R.string.skills_title), Icons.Default.Terminal, Modifier.weight(1f), onShowCommands)
+            QuickActionChip(stringResource(R.string.nav_models), Icons.Default.SmartToy, Modifier.weight(1f), onOpenModelPicker)
+            QuickActionChip(stringResource(R.string.chat_new), Icons.Default.Add, Modifier.weight(1f), onNewSession)
         }
     }
 }
@@ -928,8 +929,8 @@ private fun ChatSessionLoadingCard() {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
             Column {
-                Text("Switching session", fontWeight = FontWeight.SemiBold)
-                Text("Syncing chat history…", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(stringResource(R.string.chat_switching_session), fontWeight = FontWeight.SemiBold)
+                Text(stringResource(R.string.chat_syncing_history), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
     }
@@ -945,7 +946,7 @@ private fun ThinkingRow() {
     ) {
         CircularProgressIndicator(modifier = Modifier.size(14.dp), strokeWidth = 1.8.dp)
         Spacer(modifier = Modifier.width(8.dp))
-        Text("Thinking…", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(stringResource(R.string.chat_thinking), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
 
@@ -958,7 +959,7 @@ private fun SlashCommandPanel(actions: List<SlashAction>, onAction: (SlashAction
         contentPadding = PaddingValues(10.dp)
     ) {
         Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            Text("Commands", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, fontWeight = FontWeight.Bold)
+            Text(stringResource(R.string.skills_title), style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, fontWeight = FontWeight.Bold)
             actions.forEach { action ->
                 Surface(onClick = { onAction(action) }, shape = RoundedCornerShape(14.dp), color = Color.Transparent) {
                     Row(
@@ -1012,7 +1013,7 @@ private fun ComposerDock(
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                DockPillButton("技能扩展", Icons.Default.AutoAwesome, enabled = hasActiveSession, onClick = onShowSkillSheet)
+                DockPillButton(stringResource(R.string.chat_skills_extension), Icons.Default.AutoAwesome, enabled = hasActiveSession, onClick = onShowSkillSheet)
                 Spacer(Modifier.weight(1f))
                 DockPillButton(selectedModelText, Icons.Default.SmartToy, enabled = hasActiveSession, onClick = onOpenModelPicker)
             }
@@ -1027,7 +1028,7 @@ private fun ComposerDock(
 
             if (voiceMode) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    RoundIconButton(Icons.Default.Keyboard, "Keyboard", enabled = true, onClick = onToggleVoiceMode)
+                    RoundIconButton(Icons.Default.Keyboard, stringResource(R.string.chat_placeholder), enabled = true, onClick = onToggleVoiceMode)
                     Surface(
                         shape = RoundedCornerShape(16.dp),
                         color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.72f),
@@ -1037,13 +1038,13 @@ private fun ComposerDock(
                             .height(42.dp)
                     ) {
                         Box(contentAlignment = Alignment.Center) {
-                            Text("Hold to talk", fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.primary)
+                            Text(stringResource(R.string.chat_hold_to_talk), fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.primary)
                         }
                     }
                 }
             } else {
                 Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    RoundIconButton(Icons.Default.Add, "附件", enabled = canCompose, onClick = onOpenAttachment)
+                    RoundIconButton(Icons.Default.Add, stringResource(R.string.chat_attachment), enabled = canCompose, onClick = onOpenAttachment)
                     BasicTextField(
                         value = messageText,
                         onValueChange = onMessageTextChange,
@@ -1069,9 +1070,9 @@ private fun ComposerDock(
                                     if (messageText.isEmpty()) {
                                         Text(
                                             when {
-                                                !hasActiveSession -> "请先添加网关"
-                                                !canSend -> "链路未全部连通"
-                                                else -> "消息"
+                                                !hasActiveSession -> stringResource(R.string.chat_add_gateway_placeholder)
+                                                !canSend -> stringResource(R.string.gateway_status_disconnected)
+                                                else -> stringResource(R.string.chat_placeholder)
                                             },
                                             style = MaterialTheme.typography.bodyMedium,
                                             color = Color(0xFFA0A4AF)
@@ -1082,7 +1083,7 @@ private fun ComposerDock(
                             }
                         }
                     )
-                    RoundIconButton(Icons.Default.Mic, "语音", enabled = canCompose, onClick = onToggleVoiceMode)
+                    RoundIconButton(Icons.Default.Mic, stringResource(R.string.chat_voice_message), enabled = canCompose, onClick = onToggleVoiceMode)
                     SendButton(
                         enabled = canCompose && !isUploadingAttachment && (messageText.isNotBlank() || attachments.isNotEmpty()),
                         onClick = onSend
@@ -1103,7 +1104,7 @@ private fun AttachmentTray(
         if (isUploading) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
-                Text("Uploading attachment…", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(stringResource(R.string.chat_uploading_attachment), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
         attachments.forEach { attachment ->
@@ -1125,7 +1126,7 @@ private fun AttachmentTray(
                         Text("${attachment.mimeType} · ${attachment.displaySize}", maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                     TextButton(onClick = { onRemove(attachment) }) {
-                        Text("Remove")
+                        Text(stringResource(R.string.common_action_delete))
                     }
                 }
             }
@@ -1244,7 +1245,7 @@ private fun MessageBubble(
                 verticalArrangement = Arrangement.spacedBy(9.dp)
             ) {
                 if (isTool) {
-                    ToolHeader(message.toolDisplayName ?: "Tool activity")
+                    ToolHeader(message.toolDisplayName ?: stringResource(R.string.chat_tool_activity))
                 }
 
                 val displayText = message.plainTextContent
@@ -1294,8 +1295,8 @@ private fun FileBlock(block: RelayChatContentBlock, isUser: Boolean) {
         ) {
             Icon(Icons.Default.Description, null, modifier = Modifier.size(20.dp), tint = if (isUser) Color.White else MaterialTheme.colorScheme.primary)
             Column(modifier = Modifier.weight(1f)) {
-                Text(block.fileDisplayName ?: "Attachment", maxLines = 1, overflow = TextOverflow.Ellipsis, fontWeight = FontWeight.SemiBold, color = if (isUser) Color.White else MaterialTheme.colorScheme.onSurface)
-                Text(block.fileStatusText ?: block.mimeType ?: "File", maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.labelSmall, color = if (isUser) Color.White.copy(alpha = 0.78f) else MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(block.fileDisplayName ?: stringResource(R.string.chat_attachment), maxLines = 1, overflow = TextOverflow.Ellipsis, fontWeight = FontWeight.SemiBold, color = if (isUser) Color.White else MaterialTheme.colorScheme.onSurface)
+                Text(block.fileStatusText ?: block.mimeType ?: stringResource(R.string.chat_attachment), maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.labelSmall, color = if (isUser) Color.White.copy(alpha = 0.78f) else MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
     }
@@ -1313,7 +1314,7 @@ private fun VoiceBlock(block: RelayChatContentBlock, isUser: Boolean) {
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             Icon(Icons.Default.GraphicEq, null, modifier = Modifier.size(18.dp), tint = if (isUser) Color.White else MaterialTheme.colorScheme.primary)
-            Text(block.voiceTranscriptText ?: block.voiceStatusText ?: "Voice message", style = MaterialTheme.typography.bodySmall, color = if (isUser) Color.White else MaterialTheme.colorScheme.onSurface)
+            Text(block.voiceTranscriptText ?: block.voiceStatusText ?: stringResource(R.string.chat_voice_message), style = MaterialTheme.typography.bodySmall, color = if (isUser) Color.White else MaterialTheme.colorScheme.onSurface)
         }
     }
 }

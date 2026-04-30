@@ -56,15 +56,28 @@
 
     <string name="chat_send">发送</string>
 
+    <string name="chat_new">新建</string>
     <string name="chat_new_session">新会话</string>
+    <string name="chat_skills_extension">技能扩展</string>
+    <string name="chat_add_gateway_placeholder">请先添加网关</string>
 
     <string name="chat_sessions">会话</string>
 
     <string name="chat_empty">开始一段对话</string>
+    <string name="chat_empty_detail">使用文本、快捷命令、模型选择或下方的 iOS 风格工具栏进行交互。</string>
 
     <string name="chat_thinking">思考中…</string>
 
     <string name="chat_toggle_tools">切换工具消息</string>
+    <string name="chat_current_session">当前会话</string>
+    <string name="chat_main_session">主会话</string>
+    <string name="chat_switching_session">切换会话中</string>
+    <string name="chat_syncing_history">同步聊天历史…</string>
+    <string name="chat_uploading_attachment">正在上传附件…</string>
+    <string name="chat_tool_activity">工具活动</string>
+    <string name="chat_voice_message">语音消息</string>
+    <string name="chat_attachment">附件</string>
+    <string name="chat_hold_to_talk">松开发送</string>
 
 
     
@@ -77,6 +90,25 @@
     <string name="gateways_refresh">刷新</string>
 
     <string name="gateways_switch">切换网关</string>
+    <string name="gateways_list_title">网关列表</string>
+    <string name="gateway_status_unpaired">待绑定</string>
+    <string name="gateway_status_online">在线</string>
+    <string name="gateway_status_offline">离线</string>
+    <string name="gateway_status_disconnected">未连接</string>
+    <string name="gateway_unpaired_host">未绑定主机</string>
+    <string name="gateway_context_usage_empty">上下文 0/0（0%%）</string>
+    <string name="gateway_last_seen">最近登录 %s</string>
+    <string name="gateway_last_model">最近使用模型 %s</string>
+    <string name="gateway_sync_models">同步模型中…</string>
+    <string name="gateway_no_models">所选网关未上报可用模型。</string>
+    <string name="gateway_usage_guide_prompt">安装 Agent、生成配对码、后台运行服务，随时可以回来再看一遍。</string>
+    <string name="gateway_connectivity_prompt">请确认 Relay 已登录，并且桌面端网关已连接。</string>
+    <string name="gateway_usage_guide_title">首次使用先看说明</string>
+    <string name="gateway_usage_guide_button">查看使用说明</string>
+    <string name="gateway_no_host_title">当前没有绑定主机</string>
+    <string name="gateway_no_host_detail">你已经回到正常页面，只是聊天、模型、技能和任务都要等绑定主机后才会可用。</string>
+    <string name="gateway_no_host_hint">当前账号还没有绑定主机，请先配对。</string>
+    <string name="gateway_open_settings">打开设置</string>
 
 
     
@@ -670,7 +702,9 @@
     <string name="common_action_clear_search">清空搜索</string>
 
     <string name="common_action_delete">删除</string>
+    <string name="common_action_close">关闭</string>
     <string name="common_action_create">创建</string>
+    <string name="common_not_selected">未选择</string>
     <string name="common_action_restart">立即重启</string>
 
     <string name="common_action_done">完成</string>

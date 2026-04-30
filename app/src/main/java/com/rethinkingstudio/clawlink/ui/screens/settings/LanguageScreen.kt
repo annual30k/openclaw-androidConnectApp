@@ -7,7 +7,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
@@ -24,7 +24,9 @@ import com.rethinkingstudio.clawlink.ui.components.ClawLinkScaffold
 fun LanguageScreen(
     onBack: () -> Unit
 ) {
-    val currentPreference = LanguageManager.getCurrentPreference()
+    var selectedPreference by remember { 
+        mutableStateOf(LanguageManager.getCurrentPreference()) 
+    }
 
     ClawLinkScaffold(
         topBar = {
@@ -50,20 +52,29 @@ fun LanguageScreen(
                 Column {
                     LanguageRow(
                         preference = LanguagePreference.SYSTEM,
-                        isSelected = currentPreference == LanguagePreference.SYSTEM,
-                        onClick = { LanguageManager.setLanguage(LanguagePreference.SYSTEM) }
+                        isSelected = selectedPreference == LanguagePreference.SYSTEM,
+                        onClick = { 
+                            selectedPreference = LanguagePreference.SYSTEM
+                            LanguageManager.setLanguage(LanguagePreference.SYSTEM) 
+                        }
                     )
                     HorizontalDivider(modifier = Modifier.padding(start = 16.dp))
                     LanguageRow(
                         preference = LanguagePreference.ZH_HANS,
-                        isSelected = currentPreference == LanguagePreference.ZH_HANS,
-                        onClick = { LanguageManager.setLanguage(LanguagePreference.ZH_HANS) }
+                        isSelected = selectedPreference == LanguagePreference.ZH_HANS,
+                        onClick = { 
+                            selectedPreference = LanguagePreference.ZH_HANS
+                            LanguageManager.setLanguage(LanguagePreference.ZH_HANS) 
+                        }
                     )
                     HorizontalDivider(modifier = Modifier.padding(start = 16.dp))
                     LanguageRow(
                         preference = LanguagePreference.EN,
-                        isSelected = currentPreference == LanguagePreference.EN,
-                        onClick = { LanguageManager.setLanguage(LanguagePreference.EN) }
+                        isSelected = selectedPreference == LanguagePreference.EN,
+                        onClick = { 
+                            selectedPreference = LanguagePreference.EN
+                            LanguageManager.setLanguage(LanguagePreference.EN) 
+                        }
                     )
                 }
             }

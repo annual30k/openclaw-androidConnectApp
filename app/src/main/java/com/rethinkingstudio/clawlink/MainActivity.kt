@@ -1,7 +1,7 @@
 package com.rethinkingstudio.clawlink
 
 import android.os.Bundle
-import androidx.activity.ComponentActivity
+import androidx.appcompat.app.AppCompatActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.Box
@@ -11,7 +11,7 @@ import com.rethinkingstudio.clawlink.ui.navigation.AppNavigation
 import com.rethinkingstudio.clawlink.app.PocketClawTheme
 import com.rethinkingstudio.clawlink.ui.components.ClawLinkBackdrop
 
-class MainActivity : ComponentActivity() {
+class MainActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
