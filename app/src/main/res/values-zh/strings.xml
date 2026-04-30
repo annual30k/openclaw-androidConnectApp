@@ -109,6 +109,23 @@
     <string name="gateway_no_host_detail">你已经回到正常页面，只是聊天、模型、技能和任务都要等绑定主机后才会可用。</string>
     <string name="gateway_no_host_hint">当前账号还没有绑定主机，请先配对。</string>
     <string name="gateway_open_settings">打开设置</string>
+    <string name="usage_guide_title">使用说明</string>
+    <string name="usage_guide_subtitle">简单三步，让你的电脑随时随地支持远程访问。</string>
+    <string name="usage_guide_step_1_title">下载并安装</string>
+    <string name="usage_guide_step_1_desc">全局安装 `clawconnect-agent`，安装后会得到 `clawconnect` 命令。</string>
+    <string name="usage_guide_step_1_label">安装命令</string>
+    <string name="usage_guide_step_2_title">配对并绑定</string>
+    <string name="usage_guide_step_2_desc">向 Relay 注册主机。默认推荐扫码绑定，若终端显示异常请选择手动输入。</string>
+    <string name="usage_guide_step_2_label_scan">扫码绑定 (默认)</string>
+    <string name="usage_guide_step_2_label_manual">手动输入 (备选)</string>
+    <string name="usage_guide_step_3_title">启动运行</string>
+    <string name="usage_guide_step_3_desc">正式使用建议安装为后台服务，排错连接时可选择前台调试运行。</string>
+    <string name="usage_guide_step_3_label">后台服务 (推荐)</string>
+    <string name="usage_guide_step_3_label_fg">前台调试</string>
+    <string name="usage_guide_after_title">完成后怎么用</string>
+    <string name="usage_guide_after_desc">回到聊天页，只要网关在线即可对话。如果你有多个主机，可以在设置 -> 网关中切换。</string>
+    <string name="usage_guide_copy">复制</string>
+    <string name="usage_guide_copied">已复制到剪贴板</string>
 
 
     
