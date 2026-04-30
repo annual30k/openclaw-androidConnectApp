@@ -2,102 +2,1335 @@
 <resources>
     <string name="app_name">ClawLink</string>
 
-    <!-- Auth -->
+
+    
     <string name="login_title">登录</string>
+
     <string name="login_email">邮箱</string>
+
     <string name="login_password">密码</string>
+
     <string name="login_server_url">服务器地址</string>
+
     <string name="login_button">登录</string>
+
     <string name="login_register">注册</string>
+
     <string name="login_forgot_password">忘记密码？</string>
+
     <string name="pairing_title">配对网关</string>
+
     <string name="pairing_gateway_id">网关 ID</string>
+
     <string name="pairing_access_code">配对码</string>
+
     <string name="pairing_button">配对</string>
 
-    <!-- Main -->
+
+    
     <string name="main_title">ClawLink</string>
+
     <string name="main_no_gateway">未连接网关</string>
+
     <string name="main_tap_select">点击选择网关</string>
+
     <string name="quick_actions">快捷操作</string>
+
     <string name="gateway_details">网关详情</string>
 
-    <!-- Navigation -->
+
+    
     <string name="nav_chat">对话</string>
+
     <string name="nav_models">模型</string>
+
     <string name="nav_skills">技能</string>
+
     <string name="nav_tasks">任务</string>
 
-    <!-- Chat -->
+
+    
     <string name="chat_title">对话</string>
+
     <string name="chat_placeholder">输入消息…</string>
+
     <string name="chat_send">发送</string>
+
     <string name="chat_new_session">新会话</string>
+
     <string name="chat_sessions">会话</string>
+
     <string name="chat_empty">开始一段对话</string>
+
     <string name="chat_thinking">思考中…</string>
+
     <string name="chat_toggle_tools">切换工具消息</string>
 
-    <!-- Gateways -->
+
+    
     <string name="gateways_title">网关</string>
+
     <string name="gateways_empty">未找到网关</string>
+
     <string name="gateways_empty_hint">请确认中继服务器正在运行</string>
+
     <string name="gateways_refresh">刷新</string>
+
     <string name="gateways_switch">切换网关</string>
 
-    <!-- Models -->
+
+    
     <string name="models_title">模型</string>
+
     <string name="models_empty">暂无可用模型</string>
+
     <string name="models_context">上下文：%s tokens</string>
+
     <string name="models_selected">已选</string>
 
-    <!-- Skills -->
-    <string name="skills_title">技能（%1$d/%2$d）</string>
+
+    
+    <string name="skills_title">技能</string>
+
     <string name="skills_empty">未找到技能</string>
+
     <string name="skills_commands">命令：</string>
 
-    <!-- Tasks -->
-    <string name="tasks_title">任务</string>
+
+    
+    <string name="tasks_title">定时任务</string>
+
     <string name="tasks_active">活跃</string>
+
     <string name="tasks_paused">已暂停</string>
+
     <string name="tasks_empty">暂无任务</string>
+
     <string name="tasks_create">创建任务</string>
+
     <string name="tasks_delete">删除</string>
+
     <string name="tasks_next">下次：%s</string>
+
     <string name="tasks_last_result">上次结果</string>
+
     <string name="tasks_created">创建时间</string>
+
     <string name="tasks_schedule">调度</string>
 
-    <!-- Create Task Dialog -->
+
+    
     <string name="task_dialog_title">创建任务</string>
+
     <string name="task_dialog_title_label">标题</string>
+
     <string name="task_dialog_prompt_label">提示词</string>
+
     <string name="task_dialog_every_label">间隔</string>
+
     <string name="task_dialog_unit_label">单位</string>
+
     <string name="task_dialog_create">创建</string>
+
     <string name="task_dialog_cancel">取消</string>
 
-    <!-- Settings -->
+
+    
     <string name="settings_title">设置</string>
+
     <string name="settings_account">账户</string>
+
     <string name="settings_email">邮箱</string>
+
     <string name="settings_gateway">网关</string>
+
     <string name="settings_server">服务器</string>
+
     <string name="settings_preferences">偏好设置</string>
+
     <string name="settings_advanced">高级设置</string>
+
     <string name="settings_advanced_subtitle">日志、备份、网关维护</string>
+
     <string name="settings_help">帮助与使用指南</string>
+
     <string name="settings_help_subtitle">如何使用 PocketClaw</string>
+
     <string name="settings_logout">退出登录</string>
+
     <string name="settings_session">会话</string>
 
-    <!-- General -->
+
+    
     <string name="back">返回</string>
+
     <string name="refresh">刷新</string>
+
     <string name="dismiss">关闭</string>
+
     <string name="cancel">取消</string>
+
     <string name="save">保存</string>
+
     <string name="delete">删除</string>
+
     <string name="ok">确定</string>
+
     <string name="no_gateway_selected">未设置</string>
+
+<string name="advanced_backup_management">备份管理</string>
+
+    <string name="advanced_backup_management_detail">本地管理 openclaw.json 备份。</string>
+
+    <string name="advanced_restart_gateway">重启 Gateway</string>
+
+    <string name="advanced_restart_gateway_detail">Gateway 在线时使用，会短暂中断当前连接。</string>
+
+    <string name="advanced_show_tools">显示 tools 调用过程</string>
+
+    <string name="advanced_show_tools_detail">关闭后只保留结果卡片，用于简化聊天视图。</string>
+
+    <string name="advanced_status_unknown">未知</string>
+
+
+
+    <string name="advanced_view_logs">查看日志</string>
+
+    <string name="advanced_view_logs_detail">读取全部日志，支持关键字搜索，用于快速排障。</string>
+
+    <string name="alert_delete_account_message">会删除账号、解除所有网关绑定，并清掉消息和关联文件。这个操作不能恢复。</string>
+
+    <string name="alert_delete_account_title">注销账号？</string>
+
+    <string name="alert_save_name_failed_title">名称保存失败</string>
+
+    <string name="alert_update_failed_message">当前设备无法打开外部更新入口。你可以稍后重试，或直接前往 App Store 搜索 ClawLink。</string>
+
+    <string name="alert_update_failed_title">检查更新失败</string>
+
+    <string name="auth_button_apple_sign_in">苹果账号登录</string>
+
+    <string name="auth_button_processing">处理中…</string>
+
+    <string name="auth_button_register">注册</string>
+
+    <string name="auth_button_send_verification">发送验证码</string>
+
+    <string name="auth_button_sign_in">登录</string>
+
+    <string name="auth_button_verify_and_register">验证并注册</string>
+
+    <string name="auth_divider_or">或</string>
+
+    <string name="auth_field_email">邮箱</string>
+
+    <string name="auth_field_name">昵称</string>
+
+    <string name="auth_field_name_placeholder">例如：Alex</string>
+
+    <string name="auth_field_password">密码</string>
+
+    <string name="auth_field_password_hide">隐藏密码</string>
+
+    <string name="auth_field_password_placeholder_login">请输入密码</string>
+
+    <string name="auth_field_password_placeholder_register">至少 8 位</string>
+
+    <string name="auth_field_password_show">显示密码</string>
+
+    <string name="auth_field_verification">邮箱验证码</string>
+
+    <string name="auth_field_verification_placeholder">请输入 6 位验证码</string>
+
+    <string name="auth_login_subtitle">使用邮箱或 Apple 账号继续</string>
+
+    <string name="auth_login_title">登录账号</string>
+
+    <string name="auth_more_settings_title">更多设置</string>
+
+    <string name="auth_pairing_binding_in_progress">绑定中</string>
+
+    <string name="auth_pairing_complete_binding">完成绑定</string>
+
+    <string name="auth_pairing_current_account">当前已登录账号</string>
+
+    <string name="auth_pairing_hint_retry">请检查上方错误提示后重试。</string>
+
+    <string name="auth_pairing_hint_success">绑定已完成，正在返回主界面。</string>
+
+    <string name="auth_pairing_hint_verifying">正在校验绑定信息并刷新网关列表，请稍等。</string>
+
+    <string name="auth_pairing_manual_title">手动输入</string>
+
+    <string name="auth_pairing_nav_title">绑定主机</string>
+
+    <string name="auth_pairing_pairing_code_placeholder">配对码</string>
+
+    <string name="auth_pairing_result_fail_message">绑定失败，请检查 Relay 地址和配对码后重试。</string>
+
+    <string name="auth_pairing_result_fail_title">绑定失败</string>
+
+    <string name="auth_pairing_result_success_message">主机已完成绑定，正在返回主界面。</string>
+
+    <string name="auth_pairing_result_success_title">绑定成功</string>
+
+    <string name="auth_pairing_scan_fail_title">扫码失败</string>
+
+    <string name="auth_pairing_scan_success_message">已识别二维码，正在自动完成绑定。</string>
+
+    <string name="auth_pairing_scan_success_title">扫码成功</string>
+
+    <string name="auth_pairing_scan_button">开始扫码</string>
+
+    <string name="auth_pairing_scan_description">对准 `clawconnect pair` 输出的二维码，识别后会自动填入 Relay 地址和配对码。</string>
+
+    <string name="auth_pairing_scan_no_camera_hint">如果当前环境没有摄像头权限，也可以继续使用下面的手动输入。</string>
+
+    <string name="auth_pairing_scan_title">扫码填写</string>
+
+    <string name="auth_pairing_scanner_close">关闭扫码器</string>
+
+    <string name="auth_pairing_scanner_description">对准 connect-agent 输出的二维码，识别成功后会自动把 Relay 地址和配对码填回上一页。</string>
+
+    <string name="auth_pairing_scanner_input_unavailable">无法访问相机输入。</string>
+
+    <string name="auth_pairing_scanner_no_available_camera">当前环境没有可用摄像头。</string>
+
+    <string name="auth_pairing_scanner_no_camera">当前设备无法使用相机扫码。</string>
+
+    <string name="auth_pairing_scanner_no_camera_hint">如果相机没有权限，或当前环境没有可用摄像头，可以回到上一页继续手动填写。</string>
+
+    <string name="auth_pairing_scanner_permission_denied">未获得相机权限，请在系统设置中开启后重试。</string>
+
+    <string name="auth_pairing_scanner_permission_restricted">相机权限未开启，请在系统设置中允许相机访问。</string>
+
+    <string name="auth_pairing_scanner_place_qr">将二维码放入取景框内</string>
+
+    <string name="auth_pairing_scanner_qr_detection_failed">无法启动二维码识别。</string>
+
+    <string name="auth_pairing_scanner_start_failed">相机启动失败，请稍后重试。</string>
+
+    <string name="auth_pairing_scanner_title">扫码配对</string>
+
+    <string name="auth_pairing_scanner_unrecognizable">扫码内容无法识别，请重新扫描。</string>
+
+    <string name="auth_pairing_subtitle">支持扫码配对和手动输入配对码</string>
+
+    <string name="auth_pairing_title">绑定你的主机</string>
+
+    <string name="auth_pairing_wrong_account_hint">如果绑错账号，可以先退出再重新登录。</string>
+
+    <string name="auth_password_min_length">密码至少 8 位</string>
+
+    <string name="auth_private_deployment_description">开启后可使用自定义 Relay 地址。关闭后自动使用默认地址。</string>
+
+    <string name="auth_private_deployment_title">私有化部署</string>
+
+    <string name="auth_register_subtitle">注册后即可同步设备与会话</string>
+
+    <string name="auth_register_title">注册账号</string>
+
+    <string name="auth_relay_address">Relay 地址</string>
+
+    <string name="auth_resend_countdown">重新发送 (%ss)</string>
+
+    <string name="auth_resend_prompt">没有收到？重新发送验证码</string>
+
+    <string name="auth_verification_subtitle_sent">填写信息后先发送邮箱验证码</string>
+
+    <string name="auth_verification_subtitle_to">验证码已发送到 %s</string>
+
+    <string name="chat_attachment_copied">已复制</string>
+
+    <string name="chat_attachment_copy">复制</string>
+
+    <string name="chat_attachment_upload_failed">失败</string>
+
+    <string name="chat_attachment_uploaded">已发送</string>
+
+    <string name="chat_composer_add_attachment">添加附件</string>
+
+    <string name="chat_composer_add_attachment_hint">可选择文件、相册或拍照</string>
+
+    <string name="chat_composer_camera">拍照</string>
+
+    <string name="chat_composer_camera_unavailable">当前设备不支持拍照。</string>
+
+    <string name="chat_composer_clear">清空</string>
+
+    <string name="chat_composer_file">文件</string>
+
+    <string name="chat_composer_image_read_failed">无法读取所选图片。</string>
+
+    <string name="chat_composer_image_save_failed">无法保存所选图片。</string>
+
+    <string name="chat_composer_import_failed">附件导入失败</string>
+
+    <string name="chat_composer_import_failed_default">无法导入所选附件。</string>
+
+    <string name="chat_composer_no_importable_images">没有可导入的图片。</string>
+
+    <string name="chat_composer_pending_files">待发送文件</string>
+
+    <string name="chat_composer_photo_library">相册</string>
+
+    <string name="chat_composer_stop_voice_hint">点按结束当前语音输入</string>
+
+    <string name="chat_composer_stop_voice_input">停止语音输入</string>
+
+    <string name="chat_composer_switch_to_text">切换到文字输入</string>
+
+    <string name="chat_composer_switch_to_text_hint">返回文字输入界面继续编辑消息</string>
+
+    <string name="chat_composer_switch_to_voice">切换到语音输入</string>
+
+    <string name="chat_composer_switch_to_voice_hint_supported">点击后展开按住说话模式</string>
+
+    <string name="chat_composer_switch_to_voice_hint_unsupported">当前环境不支持语音输入</string>
+
+    <string name="chat_composer_text_hint">切换到文字输入</string>
+
+    <string name="chat_composer_text_hint_detail">返回文字输入界面继续编辑消息</string>
+
+    <string name="chat_composer_voice_hint">切换到语音输入</string>
+
+    <string name="chat_composer_voice_hint_expand">点击后展开按住说话模式</string>
+
+    <string name="chat_composer_voice_hint_unsupported">当前环境不支持语音输入</string>
+
+    <string name="chat_composer_voice_hold_continue">按住继续说话</string>
+
+    <string name="chat_composer_voice_hold_hint">长按开始录音，在椭圆内松开发送，滑出后松开取消发送，滑回来继续发送</string>
+
+    <string name="chat_composer_voice_hold_talk">按住说话</string>
+
+    <string name="chat_composer_voice_input">语音输入</string>
+
+    <string name="chat_composer_voice_input_hint">点按开始语音输入并将结果填入消息框</string>
+
+    <string name="chat_composer_voice_release_cancel">松开取消发送</string>
+
+    <string name="chat_composer_voice_release_send">松开发送</string>
+
+    <string name="chat_connection_connecting">连接中</string>
+
+    <string name="chat_connection_offline">未连接</string>
+
+    <string name="chat_connection_ok">连接正常</string>
+
+    <string name="chat_connection_partial">部分可用</string>
+
+    <string name="chat_context_label">上下文</string>
+
+    <string name="chat_empty_guide_button">查看使用说明</string>
+
+    <string name="chat_empty_guide_description_new">安装 Agent、生成配对码、后台运行服务，按步骤走。</string>
+
+    <string name="chat_empty_guide_description_seen">安装 Agent、生成配对码、后台运行服务，随时可以回来再看一遍。</string>
+
+    <string name="chat_empty_guide_title">首次使用先看说明</string>
+
+    <string name="chat_empty_no_host_description">你已经回到正常页面，只是聊天、模型、技能和任务都要等绑定主机后才会可用。</string>
+
+    <string name="chat_empty_no_host_hint">如果你有多个主机，可以在网关列表里切到已绑定的那一台，不需要回到绑定页。</string>
+
+    <string name="chat_empty_no_host_title">当前没有绑定主机</string>
+
+    <string name="chat_empty_open_settings">打开设置</string>
+
+    <string name="chat_file_default_name">文件</string>
+
+    <string name="chat_gateway_switching_subtitle">正在同步会话与主机状态…</string>
+
+    <string name="chat_gateway_switching_title">正在切换网关</string>
+
+    <string name="chat_loading_switching_session">正在切换会话</string>
+
+    <string name="chat_loading_syncing">消息正在同步，请稍等。</string>
+
+    <string name="chat_model_empty">模型列表为空</string>
+
+    <string name="chat_model_empty_hint">可能是网关尚未完全启动或未配置供应商。
+点击下方按钮手动刷新。</string>
+
+    <string name="chat_model_maintenance">维护状态</string>
+
+    <string name="chat_model_maintenance_detail">当前网关正在重启恢复中，模型暂时不可切换。</string>
+
+    <string name="chat_model_nav_title">选择模型</string>
+
+    <string name="chat_model_refresh">刷新模型列表</string>
+
+    <string name="chat_model_select">选择模型</string>
+
+    <string name="chat_model_syncing">正在同步可用模型...</string>
+
+    <string name="chat_new_messages">新消息</string>
+
+    <string name="chat_pending_binding">待绑定</string>
+
+    <string name="chat_placeholder_add_gateway">当前还没有绑定主机，请先添加网关</string>
+
+    <string name="chat_placeholder_gateway_recovering">网关重启恢复中，暂不可发送</string>
+
+    <string name="chat_placeholder_message">消息</string>
+
+    <string name="chat_placeholder_not_ready">链路未全部连通，暂不可发送</string>
+
+    <string name="chat_placeholder_pair_first">请先完成配对</string>
+
+    <string name="chat_preview_action_complete_failed">无法完成该操作。</string>
+
+    <string name="chat_preview_action_failed">操作失败</string>
+
+    <string name="chat_preview_annotate">标注</string>
+
+    <string name="chat_preview_close">关闭预览</string>
+
+    <string name="chat_preview_confirm">好</string>
+
+    <string name="chat_preview_copy_filename">复制文件名</string>
+
+    <string name="chat_preview_delete">删除</string>
+
+    <string name="chat_preview_delete_cache_message">这只会删除当前设备上缓存的预览副本。</string>
+
+    <string name="chat_preview_delete_cache_title">删除下载副本？</string>
+
+    <string name="chat_preview_delete_local_copy">删除本地副本</string>
+
+    <string name="chat_preview_file">文件</string>
+
+    <string name="chat_preview_file_load_failed">文件加载失败。</string>
+
+    <string name="chat_preview_file_open_failed">无法打开该文件。</string>
+
+    <string name="chat_preview_file_unavailable">文件预览不可用</string>
+
+    <string name="chat_preview_image_load_failed">图片加载失败</string>
+
+    <string name="chat_preview_image_loading">图片加载中</string>
+
+    <string name="chat_preview_image_process_failed">无法处理该图片。</string>
+
+    <string name="chat_preview_image_unavailable">图片预览不可用</string>
+
+    <string name="chat_preview_missing_download_url">缺少可预览的下载地址。</string>
+
+    <string name="chat_preview_more_actions">更多操作</string>
+
+    <string name="chat_preview_open_failed">打开失败</string>
+
+    <string name="chat_preview_opening">正在打开预览...</string>
+
+    <string name="chat_preview_save_to_files">保存到文件</string>
+
+    <string name="chat_preview_share">分享</string>
+
+    <string name="chat_preview_unsupported_type">该文件类型暂不支持系统预览。</string>
+
+    <string name="chat_run_active_detail">点按停止即可中断当前问题，已生成内容会保留在聊天里。</string>
+
+    <string name="chat_run_processing_count">正在处理 %d 个回复</string>
+
+    <string name="chat_run_replying">正在回复当前问题</string>
+
+    <string name="chat_run_stop_detail">停止后会保留已经生成的内容。</string>
+
+    <string name="chat_run_stopping">正在停止当前回复</string>
+
+    <string name="chat_session_activity_none">暂无活动</string>
+
+    <string name="chat_session_default">默认会话</string>
+
+    <string name="chat_session_direct">直连会话</string>
+
+    <string name="chat_session_global">全局会话</string>
+
+    <string name="chat_session_global_scope">全局作用域</string>
+
+    <string name="chat_session_group">群组会话</string>
+
+    <string name="chat_session_local">本地创建</string>
+
+    <string name="chat_session_main">主会话</string>
+
+    <string name="chat_session_new">新会话</string>
+
+    <string name="chat_session_new_with_suffix">新会话 · %s</string>
+
+    <string name="chat_session_no_identifier">暂无标识</string>
+
+    <string name="chat_session_uncategorized">未分类会话</string>
+
+    <string name="chat_session_untitled">未命名会话</string>
+
+    <string name="chat_skill_auto_install_hint">不需要你手写技能内容，OpenClaw 会按固定模板自己完成。</string>
+
+    <string name="chat_skill_installable">可安装的技能</string>
+
+    <string name="chat_skill_installable_desc">把文件互传、语音发送和其他扩展能力统一收纳在这里。</string>
+
+    <string name="chat_skill_extension_file_transfer">PC与移动端实现文件互传</string>
+
+    <string name="chat_skill_extension_title">技能扩展</string>
+
+    <string name="chat_skill_extension_voice_reply">让助手回复也能变成语音</string>
+
+    <string name="chat_skill_panel_title">快捷命令</string>
+
+    <string name="chat_status_connecting">正在连接</string>
+
+    <string name="chat_status_disconnected">连接中断</string>
+
+    <string name="chat_status_done_no_text">已完成，但未返回文本。</string>
+
+    <string name="chat_status_syncing_content">正在同步最终内容...</string>
+
+    <string name="chat_status_syncing_reply">正在同步回复...</string>
+
+    <string name="chat_voice_cancel">取消</string>
+
+    <string name="chat_voice_confirm">确定</string>
+
+    <string name="chat_voice_continue">继续语音</string>
+
+    <string name="chat_voice_continue_hint">返回语音输入继续说话</string>
+
+    <string name="chat_voice_expires_until">有效期至 %s</string>
+
+    <string name="chat_voice_generating">语音生成中...</string>
+
+    <string name="chat_voice_generating_hint">正在生成语音消息</string>
+
+    <string name="chat_voice_hold_continue">按住继续说话</string>
+
+    <string name="chat_voice_hold_hint">长按开始录音，在椭圆内松开发送，滑出后松开取消发送，滑回来继续发送</string>
+
+    <string name="chat_voice_hold_talk">按住说话</string>
+
+    <string name="chat_voice_message_label">语音消息</string>
+
+    <string name="chat_voice_play_failed">语音播放失败：%s</string>
+
+    <string name="chat_voice_play_hint">点击播放或暂停</string>
+
+    <string name="chat_voice_play_hint_transcript">点击播放或暂停，长按可转文字</string>
+
+    <string name="chat_voice_preparing">正在准备录音</string>
+
+    <string name="chat_voice_recording">录音中</string>
+
+    <string name="chat_voice_release_cancel">松开取消发送</string>
+
+    <string name="chat_voice_release_send">松开发送</string>
+
+    <string name="chat_voice_sending">正在发送</string>
+
+    <string name="chat_voice_transcript_hint">点按后可继续修改，修改完成后点确定发送</string>
+
+    <string name="chat_voice_transcript_label">语音识别结果</string>
+
+    <string name="chat_voice_reply_disabled_hint">先安装语音发送拓展技能，再回来开启这个开关。</string>
+
+    <string name="chat_voice_reply_enabled_hint">开启后，消息变为语音消息。</string>
+
+    <string name="chat_voice_reply_title">语音回复</string>
+
+    <string name="chat_voice_reply_toggle">语音回复</string>
+
+    <string name="chat_voice_settings_auto_select">自动选择</string>
+
+    <string name="chat_voice_settings_chinese_male">中文男声</string>
+
+    <string name="chat_voice_settings_edge_tts_hint">edge-tts-universal 会优先使用这里的值，系统语音只做兜底。</string>
+
+    <string name="chat_voice_settings_english_female">英文女声</string>
+
+    <string name="chat_voice_settings_english_male">英文男声</string>
+
+    <string name="chat_voice_settings_fast">快</string>
+
+    <string name="chat_voice_settings_lively_female">活泼女声</string>
+
+    <string name="chat_voice_settings_slow">慢</string>
+
+    <string name="chat_voice_settings_speed">语速</string>
+
+    <string name="chat_voice_settings_subtitle">选一个常用音色，再把语速调到舒服的节奏。</string>
+
+    <string name="chat_voice_settings_title">语音参数</string>
+
+    <string name="chat_voice_settings_voice">声音</string>
+
+    <string name="common_action_back">返回</string>
+
+    <string name="common_action_cancel">取消</string>
+
+    <string name="common_action_clear_search">清空搜索</string>
+
+    <string name="common_action_delete">删除</string>
+    <string name="common_action_create">创建</string>
+    <string name="common_action_restart">立即重启</string>
+
+    <string name="common_action_done">完成</string>
+
+    <string name="common_action_keep">保留</string>
+
+    <string name="common_action_more">更多…</string>
+
+    <string name="common_action_ok">知道了</string>
+
+    <string name="common_action_refresh_now">立即刷新</string>
+    <string name="common_action_refresh">刷新</string>
+
+    <string name="common_action_reload">重新加载</string>
+
+    <string name="common_action_save">保存</string>
+
+    <string name="common_action_view_all">查看全部</string>
+
+    <string name="common_default">默认</string>
+
+    <string name="common_filter_all">全部</string>
+
+    <string name="common_none">暂无</string>
+
+    <string name="common_toggle_off">已关闭</string>
+
+    <string name="common_toggle_on">已开启</string>
+
+    <string name="common_unknown">未知</string>
+
+    <string name="gateway_aggregate_connecting">连接中</string>
+
+    <string name="gateway_aggregate_offline">离线</string>
+
+    <string name="gateway_aggregate_online">在线</string>
+
+    <string name="gateway_aggregate_partial">半可用</string>
+
+    <string name="gateway_card_last_seen">最近登录 %s</string>
+
+    <string name="gateway_card_recent_model">最近使用模型</string>
+
+    <string name="gateway_context_empty">上下文 --</string>
+
+    <string name="gateway_context_value">上下文 %s</string>
+
+    <string name="gateway_empty_bind_button">去绑定主机</string>
+
+    <string name="gateway_empty_description">你仍然可以保留在正常页面里，只是聊天和管理功能需要先绑定一个主机。</string>
+
+    <string name="gateway_empty_hint">如果你的账号下已经有多台主机，先在这里切到已绑定的那一台；如果一台都没有，直接去绑定。</string>
+
+    <string name="gateway_empty_no_host">当前没有绑定主机</string>
+
+    <string name="gateway_empty_no_switch">没有可切换的网关</string>
+
+    <string name="gateway_list_title">网关列表</string>
+
+    <string name="gateway_maintenance_recovering_detail">%s 正在重启恢复中，相关操作会暂时锁定，等电脑端重新回到聊天列表后会自动解锁。</string>
+
+    <string name="gateway_maintenance_recovering_short">网关重启恢复中，暂不可操作</string>
+
+    <string name="gateway_maintenance_sending_detail">%s 的重启请求正在发送中，相关操作会暂时锁定。</string>
+
+    <string name="gateway_maintenance_sending_short">网关重启请求发送中，暂不可操作</string>
+
+    <string name="gateway_maintenance_timeout_detail">%s 的重启等待已超时，请手动重试或取消等待。</string>
+
+    <string name="gateway_maintenance_timeout_short">网关重启等待已超时，请重试或取消等待</string>
+
+    <string name="gateway_phase_app_relay_authenticated">会话有效</string>
+
+    <string name="gateway_phase_app_relay_connecting">正在建立会话</string>
+
+    <string name="gateway_phase_app_relay_offline">会话未建立</string>
+
+    <string name="gateway_phase_host_gateway_backoff">OpenClaw 重试中</string>
+
+    <string name="gateway_phase_host_gateway_connecting">正在连接 OpenClaw</string>
+
+    <string name="gateway_phase_host_gateway_degraded">OpenClaw 连接异常</string>
+
+    <string name="gateway_phase_host_gateway_healthy">OpenClaw 运行正常</string>
+
+    <string name="gateway_phase_host_gateway_offline">OpenClaw 未连接</string>
+
+    <string name="gateway_phase_host_gateway_waiting">主机已在线，等待 OpenClaw</string>
+
+    <string name="gateway_phase_not_available">未获取</string>
+
+    <string name="gateway_phase_relay_host_backoff">主机连接重试中</string>
+
+    <string name="gateway_phase_relay_host_connected">Relay 已连接到主机</string>
+
+    <string name="gateway_phase_relay_host_connecting">Relay 正在连接主机</string>
+
+    <string name="gateway_phase_relay_host_degraded">主机连接不稳定</string>
+
+    <string name="gateway_phase_relay_host_offline">Relay 未连接到主机</string>
+
+    <string name="gateway_phase_unknown">状态未知</string>
+
+    <string name="gateway_restart_elapsed_hours">%1$d 小时 %2$d 分 %3$d 秒</string>
+
+    <string name="gateway_restart_elapsed_minutes">%1$d 分 %2$d 秒</string>
+
+    <string name="gateway_restart_elapsed_seconds">%d 秒</string>
+
+    <string name="gateway_session_count">共 %s 个，会话按最近活动排序</string>
+
+    <string name="gateway_session_current">当前会话</string>
+
+    <string name="gateway_session_current_badge">当前</string>
+
+    <string name="gateway_session_empty">暂无会话，请先刷新</string>
+
+    <string name="gateway_session_list">会话列表</string>
+
+    <string name="gateway_session_refreshing">正在刷新会话列表</string>
+
+    <string name="gateway_unnamed">未命名网关</string>
+
+    <string name="gateway_unpair_session_message">会清掉这台网关的聊天上下文与绑定信息，需要重新配对后才能继续控制主机。</string>
+
+    <string name="gateway_unpair_titled">取消关联 %s？</string>
+
+    <string name="office_activity_detail_error">需要检查连接或任务状态</string>
+
+    <string name="office_activity_detail_executing">正在执行工具和动作</string>
+
+    <string name="office_activity_detail_model_idle">模型 %s 正在待命</string>
+
+    <string name="office_activity_detail_offline">主机暂时离线</string>
+
+    <string name="office_activity_detail_researching">正在查找资料和上下文</string>
+
+    <string name="office_activity_detail_sleeping">Gateway 已离线，正在床上休息</string>
+
+    <string name="office_activity_detail_syncing">正在同步运行状态</string>
+
+    <string name="office_activity_detail_waiting">等待下一次任务</string>
+
+    <string name="office_activity_detail_writing">正在组织回复和状态</string>
+
+    <string name="office_activity_error">异常</string>
+
+    <string name="office_activity_executing">执行中</string>
+
+    <string name="office_activity_idle">待命</string>
+
+    <string name="office_activity_offline">离线</string>
+
+    <string name="office_activity_researching">检索中</string>
+
+    <string name="office_activity_sleeping">睡觉中</string>
+
+    <string name="office_activity_syncing">同步中</string>
+
+    <string name="office_activity_working">工作中</string>
+
+    <string name="office_activity_writing">写作中</string>
+
+    <string name="office_detail_agent">智能体</string>
+
+    <string name="office_detail_context">上下文</string>
+
+    <string name="office_detail_model">模型</string>
+
+    <string name="office_detail_online">在线</string>
+
+    <string name="office_detail_progress">进度</string>
+
+    <string name="office_dynamics_subtitle">当前状态回顾</string>
+
+    <string name="office_last_active">最后活跃 %s</string>
+
+    <string name="office_last_active_prefix">最后活跃 </string>
+
+    <string name="office_mode_resting">休息中</string>
+
+    <string name="office_mode_resting_subtitle">等待下一条任务</string>
+
+    <string name="office_mode_sleeping">睡觉中</string>
+
+    <string name="office_mode_sleeping_subtitle">Gateway 已离线</string>
+
+    <string name="office_mode_working">工作中</string>
+
+    <string name="office_mode_working_subtitle">正在处理当前任务</string>
+
+    <string name="office_no_host">未绑定主机</string>
+
+    <string name="office_no_host_subtitle">请先配置 Gateway 地址</string>
+
+    <string name="office_panel_dynamics">办公室动态</string>
+
+    <string name="office_recent_online">最近在线 %s</string>
+
+    <string name="office_title">像素办公室</string>
+
+    <string name="settings_about_console">OpenClaw Remote Control Console</string>
+
+    <string name="settings_account_delete">注销账号</string>
+
+    <string name="settings_account_sign_out">退出账号</string>
+
+    <string name="settings_gateway_action_add">添加</string>
+
+    <string name="settings_gateway_action_bind">绑定</string>
+
+    <string name="settings_gateway_edit_name_placeholder">输入网关名称</string>
+
+    <string name="settings_gateway_fallback_last_seen">暂无</string>
+
+    <string name="settings_gateway_fallback_name">未关联主机</string>
+
+    <string name="settings_gateway_fallback_platform">等待重新配对</string>
+
+    <string name="settings_gateway_unpair">取消关联</string>
+
+    <string name="settings_gateway_unpair_message">会清掉当前 App 到 Relay 的会话与本地绑定信息，需要重新配对后才能继续发消息。</string>
+
+    <string name="settings_gateway_unpair_title">取消当前配对？</string>
+
+    <string name="settings_language_en">English</string>
+
+    <string name="settings_language_system">跟随系统</string>
+
+    <string name="settings_language_zh_hans">中文</string>
+
+    <string name="settings_maintenance_lock_title">维护锁定</string>
+
+    <string name="settings_row_advanced">高级功能</string>
+    <string name="settings_section_maintenance">维护管理</string>
+    <string name="settings_section_maintenance_subtitle">网关系统状态与控制</string>
+    <string name="settings_section_repair">修复工具</string>
+    <string name="settings_section_repair_subtitle">排查并修复常见问题</string>
+    <string name="advanced_section_features_subtitle">配置实验性及核心特性</string>
+    <string name="settings_section_data">数据管理</string>
+    <string name="settings_section_data_subtitle">管理系统日志及配置数据</string>
+    <string name="advanced_title">高级设置</string>
+    <string name="advanced_maintenance">维护</string>
+    <string name="advanced_repair">修复</string>
+    <string name="advanced_features">特性</string>
+    <string name="advanced_data_management">数据管理</string>
+    <string name="advanced_restart">重启网关</string>
+    <string name="advanced_restart_detail">重启宿主机上的 OpenClaw 服务。</string>
+    <string name="advanced_remote_restart">远程重启</string>
+    <string name="advanced_remote_restart_detail">完全重启远程宿主系统。</string>
+    <string name="advanced_restart_confirm_title">重启网关软件？</string>
+    <string name="advanced_restart_confirm_message">这将重启宿主机上的 OpenClaw 软件。当前正在进行的会话可能会有短暂中断。</string>
+    <string name="advanced_remote_restart_confirm_title">远程重启主机？</string>
+    <string name="advanced_remote_restart_confirm_message">这将对远程宿主机执行完整的系统重启。此操作不可撤销，请确认主机已保存所有工作。</string>
+    <string name="advanced_prefs_show_tools">显示工具调用过程</string>
+    <string name="advanced_prefs_show_tools_detail">在聊天中展示后台工具调用的详细过程。</string>
+    <string name="advanced_doctor_fix">Doctor Fix</string>
+    <string name="advanced_doctor_fix_detail">在网关上运行全面的诊断和修复脚本。</string>
+    <string name="advanced_doctor_fix_execute">执行 Doctor Fix</string>
+    <string name="advanced_backups">备份管理</string>
+    <string name="advanced_backups_detail">管理并恢复系统配置备份。</string>
+    <string name="advanced_logs">系统日志</string>
+    <string name="advanced_logs_detail">实时查看网关的系统运行日志。</string>
+
+    <string name="settings_row_check_update">检查更新</string>
+
+    <string name="settings_row_check_update_detail">打开 App Store</string>
+
+    <string name="settings_row_language">语言</string>
+
+    <string name="settings_row_models">模型</string>
+    <string name="settings_row_backups">备份管理</string>
+    <string name="backups_empty_state">当前网关暂无备份记录。</string>
+    <string name="backups_action_restore">恢复</string>
+    <string name="backups_create_title">新建备份</string>
+    <string name="backups_create_label">标签</string>
+    <string name="backups_create_note">备注 (可选)</string>
+    <string name="settings_row_logs">网关日志</string>
+
+    <string name="settings_row_office">像素办公室</string>
+
+    <string name="settings_row_sessions">会话</string>
+
+    <string name="settings_row_skills">技能</string>
+
+    <string name="settings_row_tasks">定时任务</string>
+
+    <string name="settings_row_usage_guide">使用说明</string>
+
+    <string name="settings_row_voice_setup">配置语音发送</string>
+
+    <string name="settings_section_about">关于</string>
+
+    <string name="settings_section_about_subtitle">检查更新与发布入口</string>
+
+    <string name="settings_section_account">账号</string>
+
+    <string name="settings_section_account_subtitle">退出当前账号或永久注销</string>
+
+    <string name="settings_section_ai">AI</string>
+
+    <string name="settings_section_ai_subtitle">配置模型、会话以及语音偏好</string>
+
+    <string name="settings_section_features">功能</string>
+
+    <string name="settings_section_features_subtitle">使用像素办公室观察工作状态，管理定时任务与技能</string>
+
+    <string name="settings_section_gateway">网关</string>
+
+    <string name="settings_section_gateway_subtitle">检查 App、Relay 与 OpenClaw 哪一段没有连通</string>
+
+    <string name="settings_section_management">管理</string>
+
+    <string name="settings_section_management_subtitle">网关维护与使用指南</string>
+
+    <string name="settings_session_hint_title">会话提示</string>
+
+    <string name="settings_session_list_title">会话列表</string>
+
+    <string name="settings_session_lock_title">会话锁定</string>
+
+    <string name="skills_action_disable">停用技能</string>
+
+    <string name="skills_action_enable">启用技能</string>
+
+    <string name="skills_availability_blocked">受限</string>
+
+    <string name="skills_availability_disabled">已停用</string>
+
+    <string name="skills_availability_needs_setup">需配置</string>
+
+    <string name="skills_availability_ready">可用</string>
+
+    <string name="skills_compact_missing_count">缺失 %d 项</string>
+
+    <string name="skills_compact_no_requirements">无需依赖</string>
+
+    <string name="skills_compact_ready">依赖齐全</string>
+
+    <string name="skills_config_satisfied">已满足</string>
+
+    <string name="skills_config_unsatisfied">未满足</string>
+
+    <string name="skills_detail_always_loaded">始终加载</string>
+
+    <string name="skills_detail_current_status">当前状态</string>
+
+    <string name="skills_detail_homepage">项目主页</string>
+
+    <string name="skills_detail_install_path">安装路径</string>
+
+    <string name="skills_detail_open_homepage">打开技能主页</string>
+
+    <string name="skills_detail_primary_env">主环境变量</string>
+
+    <string name="skills_detail_quick_prompts_hint">点一下就会把句子带入聊天输入框，后面只要补一句具体需求。</string>
+
+    <string name="skills_detail_section_config_checks">配置检查</string>
+
+    <string name="skills_detail_section_quick_prompts">快捷带入</string>
+
+    <string name="skills_detail_section_requirements">依赖与缺失</string>
+
+    <string name="skills_detail_section_status_source">状态与来源</string>
+
+    <string name="skills_detail_source">技能来源</string>
+
+    <string name="skills_detail_title">技能详情</string>
+
+    <string name="skills_detail_unavailable_subtitle">请返回上一页并重新打开该技能，或者手动刷新列表。</string>
+
+    <string name="skills_detail_unavailable_title">技能列表刚刚切换，当前条目已经不可用。</string>
+
+    <string name="skills_empty_no_results_subtitle">换一个筛选条件，或者搜索别的关键词试试。</string>
+
+    <string name="skills_empty_no_results_title">没有找到匹配的技能</string>
+
+    <string name="skills_empty_subtitle">连接到当前网关后，技能列表会自动同步到这里。</string>
+
+    <string name="skills_empty_title">当前没有已安装技能</string>
+
+    <string name="skills_expansion_file_hero_subtitle">不用手写技能内容，点一下就能让它自己创建并验证。</string>
+
+    <string name="skills_expansion_file_hero_title">让 OpenClaw 帮你收发文件</string>
+
+    <string name="skills_expansion_file_install_button">让 OpenClaw 安装文件互传</string>
+
+    <string name="skills_expansion_file_step1_detail">配置完成后，ClawLink 可以把电脑上的文件通过 `clawconnect send-file` 发到 iPhone，iPhone 端也能把文件通过附件入口回传到聊天中。</string>
+
+    <string name="skills_expansion_file_step1_title">了解这个能力</string>
+
+    <string name="skills_expansion_file_step2_detail">这个能力依赖 `skill-creator` 和 `clawconnect-agent` 的 send-file 流程，先确认工具已安装，再按固定模板生成正确的 `file-transfer` 技能。</string>
+
+    <string name="skills_expansion_file_step2_title">确认技能来源</string>
+
+    <string name="skills_expansion_file_step3_detail">点底部按钮后，OpenClaw 会先读懂 `clawconnect send-file` 的用法，再自己生成 `file-transfer` 技能、验证 relay 上传流程，并把偏好写进记忆。</string>
+
+    <string name="skills_expansion_file_step3_title">安装并验证文件互传</string>
+
+    <string name="skills_expansion_file_title">启动文件互传</string>
+
+    <string name="skills_expansion_voice_hero_subtitle">先装 edge-tts-universal，再把默认音色和语速写进配置，受限时自动回退到系统语音。</string>
+
+    <string name="skills_expansion_voice_hero_title">让 OpenClaw 把回复变成语音</string>
+
+    <string name="skills_expansion_voice_install_button">让 OpenClaw 配置语音发送</string>
+
+    <string name="skills_expansion_voice_step1_detail">先把 `edge-tts-universal`、默认音色和系统语音的兜底关系理清楚，这样语音回复在生成受限时也不会断。</string>
+
+    <string name="skills_expansion_voice_step1_title">了解这个能力</string>
+
+    <string name="skills_expansion_voice_step2_detail">这个能力依赖 `skill-creator`、`edge-tts-universal` 和宿主机语音引擎，先确认可用再继续生成技能，并把音色和语速默认值写进去。</string>
+
+    <string name="skills_expansion_voice_step2_title">确认技能来源</string>
+
+    <string name="skills_expansion_voice_step3_detail">点底部按钮后，OpenClaw 会先安装并验证 `edge-tts-universal`，再按你选的音色和语速把测试语音发到 iPhone。</string>
+
+    <string name="skills_expansion_voice_step3_title">安装并验证语音发送</string>
+
+    <string name="skills_expansion_voice_title">配置语音发送</string>
+
+    <string name="skills_install_none">没有可见安装方式</string>
+
+    <string name="skills_metric_needs_setup">待配置</string>
+
+    <string name="skills_metric_ready">可用</string>
+
+    <string name="skills_missing_none">没有缺失项</string>
+
+    <string name="skills_overview_installed">已安装技能</string>
+
+    <string name="skills_prompt_template_clarify_prompt">如果我描述得不完整，请先问我 1 个最关键的问题，再继续使用「{skillName}」。</string>
+
+    <string name="skills_prompt_template_clarify_subtitle">信息不够时先补齐</string>
+
+    <string name="skills_prompt_template_clarify_title">先问我</string>
+
+    <string name="skills_prompt_template_short_prompt">请用最短可执行的方式调用「{skillName}」完成这件事：</string>
+
+    <string name="skills_prompt_template_short_subtitle">只要最短可执行步骤</string>
+
+    <string name="skills_prompt_template_short_title">最短指令</string>
+
+    <string name="skills_prompt_template_starter_prompt">请使用「{skillName}」帮我处理这个需求：</string>
+
+    <string name="skills_prompt_template_starter_subtitle">把技能名带进去</string>
+
+    <string name="skills_prompt_template_starter_title">直接开口</string>
+
+    <string name="skills_refresh_title">技能刷新</string>
+
+    <string name="skills_requirements_any">任一 %s</string>
+
+    <string name="skills_requirements_any_commands">任一命令</string>
+
+    <string name="skills_requirements_commands">命令</string>
+
+    <string name="skills_requirements_config">配置项</string>
+
+    <string name="skills_requirements_env">环境变量</string>
+
+    <string name="skills_requirements_none">这个技能没有额外依赖。</string>
+
+    <string name="skills_requirements_platform">平台</string>
+
+    <string name="skills_search_placeholder">搜索技能名称、用途或来源</string>
+
+    <string name="skills_source_bundled">内置</string>
+
+    <string name="skills_source_extra">额外目录</string>
+
+    <string name="skills_source_managed">托管</string>
+
+    <string name="skills_source_plugin">插件</string>
+
+    <string name="skills_source_unmarked">未标记</string>
+
+    <string name="skills_source_workspace">工作区</string>
+
+    <string name="skills_state_disabled">已停用</string>
+
+    <string name="skills_state_enabled">已启用</string>
+
+    <string name="skills_status_blocked_detail">当前被 allowlist 限制</string>
+
+    <string name="skills_status_disabled_detail">当前在设置里已停用</string>
+
+    <string name="skills_status_missing_detail">还差 %s</string>
+
+    <string name="skills_status_needs_setup_detail">还需要补齐依赖</string>
+
+    <string name="skills_status_ready_detail">依赖齐全，可以直接使用</string>
+
+    <string name="skills_summary_blocked">受限状态，当前不能启用。</string>
+
+    <string name="skills_summary_disabled">已停用，点开详情可重新启用。</string>
+
+    <string name="tasks_badge_completed">已完成</string>
+
+    <string name="tasks_badge_enabled">已启用</string>
+
+    <string name="tasks_badge_paused">已暂停</string>
+
+    <string name="tasks_badge_pending">待执行</string>
+
+    <string name="tasks_delete_confirm_message">任务「%s」会从 Relay 中移除。</string>
+
+    <string name="tasks_delete_confirm_title">删除这个任务？</string>
+
+    <string name="tasks_delete_confirm_title_named">删除「%s」？</string>
+
+    <string name="tasks_editor_create_subtitle">先写任务要做什么，再设置执行方式和时间。标题可以留空。</string>
+
+    <string name="tasks_editor_create_title">新建任务</string>
+
+    <string name="tasks_editor_edit_subtitle">修改任务内容、执行方式或时间。</string>
+
+    <string name="tasks_editor_edit_title">编辑任务</string>
+
+    <string name="tasks_editor_execution_settings">执行设置</string>
+
+    <string name="tasks_editor_first_run_time">首次执行</string>
+
+    <string name="tasks_editor_interval_amount">间隔数值</string>
+
+    <string name="tasks_editor_mode_once">单次执行</string>
+
+    <string name="tasks_editor_mode_repeat">循环执行</string>
+
+    <string name="tasks_editor_preset_15_minutes">15 分钟后</string>
+
+    <string name="tasks_editor_preset_1_hour">1 小时后</string>
+
+    <string name="tasks_editor_preset_every_1_day">每 1 天</string>
+
+    <string name="tasks_editor_preset_tomorrow_9">明天 09:00</string>
+
+    <string name="tasks_editor_presets_title">快速设置</string>
+
+    <string name="tasks_editor_preview_new_task">新任务</string>
+
+    <string name="tasks_editor_preview_once">一次执行</string>
+
+    <string name="tasks_editor_preview_repeat">循环执行</string>
+
+    <string name="tasks_editor_preview_title">计划预览 (保存后的外观)</string>
+
+    <string name="tasks_editor_prompt_label">任务指令</string>
+
+    <string name="tasks_editor_prompt_placeholder">例如：每天早上总结前一天的聊天要点...</string>
+
+    <string name="tasks_editor_repeat_after_each_run">每次执行后循环</string>
+
+    <string name="tasks_editor_repeat_every">每 %1$s %2$s</string>
+
+    <string name="tasks_editor_repeat_preview">%1$s，之后按 %2$s 循环</string>
+
+    <string name="tasks_editor_schedule_time">执行时间</string>
+
+    <string name="tasks_editor_select_first_run_time">请选择首次执行时间</string>
+
+    <string name="tasks_editor_select_schedule_time">请选择执行时间</string>
+
+    <string name="tasks_editor_time_unit">时间单位</string>
+
+    <string name="tasks_editor_title_label">任务标题</string>
+
+    <string name="tasks_editor_title_placeholder">留空会自动生成</string>
+
+    <string name="tasks_editor_unit_picker">单位</string>
+
+    <string name="tasks_empty_no_results_title">当前条件没有结果</string>
+
+    <string name="tasks_empty_subtitle_filter">换个筛选条件看看，或者回到全部任务。</string>
+
+    <string name="tasks_empty_subtitle_no_tasks">先点上方的大按钮，写一句话再设置执行时间。</string>
+
+    <string name="tasks_empty_subtitle_search">换个关键词试试，或者直接清空搜索。</string>
+
+    <string name="tasks_empty_title">还没有定时任务</string>
+
+    <string name="tasks_filter_active">进行中</string>
+
+    <string name="tasks_filter_completed">已完成</string>
+
+    <string name="tasks_filter_paused">已暂停</string>
+
+    <string name="tasks_list_subtitle_default">点按任务卡进入编辑，左右滑可以更快处理。</string>
+
+    <string name="tasks_list_subtitle_grouped">默认按状态分组，点按任务卡进入编辑，左右滑可以更快处理。</string>
+
+    <string name="tasks_list_subtitle_searching">正在搜索「%s」，点按任务卡进入编辑，左右滑可以更快处理。</string>
+
+    <string name="tasks_list_title">任务列表</string>
+
+    <string name="tasks_metric_paused">暂停</string>
+
+    <string name="tasks_metric_running">运行中</string>
+
+    <string name="tasks_metric_total">总计</string>
+
+    <string name="tasks_model_last_result_empty">暂无执行结果</string>
+
+    <string name="tasks_model_next_run_at">下次 %s</string>
+
+    <string name="tasks_model_next_run_empty">暂无下次执行时间</string>
+
+    <string name="tasks_model_prompt_empty">暂无执行内容</string>
+
+    <string name="tasks_model_schedule_every">每 %1$s %2$s</string>
+
+    <string name="tasks_model_schedule_every_start">每 %1$s %2$s · 起始 %3$s</string>
+
+    <string name="tasks_model_schedule_once">一次性任务</string>
+
+    <string name="tasks_model_schedule_once_at">一次性 · %s</string>
+
+    <string name="tasks_model_schedule_repeat">重复执行</string>
+
+    <string name="tasks_model_schedule_repeat_start">重复执行 · 起始 %s</string>
+
+    <string name="tasks_model_schedule_unset">未设置</string>
+
+    <string name="tasks_overview_no_scheduled">没有排期中的任务</string>
+
+    <string name="tasks_refresh_title">任务刷新</string>
+
+    <string name="tasks_repeat_count">次</string>
+
+    <string name="tasks_repeat_day">天</string>
+
+    <string name="tasks_repeat_days">天</string>
+
+    <string name="tasks_repeat_hour">小时</string>
+
+    <string name="tasks_repeat_hours">小时</string>
+
+    <string name="tasks_repeat_minute">分钟</string>
+
+    <string name="tasks_repeat_minutes">分钟</string>
+
+    <string name="tasks_repeat_week">周</string>
+
+    <string name="tasks_repeat_weeks">周</string>
+
+    <string name="tasks_search_placeholder">搜索任务标题、内容或计划...</string>
+
+    <string name="tasks_section_count">%d 个任务</string>
+
+    <string name="tasks_validation_first_schedule_required">请选择首次执行时间。</string>
+
+    <string name="tasks_validation_prompt_required">请输入要执行的内容。</string>
+
+    <string name="tasks_validation_repeat_amount_positive">重复间隔必须大于 0。</string>
+
+    <string name="tasks_validation_repeat_unit_required">请选择重复单位。</string>
+
+    <string name="tasks_validation_schedule_kind_required">请选择任务的执行方式。</string>
+
+    <string name="tasks_validation_schedule_required">请选择执行时间。</string>
+
+
 </resources>

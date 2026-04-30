@@ -2,102 +2,1335 @@
 <resources>
     <string name="app_name">ClawLink</string>
 
-    <!-- Auth -->
+
+    
     <string name="login_title">Login</string>
+
     <string name="login_email">Email</string>
+
     <string name="login_password">Password</string>
+
     <string name="login_server_url">Server URL</string>
+
     <string name="login_button">Login</string>
+
     <string name="login_register">Register</string>
+
     <string name="login_forgot_password">Forgot Password?</string>
+
     <string name="pairing_title">Pair Gateway</string>
+
     <string name="pairing_gateway_id">Gateway ID</string>
+
     <string name="pairing_access_code">Access Code</string>
+
     <string name="pairing_button">Pair</string>
 
-    <!-- Main -->
+
+    
     <string name="main_title">ClawLink</string>
+
     <string name="main_no_gateway">No gateway connected</string>
+
     <string name="main_tap_select">Tap to select a gateway</string>
+
     <string name="quick_actions">Quick Actions</string>
+
     <string name="gateway_details">Gateway Details</string>
 
-    <!-- Navigation -->
+
+    
     <string name="nav_chat">Chat</string>
+
     <string name="nav_models">Models</string>
+
     <string name="nav_skills">Skills</string>
+
     <string name="nav_tasks">Tasks</string>
 
-    <!-- Chat -->
+
+    
     <string name="chat_title">Chat</string>
+
     <string name="chat_placeholder">Type a message...</string>
+
     <string name="chat_send">Send</string>
+
     <string name="chat_new_session">New session</string>
+
     <string name="chat_sessions">Sessions</string>
+
     <string name="chat_empty">Start a conversation</string>
+
     <string name="chat_thinking">Thinking…</string>
+
     <string name="chat_toggle_tools">Toggle tool messages</string>
 
-    <!-- Gateways -->
+
+    
     <string name="gateways_title">Gateways</string>
+
     <string name="gateways_empty">No gateways found</string>
+
     <string name="gateways_empty_hint">Make sure your relay server is running</string>
+
     <string name="gateways_refresh">Refresh</string>
+
     <string name="gateways_switch">Switch Gateway</string>
 
-    <!-- Models -->
+
+    
     <string name="models_title">Models</string>
+
     <string name="models_empty">No models available</string>
+
     <string name="models_context">Context: %s tokens</string>
+
     <string name="models_selected">Selected</string>
 
-    <!-- Skills -->
-    <string name="skills_title">Skills (%1$d/%2$d)</string>
+
+    
+    <string name="skills_title">Skills</string>
+
     <string name="skills_empty">No skills found</string>
+
     <string name="skills_commands">Commands:</string>
 
-    <!-- Tasks -->
-    <string name="tasks_title">Tasks</string>
+
+    
+    <string name="tasks_title">Scheduled Tasks</string>
+
     <string name="tasks_active">Active</string>
+
     <string name="tasks_paused">Paused</string>
+
     <string name="tasks_empty">No tasks yet</string>
+
     <string name="tasks_create">Create Task</string>
+
     <string name="tasks_delete">Delete</string>
+
     <string name="tasks_next">Next: %s</string>
+
     <string name="tasks_last_result">Last Result</string>
+
     <string name="tasks_created">Created</string>
+
     <string name="tasks_schedule">Schedule</string>
 
-    <!-- Create Task Dialog -->
+
+    
     <string name="task_dialog_title">Create Task</string>
+
     <string name="task_dialog_title_label">Title</string>
+
     <string name="task_dialog_prompt_label">Prompt</string>
+
     <string name="task_dialog_every_label">Every</string>
+
     <string name="task_dialog_unit_label">Unit</string>
+
     <string name="task_dialog_create">Create</string>
+
     <string name="task_dialog_cancel">Cancel</string>
 
-    <!-- Settings -->
+
+    
     <string name="settings_title">Settings</string>
+
     <string name="settings_account">Account</string>
+
     <string name="settings_email">Email</string>
+
     <string name="settings_gateway">Gateway</string>
+
     <string name="settings_server">Server</string>
+
     <string name="settings_preferences">Preferences</string>
+
     <string name="settings_advanced">Advanced Settings</string>
+
     <string name="settings_advanced_subtitle">Logs, backups, gateway maintenance</string>
+
     <string name="settings_help">Help &amp; Usage Guide</string>
+
     <string name="settings_help_subtitle">How to use PocketClaw</string>
+
     <string name="settings_logout">Logout</string>
+
     <string name="settings_session">Session</string>
 
-    <!-- General -->
+
+    
     <string name="back">Back</string>
+
     <string name="refresh">Refresh</string>
+
     <string name="dismiss">Dismiss</string>
+
     <string name="cancel">Cancel</string>
+
     <string name="save">Save</string>
+
     <string name="delete">Delete</string>
+
     <string name="ok">OK</string>
+
     <string name="no_gateway_selected">Not set</string>
+
+<string name="advanced_backup_management">Backup Management</string>
+
+    <string name="advanced_backup_management_detail">Locally manage openclaw.json backups.</string>
+
+    <string name="advanced_restart_gateway">Restart Gateway</string>
+
+    <string name="advanced_restart_gateway_detail">Use when Gateway is online. Connection will briefly drop.</string>
+
+    <string name="advanced_show_tools">Show tool invocation process</string>
+
+    <string name="advanced_show_tools_detail">When off, only result cards are shown to simplify chat view.</string>
+
+    <string name="advanced_status_unknown">Unknown</string>
+
+
+
+    <string name="advanced_view_logs">View Logs</string>
+
+    <string name="advanced_view_logs_detail">Read all logs with keyword search for quick troubleshooting.</string>
+
+    <string name="alert_delete_account_message">This will delete your account, unbind all gateways, and clear messages and files. This cannot be undone.</string>
+
+    <string name="alert_delete_account_title">Delete Account?</string>
+
+    <string name="alert_save_name_failed_title">Failed to Save Name</string>
+
+    <string name="alert_update_failed_message">Unable to open the external update page. You can try again later or search for ClawLink directly in the App Store.</string>
+
+    <string name="alert_update_failed_title">Update Check Failed</string>
+
+    <string name="auth_button_apple_sign_in">Sign in with Apple</string>
+
+    <string name="auth_button_processing">Processing…</string>
+
+    <string name="auth_button_register">Register</string>
+
+    <string name="auth_button_send_verification">Send Code</string>
+
+    <string name="auth_button_sign_in">Sign In</string>
+
+    <string name="auth_button_verify_and_register">Verify &amp; Register</string>
+
+    <string name="auth_divider_or">Or</string>
+
+    <string name="auth_field_email">Email</string>
+
+    <string name="auth_field_name">Name</string>
+
+    <string name="auth_field_name_placeholder">e.g. Alex</string>
+
+    <string name="auth_field_password">Password</string>
+
+    <string name="auth_field_password_hide">Hide password</string>
+
+    <string name="auth_field_password_placeholder_login">Enter your password</string>
+
+    <string name="auth_field_password_placeholder_register">At least 8 characters</string>
+
+    <string name="auth_field_password_show">Show password</string>
+
+    <string name="auth_field_verification">Verification Code</string>
+
+    <string name="auth_field_verification_placeholder">Enter 6-digit code</string>
+
+    <string name="auth_login_subtitle">Sign in with email or Apple ID</string>
+
+    <string name="auth_login_title">Sign In</string>
+
+    <string name="auth_more_settings_title">More Settings</string>
+
+    <string name="auth_pairing_binding_in_progress">Binding…</string>
+
+    <string name="auth_pairing_complete_binding">Complete Binding</string>
+
+    <string name="auth_pairing_current_account">Currently signed in</string>
+
+    <string name="auth_pairing_hint_retry">Check the error above and try again.</string>
+
+    <string name="auth_pairing_hint_success">Binding complete. Returning to main screen.</string>
+
+    <string name="auth_pairing_hint_verifying">Verifying binding info and refreshing gateway list, please wait.</string>
+
+    <string name="auth_pairing_manual_title">Manual Input</string>
+
+    <string name="auth_pairing_nav_title">Bind Host</string>
+
+    <string name="auth_pairing_pairing_code_placeholder">Pairing Code</string>
+
+    <string name="auth_pairing_result_fail_message">Binding failed. Please check the Relay address and pairing code, then try again.</string>
+
+    <string name="auth_pairing_result_fail_title">Binding Failed</string>
+
+    <string name="auth_pairing_result_success_message">Host has been bound. Returning to main screen.</string>
+
+    <string name="auth_pairing_result_success_title">Binding Successful</string>
+
+    <string name="auth_pairing_scan_fail_title">Scan Failed</string>
+
+    <string name="auth_pairing_scan_success_message">QR code recognized. Completing binding automatically.</string>
+
+    <string name="auth_pairing_scan_success_title">Scan Successful</string>
+
+    <string name="auth_pairing_scan_button">Start Scanning</string>
+
+    <string name="auth_pairing_scan_description">Point at the QR code from `clawconnect pair`. The Relay address and pairing code will be filled automatically.</string>
+
+    <string name="auth_pairing_scan_no_camera_hint">If camera access is unavailable, you can still use manual input below.</string>
+
+    <string name="auth_pairing_scan_title">Scan to Fill</string>
+
+    <string name="auth_pairing_scanner_close">Close Scanner</string>
+
+    <string name="auth_pairing_scanner_description">Point at the QR code from connect-agent. The Relay address and pairing code will be filled back automatically.</string>
+
+    <string name="auth_pairing_scanner_input_unavailable">Unable to access camera input.</string>
+
+    <string name="auth_pairing_scanner_no_available_camera">No available camera in current environment.</string>
+
+    <string name="auth_pairing_scanner_no_camera">No camera available on this device.</string>
+
+    <string name="auth_pairing_scanner_no_camera_hint">If camera permission is not available, go back to enter manually.</string>
+
+    <string name="auth_pairing_scanner_permission_denied">Camera permission denied. Please enable it in Settings and try again.</string>
+
+    <string name="auth_pairing_scanner_permission_restricted">Camera access is restricted. Please allow camera access in Settings.</string>
+
+    <string name="auth_pairing_scanner_place_qr">Place QR code inside the viewfinder</string>
+
+    <string name="auth_pairing_scanner_qr_detection_failed">Unable to start QR code detection.</string>
+
+    <string name="auth_pairing_scanner_start_failed">Camera failed to start. Please try again later.</string>
+
+    <string name="auth_pairing_scanner_title">Scan QR Code</string>
+
+    <string name="auth_pairing_scanner_unrecognizable">Unable to recognize QR code content. Please scan again.</string>
+
+    <string name="auth_pairing_subtitle">Scan QR code or enter pairing code manually</string>
+
+    <string name="auth_pairing_title">Bind Your Host</string>
+
+    <string name="auth_pairing_wrong_account_hint">If bound to the wrong account, sign out and sign in again.</string>
+
+    <string name="auth_password_min_length">At least 8 characters</string>
+
+    <string name="auth_private_deployment_description">Enable to use a custom Relay address. Disable to use the default.</string>
+
+    <string name="auth_private_deployment_title">Private Deployment</string>
+
+    <string name="auth_register_subtitle">Sync devices and sessions after registration</string>
+
+    <string name="auth_register_title">Create Account</string>
+
+    <string name="auth_relay_address">Relay Address</string>
+
+    <string name="auth_resend_countdown">Resend (%ss)</string>
+
+    <string name="auth_resend_prompt">Didn\'t receive it? Resend code</string>
+
+    <string name="auth_verification_subtitle_sent">Verification code sent. Enter it below.</string>
+
+    <string name="auth_verification_subtitle_to">Verification code sent to %s</string>
+
+    <string name="chat_attachment_copied">Copied</string>
+
+    <string name="chat_attachment_copy">Copy</string>
+
+    <string name="chat_attachment_upload_failed">Failed</string>
+
+    <string name="chat_attachment_uploaded">Sent</string>
+
+    <string name="chat_composer_add_attachment">Add Attachment</string>
+
+    <string name="chat_composer_add_attachment_hint">Choose files, photos, or camera</string>
+
+    <string name="chat_composer_camera">Camera</string>
+
+    <string name="chat_composer_camera_unavailable">Camera is not available on this device.</string>
+
+    <string name="chat_composer_clear">Clear</string>
+
+    <string name="chat_composer_file">File</string>
+
+    <string name="chat_composer_image_read_failed">Unable to read the selected image.</string>
+
+    <string name="chat_composer_image_save_failed">Unable to save the selected image.</string>
+
+    <string name="chat_composer_import_failed">Import Failed</string>
+
+    <string name="chat_composer_import_failed_default">Unable to import the selected attachment.</string>
+
+    <string name="chat_composer_no_importable_images">No images to import.</string>
+
+    <string name="chat_composer_pending_files">Pending Files</string>
+
+    <string name="chat_composer_photo_library">Photos</string>
+
+    <string name="chat_composer_stop_voice_hint">Tap to end current voice input</string>
+
+    <string name="chat_composer_stop_voice_input">Stop Voice Input</string>
+
+    <string name="chat_composer_switch_to_text">Switch to Text Input</string>
+
+    <string name="chat_composer_switch_to_text_hint">Return to text input to continue editing</string>
+
+    <string name="chat_composer_switch_to_voice">Switch to Voice Input</string>
+
+    <string name="chat_composer_switch_to_voice_hint_supported">Tap to expand hold-to-speak mode</string>
+
+    <string name="chat_composer_switch_to_voice_hint_unsupported">Voice input is not supported in the current environment</string>
+
+    <string name="chat_composer_text_hint">Switch to text input</string>
+
+    <string name="chat_composer_text_hint_detail">Return to text input to continue editing</string>
+
+    <string name="chat_composer_voice_hint">Switch to voice input</string>
+
+    <string name="chat_composer_voice_hint_expand">Tap to open hold-to-talk mode</string>
+
+    <string name="chat_composer_voice_hint_unsupported">Voice input is not supported in current environment</string>
+
+    <string name="chat_composer_voice_hold_continue">Hold to Continue Talking</string>
+
+    <string name="chat_composer_voice_hold_hint">Long press to start recording, release within ellipse to send, slide out to cancel, slide back to continue sending</string>
+
+    <string name="chat_composer_voice_hold_talk">Hold to Talk</string>
+
+    <string name="chat_composer_voice_input">Voice Input</string>
+
+    <string name="chat_composer_voice_input_hint">Tap to start voice input and fill in the message box</string>
+
+    <string name="chat_composer_voice_release_cancel">Release to Cancel</string>
+
+    <string name="chat_composer_voice_release_send">Release to Send</string>
+
+    <string name="chat_connection_connecting">Connecting</string>
+
+    <string name="chat_connection_offline">Disconnected</string>
+
+    <string name="chat_connection_ok">Connected</string>
+
+    <string name="chat_connection_partial">Partially Available</string>
+
+    <string name="chat_context_label">Context</string>
+
+    <string name="chat_empty_guide_button">View Usage Guide</string>
+
+    <string name="chat_empty_guide_description_new">Install Agent, generate pairing code, run background service. Follow the steps.</string>
+
+    <string name="chat_empty_guide_description_seen">Install Agent, generate pairing code, run background service. You can come back anytime.</string>
+
+    <string name="chat_empty_guide_title">Read the Guide First</string>
+
+    <string name="chat_empty_no_host_description">You\'re back on the normal page, but chat, models, skills, and tasks require a bound host.</string>
+
+    <string name="chat_empty_no_host_hint">If you have multiple hosts, switch to a bound one in the gateway list.</string>
+
+    <string name="chat_empty_no_host_title">No Host Bound</string>
+
+    <string name="chat_empty_open_settings">Open Settings</string>
+
+    <string name="chat_file_default_name">File</string>
+
+    <string name="chat_gateway_switching_subtitle">Syncing sessions and host status…</string>
+
+    <string name="chat_gateway_switching_title">Switching Gateway</string>
+
+    <string name="chat_loading_switching_session">Switching Session</string>
+
+    <string name="chat_loading_syncing">Syncing messages, please wait.</string>
+
+    <string name="chat_model_empty">Model list is empty</string>
+
+    <string name="chat_model_empty_hint">Gateway may not be fully started or no provider configured.
+Tap the button below to refresh manually.</string>
+
+    <string name="chat_model_maintenance">Maintenance</string>
+
+    <string name="chat_model_maintenance_detail">Gateway is restarting. Models are temporarily unavailable.</string>
+
+    <string name="chat_model_nav_title">Select Model</string>
+
+    <string name="chat_model_refresh">Refresh Models</string>
+
+    <string name="chat_model_select">Select Model</string>
+
+    <string name="chat_model_syncing">Syncing available models...</string>
+
+    <string name="chat_new_messages">New Messages</string>
+
+    <string name="chat_pending_binding">Pending Binding</string>
+
+    <string name="chat_placeholder_add_gateway">No host is bound yet. Add a gateway first.</string>
+
+    <string name="chat_placeholder_gateway_recovering">Gateway is recovering. Sending is temporarily unavailable.</string>
+
+    <string name="chat_placeholder_message">Message</string>
+
+    <string name="chat_placeholder_not_ready">Connection is not fully ready. Sending is unavailable.</string>
+
+    <string name="chat_placeholder_pair_first">Pair first</string>
+
+    <string name="chat_preview_action_complete_failed">Unable to complete this action.</string>
+
+    <string name="chat_preview_action_failed">Action Failed</string>
+
+    <string name="chat_preview_annotate">Annotate</string>
+
+    <string name="chat_preview_close">Close Preview</string>
+
+    <string name="chat_preview_confirm">OK</string>
+
+    <string name="chat_preview_copy_filename">Copy Filename</string>
+
+    <string name="chat_preview_delete">Delete</string>
+
+    <string name="chat_preview_delete_cache_message">This will only delete the cached preview copy on the current device.</string>
+
+    <string name="chat_preview_delete_cache_title">Delete Downloaded Copy?</string>
+
+    <string name="chat_preview_delete_local_copy">Delete Local Copy</string>
+
+    <string name="chat_preview_file">File</string>
+
+    <string name="chat_preview_file_load_failed">File load failed.</string>
+
+    <string name="chat_preview_file_open_failed">Unable to open this file.</string>
+
+    <string name="chat_preview_file_unavailable">File preview unavailable</string>
+
+    <string name="chat_preview_image_load_failed">Image Load Failed</string>
+
+    <string name="chat_preview_image_loading">Loading Image</string>
+
+    <string name="chat_preview_image_process_failed">Unable to process this image.</string>
+
+    <string name="chat_preview_image_unavailable">Image preview unavailable</string>
+
+    <string name="chat_preview_missing_download_url">Missing downloadable preview URL.</string>
+
+    <string name="chat_preview_more_actions">More Actions</string>
+
+    <string name="chat_preview_open_failed">Open Failed</string>
+
+    <string name="chat_preview_opening">Opening preview...</string>
+
+    <string name="chat_preview_save_to_files">Save to Files</string>
+
+    <string name="chat_preview_share">Share</string>
+
+    <string name="chat_preview_unsupported_type">This file type is not supported for system preview.</string>
+
+    <string name="chat_run_active_detail">Tap stop to interrupt this question. Generated content will remain in chat.</string>
+
+    <string name="chat_run_processing_count">Processing %d replies</string>
+
+    <string name="chat_run_replying">Replying to the current question</string>
+
+    <string name="chat_run_stop_detail">Generated content will be kept after stopping.</string>
+
+    <string name="chat_run_stopping">Stopping current reply</string>
+
+    <string name="chat_session_activity_none">No activity yet</string>
+
+    <string name="chat_session_default">Default session</string>
+
+    <string name="chat_session_direct">Direct session</string>
+
+    <string name="chat_session_global">Global session</string>
+
+    <string name="chat_session_global_scope">Global scope</string>
+
+    <string name="chat_session_group">Group session</string>
+
+    <string name="chat_session_local">Created locally</string>
+
+    <string name="chat_session_main">Main session</string>
+
+    <string name="chat_session_new">New session</string>
+
+    <string name="chat_session_new_with_suffix">New session · %s</string>
+
+    <string name="chat_session_no_identifier">No identifier</string>
+
+    <string name="chat_session_uncategorized">Uncategorized session</string>
+
+    <string name="chat_session_untitled">Untitled session</string>
+
+    <string name="chat_skill_auto_install_hint">No need to write skill content manually. OpenClaw will complete it using a fixed template.</string>
+
+    <string name="chat_skill_installable">Installable Skills</string>
+
+    <string name="chat_skill_installable_desc">File transfer, voice sending, and other extensions unified here.</string>
+
+    <string name="chat_skill_extension_file_transfer">File transfer between PC and mobile</string>
+
+    <string name="chat_skill_extension_title">Skill Extensions</string>
+
+    <string name="chat_skill_extension_voice_reply">Let assistant replies become voice</string>
+
+    <string name="chat_skill_panel_title">Quick Commands</string>
+
+    <string name="chat_status_connecting">Connecting</string>
+
+    <string name="chat_status_disconnected">Disconnected</string>
+
+    <string name="chat_status_done_no_text">Completed, but no text returned.</string>
+
+    <string name="chat_status_syncing_content">Syncing final content...</string>
+
+    <string name="chat_status_syncing_reply">Syncing reply...</string>
+
+    <string name="chat_voice_cancel">Cancel</string>
+
+    <string name="chat_voice_confirm">Confirm</string>
+
+    <string name="chat_voice_continue">Continue Voice</string>
+
+    <string name="chat_voice_continue_hint">Return to voice input to continue</string>
+
+    <string name="chat_voice_expires_until">Expires %s</string>
+
+    <string name="chat_voice_generating">Generating voice...</string>
+
+    <string name="chat_voice_generating_hint">Generating voice message</string>
+
+    <string name="chat_voice_hold_continue">Hold to continue talking</string>
+
+    <string name="chat_voice_hold_hint">Hold to start recording. Release inside ellipse to send. Slide out to cancel.</string>
+
+    <string name="chat_voice_hold_talk">Hold to talk</string>
+
+    <string name="chat_voice_message_label">Voice message</string>
+
+    <string name="chat_voice_play_failed">Voice playback failed: %s</string>
+
+    <string name="chat_voice_play_hint">Tap to play or pause</string>
+
+    <string name="chat_voice_play_hint_transcript">Tap to play or pause, long press to transcribe</string>
+
+    <string name="chat_voice_preparing">Preparing to record</string>
+
+    <string name="chat_voice_recording">Recording</string>
+
+    <string name="chat_voice_release_cancel">Release to cancel</string>
+
+    <string name="chat_voice_release_send">Release to send</string>
+
+    <string name="chat_voice_sending">Sending</string>
+
+    <string name="chat_voice_transcript_hint">Tap to edit. Press confirm to send.</string>
+
+    <string name="chat_voice_transcript_label">Voice recognition result</string>
+
+    <string name="chat_voice_reply_disabled_hint">Install voice sending extension skill first, then enable this switch.</string>
+
+    <string name="chat_voice_reply_enabled_hint">When enabled, messages become voice messages.</string>
+
+    <string name="chat_voice_reply_title">Voice Reply</string>
+
+    <string name="chat_voice_reply_toggle">Voice Reply</string>
+
+    <string name="chat_voice_settings_auto_select">Auto Select</string>
+
+    <string name="chat_voice_settings_chinese_male">Chinese Male</string>
+
+    <string name="chat_voice_settings_edge_tts_hint">edge-tts-universal will prioritize these values; system voice is only used as a fallback.</string>
+
+    <string name="chat_voice_settings_english_female">English Female</string>
+
+    <string name="chat_voice_settings_english_male">English Male</string>
+
+    <string name="chat_voice_settings_fast">Fast</string>
+
+    <string name="chat_voice_settings_lively_female">Lively Female</string>
+
+    <string name="chat_voice_settings_slow">Slow</string>
+
+    <string name="chat_voice_settings_speed">Speed</string>
+
+    <string name="chat_voice_settings_subtitle">Choose a voice and adjust the speed to a comfortable pace.</string>
+
+    <string name="chat_voice_settings_title">Voice Parameters</string>
+
+    <string name="chat_voice_settings_voice">Voice</string>
+
+    <string name="common_action_back">Back</string>
+
+    <string name="common_action_cancel">Cancel</string>
+
+    <string name="common_action_clear_search">Clear Search</string>
+
+    <string name="common_action_delete">Delete</string>
+    <string name="common_action_create">Create</string>
+    <string name="common_action_restart">Restart</string>
+
+    <string name="common_action_done">Done</string>
+
+    <string name="common_action_keep">Keep</string>
+
+    <string name="common_action_more">More…</string>
+
+    <string name="common_action_ok">OK</string>
+
+    <string name="common_action_refresh_now">Refresh Now</string>
+    <string name="common_action_refresh">Refresh</string>
+
+    <string name="common_action_reload">Reload</string>
+
+    <string name="common_action_save">Save</string>
+
+    <string name="common_action_view_all">View All</string>
+
+    <string name="common_default">Default</string>
+
+    <string name="common_filter_all">All</string>
+
+    <string name="common_none">None</string>
+
+    <string name="common_toggle_off">Off</string>
+
+    <string name="common_toggle_on">On</string>
+
+    <string name="common_unknown">Unknown</string>
+
+    <string name="gateway_aggregate_connecting">Connecting</string>
+
+    <string name="gateway_aggregate_offline">Offline</string>
+
+    <string name="gateway_aggregate_online">Online</string>
+
+    <string name="gateway_aggregate_partial">Partial</string>
+
+    <string name="gateway_card_last_seen">Last seen %s</string>
+
+    <string name="gateway_card_recent_model">Recent model</string>
+
+    <string name="gateway_context_empty">Context --</string>
+
+    <string name="gateway_context_value">Context %s</string>
+
+    <string name="gateway_empty_bind_button">Bind Host</string>
+
+    <string name="gateway_empty_description">You can stay on the normal page, but chat and management features require a bound host.</string>
+
+    <string name="gateway_empty_hint">If you have multiple hosts, switch to a bound one here. If none, go bind one.</string>
+
+    <string name="gateway_empty_no_host">No host bound</string>
+
+    <string name="gateway_empty_no_switch">No gateways to switch</string>
+
+    <string name="gateway_list_title">Gateway List</string>
+
+    <string name="gateway_maintenance_recovering_detail">%s is recovering from restart. Related actions are locked until the desktop returns to the chat list.</string>
+
+    <string name="gateway_maintenance_recovering_short">Gateway is recovering from restart</string>
+
+    <string name="gateway_maintenance_sending_detail">%s restart request is being sent. Related actions are temporarily locked.</string>
+
+    <string name="gateway_maintenance_sending_short">Gateway restart request is being sent</string>
+
+    <string name="gateway_maintenance_timeout_detail">%s restart wait timed out. Retry manually or cancel waiting.</string>
+
+    <string name="gateway_maintenance_timeout_short">Gateway restart wait timed out. Retry or cancel waiting.</string>
+
+    <string name="gateway_phase_app_relay_authenticated">Session valid</string>
+
+    <string name="gateway_phase_app_relay_connecting">Establishing session</string>
+
+    <string name="gateway_phase_app_relay_offline">Session not established</string>
+
+    <string name="gateway_phase_host_gateway_backoff">Retrying OpenClaw</string>
+
+    <string name="gateway_phase_host_gateway_connecting">Connecting to OpenClaw</string>
+
+    <string name="gateway_phase_host_gateway_degraded">OpenClaw connection issue</string>
+
+    <string name="gateway_phase_host_gateway_healthy">OpenClaw is running normally</string>
+
+    <string name="gateway_phase_host_gateway_offline">OpenClaw is not connected</string>
+
+    <string name="gateway_phase_host_gateway_waiting">Host is online, waiting for OpenClaw</string>
+
+    <string name="gateway_phase_not_available">Not available</string>
+
+    <string name="gateway_phase_relay_host_backoff">Retrying host connection</string>
+
+    <string name="gateway_phase_relay_host_connected">Relay is connected to the host</string>
+
+    <string name="gateway_phase_relay_host_connecting">Relay is connecting to the host</string>
+
+    <string name="gateway_phase_relay_host_degraded">Host connection is unstable</string>
+
+    <string name="gateway_phase_relay_host_offline">Relay is not connected to the host</string>
+
+    <string name="gateway_phase_unknown">Unknown status</string>
+
+    <string name="gateway_restart_elapsed_hours">%1$d hr %2$d min %3$d sec</string>
+
+    <string name="gateway_restart_elapsed_minutes">%1$d min %2$d sec</string>
+
+    <string name="gateway_restart_elapsed_seconds">%d sec</string>
+
+    <string name="gateway_session_count">%s total, sorted by recent activity</string>
+
+    <string name="gateway_session_current">Current Session</string>
+
+    <string name="gateway_session_current_badge">Current</string>
+
+    <string name="gateway_session_empty">No sessions. Refresh first.</string>
+
+    <string name="gateway_session_list">Session List</string>
+
+    <string name="gateway_session_refreshing">Refreshing session list</string>
+
+    <string name="gateway_unnamed">Unnamed gateway</string>
+
+    <string name="gateway_unpair_session_message">This will clear chat context and binding info for this gateway. You\'ll need to re-pair to continue controlling the host.</string>
+
+    <string name="gateway_unpair_titled">Unpair %s?</string>
+
+    <string name="office_activity_detail_error">Check the connection or task status</string>
+
+    <string name="office_activity_detail_executing">Running tools and actions</string>
+
+    <string name="office_activity_detail_model_idle">Model %s is standing by</string>
+
+    <string name="office_activity_detail_offline">Host is temporarily offline</string>
+
+    <string name="office_activity_detail_researching">Looking up references and context</string>
+
+    <string name="office_activity_detail_sleeping">Gateway is offline and resting</string>
+
+    <string name="office_activity_detail_syncing">Syncing runtime status</string>
+
+    <string name="office_activity_detail_waiting">Waiting for the next task</string>
+
+    <string name="office_activity_detail_writing">Composing replies and status</string>
+
+    <string name="office_activity_error">Issue</string>
+
+    <string name="office_activity_executing">Executing</string>
+
+    <string name="office_activity_idle">Idle</string>
+
+    <string name="office_activity_offline">Offline</string>
+
+    <string name="office_activity_researching">Researching</string>
+
+    <string name="office_activity_sleeping">Sleeping</string>
+
+    <string name="office_activity_syncing">Syncing</string>
+
+    <string name="office_activity_working">Working</string>
+
+    <string name="office_activity_writing">Writing</string>
+
+    <string name="office_detail_agent">Agent</string>
+
+    <string name="office_detail_context">Context</string>
+
+    <string name="office_detail_model">Model</string>
+
+    <string name="office_detail_online">Online</string>
+
+    <string name="office_detail_progress">Progress</string>
+
+    <string name="office_dynamics_subtitle">Current status overview</string>
+
+    <string name="office_last_active">Last active %s</string>
+
+    <string name="office_last_active_prefix">Last active </string>
+
+    <string name="office_mode_resting">Resting</string>
+
+    <string name="office_mode_resting_subtitle">Waiting for the next task</string>
+
+    <string name="office_mode_sleeping">Sleeping</string>
+
+    <string name="office_mode_sleeping_subtitle">Gateway is offline</string>
+
+    <string name="office_mode_working">Working</string>
+
+    <string name="office_mode_working_subtitle">Processing the current task</string>
+
+    <string name="office_no_host">No Host Bound</string>
+
+    <string name="office_no_host_subtitle">Configure the Gateway address first</string>
+
+    <string name="office_panel_dynamics">Office Activity</string>
+
+    <string name="office_recent_online">Recently online %s</string>
+
+    <string name="office_title">Pixel Office</string>
+
+    <string name="settings_about_console">OpenClaw Remote Control Console</string>
+
+    <string name="settings_account_delete">Delete Account</string>
+
+    <string name="settings_account_sign_out">Sign Out</string>
+
+    <string name="settings_gateway_action_add">Add</string>
+
+    <string name="settings_gateway_action_bind">Bind</string>
+
+    <string name="settings_gateway_edit_name_placeholder">Enter gateway name</string>
+
+    <string name="settings_gateway_fallback_last_seen">N/A</string>
+
+    <string name="settings_gateway_fallback_name">No Host</string>
+
+    <string name="settings_gateway_fallback_platform">Awaiting Re-pair</string>
+
+    <string name="settings_gateway_unpair">Unpair</string>
+
+    <string name="settings_gateway_unpair_message">This will clear the session and local binding to the Relay. You\'ll need to re-pair to continue messaging.</string>
+
+    <string name="settings_gateway_unpair_title">Unpair current gateway?</string>
+
+    <string name="settings_language_en">English</string>
+
+    <string name="settings_language_system">System</string>
+
+    <string name="settings_language_zh_hans">Chinese</string>
+
+    <string name="settings_maintenance_lock_title">Maintenance Lock</string>
+
+    <string name="settings_row_advanced">Advanced</string>
+    <string name="settings_section_maintenance">Maintenance</string>
+    <string name="settings_section_maintenance_subtitle">Gateway system health and control</string>
+    <string name="settings_section_repair">Repair</string>
+    <string name="settings_section_repair_subtitle">Troubleshoot and fix common issues</string>
+    <string name="advanced_section_features_subtitle">Configure experimental and core features</string>
+    <string name="settings_section_data">Data</string>
+    <string name="settings_section_data_subtitle">Manage system logs and configuration data</string>
+    <string name="advanced_title">Advanced</string>
+    <string name="advanced_maintenance">Maintenance</string>
+    <string name="advanced_repair">Repair</string>
+    <string name="advanced_features">Features</string>
+    <string name="advanced_data_management">Data Management</string>
+    <string name="advanced_restart">Restart Gateway</string>
+    <string name="advanced_restart_detail">Restart the OpenClaw service on the host.</string>
+    <string name="advanced_remote_restart">Remote Restart</string>
+    <string name="advanced_remote_restart_detail">Reboot the remote host system entirely.</string>
+    <string name="advanced_restart_confirm_title">Restart Gateway?</string>
+    <string name="advanced_restart_confirm_message">This will restart the OpenClaw software on the host. Current sessions might be briefly interrupted.</string>
+    <string name="advanced_remote_restart_confirm_title">Remote Restart Host?</string>
+    <string name="advanced_remote_restart_confirm_message">This will perform a full system reboot of the remote host. This action cannot be undone.</string>
+    <string name="advanced_prefs_show_tools">Show Tool Invocation</string>
+    <string name="advanced_prefs_show_tools_detail">Display the background tool calling process in the chat.</string>
+    <string name="advanced_doctor_fix">Doctor Fix</string>
+    <string name="advanced_doctor_fix_detail">Run a comprehensive diagnostic and repair script on the gateway.</string>
+    <string name="advanced_doctor_fix_execute">Execute Doctor Fix</string>
+    <string name="advanced_backups">Backups</string>
+    <string name="advanced_backups_detail">Manage and restore system configuration backups.</string>
+    <string name="advanced_logs">Logs</string>
+    <string name="advanced_logs_detail">View real-time system logs from the gateway.</string>
+
+    <string name="settings_row_check_update">Check for Updates</string>
+
+    <string name="settings_row_check_update_detail">Open App Store</string>
+
+    <string name="settings_row_language">Language</string>
+
+    <string name="settings_row_models">Models</string>
+    <string name="settings_row_backups">Backups</string>
+    <string name="backups_empty_state">No backups found on this gateway.</string>
+    <string name="backups_action_restore">Restore</string>
+    <string name="backups_create_title">Create Backup</string>
+    <string name="backups_create_label">Label</string>
+    <string name="backups_create_note">Note (Optional)</string>
+    <string name="settings_row_logs">Gateway Logs</string>
+
+    <string name="settings_row_office">Pixel Office</string>
+
+    <string name="settings_row_sessions">Sessions</string>
+
+    <string name="settings_row_skills">Skills</string>
+
+    <string name="settings_row_tasks">Scheduled Tasks</string>
+
+    <string name="settings_row_usage_guide">Usage Guide</string>
+
+    <string name="settings_row_voice_setup">Voice Reply Setup</string>
+
+    <string name="settings_section_about">About</string>
+
+    <string name="settings_section_about_subtitle">Check for updates and release info</string>
+
+    <string name="settings_section_account">Account</string>
+
+    <string name="settings_section_account_subtitle">Sign out or delete account</string>
+
+    <string name="settings_section_ai">AI</string>
+
+    <string name="settings_section_ai_subtitle">Configure models, sessions, and voice preferences</string>
+
+    <string name="settings_section_features">Features</string>
+
+    <string name="settings_section_features_subtitle">Pixel office, scheduled tasks, and skills</string>
+
+    <string name="settings_section_gateway">Gateway</string>
+
+    <string name="settings_section_gateway_subtitle">Check connectivity between App, Relay, and OpenClaw</string>
+
+    <string name="settings_section_management">Management</string>
+
+    <string name="settings_section_management_subtitle">Gateway maintenance and usage guide</string>
+
+    <string name="settings_session_hint_title">Session Notice</string>
+
+    <string name="settings_session_list_title">Session List</string>
+
+    <string name="settings_session_lock_title">Session Lock</string>
+
+    <string name="skills_action_disable">Disable Skill</string>
+
+    <string name="skills_action_enable">Enable Skill</string>
+
+    <string name="skills_availability_blocked">Restricted</string>
+
+    <string name="skills_availability_disabled">Disabled</string>
+
+    <string name="skills_availability_needs_setup">Needs setup</string>
+
+    <string name="skills_availability_ready">Ready</string>
+
+    <string name="skills_compact_missing_count">%d missing</string>
+
+    <string name="skills_compact_no_requirements">No dependencies</string>
+
+    <string name="skills_compact_ready">Dependencies ready</string>
+
+    <string name="skills_config_satisfied">Satisfied</string>
+
+    <string name="skills_config_unsatisfied">Unsatisfied</string>
+
+    <string name="skills_detail_always_loaded">Always Loaded</string>
+
+    <string name="skills_detail_current_status">Current Status</string>
+
+    <string name="skills_detail_homepage">Project Homepage</string>
+
+    <string name="skills_detail_install_path">Install Path</string>
+
+    <string name="skills_detail_open_homepage">Open Skill Homepage</string>
+
+    <string name="skills_detail_primary_env">Primary Env Var</string>
+
+    <string name="skills_detail_quick_prompts_hint">Tap a prompt to place it into the chat composer, then add your specific request.</string>
+
+    <string name="skills_detail_section_config_checks">Config Checks</string>
+
+    <string name="skills_detail_section_quick_prompts">Quick Prompts</string>
+
+    <string name="skills_detail_section_requirements">Requirements &amp; Missing Items</string>
+
+    <string name="skills_detail_section_status_source">Status &amp; Source</string>
+
+    <string name="skills_detail_source">Skill Source</string>
+
+    <string name="skills_detail_title">Skill Details</string>
+
+    <string name="skills_detail_unavailable_subtitle">Go back and reopen this skill, or refresh the list manually.</string>
+
+    <string name="skills_detail_unavailable_title">The skill list changed and this item is no longer available.</string>
+
+    <string name="skills_empty_no_results_subtitle">Try another filter or search keyword.</string>
+
+    <string name="skills_empty_no_results_title">No matching skills</string>
+
+    <string name="skills_empty_subtitle">After connecting to the current gateway, skills will sync here automatically.</string>
+
+    <string name="skills_empty_title">No installed skills yet</string>
+
+    <string name="skills_expansion_file_hero_subtitle">Create and verify the skill with one tap, without writing it by hand.</string>
+
+    <string name="skills_expansion_file_hero_title">Let OpenClaw send and receive files</string>
+
+    <string name="skills_expansion_file_install_button">Install file transfer with OpenClaw</string>
+
+    <string name="skills_expansion_file_step1_detail">After setup, ClawLink can send files from the computer to iPhone with `clawconnect send-file`, and iPhone can send files back through chat attachments.</string>
+
+    <string name="skills_expansion_file_step1_title">Understand the capability</string>
+
+    <string name="skills_expansion_file_step2_detail">This depends on `skill-creator` and the `clawconnect-agent` send-file flow. Confirm the tools first, then generate the `file-transfer` skill from the template.</string>
+
+    <string name="skills_expansion_file_step2_title">Confirm the skill source</string>
+
+    <string name="skills_expansion_file_step3_detail">After tapping the button, OpenClaw will inspect `clawconnect send-file`, generate the `file-transfer` skill, verify relay upload, and save the preference.</string>
+
+    <string name="skills_expansion_file_step3_title">Install and verify transfer</string>
+
+    <string name="skills_expansion_file_title">Start file transfer</string>
+
+    <string name="skills_expansion_voice_hero_subtitle">Install edge-tts-universal, save the default voice and rate, and fall back to system speech when generation is limited.</string>
+
+    <string name="skills_expansion_voice_hero_title">Let OpenClaw turn replies into voice</string>
+
+    <string name="skills_expansion_voice_install_button">Configure voice replies with OpenClaw</string>
+
+    <string name="skills_expansion_voice_step1_detail">Clarify how `edge-tts-universal`, the default voice, and system speech fallback work together so voice replies keep working.</string>
+
+    <string name="skills_expansion_voice_step1_title">Understand the capability</string>
+
+    <string name="skills_expansion_voice_step2_detail">This depends on `skill-creator`, `edge-tts-universal`, and the host speech engine. Confirm availability, then generate the skill with default voice and rate.</string>
+
+    <string name="skills_expansion_voice_step2_title">Confirm the skill source</string>
+
+    <string name="skills_expansion_voice_step3_detail">After tapping the button, OpenClaw will install and verify `edge-tts-universal`, then send a test voice message to iPhone with your selected voice and rate.</string>
+
+    <string name="skills_expansion_voice_step3_title">Install and verify voice sending</string>
+
+    <string name="skills_expansion_voice_title">Configure voice replies</string>
+
+    <string name="skills_install_none">No visible installation method</string>
+
+    <string name="skills_metric_needs_setup">Setup Needed</string>
+
+    <string name="skills_metric_ready">Ready</string>
+
+    <string name="skills_missing_none">Nothing missing</string>
+
+    <string name="skills_overview_installed">Installed Skills</string>
+
+    <string name="skills_prompt_template_clarify_prompt">If my request is incomplete, ask me the one most important question before continuing with \"{skillName}\".</string>
+
+    <string name="skills_prompt_template_clarify_subtitle">Fill gaps before acting</string>
+
+    <string name="skills_prompt_template_clarify_title">Ask me first</string>
+
+    <string name="skills_prompt_template_short_prompt">Use \"{skillName}\" in the shortest actionable way to complete this:</string>
+
+    <string name="skills_prompt_template_short_subtitle">Use the shortest actionable path</string>
+
+    <string name="skills_prompt_template_short_title">Shortest instruction</string>
+
+    <string name="skills_prompt_template_starter_prompt">Please use \"{skillName}\" to help with this request:</string>
+
+    <string name="skills_prompt_template_starter_subtitle">Include the skill name</string>
+
+    <string name="skills_prompt_template_starter_title">Ask directly</string>
+
+    <string name="skills_refresh_title">Skill Refresh</string>
+
+    <string name="skills_requirements_any">Any of %s</string>
+
+    <string name="skills_requirements_any_commands">Any Command</string>
+
+    <string name="skills_requirements_commands">Commands</string>
+
+    <string name="skills_requirements_config">Config</string>
+
+    <string name="skills_requirements_env">Environment Variables</string>
+
+    <string name="skills_requirements_none">This skill has no extra dependencies.</string>
+
+    <string name="skills_requirements_platform">Platform</string>
+
+    <string name="skills_search_placeholder">Search skill name, purpose, or source</string>
+
+    <string name="skills_source_bundled">Built in</string>
+
+    <string name="skills_source_extra">Extra directory</string>
+
+    <string name="skills_source_managed">Managed</string>
+
+    <string name="skills_source_plugin">Plugin</string>
+
+    <string name="skills_source_unmarked">Unmarked</string>
+
+    <string name="skills_source_workspace">Workspace</string>
+
+    <string name="skills_state_disabled">Disabled</string>
+
+    <string name="skills_state_enabled">Enabled</string>
+
+    <string name="skills_status_blocked_detail">Currently restricted by the allowlist.</string>
+
+    <string name="skills_status_disabled_detail">Currently disabled in Settings.</string>
+
+    <string name="skills_status_missing_detail">Missing %s</string>
+
+    <string name="skills_status_needs_setup_detail">Some dependencies still need to be configured.</string>
+
+    <string name="skills_status_ready_detail">All dependencies are available. This skill is ready to use.</string>
+
+    <string name="skills_summary_blocked">Restricted and cannot be enabled right now.</string>
+
+    <string name="skills_summary_disabled">Disabled. Open details to enable it again.</string>
+
+    <string name="tasks_badge_completed">Completed</string>
+
+    <string name="tasks_badge_enabled">Enabled</string>
+
+    <string name="tasks_badge_paused">Paused</string>
+
+    <string name="tasks_badge_pending">Pending</string>
+
+    <string name="tasks_delete_confirm_message">Task \"%s\" will be removed from Relay.</string>
+
+    <string name="tasks_delete_confirm_title">Delete this task?</string>
+
+    <string name="tasks_delete_confirm_title_named">Delete \"%s\"?</string>
+
+    <string name="tasks_editor_create_subtitle">Describe what the task should do, then set how and when it runs. The title can be left blank.</string>
+
+    <string name="tasks_editor_create_title">New Task</string>
+
+    <string name="tasks_editor_edit_subtitle">Modify the task content, execution mode, or schedule.</string>
+
+    <string name="tasks_editor_edit_title">Edit Task</string>
+
+    <string name="tasks_editor_execution_settings">Execution Settings</string>
+
+    <string name="tasks_editor_first_run_time">First Run</string>
+
+    <string name="tasks_editor_interval_amount">Interval Amount</string>
+
+    <string name="tasks_editor_mode_once">Run Once</string>
+
+    <string name="tasks_editor_mode_repeat">Repeat</string>
+
+    <string name="tasks_editor_preset_15_minutes">In 15 Minutes</string>
+
+    <string name="tasks_editor_preset_1_hour">In 1 Hour</string>
+
+    <string name="tasks_editor_preset_every_1_day">Every 1 Day</string>
+
+    <string name="tasks_editor_preset_tomorrow_9">Tomorrow 09:00</string>
+
+    <string name="tasks_editor_presets_title">Quick Setup</string>
+
+    <string name="tasks_editor_preview_new_task">New Task</string>
+
+    <string name="tasks_editor_preview_once">One-time Run</string>
+
+    <string name="tasks_editor_preview_repeat">Repeating Run</string>
+
+    <string name="tasks_editor_preview_title">Schedule Preview After Saving</string>
+
+    <string name="tasks_editor_prompt_label">Task Instruction</string>
+
+    <string name="tasks_editor_prompt_placeholder">Example: Summarize yesterday\'s chat highlights every morning...</string>
+
+    <string name="tasks_editor_repeat_after_each_run">Repeat after each run</string>
+
+    <string name="tasks_editor_repeat_every">Every %1$s %2$s</string>
+
+    <string name="tasks_editor_repeat_preview">%1$s, then repeat by %2$s</string>
+
+    <string name="tasks_editor_schedule_time">Run Time</string>
+
+    <string name="tasks_editor_select_first_run_time">Select the first run time</string>
+
+    <string name="tasks_editor_select_schedule_time">Select a run time</string>
+
+    <string name="tasks_editor_time_unit">Time Unit</string>
+
+    <string name="tasks_editor_title_label">Task Title</string>
+
+    <string name="tasks_editor_title_placeholder">Leave blank to auto-generate</string>
+
+    <string name="tasks_editor_unit_picker">Unit</string>
+
+    <string name="tasks_empty_no_results_title">No results for current filters</string>
+
+    <string name="tasks_empty_subtitle_filter">Try another filter, or return to all tasks.</string>
+
+    <string name="tasks_empty_subtitle_no_tasks">Tap the large button above, write a prompt, then set the execution time.</string>
+
+    <string name="tasks_empty_subtitle_search">Try another keyword, or clear the search.</string>
+
+    <string name="tasks_empty_title">No scheduled tasks yet</string>
+
+    <string name="tasks_filter_active">Active</string>
+
+    <string name="tasks_filter_completed">Completed</string>
+
+    <string name="tasks_filter_paused">Paused</string>
+
+    <string name="tasks_list_subtitle_default">Tap a task card to edit it, or swipe for faster actions.</string>
+
+    <string name="tasks_list_subtitle_grouped">Grouped by status by default. Tap a task card to edit it, or swipe for faster actions.</string>
+
+    <string name="tasks_list_subtitle_searching">Searching for \"%s\". Tap a task card to edit it, or swipe for faster actions.</string>
+
+    <string name="tasks_list_title">Task List</string>
+
+    <string name="tasks_metric_paused">Paused</string>
+
+    <string name="tasks_metric_running">Running</string>
+
+    <string name="tasks_metric_total">Total</string>
+
+    <string name="tasks_model_last_result_empty">No result yet</string>
+
+    <string name="tasks_model_next_run_at">Next %s</string>
+
+    <string name="tasks_model_next_run_empty">No next run scheduled</string>
+
+    <string name="tasks_model_prompt_empty">No prompt yet</string>
+
+    <string name="tasks_model_schedule_every">Every %1$s %2$s</string>
+
+    <string name="tasks_model_schedule_every_start">Every %1$s %2$s · starts %3$s</string>
+
+    <string name="tasks_model_schedule_once">One-time task</string>
+
+    <string name="tasks_model_schedule_once_at">One-time · %s</string>
+
+    <string name="tasks_model_schedule_repeat">Repeats</string>
+
+    <string name="tasks_model_schedule_repeat_start">Repeats · starts %s</string>
+
+    <string name="tasks_model_schedule_unset">Not set</string>
+
+    <string name="tasks_overview_no_scheduled">No scheduled tasks</string>
+
+    <string name="tasks_refresh_title">Task Refresh</string>
+
+    <string name="tasks_repeat_count">times</string>
+
+    <string name="tasks_repeat_day">days</string>
+
+    <string name="tasks_repeat_days">Days</string>
+
+    <string name="tasks_repeat_hour">hours</string>
+
+    <string name="tasks_repeat_hours">Hours</string>
+
+    <string name="tasks_repeat_minute">minutes</string>
+
+    <string name="tasks_repeat_minutes">Minutes</string>
+
+    <string name="tasks_repeat_week">weeks</string>
+
+    <string name="tasks_repeat_weeks">Weeks</string>
+
+    <string name="tasks_search_placeholder">Search task title, content, or schedule...</string>
+
+    <string name="tasks_section_count">%d tasks</string>
+
+    <string name="tasks_validation_first_schedule_required">Choose the first execution time.</string>
+
+    <string name="tasks_validation_prompt_required">Enter what the task should do.</string>
+
+    <string name="tasks_validation_repeat_amount_positive">Repeat interval must be greater than 0.</string>
+
+    <string name="tasks_validation_repeat_unit_required">Choose a repeat unit.</string>
+
+    <string name="tasks_validation_schedule_kind_required">Choose how this task should run.</string>
+
+    <string name="tasks_validation_schedule_required">Choose an execution time.</string>
+
+
 </resources>

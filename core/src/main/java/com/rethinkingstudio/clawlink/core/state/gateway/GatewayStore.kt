@@ -60,6 +60,34 @@ class GatewayStore(
         _state.value = _state.value.copy(gateways = list)
     }
 
+    suspend fun updateGatewayName(gatewayId: String, newName: String) {
+        try {
+            apiClient.updateGateway(gatewayId, mapOf("display_name" to newName))
+            val list = _state.value.gateways.map {
+                if (it.id == gatewayId) it.copy(displayName = newName) else it
+            }
+            _state.value = _state.value.copy(gateways = list)
+        } catch (e: Exception) {
+            _state.value = _state.value.copy(errorMessage = "Failed to update name: ${e.message}")
+        }
+    }
+
+    suspend fun restartGateway(gatewayId: String) {
+        try {
+            apiClient.restartGateway(gatewayId)
+        } catch (e: Exception) {
+            _state.value = _state.value.copy(errorMessage = "Failed to restart: ${e.message}")
+        }
+    }
+
+    suspend fun remoteRestartGateway(gatewayId: String) {
+        try {
+            apiClient.remoteRestartGateway(gatewayId)
+        } catch (e: Exception) {
+            _state.value = _state.value.copy(errorMessage = "Failed to remote restart: ${e.message}")
+        }
+    }
+
     fun clearError() {
         _state.value = _state.value.copy(errorMessage = null)
     }

@@ -92,6 +92,7 @@ class AppContainer(context: Context) {
     val skillStore: SkillStore = SkillStore(apiClient)
     val taskStore: TaskStore = TaskStore(apiClient)
     val backupStore: BackupStore = BackupStore(apiClient)
+    val userPreferencesStore: com.rethinkingstudio.clawlink.core.state.UserPreferencesStore = com.rethinkingstudio.clawlink.core.state.UserPreferencesStore(context)
 }
 
 class ClawLinkApplication : Application() {

@@ -201,9 +201,21 @@ class RelayAPIClient(
         return request(APIEndpoints.Mobile.Gateway.approveSensitiveAction(gatewayId), req)
     }
 
-    suspend fun updateGatewayDisplayName(gatewayId: String, displayName: String) {
-        val req = UpdateGatewayDisplayNameRequest(displayName)
-        request<EmptyResponse>(APIEndpoints.Mobile.Gateway.update(gatewayId), req)
+    suspend fun updateGateway(gatewayId: String, body: Map<String, String>) {
+        request<EmptyResponse>(APIEndpoints.Mobile.Gateway.update(gatewayId), body)
+    }
+
+    suspend fun restartGateway(gatewayId: String) {
+        request<EmptyResponse>(APIEndpoints.Mobile.Gateway.restart(gatewayId))
+    }
+
+    suspend fun remoteRestartGateway(gatewayId: String) {
+        request<EmptyResponse>(APIEndpoints.Mobile.Gateway.remoteRestart(gatewayId))
+    }
+
+    suspend fun executeAdvancedAction(gatewayId: String, kind: String): AdvancedActionResponse {
+        val req = mapOf("kind" to kind)
+        return request(APIEndpoints.Mobile.Gateway.executeAdvancedAction(gatewayId), req)
     }
 
     // ── Chat ─────────────────────────────────────────────────────────────

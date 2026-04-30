@@ -307,4 +307,19 @@ data class APIErrorResponse(
 )
 
 @Serializable
+data class AdvancedActionResponse(
+    val requestId: String,
+    val status: String
+)
+
+@Serializable
+data class AdvancedActionLogEntry(
+    val id: String = java.util.UUID.randomUUID().toString(),
+    val requestId: String,
+    val text: String,
+    val stream: String,
+    val createdAt: String
+)
+
+@Serializable
 class EmptyResponse

@@ -6,7 +6,9 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import kotlinx.coroutines.launch
 import androidx.compose.ui.platform.LocalContext
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
@@ -38,6 +40,13 @@ object Routes {
     const val SETTINGS = "settings"
     const val ADVANCED = "advanced"
     const val HELP = "help"
+    const val OFFICE = "office"
+    const val SESSIONS = "sessions"
+    const val VOICE_SETUP = "voice_setup"
+    const val LANGUAGE = "language"
+    const val LOGS = "logs"
+    const val BACKUPS = "backups"
+    const val DOCTOR_FIX = "doctor_fix"
 }
 
 @Composable
@@ -49,6 +58,7 @@ fun AppNavigation(
     val welcomePrefs = remember { context.getSharedPreferences("clawlink_welcome", 0) }
     var hasSeenWelcome by remember { mutableStateOf(welcomePrefs.getBoolean("seen", false)) }
     val authState by container.authStore.state.collectAsState()
+    val scope = rememberCoroutineScope()
 
     LaunchedEffect(Unit) {
         container.authStore.tryRestoreSession()
@@ -173,13 +183,72 @@ fun AppNavigation(
                 onNavigateToTasks = { navController.navigate(Routes.TASKS) },
                 onNavigateToAdvanced = { navController.navigate(Routes.ADVANCED) },
                 onNavigateToHelp = { navController.navigate(Routes.HELP) },
-                onLogout = { }
+                onNavigateToOffice = { navController.navigate(Routes.OFFICE) },
+                onNavigateToSessions = { navController.navigate(Routes.SESSIONS) },
+                onNavigateToVoiceSetup = { navController.navigate(Routes.VOICE_SETUP) },
+                onNavigateToLanguage = { navController.navigate(Routes.LANGUAGE) },
+                onLogout = {
+                    scope.launch { container.authStore.logout() }
+                },
+                onDeleteAccount = {
+                    // Handle account deletion if needed
+                }
             )
         }
 
         composable(Routes.ADVANCED) {
             AdvancedScreen(
+                gatewayStore = container.gatewayStore,
+                prefsStore = container.userPreferencesStore,
+                onBack = { navController.popBackStack() },
+                onNavigateToBackups = { navController.navigate(Routes.BACKUPS) },
+                onNavigateToLogs = { navController.navigate(Routes.LOGS) },
+                onNavigateToDoctorFix = { navController.navigate(Routes.DOCTOR_FIX) }
+            )
+        }
+
+        composable(Routes.OFFICE) {
+            com.rethinkingstudio.clawlink.ui.screens.settings.OfficeScreen(
+                onBack = { navController.popBackStack() }
+            )
+        }
+
+        composable(Routes.SESSIONS) {
+            com.rethinkingstudio.clawlink.ui.screens.settings.SessionsScreen(
+                onBack = { navController.popBackStack() }
+            )
+        }
+
+        composable(Routes.VOICE_SETUP) {
+            com.rethinkingstudio.clawlink.ui.screens.settings.VoiceSetupScreen(
+                onBack = { navController.popBackStack() }
+            )
+        }
+
+        composable(Routes.LANGUAGE) {
+            com.rethinkingstudio.clawlink.ui.screens.settings.LanguageScreen(
+                onBack = { navController.popBackStack() }
+            )
+        }
+
+        composable(Routes.BACKUPS) {
+            com.rethinkingstudio.clawlink.ui.screens.settings.BackupScreen(
                 backupStore = container.backupStore,
+                gatewayStore = container.gatewayStore,
+                onBack = { navController.popBackStack() }
+            )
+        }
+
+        composable(Routes.LOGS) {
+            com.rethinkingstudio.clawlink.ui.screens.settings.LogScreen(
+                gatewayStore = container.gatewayStore,
+                apiClient = container.apiClient,
+                onBack = { navController.popBackStack() }
+            )
+        }
+
+        composable(Routes.DOCTOR_FIX) {
+            com.rethinkingstudio.clawlink.ui.screens.settings.DoctorFixScreen(
                 gatewayStore = container.gatewayStore,
                 onBack = { navController.popBackStack() }
             )

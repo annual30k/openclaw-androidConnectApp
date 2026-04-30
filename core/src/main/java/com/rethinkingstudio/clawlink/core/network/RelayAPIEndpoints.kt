@@ -30,6 +30,9 @@ object APIEndpoints {
             fun selectModel(gatewayID: String) = APIEndpoint(HTTPMethod.POST, "/api/mobile/gateways/$gatewayID/models/select")
             fun defaultModel(gatewayID: String) = APIEndpoint(HTTPMethod.POST, "/api/mobile/gateways/$gatewayID/models/default")
             fun approveSensitiveAction(gatewayID: String) = APIEndpoint(HTTPMethod.POST, "/api/mobile/gateways/$gatewayID/approve-sensitive-action")
+            fun restart(gatewayID: String) = APIEndpoint(HTTPMethod.POST, "/api/mobile/gateways/$gatewayID/restart")
+            fun remoteRestart(gatewayID: String) = APIEndpoint(HTTPMethod.POST, "/api/mobile/gateways/$gatewayID/remote-restart")
+            fun executeAdvancedAction(gatewayID: String) = APIEndpoint(HTTPMethod.POST, "/api/mobile/gateways/$gatewayID/execute-advanced-action")
         }
 
         object Chat {
