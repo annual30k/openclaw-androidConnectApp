@@ -173,7 +173,7 @@ class ChatStore(
         }
     }
 
-    fun sendMessage(content: String) {
+    fun sendMessage(content: String, attachmentIds: List<String> = emptyList()) {
         val sessionKey = _state.value.currentSessionKey
         if (sessionKey.isBlank()) return
 
@@ -187,7 +187,37 @@ class ChatStore(
             sortTimestamp = System.currentTimeMillis() / 1000.0
         )
         _state.value = _state.value.copy(messages = _state.value.messages + msg)
-        wsClient.sendChatMessage(sessionKey, content)
+        wsClient.sendChatMessage(sessionKey, content, attachmentIds)
+    }
+
+    suspend fun uploadAttachment(
+        gatewayId: String,
+        fileName: String,
+        mimeType: String,
+        bytes: ByteArray,
+        sha256: String
+    ): String {
+        val sessionKey = _state.value.currentSessionKey
+        if (sessionKey.isBlank()) throw IllegalStateException("No active chat session")
+        val init = apiClient.initMobileFileUpload(
+            gatewayId = gatewayId,
+            sessionKey = sessionKey,
+            fileName = fileName,
+            mimeType = mimeType,
+            sizeBytes = bytes.size.toLong(),
+            sha256 = sha256
+        )
+        val chunkSize = init.chunkSize.coerceAtLeast(1)
+        var offset = 0
+        var chunkIndex = 0
+        while (offset < bytes.size) {
+            val end = minOf(offset + chunkSize, bytes.size)
+            apiClient.uploadMobileFileChunk(init.uploadId, chunkIndex, bytes.copyOfRange(offset, end))
+            offset = end
+            chunkIndex += 1
+        }
+        apiClient.completeMobileFileUpload(init.uploadId, chunkIndex)
+        return init.fileId
     }
 
     fun sendCommand(command: String) {

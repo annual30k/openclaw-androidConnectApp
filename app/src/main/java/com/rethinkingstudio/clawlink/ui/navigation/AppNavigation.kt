@@ -113,7 +113,8 @@ fun AppNavigation(
         composable(Routes.MAIN) {
             MainScreen(
                 container = container,
-                onNavigateToSettings = { navController.navigate(Routes.SETTINGS) }
+                onNavigateToSettings = { navController.navigate(Routes.SETTINGS) },
+                onNavigateToHelp = { navController.navigate(Routes.HELP) }
             )
         }
 
@@ -130,7 +131,8 @@ fun AppNavigation(
                 gatewayStore = container.gatewayStore,
                 modelStore = container.modelStore,
                 onBack = { navController.popBackStack() },
-                onOpenSettings = { navController.navigate(Routes.SETTINGS) }
+                onOpenSettings = { navController.navigate(Routes.SETTINGS) },
+                onOpenUsageGuide = { navController.navigate(Routes.HELP) }
             )
         }
 

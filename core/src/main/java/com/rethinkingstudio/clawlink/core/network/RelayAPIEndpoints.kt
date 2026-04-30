@@ -66,6 +66,8 @@ object APIEndpoints {
 
         object File {
             fun initUpload(origin: APIOrigin, gatewayID: String) = APIEndpoint(HTTPMethod.POST, "/api/${origin.value}/gateways/$gatewayID/files/init")
+            fun uploadChunk(origin: APIOrigin, uploadID: String, chunkIndex: Int) = APIEndpoint(HTTPMethod.PUT, "/api/${origin.value}/files/$uploadID/chunks/$chunkIndex")
+            fun completeUpload(origin: APIOrigin, uploadID: String) = APIEndpoint(HTTPMethod.POST, "/api/${origin.value}/files/$uploadID/complete")
             fun download(fileID: String) = APIEndpoint(HTTPMethod.GET, "/api/mobile/files/$fileID")
         }
 

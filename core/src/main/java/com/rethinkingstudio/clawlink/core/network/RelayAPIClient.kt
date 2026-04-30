@@ -14,6 +14,7 @@ import io.ktor.client.engine.okhttp.*
 import io.ktor.client.plugins.*
 import io.ktor.client.plugins.contentnegotiation.*
 import io.ktor.client.request.*
+import io.ktor.client.statement.bodyAsText
 import io.ktor.http.*
 import io.ktor.serialization.kotlinx.json.*
 import kotlinx.serialization.json.Json
@@ -97,6 +98,33 @@ class RelayAPIClient(
 
     private suspend inline fun <reified T> requestOptional(endpoint: APIEndpoint, body: Any? = null, token: String? = null): T? {
         return try { request(endpoint, body, token) } catch (_: Exception) { null }
+    }
+
+    private suspend fun requestBytes(endpoint: APIEndpoint, bytes: ByteArray, token: String? = null) {
+        val response = httpClient.request(buildUrl(endpoint)) {
+            method = when (endpoint.method) {
+                HTTPMethod.GET -> HttpMethod.Get
+                HTTPMethod.POST -> HttpMethod.Post
+                HTTPMethod.PATCH -> HttpMethod.Patch
+                HTTPMethod.DELETE -> HttpMethod.Delete
+                HTTPMethod.PUT -> HttpMethod.Put
+            }
+            contentType(ContentType.Application.OctetStream)
+            val authToken = token ?: accessToken
+            if (authToken.isNotBlank()) {
+                header(HttpHeaders.Authorization, "Bearer $authToken")
+            }
+            setBody(bytes)
+        }
+        if (response.status.value >= 400) {
+            val errorBody = try { json.decodeFromString(APIErrorResponse.serializer(), response.bodyAsText()) } catch (_: Exception) { null }
+            throw RelayAPIError.fromStatusCode(
+                code = response.status.value,
+                body = errorBody?.error,
+                remainingAttempts = errorBody?.remainingAttempts,
+                retryAfterSeconds = errorBody?.retryAfterSeconds
+            )
+        }
     }
 
     // ── Auth ─────────────────────────────────────────────────────────────
@@ -198,6 +226,32 @@ class RelayAPIClient(
     suspend fun deleteChatSession(gatewayId: String, sessionKey: String, deleteTranscript: Boolean = false): Boolean {
         val response: ChatSessionDeleteResponse = request(APIEndpoints.Mobile.Chat.deleteSession(gatewayId, sessionKey, deleteTranscript))
         return response.ok
+    }
+
+    suspend fun initMobileFileUpload(
+        gatewayId: String,
+        sessionKey: String,
+        fileName: String,
+        mimeType: String,
+        sizeBytes: Long,
+        sha256: String
+    ): FileUploadInitResponse {
+        val req = FileUploadInitRequest(
+            sessionKey = sessionKey,
+            fileName = fileName,
+            mimeType = mimeType,
+            sizeBytes = sizeBytes,
+            sha256 = sha256
+        )
+        return request(APIEndpoints.Mobile.File.initUpload(APIOrigin.mobile, gatewayId), req)
+    }
+
+    suspend fun uploadMobileFileChunk(uploadId: String, chunkIndex: Int, bytes: ByteArray) {
+        requestBytes(APIEndpoints.Mobile.File.uploadChunk(APIOrigin.mobile, uploadId, chunkIndex), bytes)
+    }
+
+    suspend fun completeMobileFileUpload(uploadId: String, totalChunks: Int): FileUploadCompleteResponse {
+        return request(APIEndpoints.Mobile.File.completeUpload(APIOrigin.mobile, uploadId), FileUploadCompleteRequest(totalChunks))
     }
 
     // ── Tasks ────────────────────────────────────────────────────────────

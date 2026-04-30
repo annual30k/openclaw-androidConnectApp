@@ -16,7 +16,10 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -119,19 +122,36 @@ class RelayWebSocketClient {
     }
 
     fun sendChatMessage(sessionKey: String, content: String, attachmentIds: List<String> = emptyList()) {
-        val attachments = if (attachmentIds.isNotEmpty()) {
-            ""","attachmentIds":[${attachmentIds.joinToString(",") { "\"$it\"" }}]"""
-        } else ""
-        send("""{"type":"chat_message","sessionKey":"$sessionKey","content":"${content.replace("\"", "\\\"")}"$attachments}""")
+        val payload = buildJsonObject {
+            put("type", JsonPrimitive("chat_message"))
+            put("sessionKey", JsonPrimitive(sessionKey))
+            put("content", JsonPrimitive(content))
+            if (attachmentIds.isNotEmpty()) {
+                put("attachmentIds", JsonArray(attachmentIds.map { JsonPrimitive(it) }))
+            }
+        }
+        send(payload.toString())
     }
 
     fun sendCommand(sessionKey: String, command: String) {
-        send("""{"type":"command","sessionKey":"$sessionKey","command":"$command"}""")
+        val payload = buildJsonObject {
+            put("type", JsonPrimitive("command"))
+            put("sessionKey", JsonPrimitive(sessionKey))
+            put("command", JsonPrimitive(command))
+        }
+        send(payload.toString())
     }
 
     fun sendModelSelect(providerId: String, modelId: String, sessionKey: String? = null) {
-        val session = sessionKey?.let { ""","sessionKey":"$it""" } ?: ""
-        send("""{"type":"model_select","providerId":"$providerId","modelId":"$modelId"$session}""")
+        val payload = buildJsonObject {
+            put("type", JsonPrimitive("model_select"))
+            put("providerId", JsonPrimitive(providerId))
+            put("modelId", JsonPrimitive(modelId))
+            if (!sessionKey.isNullOrBlank()) {
+                put("sessionKey", JsonPrimitive(sessionKey))
+            }
+        }
+        send(payload.toString())
     }
 
     fun sendPing() {
