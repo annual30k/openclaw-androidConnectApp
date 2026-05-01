@@ -83,7 +83,9 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
@@ -171,6 +173,7 @@ fun ChatScreen(
     val listState = rememberLazyListState()
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
+    val density = LocalDensity.current
     val view = LocalView.current
 
     var messageText by remember { mutableStateOf("") }
@@ -180,6 +183,7 @@ fun ChatScreen(
     var composerNotice by remember { mutableStateOf<String?>(null) }
     var uploadedAttachments by remember { mutableStateOf<List<UploadedAttachment>>(emptyList()) }
     var isUploadingAttachment by remember { mutableStateOf(false) }
+    var composerHeight by remember { mutableStateOf(0.dp) }
 
     val gatewayId = gatewayState.selectedGatewayId
     val hasSelectedGateway = gatewayState.selectedGateway != null
@@ -318,8 +322,8 @@ fun ChatScreen(
                         .fillMaxWidth()
                         .weight(1f),
                     state = listState,
-                    contentPadding = PaddingValues(top = 12.dp, bottom = 132.dp),
-                    verticalArrangement = Arrangement.spacedBy(14.dp)
+                    contentPadding = PaddingValues(top = 12.dp, bottom = composerHeight + 18.dp),
+                    verticalArrangement = Arrangement.spacedBy(18.dp)
                 ) {
                     if (!hasSelectedGateway) {
                         item {
@@ -362,6 +366,10 @@ fun ChatScreen(
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
                     .fillMaxWidth()
+                    .onGloballyPositioned { coordinates ->
+                        val height = coordinates.size.height
+                        composerHeight = with(density) { height.toDp() }
+                    }
             ) {
                 AnimatedVisibility(slashActions.isNotEmpty(), enter = fadeIn() + expandVertically(), exit = fadeOut() + shrinkVertically()) {
                     SlashCommandPanel(
@@ -1267,8 +1275,8 @@ private fun MessageBubble(
             modifier = Modifier.widthIn(max = 326.dp)
         ) {
             Column(
-                modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
-                verticalArrangement = Arrangement.spacedBy(9.dp)
+                modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp)
             ) {
                 if (isTool) {
                     ToolHeader(message.toolDisplayName ?: stringResource(R.string.chat_tool_activity))
