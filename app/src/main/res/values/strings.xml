@@ -96,7 +96,8 @@
     <string name="gateway_status_offline">Offline</string>
     <string name="gateway_status_disconnected">Disconnected</string>
     <string name="gateway_unpaired_host">No Host Paired</string>
-    <string name="gateway_context_usage_empty">Context 0/0 (0%)</string>
+    <string name="gateway_context_usage_label">Context</string>
+    <string name="gateway_context_usage_empty">Context 0/0 (0%%)</string>
     <string name="gateway_last_seen">Last seen: %s</string>
     <string name="gateway_last_model">Last model: %s</string>
     <string name="gateway_sync_models">Syncing models…</string>
@@ -363,9 +364,7 @@
 
     <string name="auth_pairing_scanner_unrecognizable">Unable to recognize QR code content. Please scan again.</string>
 
-    <string name="auth_pairing_subtitle">Scan QR code or enter pairing code manually</string>
 
-    <string name="auth_pairing_title">Bind Your Host</string>
 
     <string name="auth_pairing_wrong_account_hint">If bound to the wrong account, sign out and sign in again.</string>
 
@@ -936,8 +935,8 @@ Tap the button below to refresh manually.</string>
     <string name="settings_gateway_edit_name_placeholder">Enter gateway name</string>
 
     <string name="settings_gateway_fallback_last_seen">N/A</string>
+    <string name="settings_gateway_fallback_name">Unknown Gateway</string>
 
-    <string name="settings_gateway_fallback_name">No Host</string>
 
     <string name="settings_gateway_fallback_platform">Awaiting Re-pair</string>
 
@@ -1384,4 +1383,13 @@ Tap the button below to refresh manually.</string>
     <string name="tasks_validation_schedule_required">Choose an execution time.</string>
 
 
+    <string name="auth_pairing_title">Pair Gateway</string>
+    <string name="auth_pairing_header">Enter pairing details</string>
+    <string name="auth_pairing_subtitle">Use the access code shown by your ClawLink host terminal.</string>
+    <string name="auth_scan_qr">Scan QR Code</string>
+    <string name="auth_or_manual">OR ENTER MANUALLY</string>
+    <string name="auth_gateway_id">Gateway ID (optional)</string>
+    <string name="auth_access_code">Access Code</string>
+    <string name="auth_pair_button">Pair gateway</string>
+    <string name="auth_pairing_loading">Pairing…</string>
 </resources>

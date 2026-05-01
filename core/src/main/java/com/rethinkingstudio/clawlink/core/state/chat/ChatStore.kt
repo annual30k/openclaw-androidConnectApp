@@ -248,10 +248,27 @@ class ChatStore(
         }
     }
 
+    fun connectWebSocket() {
+        val url = apiClient.baseUrl
+        val token = apiClient.accessToken
+        if (url.isNotBlank() && token.isNotBlank()) {
+            wsClient.connect(url, token)
+        }
+    }
+
     suspend fun loadSessions(gatewayId: String) {
         try {
             val sessions = apiClient.fetchChatSessions(gatewayId)
             _state.value = _state.value.copy(sessions = sessions)
+            
+            // Auto-select session if current is blank or invalid
+            val current = _state.value.currentSessionKey
+            if (current.isBlank() || current.startsWith("session_") || sessions.none { it.sessionKey == current }) {
+                val best = sessions.find { it.sessionKey == "main" } ?: sessions.firstOrNull()
+                if (best != null) {
+                    _state.value = _state.value.copy(currentSessionKey = best.sessionKey, messages = emptyList())
+                }
+            }
         } catch (_: Exception) {}
     }
 

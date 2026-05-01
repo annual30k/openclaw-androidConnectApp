@@ -92,10 +92,11 @@
     <string name="gateways_switch">切换网关</string>
     <string name="gateways_list_title">网关列表</string>
     <string name="gateway_status_unpaired">待绑定</string>
-    <string name="gateway_status_online">在线</string>
+    <string name="gateway_status_online">连接正常</string>
     <string name="gateway_status_offline">离线</string>
     <string name="gateway_status_disconnected">未连接</string>
     <string name="gateway_unpaired_host">未绑定主机</string>
+    <string name="gateway_context_usage_label">上下文</string>
     <string name="gateway_context_usage_empty">上下文 0/0（0%%）</string>
     <string name="gateway_last_seen">最近登录 %s</string>
     <string name="gateway_last_model">最近使用模型 %s</string>
@@ -363,9 +364,7 @@
 
     <string name="auth_pairing_scanner_unrecognizable">扫码内容无法识别，请重新扫描。</string>
 
-    <string name="auth_pairing_subtitle">支持扫码配对和手动输入配对码</string>
 
-    <string name="auth_pairing_title">绑定你的主机</string>
 
     <string name="auth_pairing_wrong_account_hint">如果绑错账号，可以先退出再重新登录。</string>
 
@@ -936,8 +935,8 @@
     <string name="settings_gateway_edit_name_placeholder">输入网关名称</string>
 
     <string name="settings_gateway_fallback_last_seen">暂无</string>
+    <string name="settings_gateway_fallback_name">未知网关</string>
 
-    <string name="settings_gateway_fallback_name">未关联主机</string>
 
     <string name="settings_gateway_fallback_platform">等待重新配对</string>
 
@@ -955,7 +954,6 @@
 
     <string name="settings_maintenance_lock_title">维护锁定</string>
 
-    <string name="settings_row_advanced">高级功能</string>
     <string name="settings_section_maintenance">维护管理</string>
     <string name="settings_section_maintenance_subtitle">网关系统状态与控制</string>
     <string name="settings_section_repair">修复工具</string>
@@ -1384,4 +1382,13 @@
     <string name="tasks_validation_schedule_required">请选择执行时间。</string>
 
 
+    <string name="auth_pairing_title">配对主机</string>
+    <string name="auth_pairing_header">填写配对信息</string>
+    <string name="auth_pairing_subtitle">请在主机终端查看并填写相应的配对码。</string>
+    <string name="auth_scan_qr">扫码配对</string>
+    <string name="auth_or_manual">或手动填写</string>
+    <string name="auth_gateway_id">主机 ID (可选)</string>
+    <string name="auth_access_code">配对码</string>
+    <string name="auth_pair_button">立即配对</string>
+    <string name="auth_pairing_loading">正在配对…</string>
 </resources>

@@ -59,7 +59,7 @@ class AuthStore(
             val creds = apiClient.authenticate(email, password, deviceId)
             credentialStore.saveCredentials(creds)
             apiClient.configure(creds)
-            _state.value = AuthState(isLoggedIn = true, accessToken = creds.accessToken, relayBaseUrl = creds.relayBaseURL)
+            _state.value = AuthState(isLoggedIn = true, isPaired = true, accessToken = creds.accessToken, relayBaseUrl = creds.relayBaseURL)
             true
         } catch (e: RelayAPIError) {
             val shouldSuggestRegister = e is RelayAPIError.ServerError && e.errorCode == "user_not_registered"
@@ -90,7 +90,7 @@ class AuthStore(
                     val creds = result.credentials
                     credentialStore.saveCredentials(creds)
                     apiClient.configure(creds)
-                    _state.value = AuthState(isLoggedIn = true, accessToken = creds.accessToken, relayBaseUrl = creds.relayBaseURL)
+                    _state.value = AuthState(isLoggedIn = true, isPaired = true, accessToken = creds.accessToken, relayBaseUrl = creds.relayBaseURL)
                     true
                 }
                 is RelayAPIClient.RegistrationResult.VerificationRequired -> {
@@ -136,7 +136,7 @@ class AuthStore(
             val creds = apiClient.verifyEmail(email, normalizedCode, deviceId)
             credentialStore.saveCredentials(creds)
             apiClient.configure(creds)
-            _state.value = AuthState(isLoggedIn = true, accessToken = creds.accessToken, relayBaseUrl = creds.relayBaseURL)
+            _state.value = AuthState(isLoggedIn = true, isPaired = true, accessToken = creds.accessToken, relayBaseUrl = creds.relayBaseURL)
             true
         } catch (e: Exception) {
             _state.value = _state.value.copy(isLoading = false, errorMessage = e.message ?: "Verification failed")

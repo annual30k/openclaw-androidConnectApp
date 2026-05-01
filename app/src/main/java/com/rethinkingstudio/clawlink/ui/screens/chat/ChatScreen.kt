@@ -93,6 +93,7 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.rethinkingstudio.clawlink.R
 import com.rethinkingstudio.clawlink.core.models.catalog.ModelItem
 import com.rethinkingstudio.clawlink.core.models.chat.ChatMessage
@@ -232,11 +233,16 @@ fun ChatScreen(
 
     LaunchedEffect(gatewayId) {
         if (gatewayId != null) {
-            if (chatState.currentSessionKey.isBlank()) {
-                chatStore.newSession()
-            }
+            chatStore.clearMessages()
+            chatStore.connectWebSocket()
             chatStore.loadSessions(gatewayId)
             modelStore.loadModels(gatewayId)
+        }
+    }
+
+    LaunchedEffect(gatewayId, chatState.currentSessionKey) {
+        if (gatewayId != null && chatState.currentSessionKey.isNotBlank()) {
+            chatStore.loadHistory(gatewayId, chatState.currentSessionKey)
         }
     }
 
@@ -295,12 +301,13 @@ fun ChatScreen(
                     )
                 }
 
-                if (chatState.errorMessage != null || composerNotice != null) {
+                if (chatState.errorMessage != null || gatewayState.errorMessage != null || composerNotice != null) {
                     StatusBanner(
-                        text = chatState.errorMessage ?: composerNotice.orEmpty(),
-                        isError = chatState.errorMessage != null,
+                        text = chatState.errorMessage ?: gatewayState.errorMessage ?: composerNotice.orEmpty(),
+                        isError = chatState.errorMessage != null || gatewayState.errorMessage != null,
                         onDismiss = {
                             chatStore.clearError()
+                            gatewayStore.clearError()
                             composerNotice = null
                         }
                     )
@@ -334,7 +341,7 @@ fun ChatScreen(
                         }
                     }
 
-                    if (chatState.isLoading) {
+                    if (chatState.isLoading || (gatewayState.isLoading && !hasSelectedGateway)) {
                         item { ChatSessionLoadingCard() }
                     }
 
@@ -452,11 +459,9 @@ private fun ChatTopBar(
         modifier = Modifier
             .fillMaxWidth()
             .statusBarsPadding()
-            .height(60.dp)
+            .height(72.dp)
             .background(ChatColors.canvas)
-            .padding(horizontal = 18.dp)
-            .padding(top = 0.dp)
-            .offset(y = (-5).dp),
+            .padding(horizontal = 16.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween
     ) {
@@ -468,44 +473,65 @@ private fun ChatTopBar(
 
         Surface(
             onClick = onGatewayClick,
-            shape = RoundedCornerShape(18.dp),
-            color = Color.Transparent
+            shape = RoundedCornerShape(12.dp),
+            color = Color.Transparent,
+            modifier = Modifier.weight(1f)
         ) {
             Column(
-                modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
-                horizontalAlignment = Alignment.CenterHorizontally
+                modifier = Modifier.padding(vertical = 2.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+                // Row 1: Name + Arrow
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.Center
+                ) {
                     Text(
                         gateway?.displayName ?: stringResource(R.string.gateway_unpaired_host),
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
-                        style = MaterialTheme.typography.titleMedium,
+                        style = MaterialTheme.typography.titleMedium.copy(fontSize = 17.sp),
                         fontWeight = FontWeight.Black,
                         color = Color.Black
                     )
-                    Icon(Icons.Default.ExpandMore, null, tint = Color(0xFF8B8F98), modifier = Modifier.size(22.dp))
-                }
-                if (hasGateway) {
-                    Text(
-                        gateway?.contextUsage?.takeIf { it.isNotBlank() } ?: stringResource(R.string.gateway_context_usage_empty),
-                        style = MaterialTheme.typography.labelMedium,
-                        color = ChatColors.secondaryText,
-                        fontWeight = FontWeight.Bold
+                    Icon(
+                        Icons.Default.ExpandMore,
+                        null,
+                        tint = Color(0xFF8B8F98),
+                        modifier = Modifier.size(18.dp).padding(start = 2.dp)
                     )
                 }
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+                
+                // Row 2: Context Usage
+                if (hasGateway) {
+                    Text(
+                        text = (stringResource(R.string.gateway_context_usage_label) + " " + (gateway?.contextUsage?.takeIf { it.isNotBlank() } ?: stringResource(R.string.gateway_context_usage_empty))),
+                        style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp),
+                        color = Color(0xFF8B8F98),
+                        fontWeight = FontWeight.Medium,
+                        modifier = Modifier.padding(top = 1.dp)
+                    )
+                }
+                
+                // Row 3: Status dot + Text
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.Center,
+                    modifier = Modifier.padding(top = 1.dp)
+                ) {
                     Box(
                         modifier = Modifier
-                            .size(8.dp)
+                            .size(6.dp)
                             .clip(CircleShape)
                             .background(statusColor)
                     )
                     Text(
                         statusText,
-                        style = MaterialTheme.typography.labelMedium,
-                        color = ChatColors.secondaryText,
-                        fontWeight = FontWeight.Bold
+                        style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp),
+                        color = Color(0xFF8B8F98),
+                        fontWeight = FontWeight.Medium,
+                        modifier = Modifier.padding(start = 4.dp)
                     )
                 }
             }
@@ -522,10 +548,10 @@ private fun CircleHeaderButton(icon: ImageVector, label: String, onClick: () -> 
         shape = CircleShape,
         color = Color.White,
         shadowElevation = 0.dp,
-        modifier = Modifier.size(40.dp)
+        modifier = Modifier.size(44.dp)
     ) {
         Box(contentAlignment = Alignment.Center) {
-            Icon(icon, label, tint = Color.Black, modifier = Modifier.size(22.dp))
+            Icon(icon, label, tint = Color.Black, modifier = Modifier.size(24.dp))
         }
     }
 }

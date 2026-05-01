@@ -1,0 +1,46 @@
+package com.rethinkingstudio.clawlink.core.utils
+
+import kotlin.math.roundToInt
+
+object TokenDisplayFormatter {
+    fun formatCount(value: Int): String {
+        if (value <= 0) return "0"
+        if (value >= 1_000_000) {
+            return formatScaled(value, 1_000_000, "m")
+        }
+        if (value >= 1_000) {
+            return formatScaled(value, 1_000, "k")
+        }
+        return value.toString()
+    }
+
+    fun formatUsage(usedTokens: Int?, limitTokens: Int?, fallback: String?): String {
+        if (usedTokens != null) {
+            val usedLabel = formatCount(usedTokens)
+            if (limitTokens != null && limitTokens > 0) {
+                val limitLabel = formatCount(limitTokens)
+                val percentage = ((usedTokens.toDouble() / limitTokens.toDouble()) * 100).roundToInt().coerceAtMost(999)
+                return "$usedLabel/$limitLabel ($percentage%)"
+            }
+            return usedLabel
+        }
+
+        if (limitTokens != null && limitTokens > 0) {
+            return "--/${formatCount(limitTokens)}"
+        }
+
+        val trimmedFallback = fallback?.trim() ?: ""
+        return if (trimmedFallback.isEmpty()) "--" else trimmedFallback
+    }
+
+    private fun formatScaled(value: Int, divisor: Int, suffix: String): String {
+        val scaled = value.toDouble() / divisor.toDouble()
+        val formatted = java.util.Locale.US.let { "%.1f".format(it, scaled) }
+        val trimmed = if (formatted.endsWith(".0")) formatted.substring(0, formatted.length - 2) else formatted
+        return trimmed + suffix
+    }
+
+    fun parseNonNegativeInteger(value: String?): Int? {
+        return value?.trim()?.toIntOrNull()?.takeIf { it >= 0 }
+    }
+}

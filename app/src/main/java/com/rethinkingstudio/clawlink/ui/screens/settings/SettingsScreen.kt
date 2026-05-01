@@ -1,56 +1,29 @@
 package com.rethinkingstudio.clawlink.ui.screens.settings
 
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
-import androidx.compose.material.icons.filled.ChatBubble
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.Computer
-import androidx.compose.material.icons.filled.Dashboard
-import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.filled.Extension
-import androidx.compose.material.icons.filled.Help
-import androidx.compose.material.icons.filled.Info
-import androidx.compose.material.icons.filled.Language
-import androidx.compose.material.icons.filled.Logout
-import androidx.compose.material.icons.filled.Mic
-import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.filled.Task
-import androidx.compose.material.icons.filled.Tune
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.setValue
+import androidx.compose.material.icons.filled.*
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.rethinkingstudio.clawlink.R
 import com.rethinkingstudio.clawlink.core.domain.NotificationPort
 import com.rethinkingstudio.clawlink.core.network.transport.RelayWebSocketClient
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.ui.graphics.Color
-import androidx.compose.material3.ExperimentalMaterial3Api
 import com.rethinkingstudio.clawlink.core.state.LanguageManager
 import com.rethinkingstudio.clawlink.core.state.auth.AuthStore
 import com.rethinkingstudio.clawlink.core.state.gateway.GatewayStore
@@ -69,6 +42,7 @@ fun SettingsScreen(
     notificationPort: NotificationPort,
     onBack: () -> Unit,
     onNavigateToGateways: () -> Unit,
+    onNavigateToPairing: () -> Unit,
     onNavigateToModels: () -> Unit,
     onNavigateToSkills: () -> Unit,
     onNavigateToTasks: () -> Unit,
@@ -91,29 +65,72 @@ fun SettingsScreen(
     ClawLinkScaffold(
         topBar = {
             TopAppBar(
-                title = { Text(stringResource(R.string.settings_title)) },
+                title = { Text(stringResource(R.string.settings_title), fontWeight = FontWeight.Bold) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.common_action_back))
                     }
-                }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = Color(0xFFF8F9FB))
             )
         }
     ) { padding ->
         Column(
             modifier = Modifier
                 .fillMaxSize()
+                .background(Color(0xFFF8F9FB))
                 .padding(padding)
                 .verticalScroll(rememberScrollState())
-                .padding(horizontal = 16.dp, vertical = 8.dp),
-            verticalArrangement = Arrangement.spacedBy(24.dp)
+                .padding(horizontal = 20.dp, vertical = 8.dp),
+            verticalArrangement = Arrangement.spacedBy(20.dp)
         ) {
             // Section: Gateway
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                ClawLinkSectionHeader(
-                    title = stringResource(R.string.settings_section_gateway),
-                    subtitle = stringResource(R.string.settings_section_gateway_subtitle)
-                )
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.Top
+                ) {
+                    ClawLinkSectionHeader(
+                        title = stringResource(R.string.settings_section_gateway),
+                        subtitle = stringResource(R.string.settings_section_gateway_subtitle),
+                        modifier = Modifier.weight(1f)
+                    )
+                    
+                    val hasBoundGateway = gatewayState.gateways.isNotEmpty()
+                    val actionTitle = if (hasBoundGateway) {
+                        stringResource(R.string.settings_gateway_action_add)
+                    } else {
+                        stringResource(R.string.settings_gateway_action_bind)
+                    }
+
+                    Surface(
+                        onClick = onNavigateToPairing,
+                        shape = CircleShape,
+                        color = Color(0xFF3B82F6).copy(alpha = 0.12f),
+                        modifier = Modifier.padding(top = 4.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            Icon(
+                                Icons.Default.Add,
+                                contentDescription = null,
+                                tint = Color(0xFF3B82F6),
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Text(
+                                actionTitle,
+                                style = MaterialTheme.typography.labelLarge,
+                                fontWeight = FontWeight.Bold,
+                                color = Color(0xFF3B82F6)
+                            )
+                        }
+                    }
+                }
+
                 gatewayState.selectedGateway?.let { gw ->
                     GatewayStatusCard(
                         gateway = gw,
@@ -133,28 +150,30 @@ fun SettingsScreen(
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(12.dp),
-                            modifier = Modifier.padding(8.dp)
+                            modifier = Modifier.padding(16.dp)
                         ) {
                             Surface(
                                 shape = CircleShape,
-                                color = MaterialTheme.colorScheme.surfaceVariant,
-                                modifier = Modifier.size(40.dp)
+                                color = Color(0xFFF3F4F6),
+                                modifier = Modifier.size(44.dp)
                             ) {
                                 Box(contentAlignment = Alignment.Center) {
-                                    Icon(Icons.Default.Computer, null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    Icon(Icons.Default.Computer, null, tint = Color(0xFF6B7280))
                                 }
                             }
                             Column {
-                                Text(stringResource(R.string.settings_gateway_fallback_name), fontWeight = FontWeight.Bold)
-                                Text(stringResource(R.string.settings_gateway_action_bind), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.primary)
+                                Text(stringResource(R.string.settings_gateway_fallback_name), fontWeight = FontWeight.Bold, fontSize = 17.sp)
+                                Text(stringResource(R.string.settings_gateway_action_bind), style = MaterialTheme.typography.bodySmall, color = Color(0xFF3B82F6), fontWeight = FontWeight.SemiBold)
                             }
+                            Spacer(modifier = Modifier.weight(1f))
+                            Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null, tint = Color(0xFF9CA3AF))
                         }
                     }
                 }
             }
 
             // Section: Features
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 ClawLinkSectionHeader(
                     title = stringResource(R.string.settings_section_features),
                     subtitle = stringResource(R.string.settings_section_features_subtitle)
@@ -166,13 +185,13 @@ fun SettingsScreen(
                             title = stringResource(R.string.settings_row_office),
                             onClick = onNavigateToOffice
                         )
-                        HorizontalDivider(modifier = Modifier.padding(start = 56.dp))
+                        HorizontalDivider(modifier = Modifier.padding(start = 64.dp), color = Color(0xFFF3F4F6))
                         SettingsNavigationRow(
                             icon = Icons.Default.Task,
                             title = stringResource(R.string.settings_row_tasks),
                             onClick = onNavigateToTasks
                         )
-                        HorizontalDivider(modifier = Modifier.padding(start = 56.dp))
+                        HorizontalDivider(modifier = Modifier.padding(start = 64.dp), color = Color(0xFFF3F4F6))
                         SettingsNavigationRow(
                             icon = Icons.Default.Extension,
                             title = stringResource(R.string.settings_row_skills),
@@ -183,7 +202,7 @@ fun SettingsScreen(
             }
 
             // Section: AI
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 ClawLinkSectionHeader(
                     title = stringResource(R.string.settings_section_ai),
                     subtitle = stringResource(R.string.settings_section_ai_subtitle)
@@ -195,13 +214,13 @@ fun SettingsScreen(
                             title = stringResource(R.string.settings_row_models),
                             onClick = onNavigateToModels
                         )
-                        HorizontalDivider(modifier = Modifier.padding(start = 56.dp))
+                        HorizontalDivider(modifier = Modifier.padding(start = 64.dp), color = Color(0xFFF3F4F6))
                         SettingsNavigationRow(
                             icon = Icons.Default.ChatBubble,
                             title = stringResource(R.string.settings_row_sessions),
                             onClick = onNavigateToSessions
                         )
-                        HorizontalDivider(modifier = Modifier.padding(start = 56.dp))
+                        HorizontalDivider(modifier = Modifier.padding(start = 64.dp), color = Color(0xFFF3F4F6))
                         SettingsNavigationRow(
                             icon = Icons.Default.Mic,
                             title = stringResource(R.string.settings_row_voice_setup),
@@ -212,7 +231,7 @@ fun SettingsScreen(
             }
 
             // Section: Management
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 ClawLinkSectionHeader(
                     title = stringResource(R.string.settings_section_management),
                     subtitle = stringResource(R.string.settings_section_management_subtitle)
@@ -224,13 +243,13 @@ fun SettingsScreen(
                             title = stringResource(R.string.settings_row_advanced),
                             onClick = onNavigateToAdvanced
                         )
-                        HorizontalDivider(modifier = Modifier.padding(start = 56.dp))
+                        HorizontalDivider(modifier = Modifier.padding(start = 64.dp), color = Color(0xFFF3F4F6))
                         SettingsNavigationRow(
                             icon = Icons.Default.Help,
                             title = stringResource(R.string.settings_row_usage_guide),
                             onClick = onNavigateToHelp
                         )
-                        HorizontalDivider(modifier = Modifier.padding(start = 56.dp))
+                        HorizontalDivider(modifier = Modifier.padding(start = 64.dp), color = Color(0xFFF3F4F6))
                         SettingsNavigationRow(
                             icon = Icons.Default.Language,
                             title = stringResource(R.string.settings_row_language),
@@ -242,7 +261,7 @@ fun SettingsScreen(
             }
 
             // Section: About
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 ClawLinkSectionHeader(
                     title = stringResource(R.string.settings_section_about),
                     subtitle = stringResource(R.string.settings_section_about_subtitle)
@@ -258,7 +277,7 @@ fun SettingsScreen(
             }
 
             // Section: Account
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 ClawLinkSectionHeader(
                     title = stringResource(R.string.settings_section_account),
                     subtitle = stringResource(R.string.settings_section_account_subtitle)
@@ -271,30 +290,46 @@ fun SettingsScreen(
                             color = Color.Transparent
                         ) {
                             Row(
-                                modifier = Modifier.padding(16.dp),
+                                modifier = Modifier.padding(horizontal = 16.dp, vertical = 20.dp),
                                 verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                                horizontalArrangement = Arrangement.spacedBy(14.dp)
                             ) {
-                                Icon(Icons.Default.Logout, null, tint = MaterialTheme.colorScheme.primary)
-                                Text(stringResource(R.string.settings_account_sign_out), fontWeight = FontWeight.SemiBold)
+                                Surface(
+                                    shape = RoundedCornerShape(10.dp),
+                                    color = Color(0xFFF3F4F6),
+                                    modifier = Modifier.size(36.dp)
+                                ) {
+                                    Box(contentAlignment = Alignment.Center) {
+                                        Icon(Icons.Default.Logout, null, tint = Color(0xFFEF4444), modifier = Modifier.size(18.dp))
+                                    }
+                                }
+                                Text(stringResource(R.string.settings_account_sign_out), fontWeight = FontWeight.SemiBold, color = Color(0xFFEF4444))
                             }
                         }
-                        HorizontalDivider(modifier = Modifier.padding(start = 56.dp))
+                        HorizontalDivider(modifier = Modifier.padding(start = 64.dp), color = Color(0xFFF3F4F6))
                         Surface(
                             onClick = { showDeleteConfirm = true },
                             modifier = Modifier.fillMaxWidth(),
                             color = Color.Transparent
                         ) {
                             Row(
-                                modifier = Modifier.padding(16.dp),
+                                modifier = Modifier.padding(horizontal = 16.dp, vertical = 20.dp),
                                 verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                                horizontalArrangement = Arrangement.spacedBy(14.dp)
                             ) {
-                                Icon(Icons.Default.Delete, null, tint = MaterialTheme.colorScheme.error)
+                                Surface(
+                                    shape = RoundedCornerShape(10.dp),
+                                    color = Color(0xFFF3F4F6),
+                                    modifier = Modifier.size(36.dp)
+                                ) {
+                                    Box(contentAlignment = Alignment.Center) {
+                                        Icon(Icons.Default.Delete, null, tint = Color(0xFFEF4444), modifier = Modifier.size(18.dp))
+                                    }
+                                }
                                 Text(
                                     stringResource(R.string.settings_account_delete),
                                     fontWeight = FontWeight.SemiBold,
-                                    color = MaterialTheme.colorScheme.error
+                                    color = Color(0xFFEF4444)
                                 )
                             }
                         }
@@ -302,15 +337,17 @@ fun SettingsScreen(
                 }
             }
 
-            Spacer(modifier = Modifier.height(32.dp))
+            Spacer(modifier = Modifier.height(20.dp))
 
             Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
                 Text(
                     "ClawLink v1.0.0",
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    color = Color(0xFF9CA3AF)
                 )
             }
+            
+            Spacer(modifier = Modifier.height(20.dp))
         }
     }
 
@@ -379,25 +416,34 @@ private fun SettingsNavigationRow(
         color = Color.Transparent
     ) {
         Row(
-            modifier = Modifier.padding(16.dp),
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
+            horizontalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            Icon(icon, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(24.dp))
+            Surface(
+                shape = RoundedCornerShape(10.dp),
+                color = Color(0xFF3B82F6).copy(alpha = 0.1f),
+                modifier = Modifier.size(36.dp)
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(icon, null, tint = Color(0xFF3B82F6), modifier = Modifier.size(18.dp))
+                }
+            }
+            
             Column(modifier = Modifier.weight(1f)) {
-                Text(title, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
+                Text(title, style = MaterialTheme.typography.bodyLarge.copy(fontSize = 16.sp), fontWeight = FontWeight.Bold, color = Color(0xFF1F2937))
                 if (subtitle != null) {
-                    Text(subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(subtitle, style = MaterialTheme.typography.labelSmall, color = Color(0xFF6B7280))
                 }
             }
             if (value != null) {
-                Text(value, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(value, style = MaterialTheme.typography.bodyMedium, color = Color(0xFF6B7280), modifier = Modifier.padding(end = 4.dp))
             }
             Icon(
                 Icons.AutoMirrored.Filled.KeyboardArrowRight,
                 null,
-                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
-                modifier = Modifier.size(20.dp)
+                tint = Color(0xFFD1D5DB),
+                modifier = Modifier.size(18.dp)
             )
         }
     }

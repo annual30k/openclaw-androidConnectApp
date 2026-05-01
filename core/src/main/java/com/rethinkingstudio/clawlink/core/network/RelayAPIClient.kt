@@ -21,8 +21,8 @@ import kotlinx.serialization.json.Json
 import okhttp3.OkHttpClient
 
 class RelayAPIClient(
-    private var baseUrl: String = "",
-    private var accessToken: String = ""
+    var baseUrl: String = "",
+    var accessToken: String = ""
 ) {
     private val json = Json {
         ignoreUnknownKeys = true
@@ -56,7 +56,6 @@ class RelayAPIClient(
         accessToken = ""
     }
 
-    fun getBaseUrl(): String = baseUrl
 
     private fun buildUrl(endpoint: APIEndpoint): String {
         val url = baseUrl.trimEnd('/') + endpoint.path

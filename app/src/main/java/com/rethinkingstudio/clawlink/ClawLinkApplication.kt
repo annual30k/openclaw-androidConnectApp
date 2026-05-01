@@ -68,6 +68,7 @@ class SecureCredentialStore(private val context: Context) : CredentialStore {
             .remove(TOKEN_KEY)
             .remove(RELAY_URL_KEY)
             .apply()
+        context.dataStore.edit { it.remove(LAST_GATEWAY_ID) }
     }
 
     override suspend fun saveLastGatewayId(gatewayId: String) {

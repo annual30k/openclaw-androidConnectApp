@@ -1,8 +1,8 @@
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
-    id("org.jetbrains.kotlin.plugin.compose")
     id("org.jetbrains.kotlin.plugin.serialization")
+    id("org.jetbrains.kotlin.plugin.compose")
 }
 
 android {
@@ -84,6 +84,18 @@ dependencies {
 
     // Accompanist for permissions
     implementation("com.google.accompanist:accompanist-permissions:0.36.0")
+
+    // CameraX
+    val cameraVersion = "1.3.4"
+    implementation("androidx.camera:camera-camera2:$cameraVersion")
+    implementation("androidx.camera:camera-lifecycle:$cameraVersion")
+    implementation("androidx.camera:camera-view:$cameraVersion")
+
+    // ML Kit Barcode Scanning
+    implementation("com.google.mlkit:barcode-scanning:17.3.0")
+
+    // Kotlinx Serialization
+    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.3")
 
     // Markdown rendering
     implementation("io.noties.markwon:core:4.6.2")

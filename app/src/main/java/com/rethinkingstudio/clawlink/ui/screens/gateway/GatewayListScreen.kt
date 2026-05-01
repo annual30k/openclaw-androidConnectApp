@@ -6,6 +6,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.*
@@ -24,6 +25,7 @@ import kotlinx.coroutines.launch
 @Composable
 fun GatewayListScreen(
     gatewayStore: GatewayStore,
+    onNavigateToPairing: () -> Unit,
     onBack: () -> Unit
 ) {
     val state by gatewayStore.state.collectAsState()
@@ -39,6 +41,9 @@ fun GatewayListScreen(
                     }
                 },
                 actions = {
+                    IconButton(onClick = onNavigateToPairing) {
+                        Icon(Icons.Default.Add, "Add Gateway")
+                    }
                     IconButton(onClick = {
                         scope.launch { gatewayStore.loadGateways() }
                     }) {
@@ -71,6 +76,10 @@ fun GatewayListScreen(
                     Spacer(modifier = Modifier.height(16.dp))
                     Button(onClick = { scope.launch { gatewayStore.loadGateways() } }) {
                         Text("Refresh")
+                    }
+                    Spacer(modifier = Modifier.height(8.dp))
+                    TextButton(onClick = onNavigateToPairing) {
+                        Text("Add New Gateway")
                     }
                 }
             }

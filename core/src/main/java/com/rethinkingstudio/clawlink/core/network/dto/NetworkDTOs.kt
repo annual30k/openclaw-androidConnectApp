@@ -94,6 +94,13 @@ data class GatewaySummaryDTO(
     val statuses: List<GatewayStatusDTO>? = null
 ) {
     fun toGatewaySummary(): GatewaySummary {
+        val usageValue = contextUsageValue ?: com.rethinkingstudio.clawlink.core.utils.TokenDisplayFormatter.parseNonNegativeInteger(contextUsage)
+        val usageText = com.rethinkingstudio.clawlink.core.utils.TokenDisplayFormatter.formatUsage(
+            usedTokens = usageValue,
+            limitTokens = contextLimit,
+            fallback = contextUsage
+        )
+        
         return GatewaySummary(
             gatewayId = gatewayId,
             displayName = displayName,
@@ -102,8 +109,8 @@ data class GatewaySummaryDTO(
             aggregateStatus = try { AggregateStatus.valueOf(aggregateStatus) } catch (_: Exception) { AggregateStatus.offline },
             lastSeenAt = lastSeenAt,
             currentModel = currentModel,
-            contextUsage = contextUsage,
-            contextUsageValue = contextUsageValue,
+            contextUsage = usageText,
+            contextUsageValue = usageValue,
             contextLimit = contextLimit,
             mobileControlStatus = mobileControlStatus,
             officeActivityKind = officeActivityKind,

@@ -62,6 +62,9 @@ fun AppNavigation(
 
     LaunchedEffect(Unit) {
         container.authStore.tryRestoreSession()
+        if (container.authStore.isLoggedIn) {
+            container.gatewayStore.loadGateways()
+        }
     }
 
     LaunchedEffect(authState.isLoggedIn, hasSeenWelcome) {
@@ -101,8 +104,11 @@ fun AppNavigation(
             LoginScreen(
                 authStore = container.authStore,
                 onLoginSuccess = {
-                    navController.navigate(Routes.MAIN) {
-                        popUpTo(Routes.LOGIN) { inclusive = true }
+                    scope.launch {
+                        container.gatewayStore.loadGateways()
+                        navController.navigate(Routes.MAIN) {
+                            popUpTo(Routes.LOGIN) { inclusive = true }
+                        }
                     }
                 }
             )
@@ -112,8 +118,11 @@ fun AppNavigation(
             PairingScreen(
                 authStore = container.authStore,
                 onPairSuccess = {
-                    navController.navigate(Routes.MAIN) {
-                        popUpTo(Routes.PAIRING) { inclusive = true }
+                    scope.launch {
+                        container.gatewayStore.loadGateways()
+                        navController.navigate(Routes.MAIN) {
+                            popUpTo(Routes.PAIRING) { inclusive = true }
+                        }
                     }
                 },
                 onBack = { navController.popBackStack() }
@@ -131,6 +140,7 @@ fun AppNavigation(
         composable(Routes.GATEWAYS) {
             GatewayListScreen(
                 gatewayStore = container.gatewayStore,
+                onNavigateToPairing = { navController.navigate(Routes.PAIRING) },
                 onBack = { navController.popBackStack() }
             )
         }
@@ -178,6 +188,7 @@ fun AppNavigation(
                 notificationPort = container.notificationPort,
                 onBack = { navController.popBackStack() },
                 onNavigateToGateways = { navController.navigate(Routes.GATEWAYS) },
+                onNavigateToPairing = { navController.navigate(Routes.PAIRING) },
                 onNavigateToModels = { navController.navigate(Routes.MODELS) },
                 onNavigateToSkills = { navController.navigate(Routes.SKILLS) },
                 onNavigateToTasks = { navController.navigate(Routes.TASKS) },

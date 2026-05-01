@@ -274,8 +274,13 @@ data class ComposerAttachmentUploadItem(
 // ── ChatSlashCommand ─────────────────────────────────────────────────────
 @Serializable
 data class ChatSlashCommand(
-    val name: String,
-    val description: String? = null
+    val command: String? = null,
+    val name: String? = null,
+    val title: String? = null,
+    val detail: String? = null,
+    val description: String? = null,
+    val category: String? = null,
+    val iconName: String? = null
 )
 
 // ── ChatSessionItem ──────────────────────────────────────────────────────
