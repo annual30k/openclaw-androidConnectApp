@@ -87,7 +87,7 @@ class AppContainer(context: Context) {
     val notificationPort: NotificationPort = AndroidNotificationPort(context)
 
     val authStore: AuthStore = AuthStore(apiClient, credentialStore)
-    val gatewayStore: GatewayStore = GatewayStore(apiClient, credentialStore)
+    val gatewayStore: GatewayStore = GatewayStore(apiClient, credentialStore, wsClient)
     val chatStore: ChatStore = ChatStore(apiClient, wsClient, notificationPort)
     val modelStore: ModelStore = ModelStore(apiClient)
     val skillStore: SkillStore = SkillStore(apiClient)

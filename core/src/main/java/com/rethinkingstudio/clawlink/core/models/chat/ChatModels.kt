@@ -164,14 +164,39 @@ data class RelayChatContentBlock(
 
     val isToolCallBlock: Boolean get() = type in listOf("tool_use", "tool_call")
     val isToolResultBlock: Boolean get() = type in listOf("tool_result", "tool_call_result")
-    val isFileBlock: Boolean get() = type in listOf("file", "file_upload", "file_result")
+    val isFileBlock: Boolean
+        get() {
+            val normalized = type.trim().lowercase()
+            return normalized in listOf("file", "file_upload", "file_result", "fileattachment", "attachment")
+        }
     val isVoiceMessageBlock: Boolean get() = type in listOf("voice_message", "voice_result")
     val isTextBlock: Boolean get() = type in listOf("text", "output_text", "input_text")
 
     val resolvedName: String? get() = name ?: toolName
-    val fileDisplayName: String? get() = fileName ?: text
+    val fileDisplayName: String? get() = fileName ?: name ?: text
     val fileDownloadURLString: String? get() = downloadUrl ?: downloadPath
-    val fileStatusText: String? get() = status
+    val fileStatusText: String?
+        get() {
+            val size = sizeBytes?.takeIf { it > 0 }?.let { ComposerAttachmentDraft.formatByteCount(it.toLong()) }
+            val sender = senderDisplayName?.trim()?.takeIf { it.isNotEmpty() }
+            return listOfNotNull(size, sender).joinToString(" · ").ifBlank { status }
+        }
+    val isImageFileBlock: Boolean
+        get() {
+            val normalizedMime = mimeType?.trim()?.lowercase().orEmpty()
+            if (normalizedMime.startsWith("image/")) return true
+            val normalizedName = fileDisplayName?.trim()?.lowercase().orEmpty()
+            return normalizedName.endsWith(".png") ||
+                normalizedName.endsWith(".jpg") ||
+                normalizedName.endsWith(".jpeg") ||
+                normalizedName.endsWith(".gif") ||
+                normalizedName.endsWith(".webp") ||
+                normalizedName.endsWith(".heic") ||
+                normalizedName.endsWith(".heif") ||
+                normalizedName.endsWith(".bmp") ||
+                normalizedName.endsWith(".tiff") ||
+                normalizedName.endsWith(".avif")
+        }
     val voiceTranscriptText: String? get() = transcript
     val voiceStatusText: String? get() = status
 }

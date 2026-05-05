@@ -5,6 +5,7 @@ import com.rethinkingstudio.clawlink.core.models.backups.BackupItem
 import com.rethinkingstudio.clawlink.core.models.catalog.ModelItem
 import com.rethinkingstudio.clawlink.core.models.chat.ChatSlashCommand
 import com.rethinkingstudio.clawlink.core.models.gateway.AggregateStatus
+import com.rethinkingstudio.clawlink.core.models.gateway.ConnectionPhase
 import com.rethinkingstudio.clawlink.core.models.gateway.GatewayStatus
 import com.rethinkingstudio.clawlink.core.models.gateway.GatewaySummary
 import com.rethinkingstudio.clawlink.core.models.skills.SkillItem
@@ -19,7 +20,11 @@ import kotlinx.serialization.encoding.Decoder
 import kotlinx.serialization.encoding.Encoder
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.intOrNull
 import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.longOrNull
 
 // ── Auth DTOs ────────────────────────────────────────────────────────────
 
@@ -76,9 +81,12 @@ data class GatewaySummaryDTO(
     val platform: String,
     val role: String? = null,
     val aggregateStatus: String,
+    val relayStatus: String? = null,
+    val hostStatus: String? = null,
+    val openclawStatus: String? = null,
     val lastSeenAt: String,
     val currentModel: String,
-    val contextUsage: String,
+    val contextUsage: JsonElement? = null,
     val contextUsageValue: Int? = null,
     val contextLimit: Int? = null,
     val mobileControlStatus: String? = null,
@@ -94,11 +102,12 @@ data class GatewaySummaryDTO(
     val statuses: List<GatewayStatusDTO>? = null
 ) {
     fun toGatewaySummary(): GatewaySummary {
-        val usageValue = contextUsageValue ?: com.rethinkingstudio.clawlink.core.utils.TokenDisplayFormatter.parseNonNegativeInteger(contextUsage)
+        val usageFallback = contextUsage.displayText()
+        val usageValue = contextUsageValue ?: contextUsage.nonNegativeInt()
         val usageText = com.rethinkingstudio.clawlink.core.utils.TokenDisplayFormatter.formatUsage(
             usedTokens = usageValue,
             limitTokens = contextLimit,
-            fallback = contextUsage
+            fallback = usageFallback
         )
         
         return GatewaySummary(
@@ -106,7 +115,7 @@ data class GatewaySummaryDTO(
             displayName = displayName,
             platform = platform,
             role = role,
-            aggregateStatus = try { AggregateStatus.valueOf(aggregateStatus) } catch (_: Exception) { AggregateStatus.offline },
+            aggregateStatus = AggregateStatus.fromString(aggregateStatus),
             lastSeenAt = lastSeenAt,
             currentModel = currentModel,
             contextUsage = usageText,
@@ -122,7 +131,39 @@ data class GatewaySummaryDTO(
             officeActivityProgress = officeActivityProgress,
             officeActivityUpdatedAt = officeActivityUpdatedAt,
             slashCommands = slashCommands,
-            statuses = statuses?.map { it.toGatewayStatus() } ?: emptyList()
+            statuses = statuses?.map { it.toGatewayStatus() } ?: synthesizedStatuses()
+        )
+    }
+
+    private fun JsonElement?.displayText(): String {
+        val primitive = this as? JsonPrimitive ?: return ""
+        return primitive.contentOrNull?.trim().orEmpty()
+    }
+
+    private fun JsonElement?.nonNegativeInt(): Int? {
+        val primitive = this as? JsonPrimitive ?: return null
+        val value = primitive.intOrNull ?: primitive.longOrNull?.coerceAtMost(Int.MAX_VALUE.toLong())?.toInt()
+        return value?.takeIf { it >= 0 }
+    }
+
+    private fun synthesizedStatuses(): List<GatewayStatus> {
+        val openClawState = openclawStatus ?: hostStatus
+        return listOf(
+            GatewayStatus(
+                phase = ConnectionPhase.appRelay,
+                status = AggregateStatus.online,
+                detail = "Session active"
+            ),
+            GatewayStatus(
+                phase = ConnectionPhase.relayHost,
+                status = AggregateStatus.fromString(relayStatus),
+                detail = relayStatus ?: "offline"
+            ),
+            GatewayStatus(
+                phase = ConnectionPhase.hostGateway,
+                status = AggregateStatus.fromString(openClawState),
+                detail = openClawState ?: "offline"
+            )
         )
     }
 }
@@ -135,8 +176,8 @@ data class GatewayStatusDTO(
 ) {
     fun toGatewayStatus(): GatewayStatus {
         return GatewayStatus(
-            phase = try { com.rethinkingstudio.clawlink.core.models.gateway.ConnectionPhase.valueOf(phase) } catch (_: Exception) { com.rethinkingstudio.clawlink.core.models.gateway.ConnectionPhase.appRelay },
-            status = try { AggregateStatus.valueOf(status) } catch (_: Exception) { AggregateStatus.offline },
+            phase = ConnectionPhase.fromString(phase),
+            status = AggregateStatus.fromString(status),
             detail = detail
         )
     }

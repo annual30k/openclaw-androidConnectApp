@@ -29,10 +29,12 @@ import androidx.compose.ui.unit.sp
 import com.rethinkingstudio.clawlink.R
 import com.rethinkingstudio.clawlink.core.models.gateway.AggregateStatus
 import com.rethinkingstudio.clawlink.core.models.gateway.GatewaySummary
+import com.rethinkingstudio.clawlink.core.state.gateway.GatewayStore
 
 @Composable
 fun GatewayStatusCard(
     gateway: GatewaySummary,
+    appRelayStatus: AggregateStatus,
     onEditName: (String) -> Unit,
     onClick: () -> Unit,
     modifier: Modifier = Modifier
@@ -40,13 +42,19 @@ fun GatewayStatusCard(
     var isEditing by remember { mutableStateOf(false) }
     var editedName by remember { mutableStateOf(gateway.displayName) }
 
-    val statusColor = when (gateway.aggregateStatus) {
-        AggregateStatus.online -> MaterialTheme.colorScheme.secondary
+    val effectiveStatus = if (appRelayStatus == AggregateStatus.online) {
+        gateway.aggregateStatus
+    } else {
+        appRelayStatus
+    }
+
+    val statusColor = when (effectiveStatus) {
+        AggregateStatus.online -> Color(0xFF4ADE80)
         AggregateStatus.partial -> MaterialTheme.colorScheme.tertiary
         else -> MaterialTheme.colorScheme.error
     }
 
-    val statusText = when (gateway.aggregateStatus) {
+    val statusText = when (effectiveStatus) {
         AggregateStatus.online -> stringResource(R.string.gateway_aggregate_online)
         AggregateStatus.connecting -> stringResource(R.string.gateway_aggregate_connecting)
         AggregateStatus.partial -> stringResource(R.string.gateway_aggregate_partial)
@@ -180,8 +188,15 @@ fun GatewayStatusCard(
             }
             
             // Flow Panel
+            val synthesizedStatuses = remember(gateway.statuses, appRelayStatus) {
+                GatewayStore.selectedGatewayStatuses(
+                    selectedGateway = gateway,
+                    appRelayStatus = appRelayStatus
+                )
+            }
+            
             GatewayFlowPanel(
-                statuses = gateway.statuses,
+                statuses = synthesizedStatuses,
                 modifier = Modifier.fillMaxWidth()
             )
         }

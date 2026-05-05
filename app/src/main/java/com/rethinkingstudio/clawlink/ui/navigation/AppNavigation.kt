@@ -1,5 +1,8 @@
 package com.rethinkingstudio.clawlink.ui.navigation
 
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -10,11 +13,14 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import kotlinx.coroutines.launch
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import com.rethinkingstudio.clawlink.AppContainer
+import com.rethinkingstudio.clawlink.ui.components.ClawLinkScaffold
 import com.rethinkingstudio.clawlink.ui.screens.auth.LoginScreen
 import com.rethinkingstudio.clawlink.ui.screens.auth.PairingScreen
 import com.rethinkingstudio.clawlink.ui.screens.gateway.GatewayListScreen
@@ -57,14 +63,39 @@ fun AppNavigation(
     val context = LocalContext.current
     val welcomePrefs = remember { context.getSharedPreferences("clawlink_welcome", 0) }
     var hasSeenWelcome by remember { mutableStateOf(welcomePrefs.getBoolean("seen", false)) }
+    var hasRestoredSession by remember { mutableStateOf(false) }
     val authState by container.authStore.state.collectAsState()
     val scope = rememberCoroutineScope()
 
     LaunchedEffect(Unit) {
         container.authStore.tryRestoreSession()
         if (container.authStore.isLoggedIn) {
+            if (!hasSeenWelcome) {
+                welcomePrefs.edit().putBoolean("seen", true).apply()
+                hasSeenWelcome = true
+            }
             container.gatewayStore.loadGateways()
         }
+        hasRestoredSession = true
+    }
+
+    if (!hasRestoredSession) {
+        ClawLinkScaffold {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize(),
+                contentAlignment = Alignment.Center
+            ) {
+                CircularProgressIndicator()
+            }
+        }
+        return
+    }
+
+    val startDestination = when {
+        !hasSeenWelcome -> Routes.WELCOME
+        authState.isLoggedIn -> Routes.MAIN
+        else -> Routes.LOGIN
     }
 
     LaunchedEffect(authState.isLoggedIn, hasSeenWelcome) {
@@ -86,7 +117,7 @@ fun AppNavigation(
         }
     }
 
-    NavHost(navController = navController, startDestination = Routes.WELCOME) {
+    NavHost(navController = navController, startDestination = startDestination) {
         composable(Routes.WELCOME) {
             WelcomeCarouselScreen(
                 onFinish = {
@@ -105,6 +136,8 @@ fun AppNavigation(
                 authStore = container.authStore,
                 onLoginSuccess = {
                     scope.launch {
+                        welcomePrefs.edit().putBoolean("seen", true).apply()
+                        hasSeenWelcome = true
                         container.gatewayStore.loadGateways()
                         navController.navigate(Routes.MAIN) {
                             popUpTo(Routes.LOGIN) { inclusive = true }
@@ -119,6 +152,8 @@ fun AppNavigation(
                 authStore = container.authStore,
                 onPairSuccess = {
                     scope.launch {
+                        welcomePrefs.edit().putBoolean("seen", true).apply()
+                        hasSeenWelcome = true
                         container.gatewayStore.loadGateways()
                         navController.navigate(Routes.MAIN) {
                             popUpTo(Routes.PAIRING) { inclusive = true }
@@ -133,7 +168,8 @@ fun AppNavigation(
             MainScreen(
                 container = container,
                 onNavigateToSettings = { navController.navigate(Routes.SETTINGS) },
-                onNavigateToHelp = { navController.navigate(Routes.HELP) }
+                onNavigateToHelp = { navController.navigate(Routes.HELP) },
+                hasSeenUsageGuide = hasSeenWelcome
             )
         }
 

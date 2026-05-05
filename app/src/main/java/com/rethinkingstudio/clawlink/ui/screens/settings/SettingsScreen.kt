@@ -134,6 +134,7 @@ fun SettingsScreen(
                 gatewayState.selectedGateway?.let { gw ->
                     GatewayStatusCard(
                         gateway = gw,
+                        appRelayStatus = gatewayState.appRelayStatus,
                         onEditName = { newName ->
                             scope.launch {
                                 gatewayStore.updateGatewayName(gw.id, newName)

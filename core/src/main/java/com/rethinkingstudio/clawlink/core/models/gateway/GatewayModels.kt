@@ -5,12 +5,50 @@ import kotlinx.serialization.Serializable
 
 @Serializable
 enum class AggregateStatus {
-    online, connecting, partial, offline
+    online, connecting, partial, offline;
+
+    companion object {
+        fun fromString(value: String?): AggregateStatus {
+            val normalized = value?.trim() ?: ""
+            return when (normalized) {
+                // Chinese server labels
+                "在线" -> online
+                "连接中" -> connecting
+                "半可用" -> partial
+                "离线" -> offline
+                // English server values
+                "healthy", "relay_connected" -> online
+                "connecting", "connecting_relay", "connecting_openclaw" -> connecting
+                "degraded", "backoff" -> partial
+                "offline", "unknown" -> offline
+                // Fallback: exact enum name match
+                else -> entries.find { it.name == normalized } ?: offline
+            }
+        }
+    }
 }
 
 @Serializable
 enum class ConnectionPhase {
-    appRelay, relayHost, hostGateway
+    appRelay, relayHost, hostGateway;
+
+    companion object {
+        fun fromString(value: String?): ConnectionPhase {
+            val normalized = value
+                ?.trim()
+                ?.replace(" -> ", "_")
+                ?.replace(" ", "_")
+                ?.replace("-", "_")
+                ?.lowercase()
+                ?: ""
+            return when (normalized) {
+                "apprelay", "app_relay", "app_relay_phase" -> appRelay
+                "relayhost", "relay_host" -> relayHost
+                "hostgateway", "host_gateway", "host_openclaw", "host_to_openclaw" -> hostGateway
+                else -> entries.find { it.name.equals(value?.trim(), ignoreCase = true) } ?: appRelay
+            }
+        }
+    }
 }
 
 @Serializable

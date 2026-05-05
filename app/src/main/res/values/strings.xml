@@ -100,6 +100,7 @@
     <string name="gateway_context_usage_empty">Context 0/0 (0%%)</string>
     <string name="gateway_last_seen">Last seen: %s</string>
     <string name="gateway_last_model">Last model: %s</string>
+    <string name="gateway_last_model_label">Last model</string>
     <string name="gateway_sync_models">Syncing models…</string>
     <string name="gateway_no_models">No models reported by the selected gateway.</string>
     <string name="gateway_usage_guide_prompt">Install the agent, generate a pairing code, and run the service in the background. You can always come back and check this guide again.</string>

@@ -8,7 +8,8 @@ import com.rethinkingstudio.clawlink.ui.screens.chat.ChatScreen
 fun MainScreen(
     container: AppContainer,
     onNavigateToSettings: () -> Unit,
-    onNavigateToHelp: () -> Unit
+    onNavigateToHelp: () -> Unit,
+    hasSeenUsageGuide: Boolean
 ) {
     ChatScreen(
         chatStore = container.chatStore,
@@ -16,6 +17,7 @@ fun MainScreen(
         modelStore = container.modelStore,
         onBack = null,
         onOpenSettings = onNavigateToSettings,
-        onOpenUsageGuide = onNavigateToHelp
+        onOpenUsageGuide = onNavigateToHelp,
+        hasSeenUsageGuide = hasSeenUsageGuide
     )
 }

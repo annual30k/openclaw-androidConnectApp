@@ -92,6 +92,7 @@ fun GatewayListScreen(
                 items(state.gateways, key = { it.id }) { gateway ->
                     GatewayRow(
                         gateway = gateway,
+                        appRelayStatus = state.appRelayStatus,
                         isSelected = gateway.id == state.selectedGatewayId,
                         onSelect = {
                             gatewayStore.selectGateway(gateway.id)
@@ -107,6 +108,7 @@ fun GatewayListScreen(
 @Composable
 private fun GatewayRow(
     gateway: GatewaySummary,
+    appRelayStatus: AggregateStatus,
     isSelected: Boolean,
     onSelect: () -> Unit
 ) {
@@ -137,9 +139,15 @@ private fun GatewayRow(
                 )
                 Spacer(modifier = Modifier.height(2.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
+                    val effectiveStatus = if (appRelayStatus == AggregateStatus.online) {
+                        gateway.aggregateStatus
+                    } else {
+                        appRelayStatus
+                    }
+
                     Text(
                         gateway.statusIcon,
-                        color = when (gateway.aggregateStatus) {
+                        color = when (effectiveStatus) {
                             AggregateStatus.online -> MaterialTheme.colorScheme.primary
                             AggregateStatus.offline -> MaterialTheme.colorScheme.error
                             else -> MaterialTheme.colorScheme.tertiary
@@ -147,7 +155,7 @@ private fun GatewayRow(
                     )
                     Spacer(modifier = Modifier.width(4.dp))
                     Text(
-                        gateway.aggregateStatus.name,
+                        effectiveStatus.name,
                         style = MaterialTheme.typography.labelMedium
                     )
                     Spacer(modifier = Modifier.width(8.dp))

@@ -92,7 +92,7 @@
     <string name="gateways_switch">切换网关</string>
     <string name="gateways_list_title">网关列表</string>
     <string name="gateway_status_unpaired">待绑定</string>
-    <string name="gateway_status_online">连接正常</string>
+    <string name="gateway_status_online">已连接</string>
     <string name="gateway_status_offline">离线</string>
     <string name="gateway_status_disconnected">未连接</string>
     <string name="gateway_unpaired_host">未绑定主机</string>
@@ -100,6 +100,7 @@
     <string name="gateway_context_usage_empty">上下文 0/0（0%%）</string>
     <string name="gateway_last_seen">最近登录 %s</string>
     <string name="gateway_last_model">最近使用模型 %s</string>
+    <string name="gateway_last_model_label">最近使用模型</string>
     <string name="gateway_sync_models">同步模型中…</string>
     <string name="gateway_no_models">所选网关未上报可用模型。</string>
     <string name="gateway_usage_guide_prompt">安装 Agent、生成配对码、后台运行服务，随时可以回来再看一遍。</string>
@@ -464,7 +465,7 @@
 
     <string name="chat_connection_offline">未连接</string>
 
-    <string name="chat_connection_ok">连接正常</string>
+    <string name="chat_connection_ok">已连接</string>
 
     <string name="chat_connection_partial">部分可用</string>
 

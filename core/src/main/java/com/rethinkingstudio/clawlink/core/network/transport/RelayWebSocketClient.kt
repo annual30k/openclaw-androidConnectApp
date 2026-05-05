@@ -26,11 +26,13 @@ import okhttp3.Request
 import okhttp3.Response
 import okhttp3.WebSocket
 import okhttp3.WebSocketListener
+import java.util.UUID
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 
 data class WsEvent(
     val type: String,
+    val event: String? = null,
     val payload: JsonElement? = null
 )
 
@@ -59,6 +61,8 @@ class RelayWebSocketClient {
     private var accessToken: String = ""
     private var reconnectAttempts = 0
     private val maxReconnectAttempts = 5
+    private val pendingOutbound = ArrayDeque<String>()
+    private val maxPendingOutbound = 32
     private val okHttpClient = OkHttpClient.Builder()
         .readTimeout(0, TimeUnit.MILLISECONDS)
         .pingInterval(30, TimeUnit.SECONDS)
@@ -78,7 +82,7 @@ class RelayWebSocketClient {
                 reconnectAttempts = 0
                 cancelReconnect()
                 _connectionState.value = WsConnectionState.connected
-                sendSubscribe()
+                flushPendingOutbound(webSocket)
             }
 
             override fun onMessage(webSocket: WebSocket, text: String) {
@@ -86,9 +90,10 @@ class RelayWebSocketClient {
                     val element = json.parseToJsonElement(text)
                     val obj = element as? JsonObject
                     val type = obj?.get("type")?.jsonPrimitive?.content ?: "unknown"
-                    _events.tryEmit(WsEvent(type, element))
+                    val event = obj?.get("event")?.jsonPrimitive?.content
+                    _events.tryEmit(WsEvent(type, event, element))
                 } catch (_: Exception) {
-                    _events.tryEmit(WsEvent("error", null))
+                    _events.tryEmit(WsEvent("error", null, null))
                 }
             }
 
@@ -109,7 +114,7 @@ class RelayWebSocketClient {
                 isConnected.set(false)
                 this@RelayWebSocketClient.webSocket = null
                 _connectionState.value = WsConnectionState.disconnected
-                _events.tryEmit(WsEvent("error", null))
+                _events.tryEmit(WsEvent("error", null, null))
                 if (reconnectEnabled.get()) {
                     attemptReconnect()
                 }
@@ -117,39 +122,53 @@ class RelayWebSocketClient {
         })
     }
 
-    private fun sendSubscribe() {
-        send("""{"type":"subscribe"}""")
-    }
-
-    fun sendChatMessage(sessionKey: String, content: String, attachmentIds: List<String> = emptyList()) {
-        val payload = buildJsonObject {
-            put("type", JsonPrimitive("chat_message"))
+    fun sendChatMessage(gatewayId: String, sessionKey: String, content: String, idempotencyKey: String? = null) {
+        val requestId = UUID.randomUUID().toString()
+        val params = buildJsonObject {
             put("sessionKey", JsonPrimitive(sessionKey))
-            put("content", JsonPrimitive(content))
-            if (attachmentIds.isNotEmpty()) {
-                put("attachmentIds", JsonArray(attachmentIds.map { JsonPrimitive(it) }))
-            }
+            put("message", JsonPrimitive(content))
+            put("idempotencyKey", JsonPrimitive(idempotencyKey ?: requestId))
+        }
+        val payload = buildJsonObject {
+            put("type", JsonPrimitive("cmd"))
+            put("id", JsonPrimitive(requestId))
+            put("gatewayId", JsonPrimitive(gatewayId))
+            put("method", JsonPrimitive("chat.send"))
+            put("params", params)
         }
         send(payload.toString())
     }
 
-    fun sendCommand(sessionKey: String, command: String) {
-        val payload = buildJsonObject {
-            put("type", JsonPrimitive("command"))
+    fun sendCommand(gatewayId: String, sessionKey: String, command: String) {
+        val requestId = UUID.randomUUID().toString()
+        val params = buildJsonObject {
             put("sessionKey", JsonPrimitive(sessionKey))
-            put("command", JsonPrimitive(command))
+            put("message", JsonPrimitive(command))
+            put("idempotencyKey", JsonPrimitive(requestId))
+        }
+        val payload = buildJsonObject {
+            put("type", JsonPrimitive("cmd"))
+            put("id", JsonPrimitive(requestId))
+            put("gatewayId", JsonPrimitive(gatewayId))
+            put("method", JsonPrimitive("chat.send"))
+            put("params", params)
         }
         send(payload.toString())
     }
 
-    fun sendModelSelect(providerId: String, modelId: String, sessionKey: String? = null) {
-        val payload = buildJsonObject {
-            put("type", JsonPrimitive("model_select"))
-            put("providerId", JsonPrimitive(providerId))
-            put("modelId", JsonPrimitive(modelId))
-            if (!sessionKey.isNullOrBlank()) {
-                put("sessionKey", JsonPrimitive(sessionKey))
+    fun abortChatRun(gatewayId: String, sessionKey: String, runId: String?, requestId: String = UUID.randomUUID().toString()) {
+        val params = buildJsonObject {
+            put("sessionKey", JsonPrimitive(sessionKey))
+            if (!runId.isNullOrBlank()) {
+                put("runId", JsonPrimitive(runId))
             }
+        }
+        val payload = buildJsonObject {
+            put("type", JsonPrimitive("cmd"))
+            put("id", JsonPrimitive(requestId))
+            put("gatewayId", JsonPrimitive(gatewayId))
+            put("method", JsonPrimitive("chat.abort"))
+            put("params", params)
         }
         send(payload.toString())
     }
@@ -159,19 +178,58 @@ class RelayWebSocketClient {
     }
 
     private fun send(text: String) {
-        if (isConnected.get()) {
-            webSocket?.send(text)
+        android.util.Log.d("RelayWS", "WS SEND: $text")
+        val socket = webSocket
+        if (socket != null && isConnected.get()) {
+            socket.send(text)
+            return
+        }
+
+        queuePendingOutbound(text)
+        android.util.Log.w("RelayWS", "WS not connected; queued outbound message")
+        if (
+            baseUrl.isNotBlank()
+            && accessToken.isNotBlank()
+            && _connectionState.value != WsConnectionState.connecting
+            && _connectionState.value != WsConnectionState.reconnecting
+        ) {
+            reconnectAttempts = 0
+            reconnectEnabled.set(true)
+            connect(baseUrl, accessToken)
         }
     }
+
+    private fun queuePendingOutbound(text: String) {
+        synchronized(pendingOutbound) {
+            if (pendingOutbound.size >= maxPendingOutbound) {
+                pendingOutbound.removeFirst()
+            }
+            pendingOutbound.addLast(text)
+        }
+    }
+
+    private fun flushPendingOutbound(socket: WebSocket) {
+        val messages = synchronized(pendingOutbound) {
+            val queued = pendingOutbound.toList()
+            pendingOutbound.clear()
+            queued
+        }
+        for (message in messages) {
+            android.util.Log.d("RelayWS", "WS FLUSH: $message")
+            socket.send(message)
+        }
+    }
+
+    private val reconnectDelays = listOf(1_000L, 2_000L, 4_000L, 8_000L, 15_000L)
 
     private fun attemptReconnect() {
         if (!reconnectEnabled.get() || reconnectAttempts >= maxReconnectAttempts) return
         cancelReconnect()
+        val delayMs = reconnectDelays.getOrElse(reconnectAttempts) { 15_000L }
         reconnectAttempts++
         _connectionState.value = WsConnectionState.reconnecting
-        val backoffMs = minOf(1000L * (1 shl reconnectAttempts), 30_000L)
         reconnectJob = scope.launch {
-            delay(backoffMs)
+            delay(delayMs)
             if (reconnectEnabled.get() && !isConnected.get()) {
                 connect(baseUrl, accessToken)
             }
@@ -189,7 +247,26 @@ class RelayWebSocketClient {
         cancelReconnect()
         webSocket?.close(1000, "Client disconnect")
         webSocket = null
+        synchronized(pendingOutbound) { pendingOutbound.clear() }
         _connectionState.value = WsConnectionState.disconnected
+    }
+
+    fun suspendConnection() {
+        if (!isConnected.get()) return
+        isConnected.set(false)
+        reconnectEnabled.set(false)
+        cancelReconnect()
+        webSocket?.close(1000, "Client suspend")
+        webSocket = null
+        _connectionState.value = WsConnectionState.disconnected
+    }
+
+    fun resumeConnection() {
+        if (baseUrl.isNotBlank() && accessToken.isNotBlank()) {
+            reconnectAttempts = 0
+            reconnectEnabled.set(true)
+            connect(baseUrl, accessToken)
+        }
     }
 
     fun destroy() {
