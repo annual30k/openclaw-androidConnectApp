@@ -182,7 +182,8 @@ private fun ModelPickerEmptyState(isLoading: Boolean, errorMessage: String?, onR
                 shape = CircleShape,
                 color = Color.White,
                 border = BorderStroke(1.dp, Color.Black.copy(alpha = 0.1f)),
-                shadowElevation = 2.dp
+                shadowElevation = 0.dp,
+                tonalElevation = 0.dp
             ) {
                 Row(
                     modifier = Modifier.padding(horizontal = 24.dp, vertical = 12.dp),

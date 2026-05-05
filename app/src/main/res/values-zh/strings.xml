@@ -77,6 +77,13 @@
     <string name="chat_tool_activity">工具活动</string>
     <string name="chat_voice_message">语音消息</string>
     <string name="chat_attachment">附件</string>
+    <string name="chat_attachment_album">相册</string>
+    <string name="chat_attachment_camera">拍照</string>
+    <string name="chat_attachment_file">文件</string>
+    <string name="chat_attachment_image">图片</string>
+    <string name="chat_attachment_import_failed">无法导入所选附件。</string>
+    <string name="chat_attachment_import_failed_with_reason">附件导入失败：%1$s</string>
+    <string name="chat_attachment_send_failed_with_reason">附件发送失败：%1$s</string>
     <string name="chat_hold_to_talk">松开发送</string>
 
 

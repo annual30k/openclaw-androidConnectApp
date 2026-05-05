@@ -2,6 +2,9 @@ package com.rethinkingstudio.clawlink.ui.screens.chat
 
 import android.content.Context
 import android.content.Intent
+import android.graphics.Bitmap
+import android.graphics.Bitmap.CompressFormat
+import android.graphics.BitmapFactory
 import android.net.Uri
 import android.provider.OpenableColumns
 import android.text.method.LinkMovementMethod
@@ -67,7 +70,10 @@ import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.Keyboard
 import androidx.compose.material.icons.filled.List
 import androidx.compose.material.icons.filled.Mic
+import androidx.compose.material.icons.filled.PhotoCamera
+import androidx.compose.material.icons.filled.PhotoLibrary
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.SmartToy
 import androidx.compose.material.icons.filled.Stop
@@ -99,6 +105,7 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
@@ -114,6 +121,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Popup
@@ -143,12 +151,16 @@ import androidx.compose.ui.viewinterop.AndroidView
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.contentOrNull
 import io.noties.markwon.Markwon
+import java.io.File
+import java.io.ByteArrayOutputStream
 import java.security.MessageDigest
 import java.time.Instant
 import java.time.LocalDateTime
@@ -179,45 +191,6 @@ private data class SlashAction(
     val category: String,
     val icon: ImageVector
 )
-
-private data class UploadedAttachment(
-    val fileId: String,
-    val fileName: String,
-    val mimeType: String,
-    val sizeBytes: Long,
-    val downloadUrl: String? = null,
-    val expiresAt: String? = null,
-    val imageWidth: Int? = null,
-    val imageHeight: Int? = null,
-    val senderDisplayName: String? = null
-) {
-    val displaySize: String
-        get() = when {
-            sizeBytes < 1024 -> "$sizeBytes B"
-            sizeBytes < 1024 * 1024 -> "%.1f KB".format(sizeBytes / 1024.0)
-            else -> "%.1f MB".format(sizeBytes / (1024.0 * 1024))
-        }
-
-    fun contentBlock(gatewayId: String, sessionKey: String): RelayChatContentBlock {
-        return RelayChatContentBlock(
-            type = if (mimeType.trim().lowercase().startsWith("audio/")) "voice" else "file",
-            text = fileName,
-            name = fileName,
-            fileId = fileId,
-            fileName = fileName,
-            mimeType = mimeType,
-            sizeBytes = sizeBytes.coerceAtMost(Int.MAX_VALUE.toLong()).toInt(),
-            imageWidth = imageWidth,
-            imageHeight = imageHeight,
-            downloadUrl = downloadUrl,
-            expiresAt = expiresAt,
-            senderDisplayName = senderDisplayName,
-            gatewayId = gatewayId,
-            sessionKey = sessionKey,
-            status = displaySize
-        )
-    }
-}
 
 private val defaultSlashActions = listOf(
     SlashAction("/new", "新会话", "开启一个新的聊天会话", "SESSION", Icons.Default.Add),
@@ -349,9 +322,12 @@ fun ChatScreen(
     var showGatewaySheet by remember { mutableStateOf(false) }
     var showSkillExpansionSheet by remember { mutableStateOf(false) }
     var showModelPicker by remember { mutableStateOf(false) }
+    var showAttachmentMenu by remember { mutableStateOf(false) }
+    var attachmentButtonPosition by remember { mutableStateOf(IntOffset.Zero) }
+    var attachmentButtonSize by remember { mutableStateOf(IntSize.Zero) }
     var voiceMode by remember { mutableStateOf(false) }
     var composerNotice by remember { mutableStateOf<String?>(null) }
-    var uploadedAttachments by remember { mutableStateOf<List<UploadedAttachment>>(emptyList()) }
+    var composerAttachments by remember { mutableStateOf<List<ComposerAttachmentDraft>>(emptyList()) }
     var isUploadingAttachment by remember { mutableStateOf(false) }
     var composerHeight by remember { mutableStateOf(0.dp) }
 
@@ -370,23 +346,58 @@ fun ChatScreen(
 
     val filePickerLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
         if (uris.isEmpty()) return@rememberLauncherForActivityResult
-        val activeGatewayId = gatewayId
-        if (activeGatewayId == null) {
-            composerNotice = context.getString(R.string.gateway_unpaired_host)
+        scope.launch {
+            isUploadingAttachment = true
+            composerNotice = null
+            try {
+                val imported = importPickedAttachments(context, uris)
+                composerAttachments = composerAttachments + imported
+                if (imported.isEmpty()) {
+                    composerNotice = context.getString(R.string.chat_attachment_import_failed)
+                }
+            } catch (e: Exception) {
+                composerNotice = context.getString(R.string.chat_attachment_import_failed_with_reason, e.message ?: "Unknown error")
+            } finally {
+                isUploadingAttachment = false
+                showAttachmentMenu = false
+            }
+        }
+    }
+    val imagePickerLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
+        if (uris.isEmpty()) return@rememberLauncherForActivityResult
+        scope.launch {
+            isUploadingAttachment = true
+            composerNotice = null
+            try {
+                val imported = importPickedAttachments(context, uris)
+                composerAttachments = composerAttachments + imported
+                if (imported.isEmpty()) {
+                    composerNotice = context.getString(R.string.chat_attachment_import_failed)
+                }
+            } catch (e: Exception) {
+                composerNotice = context.getString(R.string.chat_attachment_import_failed_with_reason, e.message ?: "Unknown error")
+            } finally {
+                isUploadingAttachment = false
+                showAttachmentMenu = false
+            }
+        }
+    }
+    val cameraLauncher = rememberLauncherForActivityResult(ActivityResultContracts.TakePicturePreview()) { bitmap ->
+        if (bitmap == null) {
+            showAttachmentMenu = false
             return@rememberLauncherForActivityResult
         }
         scope.launch {
             isUploadingAttachment = true
             composerNotice = null
             try {
-                val uploaded = uris.map { uri ->
-                    uploadPickedAttachment(context, chatStore, activeGatewayId, uri)
-                }
-                uploadedAttachments = uploadedAttachments + uploaded
+                val imported = importCapturedImage(context, bitmap)
+                composerAttachments = composerAttachments + imported
             } catch (e: Exception) {
-                composerNotice = "Attachment upload failed: ${e.message ?: "Unknown error"}"
+                composerNotice = context.getString(R.string.chat_attachment_import_failed_with_reason, e.message ?: "Unknown error")
             } finally {
                 isUploadingAttachment = false
+                showAttachmentMenu = false
             }
         }
     }
@@ -553,12 +564,32 @@ fun ChatScreen(
                     isStreaming = chatState.isStreaming,
                     isStoppingRun = chatState.isStoppingRun,
                     voiceMode = voiceMode,
-                    attachments = uploadedAttachments,
+                    attachments = composerAttachments,
                     isUploadingAttachment = isUploadingAttachment,
                     hasActiveSession = hasActiveSession,
-                    canSend = gatewayState.selectedGateway?.aggregateStatus == AggregateStatus.online,
+                    canEditComposer = hasActiveSession && !chatState.isStreaming && !isUploadingAttachment && !chatState.isStoppingRun,
+                    canSendMessage = gatewayState.selectedGateway?.aggregateStatus == AggregateStatus.online,
+                    showAttachmentMenu = showAttachmentMenu,
+                    onDismissAttachmentMenu = { showAttachmentMenu = false },
+                    attachmentButtonPosition = attachmentButtonPosition,
+                    attachmentButtonSize = attachmentButtonSize,
+                    onAttachmentButtonPositionChanged = { attachmentButtonPosition = it },
+                    onAttachmentButtonSizeChanged = { attachmentButtonSize = it },
+                    onPickFiles = {
+                        showAttachmentMenu = false
+                        filePickerLauncher.launch(attachmentPickerMimeTypes(ComposerAttachmentPickTarget.FILES))
+                    },
+                    onPickAlbum = {
+                        showAttachmentMenu = false
+                        imagePickerLauncher.launch(attachmentPickerMimeTypes(ComposerAttachmentPickTarget.IMAGES))
+                    },
+                    onPickCamera = {
+                        showAttachmentMenu = false
+                        cameraLauncher.launch(null)
+                    },
                     onRemoveAttachment = { attachment ->
-                        uploadedAttachments = uploadedAttachments.filterNot { it.fileId == attachment.fileId }
+                        composerAttachments = composerAttachments.filterNot { it.filePath == attachment.filePath }
+                        runCatching { File(attachment.filePath).delete() }
                     },
                     onOpenModelPicker = {
                         showModelPicker = !showModelPicker
@@ -568,36 +599,29 @@ fun ChatScreen(
                     },
                     onShowSkillSheet = { showSkillExpansionSheet = true },
                     onOpenAttachment = {
-                        filePickerLauncher.launch(arrayOf("*/*"))
+                        showAttachmentMenu = !showAttachmentMenu
                     },
                     onToggleVoiceMode = { voiceMode = !voiceMode },
                     onSend = {
-                        val trimmed = messageText.trim()
-                        val attachmentIds = uploadedAttachments.map { it.fileId }
-                        when {
-                            trimmed.isBlank() && attachmentIds.isEmpty() -> Unit
-                            trimmed.startsWith("/") -> {
-                                chatStore.sendCommand(
-                                    gatewayId = gatewayState.selectedGateway?.id.orEmpty(),
-                                    command = trimmed
-                                )
-                                messageText = ""
-                            }
-                            else -> {
-                                chatStore.sendMessage(
-                                    content = trimmed.ifBlank { " " },
-                                    gatewayId = gatewayState.selectedGateway?.id.orEmpty(),
-                                    attachmentIds = attachmentIds,
-                                    attachmentBlocks = uploadedAttachments.map {
-                                        it.contentBlock(
-                                            gatewayId = gatewayState.selectedGateway?.id.orEmpty(),
-                                            sessionKey = chatState.currentSessionKey
-                                        )
+                        scope.launch {
+                            sendComposerMessage(
+                                context = context,
+                                chatStore = chatStore,
+                                gatewayId = gatewayState.selectedGateway?.id.orEmpty(),
+                                sessionKey = chatState.currentSessionKey,
+                                rawInput = messageText,
+                                attachments = composerAttachments,
+                                onMessageSent = { clearAttachments ->
+                                    messageText = ""
+                                    composerNotice = null
+                                    if (clearAttachments) {
+                                        composerAttachments.forEach { runCatching { File(it.filePath).delete() } }
+                                        composerAttachments = emptyList()
                                     }
-                                )
-                                messageText = ""
-                                uploadedAttachments = emptyList()
-                            }
+                                },
+                                onBusyChanged = { isUploading -> isUploadingAttachment = isUploading },
+                                onError = { message -> composerNotice = message }
+                            )
                         }
                     },
                     onAbort = {
@@ -1073,7 +1097,8 @@ private fun GatewaySessionDropdownPanel(
         shape = RoundedCornerShape(18.dp),
         color = Color(0xFF101827),
         border = BorderStroke(1.dp, Color.White.copy(alpha = 0.16f)),
-        shadowElevation = 8.dp,
+        shadowElevation = 0.dp,
+        tonalElevation = 0.dp,
         modifier = modifier.fillMaxWidth()
     ) {
         Column {
@@ -1360,7 +1385,8 @@ private fun ChatSessionSwitchLoadingOverlay(modifier: Modifier = Modifier) {
             shape = RoundedCornerShape(32.dp),
             color = Color.White.copy(alpha = 0.92f),
             border = BorderStroke(1.dp, Color.White.copy(alpha = 0.72f)),
-            shadowElevation = 18.dp
+            shadowElevation = 0.dp,
+            tonalElevation = 0.dp
         ) {
             Column(
                 modifier = Modifier.padding(horizontal = 34.dp, vertical = 30.dp),
@@ -1438,7 +1464,8 @@ private fun SlashCommandPanel(actions: List<SlashAction>, onAction: (SlashAction
         shape = RoundedCornerShape(24.dp),
         color = Color.White.copy(alpha = 0.96f),
         border = BorderStroke(0.5.dp, ChatColors.dockBorder.copy(alpha = 0.8f)),
-        shadowElevation = 10.dp
+        shadowElevation = 0.dp,
+        tonalElevation = 0.dp
     ) {
         Column(
             modifier = Modifier.padding(horizontal = 14.dp, vertical = 16.dp),
@@ -1582,11 +1609,21 @@ private fun ComposerDock(
     isStreaming: Boolean,
     isStoppingRun: Boolean,
     voiceMode: Boolean,
-    attachments: List<UploadedAttachment>,
+    attachments: List<ComposerAttachmentDraft>,
     isUploadingAttachment: Boolean,
     hasActiveSession: Boolean,
-    canSend: Boolean,
-    onRemoveAttachment: (UploadedAttachment) -> Unit,
+    canEditComposer: Boolean,
+    canSendMessage: Boolean,
+    showAttachmentMenu: Boolean,
+    onDismissAttachmentMenu: () -> Unit,
+    attachmentButtonPosition: IntOffset,
+    attachmentButtonSize: IntSize,
+    onAttachmentButtonPositionChanged: (IntOffset) -> Unit,
+    onAttachmentButtonSizeChanged: (IntSize) -> Unit,
+    onPickFiles: () -> Unit,
+    onPickAlbum: () -> Unit,
+    onPickCamera: () -> Unit,
+    onRemoveAttachment: (ComposerAttachmentDraft) -> Unit,
     onOpenModelPicker: () -> Unit,
     onShowSkillSheet: () -> Unit,
     onOpenAttachment: () -> Unit,
@@ -1594,7 +1631,6 @@ private fun ComposerDock(
     onSend: () -> Unit,
     onAbort: () -> Unit
 ) {
-    val canCompose = hasActiveSession && canSend && !isStreaming
     Surface(
         modifier = Modifier.fillMaxWidth(),
         color = ChatColors.dockSurface,
@@ -1639,14 +1675,22 @@ private fun ComposerDock(
                 }
             } else {
                 Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    RoundIconButton(Icons.Default.Add, stringResource(R.string.chat_attachment), enabled = canCompose, onClick = onOpenAttachment)
+                    Box(
+                        modifier = Modifier.onGloballyPositioned { coordinates ->
+                            val topLeft = coordinates.localToRoot(Offset.Zero)
+                            onAttachmentButtonPositionChanged(IntOffset(topLeft.x.toInt(), topLeft.y.toInt()))
+                            onAttachmentButtonSizeChanged(coordinates.size)
+                        }
+                    ) {
+                        RoundIconButton(Icons.Default.Add, stringResource(R.string.chat_attachment), enabled = canEditComposer, onClick = onOpenAttachment)
+                    }
                     BasicTextField(
                         value = messageText,
                         onValueChange = onMessageTextChange,
                         modifier = Modifier
                             .weight(1f)
                             .height(42.dp),
-                        enabled = canCompose,
+                        enabled = canEditComposer,
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Text, imeAction = ImeAction.Send),
                         keyboardActions = KeyboardActions(onSend = { onSend() }),
                         textStyle = MaterialTheme.typography.bodyMedium.copy(color = Color.Black),
@@ -1666,7 +1710,7 @@ private fun ComposerDock(
                                         Text(
                                             when {
                                                 !hasActiveSession -> stringResource(R.string.chat_add_gateway_placeholder)
-                                                !canSend -> stringResource(R.string.gateway_status_disconnected)
+                                                !canSendMessage -> stringResource(R.string.gateway_status_disconnected)
                                                 else -> stringResource(R.string.chat_placeholder)
                                             },
                                             style = MaterialTheme.typography.bodyMedium,
@@ -1678,9 +1722,9 @@ private fun ComposerDock(
                             }
                         }
                     )
-                    RoundIconButton(Icons.Default.Mic, stringResource(R.string.chat_voice_message), enabled = canCompose, onClick = onToggleVoiceMode)
+                    RoundIconButton(Icons.Default.Mic, stringResource(R.string.chat_voice_message), enabled = canEditComposer, onClick = onToggleVoiceMode)
                     SendButton(
-                        enabled = (canCompose || isStreaming) && !isUploadingAttachment && !isStoppingRun && (messageText.isNotBlank() || attachments.isNotEmpty() || isStreaming),
+                        enabled = (canSendMessage || isStreaming) && !isUploadingAttachment && !isStoppingRun && (messageText.isNotBlank() || attachments.isNotEmpty() || isStreaming),
                         isStreaming = isStreaming,
                         isStoppingRun = isStoppingRun,
                         onClick = { if (isStreaming && !isStoppingRun) onAbort() else onSend() }
@@ -1689,13 +1733,24 @@ private fun ComposerDock(
             }
         }
     }
+
+    if (showAttachmentMenu) {
+        AttachmentMenuPopup(
+            anchorPosition = attachmentButtonPosition,
+            anchorSize = attachmentButtonSize,
+            onDismiss = onDismissAttachmentMenu,
+            onPickAlbum = onPickAlbum,
+            onPickCamera = onPickCamera,
+            onPickFiles = onPickFiles
+        )
+    }
 }
 
 @Composable
 private fun AttachmentTray(
-    attachments: List<UploadedAttachment>,
+    attachments: List<ComposerAttachmentDraft>,
     isUploading: Boolean,
-    onRemove: (UploadedAttachment) -> Unit
+    onRemove: (ComposerAttachmentDraft) -> Unit
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(7.dp)) {
         if (isUploading) {
@@ -1717,7 +1772,12 @@ private fun AttachmentTray(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(9.dp)
                 ) {
-                    Icon(Icons.Default.Description, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
+                    Icon(
+                        if (attachment.isImage) Icons.Default.Image else Icons.Default.Description,
+                        null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(18.dp)
+                    )
                     Column(modifier = Modifier.weight(1f)) {
                         Text(attachment.fileName, maxLines = 1, overflow = TextOverflow.Ellipsis, fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.bodySmall)
                         Text("${attachment.mimeType} · ${attachment.displaySize}", maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -1728,6 +1788,87 @@ private fun AttachmentTray(
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun AttachmentMenuPopup(
+    anchorPosition: IntOffset,
+    anchorSize: IntSize,
+    onDismiss: () -> Unit,
+    onPickAlbum: () -> Unit,
+    onPickCamera: () -> Unit,
+    onPickFiles: () -> Unit
+) {
+    val density = LocalDensity.current
+    val menuWidth = with(density) { 200.dp.roundToPx() }
+    val menuHeight = with(density) { 206.dp.roundToPx() }
+    val x = anchorPosition.x - with(density) { 8.dp.roundToPx() }
+    val y = anchorPosition.y - menuHeight - with(density) { 12.dp.roundToPx() }
+    val popupOffset = IntOffset(x.coerceAtLeast(with(density) { 12.dp.roundToPx() }), y.coerceAtLeast(with(density) { 12.dp.roundToPx() }))
+    Popup(
+        alignment = Alignment.TopStart,
+        offset = popupOffset,
+        onDismissRequest = onDismiss,
+        properties = PopupProperties(focusable = true)
+    ) {
+        Surface(
+            shape = RoundedCornerShape(34.dp),
+            color = Color.White,
+            border = BorderStroke(1.dp, Color(0xFFE8EBF1)),
+            shadowElevation = 0.dp,
+            tonalElevation = 0.dp,
+            modifier = Modifier.width(with(density) { menuWidth.toDp() })
+        ) {
+            Column(modifier = Modifier.padding(horizontal = 12.dp, vertical = 14.dp)) {
+                AttachmentMenuItem(
+                    icon = Icons.Default.PhotoLibrary,
+                    label = stringResource(R.string.chat_attachment_album),
+                    onClick = onPickAlbum
+                )
+                AttachmentMenuItem(
+                    icon = Icons.Default.PhotoCamera,
+                    label = stringResource(R.string.chat_attachment_camera),
+                    onClick = onPickCamera
+                )
+                AttachmentMenuItem(
+                    icon = Icons.Default.Folder,
+                    label = stringResource(R.string.chat_attachment_file),
+                    onClick = onPickFiles
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun AttachmentMenuItem(
+    icon: ImageVector,
+    label: String,
+    onClick: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(54.dp)
+            .clip(RoundedCornerShape(18.dp))
+            .clickable(onClick = onClick)
+            .padding(horizontal = 16.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(14.dp)
+    ) {
+        Icon(
+            icon,
+            contentDescription = null,
+            tint = ChatColors.linkBlue,
+            modifier = Modifier.size(26.dp)
+        )
+        Text(
+            label,
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.SemiBold,
+            color = Color(0xFF111827)
+        )
     }
 }
 
@@ -3462,34 +3603,171 @@ private fun sessionDisplayName(key: String): String {
     }
 }
 
-private suspend fun uploadPickedAttachment(
+private suspend fun importPickedAttachments(
     context: Context,
-    chatStore: ChatStore,
-    gatewayId: String,
+    uris: List<Uri>
+): List<ComposerAttachmentDraft> = withContext(Dispatchers.IO) {
+    val drafts = mutableListOf<ComposerAttachmentDraft>()
+    for (uri in uris) {
+        runCatching {
+            importPickedAttachment(context, uri)
+        }.onSuccess { draft ->
+            drafts += draft
+        }
+    }
+    drafts
+}
+
+private suspend fun importPickedAttachment(
+    context: Context,
     uri: Uri
-): UploadedAttachment {
+): ComposerAttachmentDraft {
     val resolver = context.contentResolver
-    val fileName = queryDisplayName(context, uri) ?: uri.lastPathSegment ?: "attachment"
+    val fileName = normalizeComposerAttachmentFileName(
+        queryDisplayName(context, uri) ?: uri.lastPathSegment ?: "attachment"
+    )
     val mimeType = resolver.getType(uri) ?: "application/octet-stream"
     val bytes = resolver.openInputStream(uri)?.use { it.readBytes() }
         ?: throw IllegalStateException("Unable to read selected file")
-    val record = chatStore.uploadAttachment(
-        gatewayId = gatewayId,
+    val directory = File(context.cacheDir, "clawlink-compose-attachments").apply { mkdirs() }
+    val targetFile = File(directory, "${java.util.UUID.randomUUID()}-$fileName")
+    targetFile.writeBytes(bytes)
+    val imageDimensions = if (isImageMimeType(mimeType)) {
+        attachmentImageDimensions(targetFile)
+    } else {
+        null
+    }
+    return ComposerAttachmentDraft(
+        filePath = targetFile.absolutePath,
         fileName = fileName,
         mimeType = mimeType,
+        sizeBytes = bytes.size.toLong(),
+        imageWidth = imageDimensions?.first,
+        imageHeight = imageDimensions?.second
+    )
+}
+
+private suspend fun importCapturedImage(
+    context: Context,
+    bitmap: Bitmap
+): ComposerAttachmentDraft = withContext(Dispatchers.IO) {
+    val directory = File(context.cacheDir, "clawlink-compose-attachments").apply { mkdirs() }
+    val fileName = "camera-${java.util.UUID.randomUUID()}.jpg"
+    val targetFile = File(directory, fileName)
+    val buffer = ByteArrayOutputStream()
+    bitmap.compress(CompressFormat.JPEG, 92, buffer)
+    targetFile.writeBytes(buffer.toByteArray())
+    ComposerAttachmentDraft(
+        filePath = targetFile.absolutePath,
+        fileName = fileName,
+        mimeType = "image/jpeg",
+        sizeBytes = targetFile.length(),
+        imageWidth = bitmap.width.takeIf { it > 0 },
+        imageHeight = bitmap.height.takeIf { it > 0 }
+    )
+}
+
+private fun normalizeComposerAttachmentFileName(fileName: String): String {
+    val trimmed = fileName.trim()
+    return trimmed.ifEmpty { "attachment" }.replace(Regex("""[\\/:*?"<>|]+"""), "_")
+}
+
+private fun attachmentImageDimensions(file: File): Pair<Int, Int>? {
+    val options = BitmapFactory.Options().apply {
+        inJustDecodeBounds = true
+    }
+    BitmapFactory.decodeFile(file.absolutePath, options)
+    if (options.outWidth <= 0 || options.outHeight <= 0) {
+        return null
+    }
+    return options.outWidth to options.outHeight
+}
+
+private suspend fun sendComposerMessage(
+    context: Context,
+    chatStore: ChatStore,
+    gatewayId: String,
+    sessionKey: String,
+    rawInput: String,
+    attachments: List<ComposerAttachmentDraft>,
+    onMessageSent: (Boolean) -> Unit,
+    onBusyChanged: (Boolean) -> Unit,
+    onError: (String) -> Unit
+) {
+    val trimmed = rawInput.trim()
+    if (trimmed.isBlank() && attachments.isEmpty()) return
+    if (gatewayId.isBlank() || sessionKey.isBlank()) {
+        onError(context.getString(R.string.gateway_unpaired_host))
+        return
+    }
+    if (trimmed.startsWith("/")) {
+        chatStore.sendCommand(
+            gatewayId = gatewayId,
+            command = trimmed
+        )
+        onMessageSent(false)
+        return
+    }
+
+    onBusyChanged(true)
+    try {
+        val uploadedBlocks = withContext(Dispatchers.IO) {
+            attachments.map { attachment ->
+                uploadComposerAttachment(chatStore, gatewayId, sessionKey, attachment)
+            }
+        }
+        chatStore.sendMessage(
+            content = trimmed.ifBlank { " " },
+            gatewayId = gatewayId,
+            attachmentIds = emptyList(),
+            attachmentBlocks = uploadedBlocks
+        )
+        onMessageSent(true)
+    } catch (e: Exception) {
+        onError(
+            context.getString(
+                R.string.chat_attachment_send_failed_with_reason,
+                e.message ?: "Unknown error"
+            )
+        )
+    } finally {
+        onBusyChanged(false)
+    }
+}
+
+private suspend fun uploadComposerAttachment(
+    chatStore: ChatStore,
+    gatewayId: String,
+    sessionKey: String,
+    attachment: ComposerAttachmentDraft
+): RelayChatContentBlock {
+    val bytes = withContext(Dispatchers.IO) {
+        File(attachment.filePath).readBytes()
+    }
+    val record = chatStore.uploadAttachment(
+        gatewayId = gatewayId,
+        fileName = attachment.fileName,
+        mimeType = attachment.mimeType,
         bytes = bytes,
         sha256 = sha256Hex(bytes)
     )
-    return UploadedAttachment(
+    return RelayChatContentBlock(
+        type = if (record.mimeType.trim().lowercase().startsWith("audio/")) "voice" else "file",
+        text = record.fileName,
+        name = record.fileName,
         fileId = record.fileId,
         fileName = record.fileName,
         mimeType = record.mimeType,
-        sizeBytes = record.sizeBytes,
-        downloadUrl = record.downloadPath,
-        expiresAt = record.expiresAt,
+        sizeBytes = record.sizeBytes.coerceAtMost(Int.MAX_VALUE.toLong()).toInt(),
         imageWidth = record.imageWidth,
         imageHeight = record.imageHeight,
-        senderDisplayName = record.senderDisplayName
+        downloadUrl = record.downloadPath,
+        downloadPath = record.downloadPath,
+        expiresAt = record.expiresAt,
+        senderDisplayName = record.senderDisplayName,
+        gatewayId = gatewayId,
+        sessionKey = sessionKey,
+        status = formatAttachmentSize(record.sizeBytes)
     )
 }
 

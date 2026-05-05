@@ -77,7 +77,7 @@ fun ClawLinkCard(
             shape = ClawLinkCardShape,
             colors = colors,
             elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
-            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.75f))
+            border = BorderStroke(1.dp, Color(0xFFE1E4EA))
         ) {
             Column(modifier = Modifier.padding(contentPadding), verticalArrangement = Arrangement.spacedBy(0.dp), content = content)
         }
@@ -87,7 +87,7 @@ fun ClawLinkCard(
             shape = ClawLinkCardShape,
             colors = colors,
             elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
-            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.75f))
+            border = BorderStroke(1.dp, Color(0xFFE1E4EA))
         ) {
             Column(modifier = Modifier.padding(contentPadding), verticalArrangement = Arrangement.spacedBy(0.dp), content = content)
         }
