@@ -18,13 +18,17 @@ import kotlinx.serialization.descriptors.PrimitiveSerialDescriptor
 import kotlinx.serialization.descriptors.SerialDescriptor
 import kotlinx.serialization.encoding.Decoder
 import kotlinx.serialization.encoding.Encoder
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.intOrNull
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.longOrNull
+import kotlinx.serialization.SerializationException
 
 // ── Auth DTOs ────────────────────────────────────────────────────────────
 
@@ -198,7 +202,7 @@ data class ChatHistoryResponse(
     val items: List<ChatHistoryItem>
 )
 
-@Serializable
+@Serializable(with = ChatHistoryItemSerializer::class)
 data class ChatHistoryItem(
     val id: String,
     val role: String,
@@ -206,6 +210,112 @@ data class ChatHistoryItem(
     val contentBlocks: List<com.rethinkingstudio.clawlink.core.models.chat.RelayChatContentBlock>? = null,
     val createdAt: String? = null
 )
+
+object ChatHistoryItemSerializer : KSerializer<ChatHistoryItem> {
+    override val descriptor: SerialDescriptor = JsonElement.serializer().descriptor
+
+    override fun serialize(encoder: Encoder, value: ChatHistoryItem) {
+        val obj = buildJsonObject {
+            put("id", JsonPrimitive(value.id))
+            put("role", JsonPrimitive(value.role))
+            value.content?.let { put("content", it) }
+            value.contentBlocks?.takeIf { it.isNotEmpty() }?.let { blocks ->
+                put(
+                    "contentBlocks",
+                    JsonArray(blocks.map { Json.encodeToJsonElement(com.rethinkingstudio.clawlink.core.models.chat.RelayChatContentBlock.serializer(), it) })
+                )
+            }
+            value.createdAt?.let { put("createdAt", JsonPrimitive(it)) }
+        }
+        encoder.encodeSerializableValue(JsonElement.serializer(), obj)
+    }
+
+    override fun deserialize(decoder: Decoder): ChatHistoryItem {
+        val element = decoder.decodeSerializableValue(JsonElement.serializer())
+        val obj = element as? JsonObject ?: throw SerializationException("Expected chat history item object")
+        val id = obj.string("id") ?: throw SerializationException("Chat history item missing id")
+        val role = obj.string("role") ?: "assistant"
+        val content = obj["content"]
+            ?: obj["text"]
+            ?: (obj["message"] as? JsonObject)?.get("content")
+            ?: (obj["message"] as? JsonObject)?.get("text")
+        val contentBlocks = extractContentBlocks(obj)
+        val createdAt = obj.string("createdAt", "created_at")
+        return ChatHistoryItem(
+            id = id,
+            role = role,
+            content = content,
+            contentBlocks = contentBlocks,
+            createdAt = createdAt
+        )
+    }
+
+    private fun extractContentBlocks(root: JsonObject): List<com.rethinkingstudio.clawlink.core.models.chat.RelayChatContentBlock> {
+        val arrays = mutableListOf<JsonArray>()
+        collectArrays(root, arrays, mutableSetOf())
+        if (arrays.isEmpty()) return emptyList()
+
+        val seen = linkedSetOf<String>()
+        return arrays.flatMap { array ->
+            array.mapNotNull { element ->
+                runCatching {
+                    Json.decodeFromJsonElement(com.rethinkingstudio.clawlink.core.models.chat.RelayChatContentBlock.serializer(), element)
+                }.getOrNull()
+            }
+        }.filter { block ->
+            seen.add(
+                listOf(
+                    block.type,
+                    block.toolCallId.orEmpty(),
+                    block.toolUseId.orEmpty(),
+                    block.resolvedName.orEmpty(),
+                    block.text.orEmpty(),
+                    block.fileId.orEmpty(),
+                    block.fileName.orEmpty(),
+                    block.status.orEmpty()
+                ).joinToString("|")
+            )
+        }
+    }
+
+    private fun collectArrays(
+        element: JsonElement?,
+        arrays: MutableList<JsonArray>,
+        visited: MutableSet<Int>
+    ) {
+        val current = element ?: return
+        val identity = System.identityHashCode(current)
+        if (!visited.add(identity)) return
+
+        when (current) {
+            is JsonArray -> {
+                if (current.any { it is JsonObject && it["type"] != null }) {
+                    arrays += current
+                }
+                current.forEach { child ->
+                    collectArrays(child, arrays, visited)
+                }
+            }
+            is JsonObject -> {
+                current.values.forEach { child ->
+                    if (child is JsonArray || child is JsonObject) {
+                        collectArrays(child, arrays, visited)
+                    }
+                }
+            }
+            else -> Unit
+        }
+    }
+}
+
+private fun JsonObject.string(vararg keys: String): String? {
+    return keys.firstNotNullOfOrNull { key ->
+        (this[key] as? JsonPrimitive)
+            ?.contentOrNull
+            ?.trim()
+            ?.takeIf { it.isNotEmpty() }
+    }
+}
 
 @Serializable
 data class GatewayChatReadyResponse(

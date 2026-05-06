@@ -249,13 +249,8 @@ fun ChatScreen(
 
                     val displayMessages = remember(chatState.messages, chatState.showInvocationProcess) {
                         chatState.messages.filter { message ->
-                            val isTool = message.role == MessageRole.tool || message.hasToolContent
-                            if (isTool) {
-                                val visible = message.visibleToolContentBlocks(chatState.showInvocationProcess)
-                                visible.isNotEmpty() || (message.toolContentBlocks.isEmpty() && message.plainTextContent.isNotBlank())
-                            } else {
-                                message.content.isNotBlank() || message.fileContentBlocks.isNotEmpty() || message.voiceContentBlocks.isNotEmpty() || message.state == MessageState.streaming
-                            }
+                            message.shouldDisplayInChat(showInvocationProcess = chatState.showInvocationProcess) ||
+                                message.state == MessageState.streaming && message.role == MessageRole.assistant
                         }
                     }
                     val hasStreamingAssistantMessage = displayMessages.any {

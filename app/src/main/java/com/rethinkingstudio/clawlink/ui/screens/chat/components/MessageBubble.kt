@@ -52,7 +52,6 @@ import com.rethinkingstudio.clawlink.core.state.chat.RemoteAttachmentCache
 import com.rethinkingstudio.clawlink.core.state.chat.chatAttachmentCacheKey
 import com.rethinkingstudio.clawlink.core.state.chat.chatImageCacheKey
 import com.rethinkingstudio.clawlink.ui.screens.chat.ChatColors
-import com.rethinkingstudio.clawlink.ui.screens.chat.formatChatTimestamp
 import java.io.File
 
 @Composable
@@ -67,10 +66,7 @@ internal fun MessageBubble(
     val isUser = message.role == MessageRole.user
     val isTool = message.role == MessageRole.tool || message.hasToolContent
     val visibleToolBlocks = message.visibleToolContentBlocks(showInvocationProcess)
-    val shouldShowToolMessage = isTool && (
-        visibleToolBlocks.isNotEmpty() || (message.toolContentBlocks.isEmpty() && message.plainTextContent.isNotBlank())
-    )
-    if (isTool && !shouldShowToolMessage) return
+    if (isTool && !message.shouldDisplayInChat(showInvocationProcess = showInvocationProcess)) return
     val syntheticFileBlocks = if (!isTool && message.fileContentBlocks.isEmpty()) {
         parseSendFileOutputBlocks(message.plainTextContent)
     } else emptyList()
@@ -89,7 +85,7 @@ internal fun MessageBubble(
 
     Column(modifier = Modifier.fillMaxWidth(), horizontalAlignment = if (isUser) Alignment.End else Alignment.Start) {
         if (isTool) {
-            ToolMessageCard(message = message, visibleToolBlocks = visibleToolBlocks, showInvocationProcess = showInvocationProcess)
+            ToolMessageCard(message = message, visibleToolBlocks = visibleToolBlocks, showInvocationProcess = showInvocationProcess, modifier = Modifier.padding(vertical = 2.dp))
             return@Column
         }
     if (isStandaloneFileMessage) {
@@ -102,7 +98,7 @@ internal fun MessageBubble(
         ) && fileBlocks.isEmpty() && message.voiceContentBlocks.isEmpty()) {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 StreamingIndicatorBubble()
-                Text("ClawLink", modifier = Modifier.padding(horizontal = 4.dp), style = MaterialTheme.typography.labelMedium, color = ChatColors.secondaryText, fontWeight = FontWeight.Bold)
+                Text("ClawLink", modifier = Modifier.padding(horizontal = 4.dp), style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp), color = ChatColors.secondaryText, fontWeight = FontWeight.Medium)
             }
             return@Column
         }
@@ -115,7 +111,7 @@ internal fun MessageBubble(
         ) {
             Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 13.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 if (displayText.isNotEmpty()) {
-                    MarkdownMessageText(text = displayText, textColor = if (isUser) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface, linkColor = if (isUser) Color.White else MaterialTheme.colorScheme.primary, textSizeSp = 15f, onDarkBackground = isUser)
+                    MarkdownMessageText(text = displayText, textColor = if (isUser) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface, linkColor = if (isUser) Color.White else MaterialTheme.colorScheme.primary, textSizeSp = 13f, onDarkBackground = isUser)
                 }
                 fileBlocks.forEach { FileBlock(it, isUser, message.state, relayBaseUrl = relayBaseUrl, accessToken = accessToken, onImageClick = onImageClick, onFileClick = onFileClick) }
                 message.voiceContentBlocks.forEach { VoiceBlock(it, isUser) }
@@ -129,9 +125,9 @@ internal fun MessageBubble(
 private fun MessageFooter(title: String, createdAt: String, isUser: Boolean, modifier: Modifier = Modifier) {
     Row(modifier = modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
         val footerColor = if (isUser) Color.White.copy(alpha = 0.72f) else ChatColors.secondaryText
-        Text(title, style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp), color = footerColor, fontWeight = FontWeight.Bold)
+        Text(title, style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp), color = footerColor, fontWeight = FontWeight.Medium)
         Spacer(Modifier.weight(1f))
-        Text(formatChatTimestamp(createdAt), style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp), color = footerColor, fontWeight = FontWeight.Bold)
+        Text(createdAt, style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp), color = footerColor, fontWeight = FontWeight.Medium)
     }
 }
 

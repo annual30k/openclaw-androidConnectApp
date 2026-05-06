@@ -60,12 +60,11 @@ sealed class RelayJSONValue : java.io.Serializable {
                     "input", "prompt", "path", "filePath", "file_path"
                 )
                 for (key in searchKeys.distinct()) {
+                    if (key in listOf("tool", "status", "type", "toolName", "tool_name")) continue
                     val rendered = value[key]?.renderedText(preferredKeys)
                     if (!rendered.isNullOrBlank()) return rendered
                 }
-                val leafTexts = value.values.mapNotNull { it.renderedText(preferredKeys) }
-                    .map { it.trim() }.filter { it.isNotEmpty() }
-                leafTexts.firstOrNull() ?: prettyJsonString()
+                prettyJsonString()
             }
         }
     }
@@ -195,8 +194,17 @@ data class RelayChatContentBlock(
     val isError: Boolean? = null
 ) : java.io.Serializable {
 
-    val isToolCallBlock: Boolean get() = type in listOf("tool_use", "tool_call")
-    val isToolResultBlock: Boolean get() = type in listOf("tool_result", "tool_call_result")
+    private val normalizedType: String
+        get() = type.trim()
+            .lowercase()
+            .replace("_", "")
+            .replace("-", "")
+            .replace(" ", "")
+
+    val isToolCallBlock: Boolean
+        get() = normalizedType in listOf("tooluse", "toolcall", "toolcallupdate", "functioncall")
+    val isToolResultBlock: Boolean
+        get() = normalizedType in listOf("toolresult", "toolresulterror", "tooloutput", "toolouterror", "tooloutputerror", "functionresult")
     val isFileBlock: Boolean
         get() {
             val normalized = type.trim().lowercase()
@@ -216,9 +224,9 @@ data class RelayChatContentBlock(
     val isVoiceMessageBlock: Boolean get() = type in listOf("voice", "voice_message", "voice_result")
     val isTextBlock: Boolean get() = type in listOf("text", "output_text", "input_text")
 
-    val resolvedName: String? get() = name ?: toolName
-    val fileDisplayName: String? get() = fileName ?: name ?: text
     private val resolvedPayload: RelayJSONValue? get() = result ?: partialResult ?: content ?: output ?: error ?: arguments ?: args
+    val resolvedName: String? get() = name ?: toolName ?: toolCallId ?: toolUseId ?: result?.stringValuesForKeys(listOf("tool", "name")) ?: content?.stringValuesForKeys(listOf("tool", "name")) ?: output?.stringValuesForKeys(listOf("tool", "name")) ?: error?.stringValuesForKeys(listOf("tool", "name")) ?: arguments?.stringValuesForKeys(listOf("tool", "name")) ?: args?.stringValuesForKeys(listOf("tool", "name"))
+    val fileDisplayName: String? get() = fileName ?: name ?: text
     val resolvedImageWidth: Int?
         get() {
             if (imageWidth != null && imageWidth > 0) return imageWidth
@@ -298,6 +306,45 @@ data class ChatMessage(
     val hasVoiceContent: Boolean get() = voiceContentBlocks.isNotEmpty()
 
     val toolDisplayName: String? get() = toolContentBlocks.firstNotNullOfOrNull { it.resolvedName }
+
+    val toolDisplaySummary: String
+        get() {
+            val names = toolContentBlocks.mapNotNull { it.resolvedName?.trim()?.takeIf { name -> name.isNotEmpty() } }
+            if (names.isEmpty()) return ""
+            return if (names.size <= 3) {
+                names.joinToString(separator = ", ")
+            } else {
+                "${names.take(2).joinToString(separator = ", ")} +${names.size - 2} more"
+            }
+        }
+
+    private val hasRenderablePlainTextContent: Boolean
+        get() = content.trim().isNotEmpty()
+
+    @Suppress("UNUSED_PARAMETER")
+    fun shouldDisplayInChat(
+        showInvocationProcess: Boolean,
+        assistantVoiceRepliesEnabled: Boolean = false,
+        assistantVoiceRepliesEnabledAt: Double? = null,
+        forceDisplayTextWhenVoiceRepliesEnabled: Boolean = false
+    ): Boolean {
+        val hasRenderableContent = hasRenderablePlainTextContent || contentBlocks.isNotEmpty()
+        if (!hasRenderableContent) return false
+
+        if (
+            role == MessageRole.assistant &&
+            assistantVoiceRepliesEnabled &&
+            forceDisplayTextWhenVoiceRepliesEnabled &&
+            !hasVoiceContent &&
+            !hasFileContent
+        ) {
+            return false
+        }
+
+        if (!hasToolContent) return true
+
+        return showInvocationProcess
+    }
 }
 
 // ── ComposerAttachmentDraft ──────────────────────────────────────────────

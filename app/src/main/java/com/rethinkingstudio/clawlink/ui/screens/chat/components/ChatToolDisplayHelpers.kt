@@ -18,11 +18,11 @@ internal sealed class ToolDisplayContent {
     fun previewText(): String = when (this) {
         is Markdown -> text.condensedToolPreview()
         is Code -> {
-            if (language?.lowercase() == "json") {
+            if (language.normalizedCodeLanguageOrNull() == "json") {
                 jsonPreviewSummary(code)?.let { "JSON: $it" } ?: "JSON"
             } else {
                 val preview = code.condensedToolPreview()
-                val label = language?.trim()?.ifEmpty { null }
+                val label = language.displayCodeLanguageLabel()
                 when {
                     preview.isBlank() && label != null -> label
                     label != null -> "$label: $preview"
@@ -194,8 +194,51 @@ private fun String.isCommandToolName(): Boolean {
 internal fun String.normalizedCodeLanguage(): String? {
     val lower = trim().lowercase()
     return when (lower) {
-        "text/markdown" -> "markdown"; "javascript" -> "js"; "typescript" -> "ts"; "shellscript" -> "shell"; "" -> null
+        "js", "jsx", "mjs", "cjs" -> "javascript"
+        "ts", "tsx" -> "typescript"
+        "py" -> "python"
+        "rb" -> "ruby"
+        "sh", "shell", "zsh", "fish", "shellscript" -> "bash"
+        "yml" -> "yaml"
+        "md", "mdx", "text/markdown" -> "markdown"
+        "c#" -> "csharp"
+        "c++" -> "cpp"
+        "objc", "objectivec", "objective-c" -> "objectivec"
+        "ps1", "pwsh" -> "powershell"
+        "bat", "cmd" -> "batch"
+        "" -> null
         else -> lower
+    }
+}
+
+internal fun String?.normalizedCodeLanguageOrNull(): String? = this?.normalizedCodeLanguage()
+
+internal fun String?.displayCodeLanguageLabel(): String? {
+    return when (val normalized = normalizedCodeLanguageOrNull()) {
+        null -> null
+        "javascript" -> "JavaScript"
+        "typescript" -> "TypeScript"
+        "python" -> "Python"
+        "ruby" -> "Ruby"
+        "bash" -> "Bash"
+        "yaml" -> "YAML"
+        "markdown" -> "Markdown"
+        "csharp" -> "C#"
+        "cpp" -> "C++"
+        "powershell" -> "PowerShell"
+        "batch" -> "Batch"
+        "json" -> "JSON"
+        "xml" -> "XML"
+        "html" -> "HTML"
+        "css" -> "CSS"
+        "sql" -> "SQL"
+        "swift" -> "Swift"
+        "objectivec" -> "Objective-C"
+        "java" -> "Java"
+        "kotlin" -> "Kotlin"
+        "go" -> "Go"
+        "rust" -> "Rust"
+        else -> normalized.replaceFirstChar { if (it.isLowerCase()) it.titlecase() else it.toString() }
     }
 }
 

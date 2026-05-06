@@ -21,15 +21,18 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
+import io.ktor.client.plugins.HttpRequestTimeoutException
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.intOrNull
 import kotlinx.serialization.json.contentOrNull
@@ -38,6 +41,7 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.longOrNull
 import kotlinx.serialization.json.jsonPrimitive
 import java.io.File
+import java.net.SocketTimeoutException
 import java.util.UUID
 
 data class ChatState(
@@ -84,7 +88,9 @@ class ChatStore(
                 // Relay server wraps chat events as {type: "event", event: "chat", payload: {...}}
                 when (event.event) {
                     "chat" -> handleChatPayload(event.payload)
+                    "agent" -> handleAgentPayload(event.payload)
                     "file" -> handleChatPayload(event.payload)
+                    "office" -> handleOfficePayload(event.payload)
                     "presence" -> { /* handled by GatewayStore */ }
                     "model_selected" -> { /* model selection update */ }
                 }
@@ -131,6 +137,166 @@ class ChatStore(
                 handleError(payloadObj)
             }
         }
+    }
+
+    private fun handleAgentPayload(payload: JsonElement?) {
+        val obj = payload as? JsonObject ?: return
+        val payloadObj = obj["payload"]?.jsonObject ?: obj
+
+        val stream = payloadObj["stream"]?.jsonPrimitive?.content?.trim()?.lowercase()
+        if (stream == "tool") {
+            ChatPayloadTool.extract(payloadObj)?.let { toolPayload ->
+                handleToolPayload(payloadObj, toolPayload)
+                return
+            }
+        }
+
+        // Not a tool stream — handle as regular assistant event
+        handleChatPayload(payload)
+    }
+
+    private fun handleToolPayload(payload: JsonObject, toolPayload: ChatPayloadTool.ToolPayload) {
+        val toolCallId = toolPayload.toolCallId
+            ?: payload.string("runId", "run_id")
+            ?: payload.string("toolRunId", "tool_run_id")
+            ?: UUID.randomUUID().toString()
+        val toolRunId = "tool:$toolCallId"
+        val explicitBlocks = parseContentBlocks(payload)
+        val contentBlocks = if (explicitBlocks.any { it.isToolCallBlock || it.isToolResultBlock }) {
+            explicitBlocks
+        } else {
+            buildSyntheticToolContentBlocks(
+                payload = payload,
+                toolCallId = toolCallId,
+                toolName = toolPayload.toolName,
+                displayText = toolPayload.displayText,
+                isError = toolPayload.state == MessageState.failed
+            )
+        }
+        val finalRole = if (contentBlocks.any { it.isToolCallBlock || it.isToolResultBlock }) MessageRole.tool else MessageRole.assistant
+        val content = toolPayload.displayText.ifBlank {
+            contentBlocks.firstNotNullOfOrNull { block ->
+                block.text?.trim()?.takeIf { it.isNotEmpty() }
+                    ?: block.result?.renderedText(listOf("content", "markdown", "text", "body", "message", "value", "result", "output"))
+                    ?: block.partialResult?.renderedText(listOf("content", "markdown", "text", "body", "message", "value", "result", "output"))
+                    ?: block.content?.renderedText(listOf("content", "markdown", "text", "body", "message", "value", "result", "output"))
+                    ?: block.output?.renderedText(listOf("content", "markdown", "text", "body", "message", "value", "result", "output"))
+                    ?: block.error?.renderedText(listOf("content", "markdown", "text", "body", "message", "value", "result", "output"))
+            }.orEmpty()
+        }
+
+        if (content.isBlank() && contentBlocks.isEmpty()) {
+            return
+        }
+
+        val existingMessage = _state.value.messages.firstOrNull { it.id == toolRunId }
+        val mergedBlocks = if (existingMessage != null) {
+            (existingMessage.contentBlocks + contentBlocks)
+                .distinctBy { it.signature() }
+                .sortedBy { if (it.isToolCallBlock) 0 else 1 }
+        } else {
+            contentBlocks
+        }
+
+        upsertMessage(
+            ChatMessage(
+                id = toolRunId,
+                role = finalRole,
+                state = toolPayload.state,
+                content = content,
+                contentBlocks = mergedBlocks,
+                createdAt = existingMessage?.createdAt ?: "",
+                runId = toolCallId,
+                sortTimestamp = existingMessage?.sortTimestamp ?: (System.currentTimeMillis() / 1000.0)
+            )
+        )
+        _state.value = _state.value.copy(
+            isStreaming = toolPayload.state == MessageState.streaming,
+            isStoppingRun = false
+        )
+    }
+
+    private fun handleOfficePayload(payload: JsonElement?) {
+        // Office events are surfaced through GatewayStore presence updates on Android.
+        // They do not create chat messages here.
+        return
+    }
+
+    private fun buildSyntheticToolContentBlocks(
+        payload: JsonObject?,
+        toolCallId: String,
+        toolName: String,
+        displayText: String,
+        isError: Boolean
+    ): List<RelayChatContentBlock> {
+        val source = payload?.let { it["data"] as? JsonObject ?: it["office"] as? JsonObject ?: it }
+            ?: buildJsonObject { }
+        val normalizedToolName = toolName.trim().ifEmpty { "tool" }
+        val displayValue = toolDisplayJsonValue(source, displayText)
+        val callArguments = firstJsonValue(source, "args", "arguments", "content")
+        val normalizedPhase = source.string("phase", "state", "status")?.trim()?.lowercase().orEmpty()
+        val isPartial = normalizedPhase == "update" || normalizedPhase == "streaming"
+
+        val blocks = mutableListOf<RelayChatContentBlock>()
+        if (callArguments != null || normalizedToolName.isNotEmpty()) {
+            blocks += RelayChatContentBlock(
+                type = "tool_use",
+                name = normalizedToolName,
+                toolCallId = toolCallId,
+                arguments = callArguments,
+                args = callArguments
+            )
+        }
+        if (displayValue != null || displayText.isNotBlank() || isError) {
+            blocks += RelayChatContentBlock(
+                type = "tool_result",
+                text = if (displayValue != null) null else displayText.ifBlank { null },
+                name = normalizedToolName,
+                toolCallId = toolCallId,
+                result = if (isError || isPartial) null else displayValue,
+                partialResult = if (isPartial) displayValue else null,
+                content = displayValue,
+                output = displayValue,
+                error = if (isError) displayValue else null,
+                isError = isError
+            )
+        }
+        return blocks
+    }
+
+    private fun toolDisplayJsonValue(source: JsonObject, displayText: String): com.rethinkingstudio.clawlink.core.models.chat.RelayJSONValue? {
+        val direct = firstJsonValue(source, "result", "partialResult", "partial_result", "output", "content", "args")
+        if (direct != null) {
+            return direct
+        }
+        source.string("text", "delta", "error")?.let {
+            return com.rethinkingstudio.clawlink.core.models.chat.RelayJSONValue.StringVal(it)
+        }
+        val message = source["message"] as? JsonObject
+        val messageContent = message?.get("content")
+        if (messageContent != null) {
+            return com.rethinkingstudio.clawlink.core.models.chat.RelayJSONValue.fromJsonElement(messageContent)
+        }
+        return displayText.trim().takeIf { it.isNotEmpty() }?.let {
+            com.rethinkingstudio.clawlink.core.models.chat.RelayJSONValue.StringVal(it)
+        }
+    }
+
+    private fun firstJsonValue(payload: JsonObject, vararg keys: String): com.rethinkingstudio.clawlink.core.models.chat.RelayJSONValue? {
+        return keys.firstNotNullOfOrNull { key ->
+            payload[key]?.let { com.rethinkingstudio.clawlink.core.models.chat.RelayJSONValue.fromJsonElement(it) }
+        }
+    }
+
+    private fun upsertMessage(message: ChatMessage) {
+        val messages = _state.value.messages.toMutableList()
+        val index = messages.indexOfFirst { it.id == message.id }
+        if (index >= 0) {
+            messages[index] = message
+        } else {
+            messages.add(message)
+        }
+        _state.value = _state.value.copy(messages = messages)
     }
 
     private fun handleDelta(payload: JsonElement?) {
@@ -188,10 +354,7 @@ class ChatStore(
         }
         val sessionKey = obj["sessionKey"]?.jsonPrimitive?.content ?: _state.value.currentSessionKey
         val content = ChatPayloadText.extract(obj).ifBlank { streamingContent.toString() }
-        val contentBlocks = parseContentBlocks(
-            obj["contentBlocks"] as? JsonArray
-                ?: ((obj["message"] as? JsonObject)?.get("content") as? JsonArray)
-        )
+        val contentBlocks = parseContentBlocks(obj)
         val role = try {
             MessageRole.valueOf(
                 obj.string("role")
@@ -202,13 +365,18 @@ class ChatStore(
             MessageRole.assistant
         }
 
+        val finalContentBlocks = contentBlocks
+
+        val finalRole = if (finalContentBlocks.any { it.isToolCallBlock || it.isToolResultBlock }) MessageRole.tool else role
+
         if (streamingMessageId != null) {
             val messages = _state.value.messages.toMutableList()
             val idx = messages.indexOfFirst { it.id == streamingMessageId }
             if (idx >= 0) {
                 messages[idx] = messages[idx].copy(
+                    role = finalRole,
                     content = content,
-                    contentBlocks = contentBlocks,
+                    contentBlocks = finalContentBlocks,
                     state = MessageState.completed
                 )
                 _state.value = _state.value.copy(messages = messages, isStreaming = false)
@@ -216,10 +384,10 @@ class ChatStore(
         } else {
             val msg = ChatMessage(
                 id = UUID.randomUUID().toString(),
-                role = role,
+                role = finalRole,
                 state = MessageState.completed,
                 content = content,
-                contentBlocks = contentBlocks,
+                contentBlocks = finalContentBlocks,
                 createdAt = "",
                 runId = runId,
                 sortTimestamp = System.currentTimeMillis() / 1000.0
@@ -278,46 +446,110 @@ class ChatStore(
         _state.value = _state.value.copy(errorMessage = msg, isStreaming = false)
     }
 
-    private fun parseContentBlocks(array: kotlinx.serialization.json.JsonArray?): List<RelayChatContentBlock> {
-        if (array == null) return emptyList()
-        return array.mapNotNull { element ->
-            try {
-                val obj = element.jsonObject
-                val type = obj["type"]?.jsonPrimitive?.content ?: return@mapNotNull null
-                RelayChatContentBlock(
-                    type = type,
-                    text = obj["text"]?.jsonPrimitive?.content,
-                    name = obj["name"]?.jsonPrimitive?.content ?: obj["tool_name"]?.jsonPrimitive?.content,
-                    fileId = obj.string("fileId", "file_id"),
-                    fileName = obj.string("fileName", "file_name", "name"),
-                    mimeType = obj.string("mimeType", "mime_type"),
-                    sizeBytes = obj.int("sizeBytes", "size_bytes"),
-                    durationMs = obj.int("durationMs", "duration_ms"),
-                    imageWidth = obj.int("imageWidth", "image_width"),
-                    imageHeight = obj.int("imageHeight", "image_height"),
-                    downloadUrl = obj.string("downloadUrl", "download_url"),
-                    downloadPath = obj.string("downloadPath", "download_path"),
-                    thumbnailUrl = obj.string("thumbnailUrl", "thumbnail_url"),
-                    expiresAt = obj.string("expiresAt", "expires_at"),
-                    senderDisplayName = obj.string("senderDisplayName", "sender_display_name"),
-                    transcript = obj.string("transcript"),
-                    gatewayId = obj.string("gatewayId", "gateway_id"),
-                    sessionKey = obj.string("sessionKey", "session_key"),
-                    arguments = obj["arguments"]?.let { com.rethinkingstudio.clawlink.core.models.chat.RelayJSONValue.fromJsonElement(it) },
-                    args = obj["args"]?.let { com.rethinkingstudio.clawlink.core.models.chat.RelayJSONValue.fromJsonElement(it) },
-                    result = obj["result"]?.let { com.rethinkingstudio.clawlink.core.models.chat.RelayJSONValue.fromJsonElement(it) },
-                    partialResult = obj["partialResult"]?.let { com.rethinkingstudio.clawlink.core.models.chat.RelayJSONValue.fromJsonElement(it) },
-                    content = obj["content"]?.let { com.rethinkingstudio.clawlink.core.models.chat.RelayJSONValue.fromJsonElement(it) },
-                    output = obj["output"]?.let { com.rethinkingstudio.clawlink.core.models.chat.RelayJSONValue.fromJsonElement(it) },
-                    error = obj["error"]?.let { com.rethinkingstudio.clawlink.core.models.chat.RelayJSONValue.fromJsonElement(it) },
-                    toolCallId = obj["tool_call_id"]?.jsonPrimitive?.content ?: obj["toolCallId"]?.jsonPrimitive?.content,
-                    toolUseId = obj["tool_use_id"]?.jsonPrimitive?.content ?: obj["toolUseId"]?.jsonPrimitive?.content,
-                    toolName = obj.string("toolName", "tool_name"),
-                    status = obj["status"]?.jsonPrimitive?.content,
-                    isError = obj["is_error"]?.jsonPrimitive?.booleanOrNull ?: obj["isError"]?.jsonPrimitive?.booleanOrNull
-                )
-            } catch (_: Exception) { null }
+    private fun parseContentBlocks(root: JsonObject): List<RelayChatContentBlock> {
+        val arrays = mutableListOf<JsonArray>()
+        collectContentBlockArrays(root, arrays, mutableSetOf())
+        if (arrays.isEmpty()) return emptyList()
+
+        val seen = linkedSetOf<String>()
+        return arrays.flatMap { array ->
+            array.mapNotNull { element -> parseContentBlock(element) }
+        }.filter { block -> seen.add(block.signature()) }
+    }
+
+    private fun parseContentBlock(element: JsonElement): RelayChatContentBlock? {
+        return try {
+            val obj = element.jsonObject
+            val text = obj["text"]?.jsonPrimitive?.content
+            var type = obj["type"]?.jsonPrimitive?.content ?: if (text != null) "text" else return null
+
+            val name = obj["name"]?.jsonPrimitive?.content 
+                ?: obj["tool_name"]?.jsonPrimitive?.content 
+                ?: obj["tool"]?.jsonPrimitive?.content
+
+            if (type.trim().lowercase() == "text") {
+                if (name != null) {
+                    type = "tool_result"
+                }
+            }
+            RelayChatContentBlock(
+                type = type,
+                text = obj["text"]?.jsonPrimitive?.content,
+                name = obj["name"]?.jsonPrimitive?.content ?: obj["tool_name"]?.jsonPrimitive?.content ?: obj["tool"]?.jsonPrimitive?.content,
+                fileId = obj.string("fileId", "file_id"),
+                fileName = obj.string("fileName", "file_name", "name"),
+                mimeType = obj.string("mimeType", "mime_type"),
+                sizeBytes = obj.int("sizeBytes", "size_bytes"),
+                durationMs = obj.int("durationMs", "duration_ms"),
+                imageWidth = obj.int("imageWidth", "image_width"),
+                imageHeight = obj.int("imageHeight", "image_height"),
+                downloadUrl = obj.string("downloadUrl", "download_url"),
+                downloadPath = obj.string("downloadPath", "download_path"),
+                thumbnailUrl = obj.string("thumbnailUrl", "thumbnail_url"),
+                expiresAt = obj.string("expiresAt", "expires_at"),
+                senderDisplayName = obj.string("senderDisplayName", "sender_display_name"),
+                transcript = obj.string("transcript"),
+                gatewayId = obj.string("gatewayId", "gateway_id"),
+                sessionKey = obj.string("sessionKey", "session_key"),
+                arguments = obj["arguments"]?.let { com.rethinkingstudio.clawlink.core.models.chat.RelayJSONValue.fromJsonElement(it) },
+                args = obj["args"]?.let { com.rethinkingstudio.clawlink.core.models.chat.RelayJSONValue.fromJsonElement(it) },
+                result = obj["result"]?.let { com.rethinkingstudio.clawlink.core.models.chat.RelayJSONValue.fromJsonElement(it) },
+                partialResult = (obj["partialResult"] ?: obj["partial_result"])?.let { com.rethinkingstudio.clawlink.core.models.chat.RelayJSONValue.fromJsonElement(it) },
+                content = obj["content"]?.let { com.rethinkingstudio.clawlink.core.models.chat.RelayJSONValue.fromJsonElement(it) },
+                output = obj["output"]?.let { com.rethinkingstudio.clawlink.core.models.chat.RelayJSONValue.fromJsonElement(it) },
+                error = obj["error"]?.let { com.rethinkingstudio.clawlink.core.models.chat.RelayJSONValue.fromJsonElement(it) },
+                toolCallId = obj["tool_call_id"]?.jsonPrimitive?.content ?: obj["toolCallId"]?.jsonPrimitive?.content,
+                toolUseId = obj["tool_use_id"]?.jsonPrimitive?.content ?: obj["toolUseId"]?.jsonPrimitive?.content,
+                toolName = obj.string("toolName", "tool_name"),
+                status = obj["status"]?.jsonPrimitive?.content,
+                isError = obj["is_error"]?.jsonPrimitive?.booleanOrNull ?: obj["isError"]?.jsonPrimitive?.booleanOrNull
+            )
+        } catch (_: Exception) {
+            null
         }
+    }
+
+    private fun collectContentBlockArrays(
+        element: JsonElement?,
+        arrays: MutableList<JsonArray>,
+        visited: MutableSet<Int>
+    ) {
+        val current = element ?: return
+        val identity = System.identityHashCode(current)
+        if (!visited.add(identity)) return
+
+        when (current) {
+            is JsonArray -> {
+                if (current.any { it is JsonObject && it["type"] != null }) {
+                    arrays += current
+                }
+                current.forEach { child ->
+                    collectContentBlockArrays(child, arrays, visited)
+                }
+            }
+            is JsonObject -> {
+                current.values.forEach { child ->
+                    if (child is JsonArray || child is JsonObject) {
+                        collectContentBlockArrays(child, arrays, visited)
+                    }
+                }
+            }
+            else -> Unit
+        }
+    }
+
+    private fun RelayChatContentBlock.signature(): String {
+        return listOf(
+            type,
+            toolCallId.orEmpty(),
+            toolUseId.orEmpty(),
+            name.orEmpty(),
+            text.orEmpty(),
+            fileId.orEmpty(),
+            fileName.orEmpty(),
+            status.orEmpty(),
+            isError?.toString().orEmpty()
+        ).joinToString("|")
     }
 
     private fun JsonObject.string(vararg keys: String): String? {
@@ -820,18 +1052,45 @@ class ChatStore(
             isLoading = true
         )
         try {
-            val items = apiClient.fetchChatHistory(normalizedGatewayId, normalizedSessionKey, limit)
-            val historyMessages = items.map { item ->
+            val items = retryOnceOnTransientFailure(
+                operationName = "chat history for $normalizedGatewayId/$normalizedSessionKey"
+            ) {
+                apiClient.fetchChatHistory(normalizedGatewayId, normalizedSessionKey, limit)
+            }
+            val rawHistoryMessages = items.map { item ->
+                val extractedContent = extractContent(item)
+                val sourceBlocks = item.contentBlocks ?: emptyList()
+                val normalizedRole = item.role.trim().lowercase().replace("_", "")
+                val isToolRole = normalizedRole in listOf("tool", "toolresult")
+                val isToolHistory = isToolRole || sourceBlocks.any { it.isToolCallBlock || it.isToolResultBlock }
+                val role = if (isToolHistory) {
+                    MessageRole.tool
+                } else {
+                    try { MessageRole.valueOf(item.role) } catch (_: Exception) { MessageRole.system }
+                }
+                val contentBlocks = sourceBlocks
+                val content = when {
+                    contentBlocks.isNotEmpty() && role == MessageRole.tool -> contentBlocks.firstNotNullOfOrNull { block ->
+                        block.text?.trim()?.takeIf { it.isNotEmpty() }
+                            ?: block.result?.renderedText(listOf("content", "markdown", "text", "body", "message", "value", "result", "output"))
+                            ?: block.partialResult?.renderedText(listOf("content", "markdown", "text", "body", "message", "value", "result", "output"))
+                            ?: block.content?.renderedText(listOf("content", "markdown", "text", "body", "message", "value", "result", "output"))
+                            ?: block.output?.renderedText(listOf("content", "markdown", "text", "body", "message", "value", "result", "output"))
+                            ?: block.error?.renderedText(listOf("content", "markdown", "text", "body", "message", "value", "result", "output"))
+                    }.orEmpty()
+                    else -> extractedContent
+                }
                 ChatMessage(
                     id = item.id,
-                    role = try { MessageRole.valueOf(item.role) } catch (_: Exception) { MessageRole.system },
-                    content = extractContent(item),
-                    contentBlocks = item.contentBlocks ?: emptyList(),
+                    role = role,
+                    content = content,
+                    contentBlocks = contentBlocks,
                     createdAt = item.createdAt ?: "",
                     runId = "",
                     sortTimestamp = null
                 )
             }
+            val historyMessages = rawHistoryMessages
             val current = _state.value
             val messages = if (current.currentGatewayId == normalizedGatewayId && current.currentSessionKey == normalizedSessionKey) {
                 mergeHistoryWithCurrentMessages(historyMessages, current.messages)
@@ -845,7 +1104,13 @@ class ChatStore(
             _state.value = _state.value.copy(isLoading = false, isSwitchingSession = false)
             throw e
         } catch (e: Exception) {
-            _state.value = _state.value.copy(isLoading = false, isSwitchingSession = false, errorMessage = e.message)
+            val currentState = _state.value
+            val shouldSuppressError = isTransientLoadFailure(e) && currentState.messages.isEmpty()
+            _state.value = currentState.copy(
+                isLoading = false,
+                isSwitchingSession = false,
+                errorMessage = if (shouldSuppressError) null else e.message
+            )
         }
     }
 
@@ -872,7 +1137,11 @@ class ChatStore(
             return
         }
         try {
-            val sessions = apiClient.fetchChatSessions(normalizedGatewayId)
+            val sessions = retryOnceOnTransientFailure(
+                operationName = "chat sessions for $normalizedGatewayId"
+            ) {
+                apiClient.fetchChatSessions(normalizedGatewayId)
+            }
             val currentState = _state.value
             val current = currentState.currentSessionKey
             val isNewGateway = currentState.currentGatewayId != normalizedGatewayId
@@ -903,13 +1172,52 @@ class ChatStore(
             android.util.Log.w("ChatStore", "Failed to load chat sessions for $normalizedGatewayId", e)
             val currentState = _state.value
             val selected = currentState.currentSessionKey.ifBlank { defaultSessionKey }
+            val isTransientLoadFailure = isTransientLoadFailure(e)
+            val hasOnlyPlaceholderSession =
+                currentState.sessions.isEmpty() ||
+                    (currentState.sessions.size == 1 && currentState.sessions.first().sessionKey == defaultSessionKey)
+
             _state.value = currentState.copy(
                 currentGatewayId = normalizedGatewayId,
                 currentSessionKey = selected,
                 isSwitchingSession = false,
-                errorMessage = e.message
+                errorMessage = if (isTransientLoadFailure && hasOnlyPlaceholderSession) null else e.message
             )
         }
+    }
+
+    private suspend fun <T> retryOnceOnTransientFailure(
+        operationName: String,
+        block: suspend () -> T
+    ): T {
+        return try {
+            block()
+        } catch (e: Exception) {
+            if (!isTransientLoadFailure(e)) {
+                throw e
+            }
+            android.util.Log.w("ChatStore", "Transient timeout while loading $operationName, retrying once", e)
+            delay(350)
+            block()
+        }
+    }
+
+    private fun isTransientLoadFailure(throwable: Throwable?): Boolean {
+        var current: Throwable? = throwable
+        while (current != null) {
+            when (current) {
+                is HttpRequestTimeoutException,
+                is SocketTimeoutException -> return true
+            }
+            val message = current.message.orEmpty()
+            if (message.contains("socket timeout has expired", ignoreCase = true) ||
+                (message.contains("timeout", ignoreCase = true) && message.contains("expired", ignoreCase = true))
+            ) {
+                return true
+            }
+            current = current.cause
+        }
+        return false
     }
 
     fun beginGatewaySwitch(gatewayId: String) {
@@ -1138,6 +1446,118 @@ class ChatStore(
         const val defaultSessionKey = "main"
         const val stoppedRunlessEventIgnoreWindowMs = 15_000L
         const val maxLocallyStoppedRunIds = 64
+    }
+}
+
+internal object ChatPayloadTool {
+    data class ToolPayload(
+        val toolCallId: String?,
+        val toolName: String,
+        val displayText: String,
+        val state: MessageState
+    )
+
+    fun extract(obj: JsonObject): ToolPayload? {
+        return extractFromSource(obj)
+    }
+
+    private fun extractFromSource(obj: JsonObject): ToolPayload? {
+        val stream = obj.string("stream")?.lowercase()
+        val payload = obj["data"] as? JsonObject
+        val office = obj["office"] as? JsonObject
+        val source = payload ?: office ?: obj
+
+        val resolvedSourceToolCallId = source.string(
+            "toolCallId",
+            "tool_call_id",
+            "toolUseId",
+            "tool_use_id",
+            "name"
+        )
+        val toolCallId = resolvedSourceToolCallId
+            ?: obj.string("toolCallId", "tool_call_id", "toolUseId", "tool_use_id", "runId", "run_id")
+
+        val toolName = source.string("toolName", "tool_name", "tool")
+            ?: source.string("name")
+            ?: obj.string("toolName", "tool_name", "tool", "name")
+            ?: "tool"
+
+        val isToolEnvelope = stream == "tool" ||
+            source.string("role")?.lowercase() == "tool" ||
+            obj.string("role")?.lowercase() == "tool"
+        val hasStructuredToolIdentity =
+            !resolvedSourceToolCallId.isNullOrBlank() ||
+                source.string("toolName", "tool_name", "tool", "name") != null
+        val hasToolDataFields = source.containsKey("args") ||
+            source.containsKey("arguments") ||
+            source.containsKey("partialResult") ||
+            source.containsKey("partial_result") ||
+            source.containsKey("isError") ||
+            source.containsKey("is_error")
+        val hasToolMarkers = stream == "tool" ||
+            isToolEnvelope ||
+            ((payload != null || office != null) && hasStructuredToolIdentity) ||
+            ((payload != null || office != null || isToolEnvelope) && hasToolDataFields)
+
+        if (!hasToolMarkers) {
+            return null
+        }
+
+        val normalizedState = normalizeState(
+            source.string("state", "phase", "status")
+                ?: obj.string("state", "phase", "status")
+        )
+        val displayText = ChatPayloadText.extract(obj)
+            .ifBlank { source.renderToolDisplayText() }
+
+        return ToolPayload(
+            toolCallId = toolCallId,
+            toolName = toolName,
+            displayText = displayText,
+            state = when {
+                normalizedState in listOf("error", "failed", "fail") -> MessageState.failed
+                normalizedState in listOf("completed", "complete", "done", "final", "result") -> MessageState.completed
+                normalizedState in listOf("streaming", "delta", "in_progress", "update") -> MessageState.streaming
+                displayText.isNotBlank() -> MessageState.completed
+                else -> MessageState.streaming
+            }
+        )
+    }
+
+    private fun normalizeState(value: String?): String {
+        return value?.trim()?.lowercase().orEmpty()
+    }
+
+    private fun JsonObject.string(vararg keys: String): String? {
+        return keys.firstNotNullOfOrNull { key ->
+            (this[key] as? kotlinx.serialization.json.JsonPrimitive)
+                ?.contentOrNull
+                ?.trim()
+                ?.takeIf { it.isNotEmpty() }
+        }
+    }
+
+    private fun JsonObject.renderToolDisplayText(): String {
+        val preferredKeys = listOf("content", "markdown", "text", "body", "message", "value", "result", "output", "data")
+        val keys = listOf("result", "partialResult", "partial_result", "output", "content", "args", "text", "delta", "error")
+        for (key in keys) {
+            val element = this[key] ?: continue
+            val rendered = com.rethinkingstudio.clawlink.core.models.chat.RelayJSONValue.fromJsonElement(element)
+                .renderedText(preferredKeys)
+                ?.trim()
+                ?.takeIf { it.isNotEmpty() }
+            if (rendered != null) {
+                return rendered
+            }
+            val plain = com.rethinkingstudio.clawlink.core.models.chat.RelayJSONValue.fromJsonElement(element)
+                .plainText
+                ?.trim()
+                ?.takeIf { it.isNotEmpty() }
+            if (plain != null) {
+                return plain
+            }
+        }
+        return ""
     }
 }
 
