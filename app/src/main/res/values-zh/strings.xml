@@ -85,6 +85,10 @@
     <string name="chat_attachment_import_failed_with_reason">附件导入失败：%1$s</string>
     <string name="chat_attachment_send_failed_with_reason">附件发送失败：%1$s</string>
     <string name="chat_hold_to_talk">松开发送</string>
+    <string name="voice_input_requires_pairing">请先完成配对后再使用语音输入。</string>
+    <string name="voice_input_pending_run">当前会话正在处理回复，请稍后再试。</string>
+    <string name="voice_input_microphone_denied">未获得麦克风权限，请到系统设置中允许后再试。</string>
+    <string name="voice_input_start_failed">语音输入启动失败：%1$s</string>
 
 
     

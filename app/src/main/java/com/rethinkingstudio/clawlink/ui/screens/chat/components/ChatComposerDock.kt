@@ -23,6 +23,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.Add
@@ -52,6 +54,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
@@ -67,6 +70,7 @@ import androidx.compose.ui.window.PopupProperties
 import com.rethinkingstudio.clawlink.R
 import com.rethinkingstudio.clawlink.ui.screens.chat.ChatColors
 import com.rethinkingstudio.clawlink.ui.screens.chat.ComposerAttachmentDraft
+import com.rethinkingstudio.clawlink.ui.screens.chat.VoiceInputPhase
 import com.rethinkingstudio.clawlink.ui.screens.chat.filePath
 import com.rethinkingstudio.clawlink.ui.screens.chat.isImage
 
@@ -78,6 +82,8 @@ internal fun ComposerDock(
     isStreaming: Boolean,
     isStoppingRun: Boolean,
     voiceMode: Boolean,
+    voiceInputPhase: VoiceInputPhase,
+    voiceInputCancelPreview: Boolean,
     attachments: List<ComposerAttachmentDraft>,
     isUploadingAttachment: Boolean,
     hasActiveSession: Boolean,
@@ -97,6 +103,10 @@ internal fun ComposerDock(
     onShowSkillSheet: () -> Unit,
     onOpenAttachment: () -> Unit,
     onToggleVoiceMode: () -> Unit,
+    onBeginVoiceInputHold: () -> Unit,
+    onEndVoiceInputHold: () -> Unit,
+    onCancelVoiceInput: () -> Unit,
+    onVoiceInputCancelPreviewChange: (Boolean) -> Unit,
     onSend: () -> Unit,
     onAbort: () -> Unit
 ) {
@@ -128,17 +138,18 @@ internal fun ComposerDock(
 
             if (voiceMode) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    RoundIconButton(Icons.Default.Keyboard, stringResource(R.string.chat_placeholder), enabled = true, onClick = onToggleVoiceMode)
-                    Surface(
-                        shape = RoundedCornerShape(16.dp),
-                        color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.72f),
-                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.2f)),
-                        modifier = Modifier.weight(1f).height(42.dp)
-                    ) {
-                        Box(contentAlignment = Alignment.Center) {
-                            Text(stringResource(R.string.chat_hold_to_talk), fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.primary)
-                        }
-                    }
+                    RoundIconButton(Icons.Default.Keyboard, stringResource(R.string.chat_placeholder), enabled = !voiceInputPhase.isBusy, onClick = onToggleVoiceMode)
+                    VoiceHoldToSpeakButton(
+                        modifier = Modifier.weight(1f),
+                        hasDraftText = messageText.trim().isNotEmpty(),
+                        canBeginHoldToSpeak = canEditComposer || voiceInputPhase.isBusy,
+                        voiceInputPhase = voiceInputPhase,
+                        cancelPreview = voiceInputCancelPreview,
+                        onBeginHold = onBeginVoiceInputHold,
+                        onEndHold = onEndVoiceInputHold,
+                        onCancel = onCancelVoiceInput,
+                        onCancelPreviewChange = onVoiceInputCancelPreviewChange
+                    )
                 }
             } else {
                 Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -207,6 +218,109 @@ internal fun ComposerDock(
             onPickFiles = onPickFiles
         )
     }
+}
+
+@Composable
+private fun VoiceHoldToSpeakButton(
+    modifier: Modifier = Modifier,
+    hasDraftText: Boolean,
+    canBeginHoldToSpeak: Boolean,
+    voiceInputPhase: VoiceInputPhase,
+    cancelPreview: Boolean,
+    onBeginHold: () -> Unit,
+    onEndHold: () -> Unit,
+    onCancel: () -> Unit,
+    onCancelPreviewChange: (Boolean) -> Unit
+) {
+    val releaseSend = stringResource(R.string.chat_voice_release_send)
+    val releaseCancel = stringResource(R.string.chat_voice_release_cancel)
+    val holdContinue = stringResource(R.string.chat_voice_hold_continue)
+    val holdTalk = stringResource(R.string.chat_voice_hold_talk)
+    val buttonText = when {
+        cancelPreview -> releaseCancel
+        voiceInputPhase.isBusy -> releaseSend
+        hasDraftText -> holdContinue
+        else -> holdTalk
+    }
+    val backgroundColor = when {
+        cancelPreview -> ChatColors.offline.copy(alpha = 0.14f)
+        voiceInputPhase.isBusy -> ChatColors.linkBlue
+        else -> ChatColors.dockControl
+    }
+    val borderColor = when {
+        cancelPreview -> ChatColors.offline.copy(alpha = 0.34f)
+        voiceInputPhase.isBusy -> ChatColors.linkBlue.copy(alpha = 0.30f)
+        else -> ChatColors.dockBorder
+    }
+    val textColor = when {
+        cancelPreview -> ChatColors.offline
+        voiceInputPhase.isBusy -> Color.White
+        else -> Color.Black
+    }
+
+    Surface(
+        shape = RoundedCornerShape(14.dp),
+        color = backgroundColor,
+        border = BorderStroke(1.dp, borderColor),
+        modifier = modifier
+            .height(42.dp)
+            .alpha(if (canBeginHoldToSpeak || voiceInputPhase.isBusy) 1f else 0.6f)
+            .pointerInput(canBeginHoldToSpeak) {
+                awaitEachGesture {
+                    val down = awaitFirstDown(requireUnconsumed = false)
+                    if (!canBeginHoldToSpeak && !voiceInputPhase.isBusy) return@awaitEachGesture
+                    var didBegin = false
+                    var didCancel = false
+                    val heightPx = size.height.toFloat()
+                    val widthPx = size.width.toFloat()
+                    onBeginHold()
+                    didBegin = true
+                    while (true) {
+                        val event = awaitPointerEvent()
+                        val change = event.changes.firstOrNull { it.id == down.id } ?: break
+                        if (change.pressed) {
+                            val inside = isPointInsideVoiceRegion(
+                                point = change.position,
+                                width = widthPx,
+                                height = heightPx
+                            )
+                            didCancel = !inside
+                            onCancelPreviewChange(didCancel)
+                            change.consume()
+                        } else {
+                            if (didBegin) {
+                                if (didCancel) onCancel() else onEndHold()
+                            }
+                            onCancelPreviewChange(false)
+                            change.consume()
+                            break
+                        }
+                    }
+                }
+            }
+    ) {
+        Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp)) {
+            Text(
+                text = buttonText,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                fontWeight = FontWeight.SemiBold,
+                color = textColor,
+                style = MaterialTheme.typography.bodyMedium
+            )
+        }
+    }
+}
+
+private fun isPointInsideVoiceRegion(point: Offset, width: Float, height: Float): Boolean {
+    if (width <= 0f || height <= 0f) return true
+    val centerX = width * 0.5f
+    val centerY = height * 0.92f
+    val radiusX = maxOf(width * 0.78f, 28f)
+    val radiusY = maxOf(height * 2.65f, 104f)
+    val dx = (point.x - centerX) / radiusX
+    val dy = (point.y - centerY) / radiusY
+    return dx * dx + dy * dy <= 1f
 }
 
 @Composable

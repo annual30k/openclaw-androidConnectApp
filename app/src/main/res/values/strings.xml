@@ -85,6 +85,10 @@
     <string name="chat_attachment_import_failed_with_reason">Attachment import failed: %1$s</string>
     <string name="chat_attachment_send_failed_with_reason">Attachment send failed: %1$s</string>
     <string name="chat_hold_to_talk">Hold to talk</string>
+    <string name="voice_input_requires_pairing">Please pair a gateway before using voice input.</string>
+    <string name="voice_input_pending_run">The current session is still handling a reply. Please try again later.</string>
+    <string name="voice_input_microphone_denied">Microphone permission denied. Please enable it in Settings and try again.</string>
+    <string name="voice_input_start_failed">Voice input failed to start: %1$s</string>
 
 
     

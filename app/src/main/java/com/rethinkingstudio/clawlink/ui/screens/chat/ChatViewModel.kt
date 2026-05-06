@@ -17,10 +17,12 @@ import com.rethinkingstudio.clawlink.core.state.gateway.GatewayStore
 import com.rethinkingstudio.clawlink.core.state.model.ModelStore
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.delay
 import java.io.File
+import java.util.UUID
 
 internal data class ChatImagePreviewState(
     val url: String,
@@ -55,6 +57,13 @@ internal class ChatViewModel(
     var attachmentButtonPosition by mutableStateOf(IntOffset.Zero)
     var attachmentButtonSize by mutableStateOf(IntSize.Zero)
     var voiceMode by mutableStateOf(false)
+    var voiceInputPhase by mutableStateOf(VoiceInputPhase.Idle)
+    var voiceInputTranscript by mutableStateOf("")
+    var voiceInputBaseText by mutableStateOf("")
+    var voiceInputAudioLevel by mutableStateOf(0.0)
+    var voiceInputCancelPreview by mutableStateOf(false)
+    private var voiceInputHoldToken: UUID? = null
+    private var voiceInputHoldJob: Job? = null
     var composerNotice by mutableStateOf<String?>(null)
     var composerAttachments by mutableStateOf<List<ComposerAttachmentDraft>>(emptyList())
     var composerAttachmentUploadItems by mutableStateOf<List<ComposerAttachmentUploadItem>>(emptyList())
@@ -62,6 +71,13 @@ internal class ChatViewModel(
     var composerHeight by mutableStateOf(0.dp)
     var imagePreview by mutableStateOf<ChatImagePreviewState?>(null)
     var documentPreview by mutableStateOf<ChatDocumentPreviewState?>(null)
+    private val speechCoordinator = ComposerSpeechCoordinator(
+        scope = scope,
+        onPartialTranscript = { transcript -> updateVoiceInputTranscript(transcript) },
+        onFinalTranscript = { transcript -> completeVoiceInput(transcript) },
+        onAudioLevel = { audioLevel -> updateVoiceInputAudioLevel(audioLevel) },
+        onError = { error -> handleVoiceInputFailure(error) }
+    )
 
     fun clearError() {
         chatStore.clearError()
@@ -131,6 +147,211 @@ internal class ChatViewModel(
                 attachments = composerAttachments
             )
         }
+    }
+
+    fun toggleVoiceMode() {
+        if (voiceInputPhase.isBusy) return
+        voiceMode = !voiceMode
+    }
+
+    fun beginVoiceInputHold(context: Context, hasRecordAudioPermission: Boolean) {
+        if (voiceInputPhase != VoiceInputPhase.Idle || voiceInputHoldToken != null) return
+        val token = UUID.randomUUID()
+        voiceInputHoldToken = token
+        voiceInputHoldJob?.cancel()
+        voiceInputHoldJob = scope.launch {
+            delay(240)
+            if (voiceInputHoldToken == token) {
+                startVoiceInput(context, holdToken = token, hasRecordAudioPermission = hasRecordAudioPermission)
+            }
+            if (voiceInputHoldToken == token) {
+                voiceInputHoldJob = null
+            }
+        }
+    }
+
+    fun endVoiceInputHold() {
+        voiceInputHoldJob?.cancel()
+        voiceInputHoldJob = null
+        if (voiceInputHoldToken == null) return
+        when (voiceInputPhase) {
+            VoiceInputPhase.Recording -> stopVoiceInput()
+            VoiceInputPhase.Starting -> cancelVoiceInput()
+            VoiceInputPhase.Stopping, VoiceInputPhase.Confirming, VoiceInputPhase.Idle -> {
+                voiceInputHoldToken = null
+            }
+        }
+    }
+
+    fun startVoiceInput(
+        context: Context,
+        holdToken: UUID? = null,
+        hasRecordAudioPermission: Boolean
+    ) {
+        if (holdToken != null && voiceInputHoldToken != holdToken) return
+
+        val gatewayId = gatewayStore.state.value.selectedGateway?.id.orEmpty()
+        val hasActiveSession = gatewayId.isNotBlank() && chatStore.state.value.currentSessionKey.isNotBlank()
+        when {
+            !hasActiveSession -> {
+                composerNotice = context.getString(R.string.voice_input_requires_pairing)
+                voiceInputHoldToken = null
+                return
+            }
+            chatStore.state.value.isStreaming || chatStore.state.value.isStoppingRun -> {
+                composerNotice = context.getString(R.string.voice_input_pending_run)
+                voiceInputHoldToken = null
+                return
+            }
+            !hasRecordAudioPermission -> {
+                composerNotice = context.getString(R.string.voice_input_microphone_denied)
+                voiceInputHoldToken = null
+                return
+            }
+            voiceInputPhase != VoiceInputPhase.Idle -> {
+                voiceInputHoldToken = null
+                return
+            }
+        }
+
+        composerNotice = null
+        voiceInputBaseText = messageText
+        voiceInputTranscript = ""
+        voiceInputAudioLevel = 0.0
+        voiceMode = true
+        voiceInputPhase = VoiceInputPhase.Starting
+
+        try {
+            speechCoordinator.start(context)
+            if (holdToken != null && voiceInputHoldToken != holdToken) {
+                speechCoordinator.cancel()
+                resetVoiceInputState(restoreComposer = true)
+                return
+            }
+            voiceInputPhase = VoiceInputPhase.Recording
+        } catch (error: VoiceInputError) {
+            resetVoiceInputState(restoreComposer = true)
+            composerNotice = error.message
+        } catch (error: Exception) {
+            resetVoiceInputState(restoreComposer = true)
+            composerNotice = context.getString(R.string.voice_input_start_failed, error.message ?: "Unknown error")
+        }
+    }
+
+    fun stopVoiceInput() {
+        if (voiceInputPhase != VoiceInputPhase.Recording && voiceInputPhase != VoiceInputPhase.Starting) return
+        voiceInputHoldToken = null
+        voiceInputHoldJob?.cancel()
+        voiceInputHoldJob = null
+        voiceInputPhase = VoiceInputPhase.Stopping
+        voiceInputAudioLevel = 0.0
+        speechCoordinator.stop()
+    }
+
+    fun cancelVoiceInput() {
+        voiceInputHoldToken = null
+        voiceInputHoldJob?.cancel()
+        voiceInputHoldJob = null
+        voiceInputCancelPreview = false
+        voiceInputAudioLevel = 0.0
+        speechCoordinator.cancel()
+        resetVoiceInputState(restoreComposer = true)
+    }
+
+    fun continueVoiceInputEditing() {
+        if (voiceInputPhase != VoiceInputPhase.Confirming) return
+        speechCoordinator.cancel()
+        voiceInputCancelPreview = false
+        voiceInputPhase = VoiceInputPhase.Idle
+        voiceInputTranscript = ""
+        voiceInputBaseText = ""
+        voiceInputHoldToken = null
+        voiceMode = true
+    }
+
+    fun confirmVoiceInput(context: Context) {
+        scope.launch {
+            sendComposerMessage(
+                context = context,
+                gatewayId = gatewayStore.state.value.selectedGateway?.id.orEmpty(),
+                sessionKey = chatStore.state.value.currentSessionKey,
+                rawInput = messageText,
+                attachments = composerAttachments
+            )
+            resetVoiceInputState(restoreComposer = false)
+        }
+    }
+
+    fun disposeVoiceInput() {
+        voiceInputHoldJob?.cancel()
+        speechCoordinator.destroy()
+    }
+
+    private fun updateVoiceInputTranscript(transcript: String) {
+        if (voiceInputPhase != VoiceInputPhase.Starting &&
+            voiceInputPhase != VoiceInputPhase.Recording &&
+            voiceInputPhase != VoiceInputPhase.Stopping
+        ) return
+
+        voiceInputTranscript = transcript
+        messageText = composedVoiceInputText(
+            baseText = voiceInputBaseText,
+            transcript = transcript.trim()
+        )
+    }
+
+    private fun updateVoiceInputAudioLevel(audioLevel: Double) {
+        if (voiceInputPhase != VoiceInputPhase.Starting &&
+            voiceInputPhase != VoiceInputPhase.Recording &&
+            voiceInputPhase != VoiceInputPhase.Stopping
+        ) return
+
+        val normalized = audioLevel.coerceIn(0.0, 1.0)
+        voiceInputAudioLevel = maxOf(normalized, voiceInputAudioLevel * 0.72)
+    }
+
+    private fun completeVoiceInput(transcript: String) {
+        if (voiceInputPhase != VoiceInputPhase.Starting &&
+            voiceInputPhase != VoiceInputPhase.Recording &&
+            voiceInputPhase != VoiceInputPhase.Stopping
+        ) return
+
+        val resolvedTranscript = transcript.trim()
+        if (resolvedTranscript.isEmpty()) {
+            resetVoiceInputState(restoreComposer = true)
+            return
+        }
+
+        messageText = composedVoiceInputText(
+            baseText = voiceInputBaseText,
+            transcript = resolvedTranscript
+        )
+        voiceInputTranscript = resolvedTranscript
+        voiceInputCancelPreview = false
+        voiceInputAudioLevel = 0.0
+        voiceInputPhase = VoiceInputPhase.Confirming
+    }
+
+    private fun handleVoiceInputFailure(error: VoiceInputError) {
+        voiceInputCancelPreview = false
+        voiceInputAudioLevel = 0.0
+        resetVoiceInputState(restoreComposer = false)
+        composerNotice = error.message
+    }
+
+    private fun resetVoiceInputState(restoreComposer: Boolean) {
+        voiceInputHoldJob?.cancel()
+        voiceInputHoldJob = null
+        if (restoreComposer) {
+            messageText = voiceInputBaseText
+        }
+        voiceInputPhase = VoiceInputPhase.Idle
+        voiceInputTranscript = ""
+        voiceInputBaseText = ""
+        voiceInputAudioLevel = 0.0
+        voiceInputCancelPreview = false
+        voiceInputHoldToken = null
+        voiceMode = true
     }
 
     private suspend fun sendComposerMessage(

@@ -23,6 +23,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.collectAsState
@@ -72,6 +73,7 @@ import com.rethinkingstudio.clawlink.ui.screens.chat.components.SlashCommandPane
 import com.rethinkingstudio.clawlink.ui.screens.chat.components.StatusBanner
 import com.rethinkingstudio.clawlink.ui.screens.chat.components.ThinkingRow
 import com.rethinkingstudio.clawlink.ui.screens.chat.components.UsageGuidePromptCard
+import com.rethinkingstudio.clawlink.ui.screens.chat.components.VoiceInputOverlay
 import com.rethinkingstudio.clawlink.ui.screens.chat.components.visibleToolContentBlocks
 import kotlinx.coroutines.launch
 
@@ -99,6 +101,7 @@ fun ChatScreen(
     val density = LocalDensity.current
     val view = LocalView.current
     val cameraPermissionState = rememberPermissionState(android.Manifest.permission.CAMERA)
+    val recordAudioPermissionState = rememberPermissionState(android.Manifest.permission.RECORD_AUDIO)
 
     val gatewayId = gatewayState.selectedGatewayId
     val hasSelectedGateway = gatewayState.selectedGateway != null
@@ -108,6 +111,12 @@ fun ChatScreen(
         RemoteImageSizeCache.init(context.applicationContext)
         RemoteImageCache.init(context.applicationContext)
         RemoteAttachmentCache.init(context.applicationContext)
+    }
+
+    DisposableEffect(viewModel) {
+        onDispose {
+            viewModel.disposeVoiceInput()
+        }
     }
 
     SideEffect {
@@ -334,7 +343,7 @@ fun ChatScreen(
                         }
                 ) {
                     AnimatedVisibility(
-                        slashActions.isNotEmpty() && hasActiveSession && !viewModel.voiceMode,
+                        slashActions.isNotEmpty() && hasActiveSession && !viewModel.voiceMode && !viewModel.voiceInputPhase.isBusy,
                         enter = fadeIn() + expandVertically(),
                         exit = fadeOut() + shrinkVertically()
                     ) {
@@ -353,10 +362,12 @@ fun ChatScreen(
                         isStreaming = chatState.isStreaming,
                         isStoppingRun = chatState.isStoppingRun,
                         voiceMode = viewModel.voiceMode,
+                        voiceInputPhase = viewModel.voiceInputPhase,
+                        voiceInputCancelPreview = viewModel.voiceInputCancelPreview,
                         attachments = viewModel.composerAttachments,
                         isUploadingAttachment = viewModel.isUploadingAttachment,
                         hasActiveSession = hasActiveSession,
-                        canEditComposer = hasActiveSession && !chatState.isStreaming && !viewModel.isUploadingAttachment && !chatState.isStoppingRun,
+                        canEditComposer = hasActiveSession && !chatState.isStreaming && !viewModel.isUploadingAttachment && !chatState.isStoppingRun && !viewModel.voiceInputPhase.isBusy,
                         canSendMessage = gatewayState.selectedGateway?.aggregateStatus == AggregateStatus.online,
                         showAttachmentMenu = viewModel.showAttachmentMenu,
                         onDismissAttachmentMenu = { viewModel.showAttachmentMenu = false },
@@ -394,7 +405,20 @@ fun ChatScreen(
                         onOpenAttachment = {
                             viewModel.showAttachmentMenu = !viewModel.showAttachmentMenu
                         },
-                        onToggleVoiceMode = { viewModel.voiceMode = !viewModel.voiceMode },
+                        onToggleVoiceMode = { viewModel.toggleVoiceMode() },
+                        onBeginVoiceInputHold = {
+                            if (recordAudioPermissionState.status.isGranted) {
+                                viewModel.beginVoiceInputHold(
+                                    context = context,
+                                    hasRecordAudioPermission = true
+                                )
+                            } else {
+                                recordAudioPermissionState.launchPermissionRequest()
+                            }
+                        },
+                        onEndVoiceInputHold = { viewModel.endVoiceInputHold() },
+                        onCancelVoiceInput = { viewModel.cancelVoiceInput() },
+                        onVoiceInputCancelPreviewChange = { viewModel.voiceInputCancelPreview = it },
                         onSend = { viewModel.onSend(context) },
                         onAbort = { chatStore.abortRun() }
                     )
@@ -488,6 +512,25 @@ fun ChatScreen(
                 onDismiss = { viewModel.documentPreview = null }
             )
         }
+
+        VoiceInputOverlay(
+            phase = viewModel.voiceInputPhase,
+            transcript = viewModel.voiceInputTranscript,
+            messageText = viewModel.messageText,
+            audioLevel = viewModel.voiceInputAudioLevel,
+            cancelPreview = viewModel.voiceInputCancelPreview,
+            canConfirm = hasActiveSession &&
+                !chatState.isStreaming &&
+                !chatState.isStoppingRun &&
+                !viewModel.isUploadingAttachment &&
+                (viewModel.messageText.trim().isNotEmpty() || viewModel.composerAttachments.isNotEmpty()),
+            isSending = viewModel.isUploadingAttachment,
+            onMessageTextChange = { viewModel.messageText = it },
+            onCancel = { viewModel.cancelVoiceInput() },
+            onContinue = { viewModel.continueVoiceInputEditing() },
+            onConfirm = { viewModel.confirmVoiceInput(context) },
+            modifier = Modifier.matchParentSize()
+        )
     }
 }
 
