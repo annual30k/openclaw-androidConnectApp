@@ -3,6 +3,9 @@ package com.rethinkingstudio.clawlink.ui.screens.chat
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.LinearOutSlowInEasing
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -29,6 +32,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
@@ -256,6 +260,7 @@ fun ChatScreen(
                     val hasStreamingAssistantMessage = displayMessages.any {
                         it.role == MessageRole.assistant && it.state == MessageState.streaming
                     }
+                    val conversationAnimationKey = "${gatewayId.orEmpty()}::${chatState.currentSessionKey}"
 
                     LazyColumn(
                         modifier = Modifier
@@ -282,30 +287,35 @@ fun ChatScreen(
                             item { ChatSessionLoadingCard() }
                         }
 
-                        items(displayMessages, key = { it.id }) { message ->
-                            MessageBubble(
-                                message = message,
-                                showInvocationProcess = chatState.showInvocationProcess,
-                                relayBaseUrl = chatStore.relayBaseUrl,
-                                accessToken = chatStore.accessToken,
-                                onImageClick = { block, url, fileName ->
-                                    viewModel.imagePreview = ChatImagePreviewState(
-                                        url = url,
-                                        accessToken = chatStore.accessToken,
-                                        fileName = fileName,
-                                        cacheKey = block.chatImageCacheKey()
-                                    )
-                                },
-                                onFileClick = { block, url, fileName ->
-                                    viewModel.documentPreview = ChatDocumentPreviewState(
-                                        url = url,
-                                        accessToken = chatStore.accessToken,
-                                        fileName = fileName,
-                                        mimeType = block.mimeType,
-                                        cacheKey = block.chatAttachmentCacheKey()
-                                    )
-                                }
-                            )
+                        items(displayMessages, key = { message -> "$conversationAnimationKey:${message.id}" }) { message ->
+                            ConversationMessageEnterAnimation(
+                                role = message.role,
+                                animationKey = "$conversationAnimationKey:${message.id}"
+                            ) {
+                                MessageBubble(
+                                    message = message,
+                                    showInvocationProcess = chatState.showInvocationProcess,
+                                    relayBaseUrl = chatStore.relayBaseUrl,
+                                    accessToken = chatStore.accessToken,
+                                    onImageClick = { block, url, fileName ->
+                                        viewModel.imagePreview = ChatImagePreviewState(
+                                            url = url,
+                                            accessToken = chatStore.accessToken,
+                                            fileName = fileName,
+                                            cacheKey = block.chatImageCacheKey()
+                                        )
+                                    },
+                                    onFileClick = { block, url, fileName ->
+                                        viewModel.documentPreview = ChatDocumentPreviewState(
+                                            url = url,
+                                            accessToken = chatStore.accessToken,
+                                            fileName = fileName,
+                                            mimeType = block.mimeType,
+                                            cacheKey = block.chatAttachmentCacheKey()
+                                        )
+                                    }
+                                )
+                            }
                         }
 
                         if (chatState.isStreaming && !hasStreamingAssistantMessage) {
@@ -478,5 +488,52 @@ fun ChatScreen(
                 onDismiss = { viewModel.documentPreview = null }
             )
         }
+    }
+}
+
+@Composable
+private fun ConversationMessageEnterAnimation(
+    role: MessageRole,
+    animationKey: String,
+    content: @Composable () -> Unit
+) {
+    val density = LocalDensity.current
+    val startOffsetPx = with(density) {
+        val direction = if (role == MessageRole.user) 1 else -1
+        28.dp.toPx() * direction
+    }
+    val offsetX = remember(animationKey) { Animatable(startOffsetPx) }
+    val alpha = remember(animationKey) { Animatable(0f) }
+
+    LaunchedEffect(animationKey) {
+        offsetX.snapTo(startOffsetPx)
+        alpha.snapTo(0f)
+        launch {
+            offsetX.animateTo(
+                targetValue = 0f,
+                animationSpec = tween(
+                    durationMillis = 240,
+                    easing = LinearOutSlowInEasing
+                )
+            )
+        }
+        launch {
+            alpha.animateTo(
+                targetValue = 1f,
+                animationSpec = tween(
+                    durationMillis = 240,
+                    easing = LinearOutSlowInEasing
+                )
+            )
+        }
+    }
+
+    Box(
+        modifier = Modifier.graphicsLayer {
+            translationX = offsetX.value
+            this.alpha = alpha.value
+        }
+    ) {
+        content()
     }
 }
