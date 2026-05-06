@@ -8,6 +8,7 @@ import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -33,7 +34,6 @@ import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Terminal
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -230,23 +230,17 @@ private fun ToolCodeBlock(language: String?, code: String, isError: Boolean) {
                 fontWeight = FontWeight.Bold
             )
             Spacer(Modifier.weight(1f))
-            IconButton(
+            CompactCopyButton(
                 onClick = { clipboardManager.setText(AnnotatedString(code)) },
-                modifier = Modifier.size(28.dp)
-            ) {
-                Icon(
-                    Icons.Default.ContentCopy,
-                    contentDescription = "Copy",
-                    modifier = Modifier.size(14.dp),
-                    tint = Color(0xFF111827)
-                )
-            }
+                tint = Color(0xFF111827),
+                iconSize = 14.dp
+            )
         }
         Box(
             modifier = Modifier
                 .fillMaxWidth()
                 .horizontalScroll(rememberScrollState())
-                .padding(horizontal = 14.dp, vertical = 12.dp)
+                .padding(horizontal = 12.dp, vertical = 10.dp)
         ) {
             if (normalizedLanguage == "json") {
                 Text(
@@ -273,6 +267,24 @@ private fun ToolCodeBlock(language: String?, code: String, isError: Boolean) {
 }
 
 @Composable
+private fun CompactCopyButton(onClick: () -> Unit, tint: Color, iconSize: androidx.compose.ui.unit.Dp) {
+    Box(
+        modifier = Modifier
+            .size(24.dp)
+            .clip(RoundedCornerShape(8.dp))
+            .clickable(onClick = onClick),
+        contentAlignment = Alignment.Center
+    ) {
+        Icon(
+            Icons.Default.ContentCopy,
+            contentDescription = "Copy",
+            modifier = Modifier.size(iconSize),
+            tint = tint
+        )
+    }
+}
+
+@Composable
 private fun TerminalBlock(title: String, subtitle: String?, text: String, mode: TerminalMode, isError: Boolean) {
     val clipboardManager = LocalClipboardManager.current
     val iconColor = if (isError) Color(0xFFF24E3E) else Color(0xFF5DCF7A)
@@ -285,9 +297,11 @@ private fun TerminalBlock(title: String, subtitle: String?, text: String, mode: 
                 Text(title, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, color = Color.White.copy(alpha = 0.92f))
                 if (!subtitle.isNullOrBlank()) { Text(subtitle, style = MaterialTheme.typography.labelSmall.copy(fontFamily = FontFamily.Monospace, fontSize = 9.sp), color = Color.White.copy(alpha = 0.54f), maxLines = 1, overflow = TextOverflow.Ellipsis) }
             }
-            IconButton(onClick = { clipboardManager.setText(AnnotatedString(text)) }, modifier = Modifier.size(24.dp)) {
-                Icon(Icons.Default.ContentCopy, null, modifier = Modifier.size(11.dp), tint = Color.White.copy(alpha = 0.84f))
-            }
+            CompactCopyButton(
+                onClick = { clipboardManager.setText(AnnotatedString(text)) },
+                tint = Color.White.copy(alpha = 0.84f),
+                iconSize = 11.dp
+            )
         }
         Box(modifier = Modifier.fillMaxWidth().background(brush = Brush.linearGradient(colors = listOf(Color(0xFF14171C), Color(0xFF1C1F26)), start = Offset.Zero, end = Offset.Infinite)).horizontalScroll(rememberScrollState()).padding(12.dp)) {
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -418,9 +432,11 @@ private fun ToolTextBlock(text: String, toolName: String?, isError: Boolean) {
             )
             if (trimmed.isNotEmpty()) {
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-                    IconButton(onClick = { clipboardManager.setText(AnnotatedString(trimmed)) }, modifier = Modifier.size(24.dp)) {
-                        Icon(Icons.Default.ContentCopy, null, modifier = Modifier.size(11.dp), tint = Color(0xFF8B8F98))
-                    }
+                    CompactCopyButton(
+                        onClick = { clipboardManager.setText(AnnotatedString(trimmed)) },
+                        tint = Color(0xFF8B8F98),
+                        iconSize = 11.dp
+                    )
                 }
             }
         }
