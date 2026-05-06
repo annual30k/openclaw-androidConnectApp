@@ -1,5 +1,6 @@
 package com.rethinkingstudio.clawlink.ui.screens.chat
 
+import com.rethinkingstudio.clawlink.core.models.chat.ComposerAttachmentDraft as CoreComposerAttachmentDraft
 import java.util.Locale
 
 internal enum class ComposerAttachmentPickTarget {
@@ -9,28 +10,16 @@ internal enum class ComposerAttachmentPickTarget {
     IMAGES
 }
 
-internal data class ComposerAttachmentDraft(
-    val filePath: String,
-    val fileName: String,
-    val mimeType: String,
-    val sizeBytes: Long,
-    val imageWidth: Int? = null,
-    val imageHeight: Int? = null
-) {
-    val displaySize: String
-        get() = formatAttachmentSize(sizeBytes)
+internal typealias ComposerAttachmentDraft = CoreComposerAttachmentDraft
 
-    val displaySubtitle: String
-        get() = listOf(mimeType, displaySize)
-            .filter { it.trim().isNotEmpty() }
-            .joinToString(" · ")
+internal val ComposerAttachmentDraft.filePath: String
+    get() = fileUri
 
-    val symbolName: String
-        get() = attachmentSymbolName(mimeType)
+internal val ComposerAttachmentDraft.symbolName: String
+    get() = attachmentSymbolName(mimeType)
 
-    val isImage: Boolean
-        get() = isImageMimeType(mimeType)
-}
+internal val ComposerAttachmentDraft.isImage: Boolean
+    get() = isImageMimeType(mimeType)
 
 internal fun attachmentPickerMimeTypes(target: ComposerAttachmentPickTarget): Array<String> {
     return when (target) {

@@ -59,7 +59,7 @@ class ComposerAttachmentHelpersTest {
     @Test
     fun composerDraftDerivesImageMetadataAndDisplayText() {
         val draft = ComposerAttachmentDraft(
-            filePath = "/tmp/photo.png",
+            fileUri = "/tmp/photo.png",
             fileName = "photo.png",
             mimeType = "image/png",
             sizeBytes = 2048

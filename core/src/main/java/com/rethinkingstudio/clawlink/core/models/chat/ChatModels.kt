@@ -79,6 +79,39 @@ sealed class RelayJSONValue : java.io.Serializable {
         return null
     }
 
+    fun numberValue(keys: List<String>): Double? {
+        return findNumberRecursively(this, keys)
+    }
+
+    private fun findNumberRecursively(node: RelayJSONValue, keys: List<String>): Double? {
+        when (node) {
+            is ObjectVal -> {
+                // First pass: check immediate keys
+                for (key in keys) {
+                    val valNode = node.value[key]
+                    if (valNode is NumberVal) return valNode.value
+                    if (valNode is StringVal) {
+                        val d = valNode.value.toDoubleOrNull()
+                        if (d != null) return d
+                    }
+                }
+                // Second pass: recurse into children
+                for (child in node.value.values) {
+                    val result = findNumberRecursively(child, keys)
+                    if (result != null) return result
+                }
+            }
+            is ArrayVal -> {
+                for (child in node.value) {
+                    val result = findNumberRecursively(child, keys)
+                    if (result != null) return result
+                }
+            }
+            else -> {}
+        }
+        return null
+    }
+
     fun prettyJsonString(): String? {
         return try {
             toJsonElement().toString()
@@ -167,13 +200,37 @@ data class RelayChatContentBlock(
     val isFileBlock: Boolean
         get() {
             val normalized = type.trim().lowercase()
-            return normalized in listOf("file", "file_upload", "file_result", "fileattachment", "attachment")
+            return normalized in listOf(
+                "file",
+                "file_upload",
+                "file_result",
+                "fileattachment",
+                "attachment",
+                "image",
+                "image_file",
+                "video",
+                "video_file",
+                "audio"
+            )
         }
-    val isVoiceMessageBlock: Boolean get() = type in listOf("voice_message", "voice_result")
+    val isVoiceMessageBlock: Boolean get() = type in listOf("voice", "voice_message", "voice_result")
     val isTextBlock: Boolean get() = type in listOf("text", "output_text", "input_text")
 
     val resolvedName: String? get() = name ?: toolName
     val fileDisplayName: String? get() = fileName ?: name ?: text
+    private val resolvedPayload: RelayJSONValue? get() = result ?: partialResult ?: content ?: output ?: error ?: arguments ?: args
+    val resolvedImageWidth: Int?
+        get() {
+            if (imageWidth != null && imageWidth > 0) return imageWidth
+            val keys = listOf("imageWidth", "image_width", "width", "w")
+            return resolvedPayload?.numberValue(keys)?.toInt()
+        }
+    val resolvedImageHeight: Int?
+        get() {
+            if (imageHeight != null && imageHeight > 0) return imageHeight
+            val keys = listOf("imageHeight", "image_height", "height", "h")
+            return resolvedPayload?.numberValue(keys)?.toInt()
+        }
     val fileDownloadURLString: String? get() = downloadUrl ?: downloadPath
     val fileStatusText: String?
         get() {
