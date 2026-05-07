@@ -173,15 +173,6 @@ fun TasksScreen(
                     },
                     colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent)
                 )
-            },
-            bottomBar = {
-                TaskSearchBar(
-                    searchText = searchText,
-                    onSearchTextChange = { searchText = it },
-                    modifier = Modifier
-                        .padding(horizontal = 20.dp)
-                        .padding(bottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding() + 12.dp)
-                )
             }
         ) { padding ->
             if (taskState.isLoading && taskState.tasks.isEmpty()) {
@@ -296,6 +287,15 @@ fun TasksScreen(
                 }
             }
         }
+
+        TaskSearchBar(
+            searchText = searchText,
+            onSearchTextChange = { searchText = it },
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .padding(horizontal = 20.dp)
+                .padding(bottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding() + 12.dp)
+        )
 
         taskState.errorMessage?.let { message ->
             Snackbar(
@@ -946,8 +946,8 @@ private fun TaskSearchBar(searchText: String, onSearchTextChange: (String) -> Un
             .background(
                 Brush.linearGradient(
                     colors = listOf(
-                        MaterialTheme.colorScheme.surface.copy(alpha = 0.82f),
-                        MaterialTheme.colorScheme.surface.copy(alpha = 0.75f)
+                        MaterialTheme.colorScheme.surface,
+                        MaterialTheme.colorScheme.surface.copy(alpha = 0.98f)
                     )
                 ),
                 PillShape

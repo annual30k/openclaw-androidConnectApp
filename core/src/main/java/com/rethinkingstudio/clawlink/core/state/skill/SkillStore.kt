@@ -14,7 +14,7 @@ data class SkillState(
     val errorMessage: String? = null
 ) {
     val filteredSkills: List<SkillItem> get() = skills.filter { filter.matches(it) }
-    val enabledCount: Int get() = skills.count { it.enabled }
+    val enabledCount: Int get() = skills.count { it.isEnabled }
     val totalCount: Int get() = skills.size
 }
 
@@ -25,9 +25,9 @@ class SkillStore(
     val state: StateFlow<SkillState> = _state.asStateFlow()
 
     suspend fun loadSkills(gatewayId: String) {
-        _state.value = _state.value.copy(isLoading = true)
+        _state.value = _state.value.copy(isLoading = true, errorMessage = null)
         try {
-            val skills = apiClient.fetchSkills(gatewayId)
+            val skills = sortSkills(apiClient.fetchSkills(gatewayId))
             _state.value = _state.value.copy(skills = skills, isLoading = false)
         } catch (e: Exception) {
             _state.value = _state.value.copy(isLoading = false, errorMessage = e.message)
@@ -38,7 +38,11 @@ class SkillStore(
         try {
             apiClient.updateSkill(gatewayId, skillKey, enabled, apiKey)
             val skills = _state.value.skills.map {
-                if (it.key == skillKey && enabled != null) it.copy(enabled = enabled) else it
+                if (it.effectiveKey == skillKey && enabled != null) {
+                    it.copy(enabled = enabled, disabled = !enabled)
+                } else {
+                    it
+                }
             }
             _state.value = _state.value.copy(skills = skills)
         } catch (e: Exception) {
@@ -52,5 +56,21 @@ class SkillStore(
 
     fun clearError() {
         _state.value = _state.value.copy(errorMessage = null)
+    }
+
+    companion object {
+        fun sortSkills(input: List<SkillItem>): List<SkillItem> {
+            return input.sortedWith(
+                compareBy<SkillItem> { skillAvailabilityPriority(it) }
+                    .thenBy(String.CASE_INSENSITIVE_ORDER) { it.effectiveName }
+            )
+        }
+
+        private fun skillAvailabilityPriority(skill: SkillItem): Int = when {
+            skill.blockedByAllowlist -> 3
+            !skill.isEnabled -> 2
+            skill.eligible == false || !skill.missing.isEmpty -> 1
+            else -> 0
+        }
     }
 }

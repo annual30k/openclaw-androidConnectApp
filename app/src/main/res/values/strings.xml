@@ -1404,4 +1404,137 @@ Tap the button below to refresh manually.</string>
     <string name="auth_access_code">Access Code</string>
     <string name="auth_pair_button">Pair gateway</string>
     <string name="auth_pairing_loading">Pairing…</string>
+
+    <!-- Advanced Screen -->
+    <string name="advanced_doctor_fix_hint_no_session">Please sign in and pair before running repair.</string>
+    <string name="advanced_doctor_fix_hint_no_gateway">Please select a gateway before running repair.</string>
+    <string name="advanced_doctor_fix_hint_locked">Gateway is recovering from restart. Repair is temporarily locked.</string>
+    <string name="advanced_doctor_fix_hint_readonly">Account has read-only access. Cannot run repair.</string>
+    <string name="advanced_doctor_fix_description">Auto-detect and attempt to fix environment dependencies and config issues.</string>
+    <string name="advanced_restart_gateway_detail2">Use when Gateway is online. Connection will briefly drop.</string>
+
+    <!-- Log Screen -->
+    <string name="log_title">View Logs</string>
+    <string name="log_hint_no_session">Please sign in and pair before viewing logs.</string>
+    <string name="log_hint_no_gateway">Please select a gateway before reading logs.</string>
+    <string name="log_metric_gateway">Current Gateway</string>
+    <string name="log_metric_fetch_time">Fetch Time</string>
+    <string name="log_last_loaded">N/A</string>
+    <string name="log_loading_title">Syncing Logs</string>
+    <string name="log_loading_subtitle">Pulling real-time log stream from remote gateway…</string>
+    <string name="log_empty_title">No Log Records</string>
+    <string name="log_empty_subtitle">Tap refresh in the top right, or pull down to load all logs.</string>
+    <string name="log_empty_refresh">Refresh Now</string>
+    <string name="log_no_match_title">No Matches Found</string>
+    <string name="log_no_match_subtitle">Try different search keywords</string>
+    <string name="log_search_placeholder">Search log content…</string>
+    <string name="log_load_failed">Load Failed</string>
+    <string name="log_error_prefix">Log read failed: %s</string>
+
+    <!-- Backup Screen -->
+    <string name="backup_title">Backup Management</string>
+    <string name="backup_hint_no_session">Please sign in and select a gateway before managing backups.</string>
+    <string name="backup_hint_locked">Gateway is recovering from restart. Backup operations are temporarily locked.</string>
+    <string name="backup_hint_readonly">Account has read-only access. Cannot manage backups.</string>
+    <string name="backup_access_limit">Access Restricted</string>
+    <string name="backup_action_message_title">Backup</string>
+    <string name="backup_hero_subtitle">Host local backup management</string>
+    <string name="backup_hero_count_label">Backup Count</string>
+    <string name="backup_hero_latest">Last Backup</string>
+    <string name="backup_hero_storage_node">Storage Node</string>
+    <string name="backup_hero_storage_path">Physical Storage Path</string>
+    <string name="backup_latest_none">N/A</string>
+    <string name="backup_create_prompt">Ready for a new backup?</string>
+    <string name="backup_create_detail">Current config will be saved locally. Restore anytime.</string>
+    <string name="backup_list_title">Backup List</string>
+    <string name="backup_list_subtitle">Restore will directly replace the host\'s openclaw.json</string>
+    <string name="backup_empty_title">No Backups Yet</string>
+    <string name="backup_empty_subtitle">Create a local backup first. If OpenClaw breaks openclaw.json later, you can restore directly.</string>
+    <string name="backup_restore_button">Restore Backup</string>
+    <string name="backup_size_label">Size</string>
+    <string name="backup_delete_title">Delete Backup?</string>
+    <string name="backup_delete_message">This will delete \"%s\" and its metadata from the host.</string>
+    <string name="backup_delete_action">Delete</string>
+    <string name="backup_restore_title">Restore Backup?</string>
+    <string name="backup_restore_message">This will overwrite the host\'s openclaw.json with \"%s\". Verify content before continuing.</string>
+    <string name="backup_restore_action">Restore</string>
+    <string name="backup_editor_name_label">Backup Name</string>
+    <string name="backup_editor_name_placeholder">e.g. Pre-upgrade backup</string>
+    <string name="backup_editor_detail_label">Backup Details</string>
+    <string name="backup_editor_detail_placeholder">Add a note for easy identification when restoring</string>
+    <string name="backup_editor_filename_label">Filename</string>
+    <string name="backup_editor_filename_placeholder">e.g. openclaw-20260322-143000.json</string>
+    <string name="backup_editor_filename_hint">Recommended to keep .json suffix. Leave empty for auto-generation.</string>
+    <string name="backup_editor_save">Save</string>
+    <string name="backup_editor_create">Create</string>
+    <string name="backup_editor_no_detail">No notes</string>
+    <string name="backup_editor_unnamed">Unnamed Backup</string>
+
+    <!-- Maintenance Screen -->
+    <string name="maintenance_restart_gateway">Restart Gateway</string>
+    <string name="maintenance_remote_restart">Remote Restart</string>
+    <string name="maintenance_online_restart_detail">Use when gateway is still online. Connection will briefly drop before restart.</string>
+    <string name="maintenance_remote_restart_detail">When Gateway is stopped but Relay and Agent are online, directly start OpenClaw.</string>
+    <string name="maintenance_suggestion_title">Suggestion</string>
+    <string name="maintenance_suggestion_body">If you need to restore openclaw.json, select a backup from the backup page before restarting.</string>
+    <string name="maintenance_metric_elapsed">Elapsed</string>
+    <string name="maintenance_metric_status">Status</string>
+    <string name="maintenance_restart_waiting">Waiting for Restart</string>
+    <string name="maintenance_restart_waiting_detail">%s is restarting. The App will automatically check if the desktop has returned to the chat list.</string>
+    <string name="maintenance_restart_waiting_timeout">Restart Wait Timed Out</string>
+    <string name="maintenance_restart_timeout_detail">The desktop hasn\'t returned to the chat list yet. You can retry manually or cancel to resume.</string>
+    <string name="maintenance_restart_sending_request">Sending Restart Request</string>
+    <string name="maintenance_restart_sending_detail">Restart request for %s is being sent. Please wait.</string>
+    <string name="maintenance_restart_status_checking">Auto Checking</string>
+    <string name="maintenance_restart_status_sending">Sending Request</string>
+    <string name="maintenance_restart_status_timeout">Timed Out</string>
+    <string name="maintenance_restart_status_waiting_long">Waiting a While</string>
+    <string name="maintenance_cancel_wait">Cancel Wait</string>
+    <string name="maintenance_cancel_disclaimer">Cancelling only unlocks local state. It won\'t cancel the restart command already sent.</string>
+    <string name="maintenance_retry">Retry Check</string>
+    <string name="maintenance_retrying">Retrying</string>
+    <string name="maintenance_hint_no_session">Please sign in and select a gateway before restarting.</string>
+    <string name="maintenance_hint_readonly">Account has read-only access. Cannot restart Gateway.</string>
+    <string name="maintenance_waiting_checking_hint">Keep this page open. It will unlock automatically after recovery.</string>
+    <string name="maintenance_waiting_sending_hint">Auto-check will continue after request is sent.</string>
+
+    <!-- Session Screen -->
+    <string name="session_nav_title">Sessions</string>
+    <string name="session_recent">Recent Sessions</string>
+    <string name="session_recent_subtitle_default">Current session is pinned. Others sorted by recent activity.</string>
+    <string name="session_recent_subtitle_can_delete">Current session is pinned. Others sorted by recent activity. Swipe left to delete.</string>
+    <string name="session_empty_title">No Available Sessions</string>
+    <string name="session_empty_hint">Send a message in the chat, or tap \"New Session\" above to create one.</string>
+    <string name="session_delete_title">Delete Session?</string>
+    <string name="session_delete_titled">Delete \"%s\"?</string>
+    <string name="session_delete_message">This will archive the session transcript and remove it from the list.</string>
+    <string name="session_delete_action">Delete</string>
+    <string name="session_hint_can_delete">Swipe left to delete sessions. Main session is always kept.</string>
+    <string name="session_hint_cannot_delete">Main session cannot be deleted.</string>
+    <string name="session_status_main">Main</string>
+    <string name="session_status_current">Current</string>
+    <string name="session_status_debug">Debug</string>
+    <string name="session_action_create_session">New Session</string>
+    <string name="session_action_switch_gateway">Switch Gateway</string>
+
+    <!-- Voice Setup Screen -->
+    <string name="voice_setup_title">Voice Reply Setup</string>
+    <string name="voice_settings_title">Voice Parameters</string>
+    <string name="voice_settings_subtitle">Choose a voice and adjust the speed to a comfortable pace.</string>
+    <string name="voice_settings_voice">Voice</string>
+    <string name="voice_settings_speed">Speed</string>
+    <string name="voice_settings_slow">Slow</string>
+    <string name="voice_settings_fast">Fast</string>
+    <string name="voice_settings_auto_select">Auto Select</string>
+    <string name="voice_settings_lively_female">Lively Female</string>
+    <string name="voice_settings_chinese_male">Chinese Male</string>
+    <string name="voice_settings_english_female">English Female</string>
+    <string name="voice_settings_english_male">English Male</string>
+    <string name="voice_settings_edge_tts_hint">edge-tts-universal will prioritize these values; system voice is only used as a fallback.</string>
+
+    <!-- Language Screen -->
+    <string name="language_title">Language</string>
+    <string name="language_system">Follow System</string>
+    <string name="language_chinese">简体中文</string>
+    <string name="language_english">English</string>
 </resources>

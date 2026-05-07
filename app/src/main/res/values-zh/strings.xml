@@ -1403,4 +1403,137 @@
     <string name="auth_access_code">配对码</string>
     <string name="auth_pair_button">立即配对</string>
     <string name="auth_pairing_loading">正在配对…</string>
+
+    <!-- Advanced Screen -->
+    <string name="advanced_doctor_fix_hint_no_session">请先登录并完成配对后再执行修复。</string>
+    <string name="advanced_doctor_fix_hint_no_gateway">请先选择一个网关后再执行修复。</string>
+    <string name="advanced_doctor_fix_hint_locked">当前网关正在重启恢复中，修复操作暂时锁定。</string>
+    <string name="advanced_doctor_fix_hint_readonly">当前账号只有只读权限，不能执行修复。</string>
+    <string name="advanced_doctor_fix_description">自动检测并尝试修复环境依赖与配置异常。</string>
+    <string name="advanced_restart_gateway_detail2">Gateway 在线时使用，会短暂中断当前连接。</string>
+
+    <!-- Log Screen -->
+    <string name="log_title">查看日志</string>
+    <string name="log_hint_no_session">请先登录并完成配对后再查看日志。</string>
+    <string name="log_hint_no_gateway">请先选择一个网关后再读取日志。</string>
+    <string name="log_metric_gateway">当前网关</string>
+    <string name="log_metric_fetch_time">拉取时间</string>
+    <string name="log_last_loaded">暂无</string>
+    <string name="log_loading_title">正在同步日志</string>
+    <string name="log_loading_subtitle">正在从远程网关拉取实时日志流…</string>
+    <string name="log_empty_title">暂无日志记录</string>
+    <string name="log_empty_subtitle">点击右上角刷新，或者下拉页面读取全部日志。</string>
+    <string name="log_empty_refresh">立即刷新</string>
+    <string name="log_no_match_title">未找到匹配内容</string>
+    <string name="log_no_match_subtitle">请尝试更换搜索关键字</string>
+    <string name="log_search_placeholder">搜索日志内容…</string>
+    <string name="log_load_failed">读取失败</string>
+    <string name="log_error_prefix">日志读取失败：%s</string>
+
+    <!-- Backup Screen -->
+    <string name="backup_title">备份管理</string>
+    <string name="backup_hint_no_session">请先登录并选择一个网关后再管理备份。</string>
+    <string name="backup_hint_locked">当前网关正在重启恢复中，备份操作暂时锁定。等待恢复后再继续。</string>
+    <string name="backup_hint_readonly">当前账号只有只读权限，不能管理备份。</string>
+    <string name="backup_access_limit">访问限制</string>
+    <string name="backup_action_message_title">备份</string>
+    <string name="backup_hero_subtitle">宿主机本地备份管理</string>
+    <string name="backup_hero_count_label">备份数量</string>
+    <string name="backup_hero_latest">最后备份</string>
+    <string name="backup_hero_storage_node">存储节点</string>
+    <string name="backup_hero_storage_path">物理存储路径</string>
+    <string name="backup_latest_none">暂无</string>
+    <string name="backup_create_prompt">准备好新的备份了吗？</string>
+    <string name="backup_create_detail">当前配置将被保存到本地，随时可恢复。</string>
+    <string name="backup_list_title">备份列表</string>
+    <string name="backup_list_subtitle">恢复操作将直接替换宿主机的 openclaw.json</string>
+    <string name="backup_empty_title">还没有备份</string>
+    <string name="backup_empty_subtitle">先创建一份宿主机本地备份，后续 OpenClaw 改坏 openclaw.json 时可以直接恢复。</string>
+    <string name="backup_restore_button">恢复备份</string>
+    <string name="backup_size_label">大小</string>
+    <string name="backup_delete_title">删除备份？</string>
+    <string name="backup_delete_message">这会从宿主机删除「%s」和它的元数据。</string>
+    <string name="backup_delete_action">删除</string>
+    <string name="backup_restore_title">恢复备份？</string>
+    <string name="backup_restore_message">将用「%s」覆盖宿主机上的 openclaw.json。建议确认内容无误后再继续。</string>
+    <string name="backup_restore_action">恢复</string>
+    <string name="backup_editor_name_label">备份名称</string>
+    <string name="backup_editor_name_placeholder">例如：升级前备份</string>
+    <string name="backup_editor_detail_label">备份详情</string>
+    <string name="backup_editor_detail_placeholder">写一点备注，方便以后恢复时识别</string>
+    <string name="backup_editor_filename_label">文件名</string>
+    <string name="backup_editor_filename_placeholder">例如：openclaw-20260322-143000.json</string>
+    <string name="backup_editor_filename_hint">建议保留 .json 结尾。留空会由宿主机自动生成。</string>
+    <string name="backup_editor_save">保存</string>
+    <string name="backup_editor_create">创建</string>
+    <string name="backup_editor_no_detail">没有备注</string>
+    <string name="backup_editor_unnamed">未命名备份</string>
+
+    <!-- Maintenance Screen -->
+    <string name="maintenance_restart_gateway">重启 Gateway</string>
+    <string name="maintenance_remote_restart">远程重启</string>
+    <string name="maintenance_online_restart_detail">网关仍在线时使用，会短暂中断当前连接后再拉起。</string>
+    <string name="maintenance_remote_restart_detail">当 Gateway 已停止、但 Relay 和 Agent 仍在线时，直接拉起 OpenClaw。</string>
+    <string name="maintenance_suggestion_title">建议</string>
+    <string name="maintenance_suggestion_body">如果需要恢复 openclaw.json，请先在备份页面选择备份后再执行重启。</string>
+    <string name="maintenance_metric_elapsed">已等待</string>
+    <string name="maintenance_metric_status">状态</string>
+    <string name="maintenance_restart_waiting">重启等待中</string>
+    <string name="maintenance_restart_waiting_detail">%s 正在重启，App 会自动检查电脑端是否已经重新回到聊天列表。</string>
+    <string name="maintenance_restart_waiting_timeout">重启等待超时</string>
+    <string name="maintenance_restart_timeout_detail">电脑端暂时还没有回到聊天列表。你可以手动重试检查，或者取消等待先恢复页面操作。</string>
+    <string name="maintenance_restart_sending_request">正在发送重启请求</string>
+    <string name="maintenance_restart_sending_detail">%s 的重启请求正在发送，请稍候。</string>
+    <string name="maintenance_restart_status_checking">自动检查中</string>
+    <string name="maintenance_restart_status_sending">请求发送中</string>
+    <string name="maintenance_restart_status_timeout">等待超时</string>
+    <string name="maintenance_restart_status_waiting_long">已等待较久</string>
+    <string name="maintenance_cancel_wait">取消等待</string>
+    <string name="maintenance_cancel_disclaimer">取消等待只会解除本地锁定，不会撤销已经发出的重启命令。</string>
+    <string name="maintenance_retry">重试检查</string>
+    <string name="maintenance_retrying">重试中</string>
+    <string name="maintenance_hint_no_session">请先登录并选择一个网关后再执行重启。</string>
+    <string name="maintenance_hint_readonly">当前账号只有只读权限，不能重启 Gateway。</string>
+    <string name="maintenance_waiting_checking_hint">请保持当前页面打开，恢复后会自动解锁。</string>
+    <string name="maintenance_waiting_sending_hint">请求发送完成后会继续自动检查。</string>
+
+    <!-- Session Screen -->
+    <string name="session_nav_title">会话</string>
+    <string name="session_recent">最近会话</string>
+    <string name="session_recent_subtitle_default">当前会话固定置顶，其余会话按最近活动排序</string>
+    <string name="session_recent_subtitle_can_delete">当前会话固定置顶，其余会话按最近活动排序，支持左滑删除</string>
+    <string name="session_empty_title">暂无可用会话</string>
+    <string name="session_empty_hint">先在聊天页发送一条消息，或点按上方"新建会话"创建新的会话。</string>
+    <string name="session_delete_title">删除会话？</string>
+    <string name="session_delete_titled">删除「%s」？</string>
+    <string name="session_delete_message">删除后会归档这个会话的 transcript，并从当前列表移除。</string>
+    <string name="session_delete_action">删除</string>
+    <string name="session_hint_can_delete">左滑会话可删除，主会话仍然保留。</string>
+    <string name="session_hint_cannot_delete">主会话不支持删除。</string>
+    <string name="session_status_main">主会话</string>
+    <string name="session_status_current">当前</string>
+    <string name="session_status_debug">联调</string>
+    <string name="session_action_create_session">新建会话</string>
+    <string name="session_action_switch_gateway">切换网关</string>
+
+    <!-- Voice Setup Screen -->
+    <string name="voice_setup_title">语音回复设置</string>
+    <string name="voice_settings_title">语音参数</string>
+    <string name="voice_settings_subtitle">选一个常用音色，再把语速调到舒服的节奏。</string>
+    <string name="voice_settings_voice">声音</string>
+    <string name="voice_settings_speed">语速</string>
+    <string name="voice_settings_slow">慢</string>
+    <string name="voice_settings_fast">快</string>
+    <string name="voice_settings_auto_select">自动选择</string>
+    <string name="voice_settings_lively_female">活泼女声</string>
+    <string name="voice_settings_chinese_male">中文男声</string>
+    <string name="voice_settings_english_female">英文女声</string>
+    <string name="voice_settings_english_male">英文男声</string>
+    <string name="voice_settings_edge_tts_hint">edge-tts-universal 会优先使用这里的值，系统语音只做兜底。</string>
+
+    <!-- Language Screen -->
+    <string name="language_title">语言</string>
+    <string name="language_system">跟随系统</string>
+    <string name="language_chinese">简体中文</string>
+    <string name="language_english">English</string>
 </resources>
