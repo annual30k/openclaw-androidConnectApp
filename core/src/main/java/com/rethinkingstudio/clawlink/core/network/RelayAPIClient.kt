@@ -6,6 +6,7 @@ import com.rethinkingstudio.clawlink.core.models.catalog.ModelItem
 import com.rethinkingstudio.clawlink.core.models.chat.ChatSessionItem
 import com.rethinkingstudio.clawlink.core.models.gateway.GatewaySummary
 import com.rethinkingstudio.clawlink.core.models.skills.SkillItem
+import com.rethinkingstudio.clawlink.core.models.tasks.TaskDraft
 import com.rethinkingstudio.clawlink.core.models.tasks.TaskItem
 import com.rethinkingstudio.clawlink.core.network.dto.*
 import io.ktor.client.*
@@ -278,17 +279,19 @@ class RelayAPIClient(
         return response.items
     }
 
-    suspend fun createTask(gatewayId: String, title: String, prompt: String, scheduleKind: String, scheduleAt: String? = null, repeatAmount: String? = null, repeatUnit: String? = null): TaskItem {
-        val body = mapOf("title" to title, "prompt" to prompt, "scheduleKind" to scheduleKind, "scheduleAt" to scheduleAt, "repeatAmount" to repeatAmount, "repeatUnit" to repeatUnit)
-        val response: TaskDetailResponse = request(APIEndpoints.Mobile.Task.create(gatewayId), body)
+    suspend fun createTask(gatewayId: String, draft: TaskDraft): TaskItem {
+        val response: TaskDetailResponse = request(APIEndpoints.Mobile.Task.create(gatewayId), draft)
         return response.task
     }
 
-    suspend fun updateTask(gatewayId: String, taskId: String, enabled: Boolean? = null, title: String? = null, prompt: String? = null): TaskItem {
+    suspend fun updateTask(gatewayId: String, taskId: String, draft: TaskDraft): TaskItem {
+        val response: TaskDetailResponse = request(APIEndpoints.Mobile.Task.update(gatewayId, taskId), draft)
+        return response.task
+    }
+
+    suspend fun setTaskEnabled(gatewayId: String, taskId: String, enabled: Boolean): TaskItem {
         val body = mutableMapOf<String, Any?>()
-        if (enabled != null) body["enabled"] = enabled
-        if (title != null) body["title"] = title
-        if (prompt != null) body["prompt"] = prompt
+        body["enabled"] = enabled
         val response: TaskDetailResponse = request(APIEndpoints.Mobile.Task.update(gatewayId, taskId), body)
         return response.task
     }
