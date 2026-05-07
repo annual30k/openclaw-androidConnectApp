@@ -1001,6 +1001,7 @@
     <string name="settings_row_check_update_detail">打开 App Store</string>
 
     <string name="settings_row_language">语言</string>
+    <string name="settings_row_advanced">高级设置</string>
 
     <string name="settings_row_models">模型</string>
     <string name="settings_row_backups">备份管理</string>
