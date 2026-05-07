@@ -988,9 +988,9 @@
     <string name="advanced_remote_restart_confirm_message">这将对远程宿主机执行完整的系统重启。此操作不可撤销，请确认主机已保存所有工作。</string>
     <string name="advanced_prefs_show_tools">显示工具调用过程</string>
     <string name="advanced_prefs_show_tools_detail">在聊天中展示后台工具调用的详细过程。</string>
-    <string name="advanced_doctor_fix">Doctor Fix</string>
+    <string name="advanced_doctor_fix">OpenClaw 修复</string>
     <string name="advanced_doctor_fix_detail">在网关上运行全面的诊断和修复脚本。</string>
-    <string name="advanced_doctor_fix_execute">执行 Doctor Fix</string>
+    <string name="advanced_doctor_fix_execute">执行 OpenClaw 修复</string>
     <string name="advanced_backups">备份管理</string>
     <string name="advanced_backups_detail">管理并恢复系统配置备份。</string>
     <string name="advanced_logs">系统日志</string>

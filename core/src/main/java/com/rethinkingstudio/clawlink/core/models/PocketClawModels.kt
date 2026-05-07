@@ -32,3 +32,9 @@ data class LogEntry(
     val timestamp: String? = null,
     val level: String? = null
 )
+@Serializable
+data class MaintenanceLogEntry(
+    val timestamp: Long,
+    val stream: String,
+    val text: String
+)

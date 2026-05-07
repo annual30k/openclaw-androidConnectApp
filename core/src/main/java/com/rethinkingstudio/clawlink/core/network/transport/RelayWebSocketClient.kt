@@ -155,6 +155,19 @@ class RelayWebSocketClient {
         send(payload.toString())
     }
 
+    fun executeCommand(gatewayId: String, method: String, params: JsonObject? = null, requestId: String = UUID.randomUUID().toString()) {
+        val payload = buildJsonObject {
+            put("type", JsonPrimitive("cmd"))
+            put("id", JsonPrimitive(requestId))
+            put("gatewayId", JsonPrimitive(gatewayId))
+            put("method", JsonPrimitive(method))
+            if (params != null) {
+                put("params", params)
+            }
+        }
+        send(payload.toString())
+    }
+
     fun syncVoiceReplyConfig(
         gatewayId: String,
         sessionKey: String,

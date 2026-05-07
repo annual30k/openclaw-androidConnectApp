@@ -340,7 +340,6 @@ fun AppNavigation(
         composable(Routes.DOCTOR_FIX) {
             com.rethinkingstudio.clawlink.ui.screens.settings.DoctorFixScreen(
                 gatewayStore = container.gatewayStore,
-                apiClient = container.apiClient,
                 onBack = { navController.popBackStack() }
             )
         }
@@ -349,7 +348,6 @@ fun AppNavigation(
             GatewayMaintenanceScreen(
                 mode = MaintenanceMode.RESTART,
                 gatewayStore = container.gatewayStore,
-                apiClient = container.apiClient,
                 onBack = { navController.popBackStack() }
             )
         }
@@ -358,7 +356,6 @@ fun AppNavigation(
             GatewayMaintenanceScreen(
                 mode = MaintenanceMode.REMOTE_RESTART,
                 gatewayStore = container.gatewayStore,
-                apiClient = container.apiClient,
                 onBack = { navController.popBackStack() }
             )
         }

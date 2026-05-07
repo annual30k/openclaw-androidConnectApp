@@ -989,9 +989,9 @@ Tap the button below to refresh manually.</string>
     <string name="advanced_remote_restart_confirm_message">This will perform a full system reboot of the remote host. This action cannot be undone.</string>
     <string name="advanced_prefs_show_tools">Show Tool Invocation</string>
     <string name="advanced_prefs_show_tools_detail">Display the background tool calling process in the chat.</string>
-    <string name="advanced_doctor_fix">Doctor Fix</string>
+    <string name="advanced_doctor_fix">OpenClaw Fix</string>
     <string name="advanced_doctor_fix_detail">Run a comprehensive diagnostic and repair script on the gateway.</string>
-    <string name="advanced_doctor_fix_execute">Execute Doctor Fix</string>
+    <string name="advanced_doctor_fix_execute">Execute OpenClaw Fix</string>
     <string name="advanced_backups">Backups</string>
     <string name="advanced_backups_detail">Manage and restore system configuration backups.</string>
     <string name="advanced_logs">Logs</string>
