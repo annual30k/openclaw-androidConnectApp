@@ -29,6 +29,8 @@ import com.rethinkingstudio.clawlink.ui.screens.model.ModelCatalogScreen
 import com.rethinkingstudio.clawlink.ui.screens.settings.SettingsScreen
 import com.rethinkingstudio.clawlink.ui.screens.settings.AdvancedScreen
 import com.rethinkingstudio.clawlink.ui.screens.settings.HelpScreen
+import com.rethinkingstudio.clawlink.ui.screens.settings.GatewayMaintenanceScreen
+import com.rethinkingstudio.clawlink.ui.screens.settings.MaintenanceMode
 import com.rethinkingstudio.clawlink.ui.screens.skills.SkillsScreen
 import com.rethinkingstudio.clawlink.ui.screens.tasks.TasksScreen
 import com.rethinkingstudio.clawlink.ui.screens.welcome.WelcomeCarouselScreen
@@ -53,6 +55,8 @@ object Routes {
     const val LOGS = "logs"
     const val BACKUPS = "backups"
     const val DOCTOR_FIX = "doctor_fix"
+    const val MAINTENANCE_RESTART = "maintenance_restart"
+    const val MAINTENANCE_REMOTE_RESTART = "maintenance_remote_restart"
 }
 
 @Composable
@@ -245,9 +249,10 @@ fun AppNavigation(
 
         composable(Routes.ADVANCED) {
             AdvancedScreen(
-                gatewayStore = container.gatewayStore,
                 prefsStore = container.userPreferencesStore,
                 onBack = { navController.popBackStack() },
+                onNavigateToRestartGateway = { navController.navigate(Routes.MAINTENANCE_RESTART) },
+                onNavigateToRemoteRestart = { navController.navigate(Routes.MAINTENANCE_REMOTE_RESTART) },
                 onNavigateToBackups = { navController.navigate(Routes.BACKUPS) },
                 onNavigateToLogs = { navController.navigate(Routes.LOGS) },
                 onNavigateToDoctorFix = { navController.navigate(Routes.DOCTOR_FIX) }
@@ -262,12 +267,17 @@ fun AppNavigation(
 
         composable(Routes.SESSIONS) {
             com.rethinkingstudio.clawlink.ui.screens.settings.SessionsScreen(
-                onBack = { navController.popBackStack() }
+                gatewayStore = container.gatewayStore,
+                chatStore = container.chatStore,
+                apiClient = container.apiClient,
+                onBack = { navController.popBackStack() },
+                onNavigateToGateways = { navController.navigate(Routes.GATEWAYS) }
             )
         }
 
         composable(Routes.VOICE_SETUP) {
             com.rethinkingstudio.clawlink.ui.screens.settings.VoiceSetupScreen(
+                prefsStore = container.userPreferencesStore,
                 onBack = { navController.popBackStack() }
             )
         }
@@ -280,8 +290,8 @@ fun AppNavigation(
 
         composable(Routes.BACKUPS) {
             com.rethinkingstudio.clawlink.ui.screens.settings.BackupScreen(
-                backupStore = container.backupStore,
                 gatewayStore = container.gatewayStore,
+                apiClient = container.apiClient,
                 onBack = { navController.popBackStack() }
             )
         }
@@ -297,6 +307,25 @@ fun AppNavigation(
         composable(Routes.DOCTOR_FIX) {
             com.rethinkingstudio.clawlink.ui.screens.settings.DoctorFixScreen(
                 gatewayStore = container.gatewayStore,
+                apiClient = container.apiClient,
+                onBack = { navController.popBackStack() }
+            )
+        }
+
+        composable(Routes.MAINTENANCE_RESTART) {
+            GatewayMaintenanceScreen(
+                mode = MaintenanceMode.RESTART,
+                gatewayStore = container.gatewayStore,
+                apiClient = container.apiClient,
+                onBack = { navController.popBackStack() }
+            )
+        }
+
+        composable(Routes.MAINTENANCE_REMOTE_RESTART) {
+            GatewayMaintenanceScreen(
+                mode = MaintenanceMode.REMOTE_RESTART,
+                gatewayStore = container.gatewayStore,
+                apiClient = container.apiClient,
                 onBack = { navController.popBackStack() }
             )
         }

@@ -1254,7 +1254,17 @@ class ChatStore(
 
     fun newSession() {
         val key = "session_${System.currentTimeMillis()}"
-        _state.value = _state.value.copy(currentSessionKey = key, messages = emptyList())
+        val current = _state.value
+        val session = ChatSessionItem(sessionKey = key, lastActivityAt = null)
+        val sessions = (listOf(session) + current.sessions)
+            .distinctBy { it.sessionKey.trim().lowercase().ifBlank { defaultSessionKey } }
+        _state.value = current.copy(
+            currentSessionKey = key,
+            sessions = sessions,
+            messages = emptyList(),
+            isSwitchingSession = false,
+            errorMessage = null
+        )
     }
 
     fun toggleShowInvocation() {
