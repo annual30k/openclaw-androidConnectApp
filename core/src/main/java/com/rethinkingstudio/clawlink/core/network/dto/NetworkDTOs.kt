@@ -481,4 +481,19 @@ data class AdvancedActionLogEntry(
 )
 
 @Serializable
+data class BackupListResponse(
+    val backups: List<BackupItem>,
+    val maxBackups: Int = 5,
+    val storagePath: String? = null
+)
+
+@Serializable
+data class BackupMutationResponse(
+    val backup: BackupItem,
+    val backups: List<BackupItem>,
+    val maxBackups: Int = 5,
+    val storagePath: String? = null
+)
+
+@Serializable
 class EmptyResponse

@@ -1,5 +1,6 @@
 package com.rethinkingstudio.clawlink.core.state.backup
 
+import com.rethinkingstudio.clawlink.core.models.backups.BackupDraft
 import com.rethinkingstudio.clawlink.core.models.backups.BackupItem
 import com.rethinkingstudio.clawlink.core.network.RelayAPIClient
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -8,6 +9,8 @@ import kotlinx.coroutines.flow.asStateFlow
 
 data class BackupState(
     val backups: List<BackupItem> = emptyList(),
+    val maxBackups: Int = 5,
+    val storagePath: String? = null,
     val isLoading: Boolean = false,
     val errorMessage: String? = null
 )
@@ -21,17 +24,26 @@ class BackupStore(
     suspend fun loadBackups(gatewayId: String) {
         _state.value = _state.value.copy(isLoading = true)
         try {
-            val backups = apiClient.fetchBackups(gatewayId)
-            _state.value = _state.value.copy(backups = backups, isLoading = false)
+            val response = apiClient.fetchBackups(gatewayId)
+            _state.value = _state.value.copy(
+                backups = response.backups,
+                maxBackups = response.maxBackups,
+                storagePath = response.storagePath,
+                isLoading = false
+            )
         } catch (e: Exception) {
             _state.value = _state.value.copy(isLoading = false, errorMessage = e.message)
         }
     }
 
-    suspend fun createBackup(gatewayId: String, label: String, note: String? = null) {
+    suspend fun createBackup(gatewayId: String, draft: BackupDraft) {
         try {
-            val backup = apiClient.createBackup(gatewayId, label, note)
-            _state.value = _state.value.copy(backups = _state.value.backups + backup)
+            val response = apiClient.createBackup(gatewayId, draft)
+            _state.value = _state.value.copy(
+                backups = response.backups,
+                maxBackups = response.maxBackups,
+                storagePath = response.storagePath
+            )
         } catch (e: Exception) {
             _state.value = _state.value.copy(errorMessage = e.message)
         }
@@ -39,8 +51,12 @@ class BackupStore(
 
     suspend fun deleteBackup(gatewayId: String, backupId: String) {
         try {
-            apiClient.deleteBackup(gatewayId, backupId)
-            _state.value = _state.value.copy(backups = _state.value.backups.filter { it.id != backupId })
+            val response = apiClient.deleteBackup(gatewayId, backupId)
+            _state.value = _state.value.copy(
+                backups = response.backups,
+                maxBackups = response.maxBackups,
+                storagePath = response.storagePath
+            )
         } catch (e: Exception) {
             _state.value = _state.value.copy(errorMessage = e.message)
         }
@@ -48,7 +64,12 @@ class BackupStore(
 
     suspend fun restoreBackup(gatewayId: String, backupId: String) {
         try {
-            apiClient.restoreBackup(gatewayId, backupId)
+            val response = apiClient.restoreBackup(gatewayId, backupId)
+            _state.value = _state.value.copy(
+                backups = response.backups,
+                maxBackups = response.maxBackups,
+                storagePath = response.storagePath
+            )
         } catch (e: Exception) {
             _state.value = _state.value.copy(errorMessage = e.message)
         }

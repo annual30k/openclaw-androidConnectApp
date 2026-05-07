@@ -5,19 +5,19 @@ import kotlinx.serialization.Serializable
 @Serializable
 data class BackupItem(
     val id: String,
-    val label: String,
-    val note: String? = null,
-    val createdAt: String,
-    val status: String = "ready",
+    val title: String,
+    val detail: String = "",
+    val filename: String = "",
     val sizeBytes: Long? = null,
-    val gatewayId: String
+    val createdAt: String,
+    val updatedAt: String = ""
 ) {
-    val displayLabel: String get() = label.ifBlank { "Backup ${createdAt.take(10)}" }
-    val isReady: Boolean get() = status == "ready"
+    val displayLabel: String get() = title.ifBlank { "Backup ${createdAt.take(10)}" }
 }
 
 @Serializable
 data class BackupDraft(
-    val label: String = "",
-    val note: String = ""
+    var title: String = "",
+    var detail: String = "",
+    var filename: String = ""
 )

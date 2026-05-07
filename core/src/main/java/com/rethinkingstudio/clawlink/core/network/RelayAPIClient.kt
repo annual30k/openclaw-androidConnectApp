@@ -1,6 +1,7 @@
 package com.rethinkingstudio.clawlink.core.network
 
 import com.rethinkingstudio.clawlink.core.models.SessionCredentials
+import com.rethinkingstudio.clawlink.core.models.backups.BackupDraft
 import com.rethinkingstudio.clawlink.core.models.backups.BackupItem
 import com.rethinkingstudio.clawlink.core.models.catalog.ModelItem
 import com.rethinkingstudio.clawlink.core.models.chat.ChatSessionItem
@@ -307,32 +308,29 @@ class RelayAPIClient(
 
     // ── Backups ──────────────────────────────────────────────────────────
 
-    suspend fun fetchBackups(gatewayId: String): List<BackupItem> {
-        val body: Map<String, List<BackupItem>>? = null
+    suspend fun fetchBackups(gatewayId: String): BackupListResponse {
         val response = httpClient.request(buildUrl(APIEndpoints.Mobile.Backup.list(gatewayId))) {
             method = HttpMethod.Get
             if (accessToken.isNotBlank()) header(HttpHeaders.Authorization, "Bearer $accessToken")
         }
         return try {
-            val wrapper = response.body<Map<String, List<BackupItem>>>()
-            wrapper["backups"] ?: emptyList()
+            response.body<BackupListResponse>()
         } catch (_: Exception) {
-            try { response.body<List<BackupItem>>() } catch (_: Exception) { emptyList() }
+            val list = try { response.body<List<BackupItem>>() } catch (_: Exception) { emptyList() }
+            BackupListResponse(backups = list)
         }
     }
 
-    suspend fun createBackup(gatewayId: String, label: String, note: String? = null): BackupItem {
-        val body = mapOf("label" to label, "note" to note)
-        val response: Map<String, BackupItem> = request(APIEndpoints.Mobile.Backup.create(gatewayId), body)
-        return response["backup"] ?: throw RelayAPIError.InvalidResponse
+    suspend fun createBackup(gatewayId: String, draft: BackupDraft): BackupMutationResponse {
+        return request(APIEndpoints.Mobile.Backup.create(gatewayId), draft)
     }
 
-    suspend fun deleteBackup(gatewayId: String, backupId: String) {
-        request<EmptyResponse>(APIEndpoints.Mobile.Backup.delete(gatewayId, backupId))
+    suspend fun deleteBackup(gatewayId: String, backupId: String): BackupMutationResponse {
+        return request(APIEndpoints.Mobile.Backup.delete(gatewayId, backupId))
     }
 
-    suspend fun restoreBackup(gatewayId: String, backupId: String) {
-        request<EmptyResponse>(APIEndpoints.Mobile.Backup.restore(gatewayId, backupId))
+    suspend fun restoreBackup(gatewayId: String, backupId: String): BackupMutationResponse {
+        return request(APIEndpoints.Mobile.Backup.restore(gatewayId, backupId))
     }
 
     // ── Logs ─────────────────────────────────────────────────────────────
