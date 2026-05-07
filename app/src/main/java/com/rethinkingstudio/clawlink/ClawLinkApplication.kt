@@ -94,6 +94,15 @@ class AppContainer(context: Context) {
     val taskStore: TaskStore = TaskStore(apiClient)
     val backupStore: BackupStore = BackupStore(apiClient)
     val userPreferencesStore: com.rethinkingstudio.clawlink.core.state.UserPreferencesStore = com.rethinkingstudio.clawlink.core.state.UserPreferencesStore(context)
+
+    init {
+        chatStore.updateVoiceReplyConfig(
+            enabled = userPreferencesStore.assistantVoiceRepliesEnabled.value,
+            hasGenerationSetup = false,
+            voiceIdentifier = userPreferencesStore.voiceReplyVoiceIdentifier.value,
+            ratePercent = userPreferencesStore.voiceReplyRatePercent.value
+        )
+    }
 }
 
 class ClawLinkApplication : Application() {

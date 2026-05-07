@@ -44,6 +44,7 @@ import com.google.accompanist.permissions.ExperimentalPermissionsApi
 import com.google.accompanist.permissions.isGranted
 import com.google.accompanist.permissions.rememberPermissionState
 import com.rethinkingstudio.clawlink.R
+import com.rethinkingstudio.clawlink.core.models.chat.ChatMessage
 import com.rethinkingstudio.clawlink.core.models.chat.MessageRole
 import com.rethinkingstudio.clawlink.core.models.chat.MessageState
 import com.rethinkingstudio.clawlink.core.models.gateway.AggregateStatus
@@ -260,9 +261,27 @@ fun ChatScreen(
                         )
                     }
 
-                    val displayMessages = remember(chatState.messages, chatState.showInvocationProcess) {
+                    val displayMessages = remember(
+                        chatState.messages,
+                        chatState.showInvocationProcess,
+                        chatState.assistantVoiceRepliesEffectiveEnabled,
+                        chatState.assistantVoiceRepliesEnabledAt,
+                        chatState.voiceReplyTextOnlyRunIds
+                    ) {
+                        val now = System.currentTimeMillis() / 1000.0
                         chatState.messages.filter { message ->
-                            message.shouldDisplayInChat(showInvocationProcess = chatState.showInvocationProcess) ||
+                            val forceDisplayText = message.isVoiceReplyTextOnlyCandidate(
+                                assistantVoiceRepliesEffectiveEnabled = chatState.assistantVoiceRepliesEffectiveEnabled,
+                                assistantVoiceRepliesEnabledAt = chatState.assistantVoiceRepliesEnabledAt,
+                                voiceReplyTextOnlyRunIds = chatState.voiceReplyTextOnlyRunIds,
+                                now = now
+                            )
+                            message.shouldDisplayInChat(
+                                showInvocationProcess = chatState.showInvocationProcess,
+                                assistantVoiceRepliesEnabled = chatState.assistantVoiceRepliesEffectiveEnabled,
+                                assistantVoiceRepliesEnabledAt = chatState.assistantVoiceRepliesEnabledAt,
+                                forceDisplayTextWhenVoiceRepliesEnabled = forceDisplayText
+                            ) ||
                                 message.state == MessageState.streaming && message.role == MessageRole.assistant
                         }
                     }
@@ -297,6 +316,12 @@ fun ChatScreen(
                         }
 
                         items(displayMessages, key = { message -> "$conversationAnimationKey:${message.id}" }) { message ->
+                            val isVoiceReplyTextOnly = message.isVoiceReplyTextOnlyCandidate(
+                                assistantVoiceRepliesEffectiveEnabled = chatState.assistantVoiceRepliesEffectiveEnabled,
+                                assistantVoiceRepliesEnabledAt = chatState.assistantVoiceRepliesEnabledAt,
+                                voiceReplyTextOnlyRunIds = chatState.voiceReplyTextOnlyRunIds,
+                                now = System.currentTimeMillis() / 1000.0
+                            )
                             ConversationMessageEnterAnimation(
                                 role = message.role,
                                 animationKey = "$conversationAnimationKey:${message.id}"
@@ -304,6 +329,7 @@ fun ChatScreen(
                                 MessageBubble(
                                     message = message,
                                     showInvocationProcess = chatState.showInvocationProcess,
+                                    isVoiceReplyTextOnly = isVoiceReplyTextOnly,
                                     relayBaseUrl = chatStore.relayBaseUrl,
                                     accessToken = chatStore.accessToken,
                                     onImageClick = { block, url, fileName ->
@@ -579,4 +605,18 @@ private fun ConversationMessageEnterAnimation(
     ) {
         content()
     }
+}
+
+private fun ChatMessage.isVoiceReplyTextOnlyCandidate(
+    assistantVoiceRepliesEffectiveEnabled: Boolean,
+    assistantVoiceRepliesEnabledAt: Double?,
+    voiceReplyTextOnlyRunIds: Set<String>,
+    now: Double
+): Boolean {
+    if (hasVoiceContent || hasFileContent) return false
+    if (role != MessageRole.assistant || !assistantVoiceRepliesEffectiveEnabled) return false
+    if (state == MessageState.streaming) return true
+    val timestamp = sortTimestamp ?: return false
+    val enabledAt = assistantVoiceRepliesEnabledAt ?: return false
+    return timestamp >= enabledAt - 2.0 && now - timestamp < 120.0
 }

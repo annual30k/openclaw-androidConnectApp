@@ -1,10 +1,14 @@
 package com.rethinkingstudio.clawlink.ui.screens.chat.components
 
+import android.media.MediaPlayer
 import android.text.method.LinkMovementMethod
+import android.net.Uri
+import android.widget.Toast
 import android.widget.TextView
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -25,6 +29,8 @@ import androidx.compose.material.icons.filled.AccessTime
 import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.GraphicEq
 import androidx.compose.material.icons.filled.Image
+import androidx.compose.material.icons.filled.Pause
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -32,10 +38,18 @@ import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -53,11 +67,17 @@ import com.rethinkingstudio.clawlink.core.state.chat.chatAttachmentCacheKey
 import com.rethinkingstudio.clawlink.core.state.chat.chatImageCacheKey
 import com.rethinkingstudio.clawlink.ui.screens.chat.ChatColors
 import java.io.File
+import java.net.HttpURLConnection
+import java.net.URL
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 @Composable
 internal fun MessageBubble(
     message: ChatMessage,
     showInvocationProcess: Boolean,
+    isVoiceReplyTextOnly: Boolean = false,
     relayBaseUrl: String,
     accessToken: String,
     onImageClick: (block: RelayChatContentBlock, url: String, fileName: String?) -> Unit = { _, _, _ -> },
@@ -71,31 +91,49 @@ internal fun MessageBubble(
         parseSendFileOutputBlocks(message.plainTextContent)
     } else emptyList()
     val fileBlocks = message.fileContentBlocks + syntheticFileBlocks
+    val voiceBlocks = message.voiceContentBlocks
     val rawDisplayText = if (syntheticFileBlocks.isNotEmpty()) "" else message.plainTextContent
-    val displayText = if (fileBlocks.isNotEmpty()) {
+    val displayText = if (fileBlocks.isNotEmpty() || voiceBlocks.isNotEmpty()) {
         val trimmed = rawDisplayText.trim()
-        val shouldSuppress = fileBlocks.any { block ->
+        val shouldSuppressFileText = fileBlocks.any { block ->
             val name = block.fileDisplayName?.trim().orEmpty()
             val status = block.fileStatusText?.trim().orEmpty()
             (name.isNotEmpty() && trimmed == name) || (status.isNotEmpty() && trimmed == status)
         }
-        if (shouldSuppress) "" else rawDisplayText
+        val shouldSuppressVoiceText = voiceBlocks.any { block ->
+            val name = block.fileDisplayName?.trim().orEmpty()
+            val status = block.voiceStatusText?.trim().orEmpty()
+            val transcript = block.voiceTranscriptText?.trim().orEmpty()
+            (name.isNotEmpty() && trimmed == name) ||
+                (status.isNotEmpty() && trimmed == status) ||
+                (transcript.isNotEmpty() && trimmed == transcript)
+        } || (message.role == MessageRole.assistant && voiceBlocks.isNotEmpty())
+        if (shouldSuppressFileText || shouldSuppressVoiceText) "" else rawDisplayText
     } else rawDisplayText
-    val isStandaloneFileMessage = !isTool && displayText.isBlank() && fileBlocks.isNotEmpty() && message.voiceContentBlocks.isEmpty()
+    val isStandaloneFileMessage = !isTool && displayText.isBlank() && fileBlocks.isNotEmpty() && voiceBlocks.isEmpty()
+    val isStandaloneVoiceMessage = !isTool && displayText.isBlank() && voiceBlocks.isNotEmpty() && fileBlocks.isEmpty()
 
     Column(modifier = Modifier.fillMaxWidth(), horizontalAlignment = if (isUser) Alignment.End else Alignment.Start) {
         if (isTool) {
             ToolMessageCard(message = message, visibleToolBlocks = visibleToolBlocks, showInvocationProcess = showInvocationProcess, modifier = Modifier.padding(vertical = 2.dp))
             return@Column
         }
-    if (isStandaloneFileMessage) {
+        if (isStandaloneVoiceMessage) {
+            StandaloneVoiceMessage(blocks = voiceBlocks, isUser = isUser, createdAt = message.createdAt, relayBaseUrl = relayBaseUrl, accessToken = accessToken)
+            return@Column
+        }
+        if (!isUser && isVoiceReplyTextOnly && fileBlocks.isEmpty() && voiceBlocks.isEmpty()) {
+            LoadingVoiceMessage(createdAt = message.createdAt)
+            return@Column
+        }
+        if (isStandaloneFileMessage) {
             StandaloneFileMessage(blocks = fileBlocks, isUser = isUser, messageState = message.state, createdAt = message.createdAt, relayBaseUrl = relayBaseUrl, accessToken = accessToken, onImageClick = onImageClick, onFileClick = onFileClick)
             return@Column
         }
         if (!isUser && message.state == MessageState.streaming && (
             displayText.isBlank() || displayText.startsWith("正在连接") || displayText.startsWith("连接中断") ||
             displayText == "正在同步回复..." || displayText == "正在同步最终内容..." || displayText == "已完成，但未返回文本。"
-        ) && fileBlocks.isEmpty() && message.voiceContentBlocks.isEmpty()) {
+        ) && fileBlocks.isEmpty() && voiceBlocks.isEmpty()) {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 StreamingIndicatorBubble()
                 Text("ClawLink", modifier = Modifier.padding(horizontal = 4.dp), style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp), color = ChatColors.secondaryText, fontWeight = FontWeight.Medium)
@@ -114,7 +152,7 @@ internal fun MessageBubble(
                     MarkdownMessageText(text = displayText, textColor = if (isUser) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface, linkColor = if (isUser) Color.White else MaterialTheme.colorScheme.primary, textSizeSp = 13f, onDarkBackground = isUser)
                 }
                 fileBlocks.forEach { FileBlock(it, isUser, message.state, relayBaseUrl = relayBaseUrl, accessToken = accessToken, onImageClick = onImageClick, onFileClick = onFileClick) }
-                message.voiceContentBlocks.forEach { VoiceBlock(it, isUser) }
+                voiceBlocks.forEach { VoiceBlock(it, isUser, relayBaseUrl = relayBaseUrl, accessToken = accessToken) }
                 MessageFooter(title = if (isUser) "You" else "ClawLink", createdAt = message.createdAt, isUser = isUser)
             }
         }
@@ -132,10 +170,73 @@ private fun MessageFooter(title: String, createdAt: String, isUser: Boolean, mod
 }
 
 @Composable
+private fun LoadingVoiceMessage(createdAt: String) {
+    Column(
+        modifier = Modifier.widthIn(max = 336.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+        horizontalAlignment = Alignment.Start
+    ) {
+        Surface(
+            shape = RoundedCornerShape(16.dp),
+            color = Color.White.copy(alpha = 0.96f),
+            border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFE1E4EA)),
+            modifier = Modifier.width(216.dp)
+        ) {
+            Row(
+                modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(34.dp)
+                        .background(ChatColors.linkBlue.copy(alpha = 0.10f), RoundedCornerShape(12.dp)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(18.dp),
+                        strokeWidth = 2.dp,
+                        color = ChatColors.linkBlue
+                    )
+                }
+                Text(
+                    "正在生成语音",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    fontWeight = FontWeight.SemiBold
+                )
+                Spacer(Modifier.weight(1f))
+                VoiceWaveformBars(tint = ChatColors.linkBlue.copy(alpha = 0.70f))
+            }
+        }
+        MessageFooter(
+            title = "ClawLink",
+            createdAt = createdAt,
+            isUser = false,
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp)
+        )
+    }
+}
+
+@Composable
 private fun StandaloneFileMessage(blocks: List<RelayChatContentBlock>, isUser: Boolean, messageState: MessageState, createdAt: String, relayBaseUrl: String, accessToken: String, onImageClick: (block: RelayChatContentBlock, url: String, fileName: String?) -> Unit = { _, _, _ -> }, onFileClick: (block: RelayChatContentBlock, url: String, fileName: String?) -> Unit = { _, _, _ -> }) {
     val maxContentWidth = if (blocks.any { it.isImageFileBlock }) 290.dp else 326.dp
     Column(modifier = Modifier.width(IntrinsicSize.Max).widthIn(max = maxContentWidth), verticalArrangement = Arrangement.spacedBy(8.dp), horizontalAlignment = if (isUser) Alignment.End else Alignment.Start) {
         blocks.forEach { block -> FileBlock(block = block, isUser = isUser, messageState = messageState, standalone = true, relayBaseUrl = relayBaseUrl, accessToken = accessToken, onImageClick = onImageClick, onFileClick = onFileClick) }
+        MessageFooter(title = if (isUser) "You" else "ClawLink", createdAt = createdAt, isUser = false, modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp))
+    }
+}
+
+@Composable
+private fun StandaloneVoiceMessage(blocks: List<RelayChatContentBlock>, isUser: Boolean, createdAt: String, relayBaseUrl: String, accessToken: String) {
+    Column(
+        modifier = Modifier.widthIn(max = 336.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+        horizontalAlignment = if (isUser) Alignment.End else Alignment.Start
+    ) {
+        blocks.firstOrNull()?.let { block ->
+            VoiceBlock(block = block, isUser = isUser, relayBaseUrl = relayBaseUrl, accessToken = accessToken, standalone = true)
+        }
         MessageFooter(title = if (isUser) "You" else "ClawLink", createdAt = createdAt, isUser = false, modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp))
     }
 }
@@ -303,13 +404,199 @@ private fun AttachmentProgressBadge(progress: Double, modifier: Modifier = Modif
 }
 
 @Composable
-private fun VoiceBlock(block: RelayChatContentBlock, isUser: Boolean) {
-    Surface(shape = RoundedCornerShape(999.dp), color = if (isUser) Color.White.copy(alpha = 0.14f) else MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.6f)) {
-        Row(modifier = Modifier.padding(horizontal = 12.dp, vertical = 9.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Icon(Icons.Default.GraphicEq, null, modifier = Modifier.size(18.dp), tint = if (isUser) Color.White else MaterialTheme.colorScheme.primary)
-            Text(block.voiceTranscriptText ?: block.voiceStatusText ?: stringResource(R.string.chat_voice_message), style = MaterialTheme.typography.bodySmall, color = if (isUser) Color.White else MaterialTheme.colorScheme.onSurface)
+private fun VoiceBlock(
+    block: RelayChatContentBlock,
+    isUser: Boolean,
+    relayBaseUrl: String,
+    accessToken: String,
+    standalone: Boolean = false
+) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    var isPlaying by remember(block.voicePlaybackIdentifier) { mutableStateOf(false) }
+    var isLoading by remember(block.voicePlaybackIdentifier) { mutableStateOf(false) }
+    var showTranscript by remember(block.voicePlaybackIdentifier) { mutableStateOf(false) }
+    var player by remember(block.voicePlaybackIdentifier) { mutableStateOf<MediaPlayer?>(null) }
+
+    DisposableEffect(block.voicePlaybackIdentifier) {
+        onDispose {
+            player?.release()
+            player = null
         }
     }
+
+    val background = if (isUser) ChatColors.userBubble else Color.White.copy(alpha = 0.96f)
+    val border = if (isUser) Color.White.copy(alpha = 0.10f) else Color(0xFFE1E4EA)
+    val primary = if (isUser) Color.White else MaterialTheme.colorScheme.onSurface
+    val width = voiceBubbleWidth(block.durationMs)
+    val transcript = block.voiceTranscriptText
+
+    Column(
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+        horizontalAlignment = if (isUser) Alignment.End else Alignment.Start
+    ) {
+        Surface(
+            shape = RoundedCornerShape(16.dp),
+            color = background,
+            border = androidx.compose.foundation.BorderStroke(1.dp, border),
+            modifier = Modifier
+                .width(width)
+                .pointerInput(block.voicePlaybackIdentifier, transcript) {
+                    detectTapGestures(
+                        onTap = {
+                            scope.launch {
+                                try {
+                                    if (isPlaying) {
+                                        player?.stop()
+                                        player?.release()
+                                        player = null
+                                        isPlaying = false
+                                        return@launch
+                                    }
+                                    isLoading = true
+                                    val playableFile = resolveVoicePlayableFile(block, relayBaseUrl, accessToken)
+                                    val mediaPlayer = MediaPlayer().apply {
+                                        setDataSource(context, Uri.fromFile(playableFile))
+                                        setOnCompletionListener {
+                                            isPlaying = false
+                                            it.release()
+                                            if (player === it) player = null
+                                        }
+                                        prepare()
+                                        start()
+                                    }
+                                    player = mediaPlayer
+                                    isPlaying = true
+                                } catch (error: Exception) {
+                                    Toast.makeText(
+                                        context,
+                                        context.getString(R.string.chat_voice_play_failed, error.message ?: "Unknown error"),
+                                        Toast.LENGTH_SHORT
+                                    ).show()
+                                } finally {
+                                    isLoading = false
+                                }
+                            }
+                        },
+                        onLongPress = {
+                            if (!transcript.isNullOrBlank()) {
+                                showTranscript = !showTranscript
+                            }
+                        }
+                    )
+                }
+        ) {
+            Row(
+                modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(34.dp)
+                        .background(primary.copy(alpha = if (isUser) 0.18f else 0.10f), RoundedCornerShape(12.dp)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    when {
+                        isLoading -> CircularProgressIndicator(modifier = Modifier.size(17.dp), strokeWidth = 2.dp, color = primary)
+                        isPlaying -> Icon(Icons.Default.Pause, null, modifier = Modifier.size(18.dp), tint = primary)
+                        else -> Icon(Icons.Default.PlayArrow, null, modifier = Modifier.size(18.dp), tint = primary)
+                    }
+                }
+                block.voiceDurationText?.let {
+                    Text(it, style = MaterialTheme.typography.bodySmall, color = primary, fontWeight = FontWeight.SemiBold)
+                }
+                Spacer(Modifier.weight(1f))
+                VoiceWaveformBars(tint = primary.copy(alpha = if (isPlaying) 0.96f else 0.70f))
+            }
+        }
+
+        if (showTranscript && !transcript.isNullOrBlank()) {
+            Surface(
+                shape = RoundedCornerShape(28.dp),
+                color = background,
+                border = androidx.compose.foundation.BorderStroke(1.dp, border),
+                modifier = Modifier.widthIn(max = if (standalone) 336.dp else 294.dp)
+            ) {
+                Box(modifier = Modifier.padding(horizontal = 16.dp, vertical = 13.dp)) {
+                    MarkdownMessageText(
+                        text = formatVoiceTranscriptDisplay(transcript),
+                        textColor = primary,
+                        linkColor = if (isUser) Color.White else MaterialTheme.colorScheme.primary,
+                        textSizeSp = 13f,
+                        onDarkBackground = isUser
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun VoiceWaveformBars(tint: Color) {
+    val heights = listOf(5.dp, 9.dp, 14.dp, 11.dp, 15.dp, 10.dp, 8.dp, 6.dp)
+    Row(horizontalArrangement = Arrangement.spacedBy(3.dp), verticalAlignment = Alignment.CenterVertically) {
+        heights.forEach { height ->
+            Box(
+                modifier = Modifier
+                    .width(2.5.dp)
+                    .height(height)
+                    .background(tint, RoundedCornerShape(2.dp))
+            )
+        }
+    }
+}
+
+private fun voiceBubbleWidth(durationMs: Int?): Dp {
+    val min = 156.dp
+    val max = 326.dp
+    val duration = durationMs?.takeIf { it > 0 } ?: return 216.dp
+    val progress = (duration / 1000.0 / 18.0).coerceIn(0.0, 1.0).toFloat()
+    return min + (max - min) * progress
+}
+
+private suspend fun resolveVoicePlayableFile(block: RelayChatContentBlock, relayBaseUrl: String, accessToken: String): File {
+    return withContext(Dispatchers.IO) {
+        val raw = block.voiceDownloadURLString?.trim().orEmpty()
+        if (raw.startsWith("file://", ignoreCase = true)) {
+            val file = File(raw.removePrefix("file://"))
+            if (file.exists()) return@withContext file
+        }
+        if (raw.isNotBlank()) {
+            val local = File(raw)
+            if (local.exists()) return@withContext local
+        }
+        val resolvedUrl = raw.takeIf { it.isNotBlank() }?.let { resolveFileUrl(it, relayBaseUrl) }
+            ?: throw IllegalStateException("Missing voice download URL")
+        val cacheKey = block.chatAttachmentCacheKey() ?: block.voicePlaybackIdentifier
+        RemoteAttachmentCache.cachedFile(cacheKey)?.let { return@withContext it }
+        val connection = (URL(resolvedUrl).openConnection() as HttpURLConnection).apply {
+            connectTimeout = 15_000
+            readTimeout = 30_000
+            if (accessToken.isNotBlank()) setRequestProperty("Authorization", "Bearer $accessToken")
+        }
+        val bytes = connection.inputStream.use { it.readBytes() }
+        RemoteAttachmentCache.put(cacheKey, block.fileDisplayName ?: block.text ?: "voice.m4a", bytes)
+            ?: throw IllegalStateException("Unable to cache voice file")
+    }
+}
+
+private fun formatVoiceTranscriptDisplay(text: String): String {
+    return text
+        .replace("\\n", "\n")
+        .replace("\r\n", "\n")
+        .replace("\r", "\n")
+        .trim()
+        .lines()
+        .joinToString("\n") { line ->
+            val trimmed = line.trim()
+            if (trimmed.isNotEmpty() && trimmed != "---" && trimmed.split(" - ").size > 2) {
+                trimmed.replace(Regex("""\s+-\s+"""), "\n- ")
+            } else {
+                trimmed
+            }
+        }
+        .trim()
 }
 
 private fun fileIcon(block: RelayChatContentBlock): ImageVector {

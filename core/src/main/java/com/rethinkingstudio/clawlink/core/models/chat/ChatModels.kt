@@ -205,9 +205,26 @@ data class RelayChatContentBlock(
         get() = normalizedType in listOf("tooluse", "toolcall", "toolcallupdate", "functioncall")
     val isToolResultBlock: Boolean
         get() = normalizedType in listOf("toolresult", "toolresulterror", "tooloutput", "toolouterror", "tooloutputerror", "functionresult")
+    private val normalizedMimeType: String get() = mimeType?.trim()?.lowercase().orEmpty()
+    private val normalizedFileName: String get() = fileDisplayName?.trim()?.lowercase().orEmpty()
+    private val isAudioMimeType: Boolean get() = normalizedMimeType.startsWith("audio/")
+    private val isAudioFileName: Boolean
+        get() = normalizedFileName.endsWith(".m4a") ||
+            normalizedFileName.endsWith(".aac") ||
+            normalizedFileName.endsWith(".mp3") ||
+            normalizedFileName.endsWith(".wav") ||
+            normalizedFileName.endsWith(".aiff") ||
+            normalizedFileName.endsWith(".caf") ||
+            normalizedFileName.endsWith(".ogg") ||
+            normalizedFileName.endsWith(".opus")
+    val isVoiceMessageBlock: Boolean
+        get() = type in listOf("voice", "voice_message", "voice_result") ||
+            isAudioMimeType ||
+            isAudioFileName
     val isFileBlock: Boolean
         get() {
             val normalized = type.trim().lowercase()
+            if (isVoiceMessageBlock) return false
             return normalized in listOf(
                 "file",
                 "file_upload",
@@ -217,11 +234,9 @@ data class RelayChatContentBlock(
                 "image",
                 "image_file",
                 "video",
-                "video_file",
-                "audio"
+                "video_file"
             )
         }
-    val isVoiceMessageBlock: Boolean get() = type in listOf("voice", "voice_message", "voice_result")
     val isTextBlock: Boolean get() = type in listOf("text", "output_text", "input_text")
 
     private val resolvedPayload: RelayJSONValue? get() = result ?: partialResult ?: content ?: output ?: error ?: arguments ?: args
@@ -262,8 +277,31 @@ data class RelayChatContentBlock(
                 normalizedName.endsWith(".tiff") ||
                 normalizedName.endsWith(".avif")
         }
-    val voiceTranscriptText: String? get() = transcript
-    val voiceStatusText: String? get() = status
+    val voiceDurationText: String?
+        get() {
+            val duration = durationMs?.takeIf { it > 0 } ?: return null
+            val totalSeconds = maxOf(1, kotlin.math.round(duration / 1000.0).toInt())
+            return String.format("%d:%02d", totalSeconds / 60, totalSeconds % 60)
+        }
+    val voiceTranscriptText: String? get() = transcript?.trim()?.takeIf { it.isNotEmpty() }
+    val voiceStatusText: String?
+        get() {
+            val duration = voiceDurationText
+            val sender = senderDisplayName?.trim()?.takeIf { it.isNotEmpty() }
+            return listOfNotNull(duration, sender)
+                .joinToString(" · ")
+                .ifBlank { status?.trim()?.takeIf { it.isNotEmpty() } }
+        }
+    val voiceDownloadURLString: String? get() = fileDownloadURLString
+    val voicePlaybackIdentifier: String
+        get() {
+            val stable = listOf(fileId, voiceDownloadURLString, fileName, text)
+                .firstNotNullOfOrNull { it?.trim()?.takeIf { value -> value.isNotEmpty() } }
+            if (stable != null) return stable
+            val fallback = listOf(gatewayId, sessionKey, type, fileName, downloadUrl, downloadPath, text, durationMs?.toString())
+                .mapNotNull { it?.trim()?.takeIf { value -> value.isNotEmpty() } }
+            return if (fallback.isEmpty()) "voice-unknown" else "voice:${fallback.joinToString("|")}"
+        }
 }
 
 // ── ChatMessage ──────────────────────────────────────────────────────────
@@ -304,6 +342,9 @@ data class ChatMessage(
         get() = contentBlocks.filter { it.isVoiceMessageBlock }
 
     val hasVoiceContent: Boolean get() = voiceContentBlocks.isNotEmpty()
+
+    val voiceTranscriptText: String?
+        get() = voiceContentBlocks.firstNotNullOfOrNull { it.voiceTranscriptText }
 
     val toolDisplayName: String? get() = toolContentBlocks.firstNotNullOfOrNull { it.resolvedName }
 

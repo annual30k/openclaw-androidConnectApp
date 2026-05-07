@@ -122,7 +122,15 @@ class RelayWebSocketClient {
         })
     }
 
-    fun sendChatMessage(gatewayId: String, sessionKey: String, content: String, idempotencyKey: String? = null) {
+    fun sendChatMessage(
+        gatewayId: String,
+        sessionKey: String,
+        content: String,
+        idempotencyKey: String? = null,
+        voiceReplyEnabled: Boolean = false,
+        voiceReplyVoiceIdentifier: String? = null,
+        voiceReplyRatePercent: Int? = null
+    ) {
         val requestId = UUID.randomUUID().toString()
         val params = buildJsonObject {
             put("sessionKey", JsonPrimitive(sessionKey))
@@ -134,6 +142,39 @@ class RelayWebSocketClient {
             put("id", JsonPrimitive(requestId))
             put("gatewayId", JsonPrimitive(gatewayId))
             put("method", JsonPrimitive("chat.send"))
+            if (voiceReplyEnabled) {
+                put("voiceReplyEnabled", JsonPrimitive(true))
+                val voice = voiceReplyVoiceIdentifier?.trim().orEmpty()
+                if (voice.isNotBlank()) {
+                    put("voiceReplyVoiceIdentifier", JsonPrimitive(voice))
+                }
+                voiceReplyRatePercent?.let { put("voiceReplyRatePercent", JsonPrimitive(it)) }
+            }
+            put("params", params)
+        }
+        send(payload.toString())
+    }
+
+    fun syncVoiceReplyConfig(
+        gatewayId: String,
+        sessionKey: String,
+        voiceReplyVoiceIdentifier: String?,
+        voiceReplyRatePercent: Int
+    ) {
+        val requestId = UUID.randomUUID().toString()
+        val params = buildJsonObject {
+            put("sessionKey", JsonPrimitive(sessionKey))
+            val voice = voiceReplyVoiceIdentifier?.trim().orEmpty()
+            if (voice.isNotBlank()) {
+                put("voiceReplyVoiceIdentifier", JsonPrimitive(voice))
+            }
+            put("voiceReplyRatePercent", JsonPrimitive(voiceReplyRatePercent))
+        }
+        val payload = buildJsonObject {
+            put("type", JsonPrimitive("cmd"))
+            put("id", JsonPrimitive(requestId))
+            put("gatewayId", JsonPrimitive(gatewayId))
+            put("method", JsonPrimitive("clawconnect.voiceReply.setConfig"))
             put("params", params)
         }
         send(payload.toString())

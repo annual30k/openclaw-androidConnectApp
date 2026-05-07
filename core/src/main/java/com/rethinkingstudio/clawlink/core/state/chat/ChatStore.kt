@@ -54,7 +54,13 @@ data class ChatState(
     val isStreaming: Boolean = false,
     val isStoppingRun: Boolean = false,
     val errorMessage: String? = null,
-    val showInvocationProcess: Boolean = true
+    val showInvocationProcess: Boolean = true,
+    val assistantVoiceRepliesEnabled: Boolean = false,
+    val assistantVoiceRepliesEffectiveEnabled: Boolean = false,
+    val assistantVoiceRepliesEnabledAt: Double? = null,
+    val voiceReplyVoiceIdentifier: String = "",
+    val voiceReplyRatePercent: Int = 0,
+    val voiceReplyTextOnlyRunIds: Set<String> = emptySet()
 )
 
 class ChatStore(
@@ -366,6 +372,11 @@ class ChatStore(
         }
 
         val finalContentBlocks = contentBlocks
+        val shouldShowVoiceReplyTextFallback =
+            runId.isNotBlank() &&
+                _state.value.voiceReplyTextOnlyRunIds.contains(runId) &&
+                finalContentBlocks.none { it.isVoiceMessageBlock || it.isFileBlock } &&
+                content.isNotBlank()
 
         val finalRole = if (finalContentBlocks.any { it.isToolCallBlock || it.isToolResultBlock }) MessageRole.tool else role
 
@@ -379,7 +390,15 @@ class ChatStore(
                     contentBlocks = finalContentBlocks,
                     state = MessageState.completed
                 )
-                _state.value = _state.value.copy(messages = messages, isStreaming = false)
+                _state.value = _state.value.copy(
+                    messages = messages,
+                    isStreaming = false,
+                    voiceReplyTextOnlyRunIds = if (shouldShowVoiceReplyTextFallback) {
+                        _state.value.voiceReplyTextOnlyRunIds - runId
+                    } else {
+                        _state.value.voiceReplyTextOnlyRunIds
+                    }
+                )
             }
         } else {
             val msg = ChatMessage(
@@ -416,7 +435,12 @@ class ChatStore(
             }
             _state.value = _state.value.copy(
                 messages = _state.value.messages + msg,
-                isStreaming = false
+                isStreaming = false,
+                voiceReplyTextOnlyRunIds = if (shouldShowVoiceReplyTextFallback) {
+                    _state.value.voiceReplyTextOnlyRunIds - runId
+                } else {
+                    _state.value.voiceReplyTextOnlyRunIds
+                }
             )
         }
 
@@ -932,7 +956,22 @@ class ChatStore(
             messages = _state.value.messages + userMsg + assistantMsg,
             isStreaming = true
         )
-        wsClient.sendChatMessage(gatewayId, sessionKey, content, clientRunId)
+        val current = _state.value
+        val voiceReplyTextOnlyRunIds = if (current.assistantVoiceRepliesEffectiveEnabled) {
+            (current.voiceReplyTextOnlyRunIds + clientRunId).takeLastSet(512)
+        } else {
+            current.voiceReplyTextOnlyRunIds
+        }
+        _state.value = _state.value.copy(voiceReplyTextOnlyRunIds = voiceReplyTextOnlyRunIds)
+        wsClient.sendChatMessage(
+            gatewayId = gatewayId,
+            sessionKey = sessionKey,
+            content = content,
+            idempotencyKey = clientRunId,
+            voiceReplyEnabled = current.assistantVoiceRepliesEffectiveEnabled,
+            voiceReplyVoiceIdentifier = current.voiceReplyVoiceIdentifier.takeIf { it.isNotBlank() },
+            voiceReplyRatePercent = current.voiceReplyRatePercent
+        )
     }
 
     suspend fun uploadAttachment(
@@ -1269,6 +1308,45 @@ class ChatStore(
 
     fun toggleShowInvocation() {
         _state.value = _state.value.copy(showInvocationProcess = !_state.value.showInvocationProcess)
+    }
+
+    fun updateVoiceReplyConfig(
+        enabled: Boolean,
+        hasGenerationSetup: Boolean,
+        voiceIdentifier: String,
+        ratePercent: Int
+    ) {
+        val current = _state.value
+        val effectiveEnabled = enabled && hasGenerationSetup
+        _state.value = current.copy(
+            assistantVoiceRepliesEnabled = enabled,
+            assistantVoiceRepliesEffectiveEnabled = effectiveEnabled,
+            assistantVoiceRepliesEnabledAt = when {
+                effectiveEnabled && !current.assistantVoiceRepliesEffectiveEnabled -> System.currentTimeMillis() / 1000.0
+                effectiveEnabled -> current.assistantVoiceRepliesEnabledAt
+                else -> null
+            },
+            voiceReplyVoiceIdentifier = voiceIdentifier.trim(),
+            voiceReplyRatePercent = ratePercent
+        )
+    }
+
+    fun syncVoiceReplyConfigToRelay() {
+        val current = _state.value
+        val gatewayId = current.currentGatewayId?.trim().orEmpty()
+        val sessionKey = current.currentSessionKey.trim()
+        if (gatewayId.isBlank() || sessionKey.isBlank()) return
+        wsClient.syncVoiceReplyConfig(
+            gatewayId = gatewayId,
+            sessionKey = sessionKey,
+            voiceReplyVoiceIdentifier = current.voiceReplyVoiceIdentifier.takeIf { it.isNotBlank() },
+            voiceReplyRatePercent = current.voiceReplyRatePercent
+        )
+    }
+
+    private fun Set<String>.takeLastSet(limit: Int): Set<String> {
+        if (size <= limit) return this
+        return toList().takeLast(limit).toSet()
     }
 
     fun clearMessages() {
