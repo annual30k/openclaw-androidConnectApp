@@ -186,6 +186,11 @@ class RelayAPIClient(
         request<EmptyResponse>(APIEndpoints.Mobile.Gateway.selectModel(gatewayId), req)
     }
 
+    suspend fun setDefaultModel(gatewayId: String, providerId: String, modelId: String, modelAlias: String) {
+        val req = DefaultModelRequest(providerId, modelId, modelAlias)
+        request<EmptyResponse>(APIEndpoints.Mobile.Gateway.defaultModel(gatewayId), req)
+    }
+
     suspend fun fetchSkills(gatewayId: String): List<SkillItem> {
         val response: SkillsListResponse = request(APIEndpoints.Mobile.Gateway.skills(gatewayId))
         return response.skills
