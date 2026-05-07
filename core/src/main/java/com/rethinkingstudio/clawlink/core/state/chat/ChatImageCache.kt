@@ -274,6 +274,37 @@ object RemoteImageSizeCache {
     private const val SIZE_PREFIX = "size:"
 }
 
+object VoicePlaybackReadStore {
+    private const val PREFS_NAME = "clawlink_chat_voice_read"
+    private const val KEY_IDENTIFIERS = "read_identifiers"
+    private val initializedContexts = ConcurrentHashMap.newKeySet<String>()
+    @Volatile private var prefs: SharedPreferences? = null
+
+    fun init(context: Context) {
+        val appContext = context.applicationContext
+        val key = appContext.packageName
+        if (!initializedContexts.add(key)) return
+        prefs = appContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+    }
+
+    fun getReadIdentifiers(): Set<String> {
+        return prefs?.getStringSet(KEY_IDENTIFIERS, emptySet()) ?: emptySet()
+    }
+
+    fun markRead(storageKey: String) {
+        val current = getReadIdentifiers().toMutableSet()
+        if (current.add(storageKey)) {
+            // Keep it capped at a reasonable size, e.g., 1024
+            val updated = if (current.size > 1024) {
+                current.sorted().takeLast(1024).toSet()
+            } else {
+                current
+            }
+            prefs?.edit()?.putStringSet(KEY_IDENTIFIERS, updated)?.apply()
+        }
+    }
+}
+
 fun RelayChatContentBlock.chatImageCacheKey(): String? {
     val assetKey = chatImageAssetKey() ?: return null
     val scopeKey = chatImageScopeKey()

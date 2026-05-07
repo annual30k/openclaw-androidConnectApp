@@ -5,6 +5,12 @@ import android.text.method.LinkMovementMethod
 import android.net.Uri
 import android.widget.Toast
 import android.widget.TextView
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
@@ -17,6 +23,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -80,6 +87,10 @@ internal fun MessageBubble(
     isVoiceReplyTextOnly: Boolean = false,
     relayBaseUrl: String,
     accessToken: String,
+    readVoicePlaybackIdentifiers: Set<String> = emptySet(),
+    onVoicePlaybackStart: (identifier: String) -> Unit = {},
+    gatewayId: String? = null,
+    sessionKey: String? = null,
     onImageClick: (block: RelayChatContentBlock, url: String, fileName: String?) -> Unit = { _, _, _ -> },
     onFileClick: (block: RelayChatContentBlock, url: String, fileName: String?) -> Unit = { _, _, _ -> }
 ) {
@@ -119,7 +130,17 @@ internal fun MessageBubble(
             return@Column
         }
         if (isStandaloneVoiceMessage) {
-            StandaloneVoiceMessage(blocks = voiceBlocks, isUser = isUser, createdAt = message.createdAt, relayBaseUrl = relayBaseUrl, accessToken = accessToken)
+            StandaloneVoiceMessage(
+                blocks = voiceBlocks,
+                isUser = isUser,
+                createdAt = message.createdAt,
+                relayBaseUrl = relayBaseUrl,
+                accessToken = accessToken,
+                readVoicePlaybackIdentifiers = readVoicePlaybackIdentifiers,
+                onVoicePlaybackStart = onVoicePlaybackStart,
+                gatewayId = gatewayId,
+                sessionKey = sessionKey
+            )
             return@Column
         }
         if (!isUser && isVoiceReplyTextOnly && fileBlocks.isEmpty() && voiceBlocks.isEmpty()) {
@@ -152,7 +173,18 @@ internal fun MessageBubble(
                     MarkdownMessageText(text = displayText, textColor = if (isUser) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface, linkColor = if (isUser) Color.White else MaterialTheme.colorScheme.primary, textSizeSp = 13f, onDarkBackground = isUser)
                 }
                 fileBlocks.forEach { FileBlock(it, isUser, message.state, relayBaseUrl = relayBaseUrl, accessToken = accessToken, onImageClick = onImageClick, onFileClick = onFileClick) }
-                voiceBlocks.forEach { VoiceBlock(it, isUser, relayBaseUrl = relayBaseUrl, accessToken = accessToken) }
+                voiceBlocks.forEach {
+                    VoiceBlock(
+                        it,
+                        isUser,
+                        relayBaseUrl = relayBaseUrl,
+                        accessToken = accessToken,
+                        readVoicePlaybackIdentifiers = readVoicePlaybackIdentifiers,
+                        onVoicePlaybackStart = onVoicePlaybackStart,
+                        gatewayId = gatewayId,
+                        sessionKey = sessionKey
+                    )
+                }
                 MessageFooter(title = if (isUser) "You" else "ClawLink", createdAt = message.createdAt, isUser = isUser)
             }
         }
@@ -228,14 +260,34 @@ private fun StandaloneFileMessage(blocks: List<RelayChatContentBlock>, isUser: B
 }
 
 @Composable
-private fun StandaloneVoiceMessage(blocks: List<RelayChatContentBlock>, isUser: Boolean, createdAt: String, relayBaseUrl: String, accessToken: String) {
+private fun StandaloneVoiceMessage(
+    blocks: List<RelayChatContentBlock>,
+    isUser: Boolean,
+    createdAt: String,
+    relayBaseUrl: String,
+    accessToken: String,
+    readVoicePlaybackIdentifiers: Set<String>,
+    onVoicePlaybackStart: (identifier: String) -> Unit,
+    gatewayId: String?,
+    sessionKey: String?
+) {
     Column(
         modifier = Modifier.widthIn(max = 336.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
         horizontalAlignment = if (isUser) Alignment.End else Alignment.Start
     ) {
         blocks.firstOrNull()?.let { block ->
-            VoiceBlock(block = block, isUser = isUser, relayBaseUrl = relayBaseUrl, accessToken = accessToken, standalone = true)
+            VoiceBlock(
+                block = block,
+                isUser = isUser,
+                relayBaseUrl = relayBaseUrl,
+                accessToken = accessToken,
+                standalone = true,
+                readVoicePlaybackIdentifiers = readVoicePlaybackIdentifiers,
+                onVoicePlaybackStart = onVoicePlaybackStart,
+                gatewayId = gatewayId,
+                sessionKey = sessionKey
+            )
         }
         MessageFooter(title = if (isUser) "You" else "ClawLink", createdAt = createdAt, isUser = false, modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp))
     }
@@ -409,7 +461,11 @@ private fun VoiceBlock(
     isUser: Boolean,
     relayBaseUrl: String,
     accessToken: String,
-    standalone: Boolean = false
+    standalone: Boolean = false,
+    readVoicePlaybackIdentifiers: Set<String> = emptySet(),
+    onVoicePlaybackStart: (identifier: String) -> Unit = {},
+    gatewayId: String? = null,
+    sessionKey: String? = null
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -431,83 +487,110 @@ private fun VoiceBlock(
     val width = voiceBubbleWidth(block.durationMs)
     val transcript = block.voiceTranscriptText
 
+    val storageKey = remember(block.voicePlaybackIdentifier, gatewayId, sessionKey) {
+        val identifier = block.voicePlaybackIdentifier.trim()
+        val gId = (gatewayId ?: block.gatewayId ?: "gateway").trim()
+        val sKey = (sessionKey ?: block.sessionKey ?: "main").trim()
+        if (identifier.isEmpty()) "" else "$gId|$sKey|$identifier"
+    }
+    val isRead = isUser || storageKey.isEmpty() || readVoicePlaybackIdentifiers.contains(storageKey)
+
     Column(
         verticalArrangement = Arrangement.spacedBy(8.dp),
         horizontalAlignment = if (isUser) Alignment.End else Alignment.Start
     ) {
-        Surface(
-            shape = RoundedCornerShape(16.dp),
-            color = background,
-            border = androidx.compose.foundation.BorderStroke(1.dp, border),
-            modifier = Modifier
-                .width(width)
-                .pointerInput(block.voicePlaybackIdentifier, transcript) {
-                    detectTapGestures(
-                        onTap = {
-                            scope.launch {
-                                try {
-                                    if (isPlaying) {
-                                        player?.stop()
-                                        player?.release()
-                                        player = null
-                                        isPlaying = false
-                                        return@launch
-                                    }
-                                    isLoading = true
-                                    val playableFile = resolveVoicePlayableFile(block, relayBaseUrl, accessToken)
-                                    val mediaPlayer = MediaPlayer().apply {
-                                        setDataSource(context, Uri.fromFile(playableFile))
-                                        setOnCompletionListener {
+        Box(contentAlignment = Alignment.CenterEnd) {
+            Surface(
+                shape = RoundedCornerShape(16.dp),
+                color = background,
+                border = androidx.compose.foundation.BorderStroke(1.dp, border),
+                modifier = Modifier
+                    .width(width)
+                    .pointerInput(block.voicePlaybackIdentifier, transcript) {
+                        detectTapGestures(
+                            onTap = {
+                                scope.launch {
+                                    try {
+                                        if (isPlaying) {
+                                            player?.stop()
+                                            player?.release()
+                                            player = null
                                             isPlaying = false
-                                            it.release()
-                                            if (player === it) player = null
+                                            return@launch
                                         }
-                                        prepare()
-                                        start()
+                                        isLoading = true
+                                        val playableFile = resolveVoicePlayableFile(block, relayBaseUrl, accessToken)
+                                        val mediaPlayer = MediaPlayer().apply {
+                                            setDataSource(context, Uri.fromFile(playableFile))
+                                            setOnCompletionListener {
+                                                isPlaying = false
+                                                it.release()
+                                                if (player === it) player = null
+                                            }
+                                            prepare()
+                                            start()
+                                        }
+                                        if (!isRead) {
+                                            onVoicePlaybackStart(block.voicePlaybackIdentifier)
+                                        }
+                                        player = mediaPlayer
+                                        isPlaying = true
+                                    } catch (error: Exception) {
+                                        Toast.makeText(
+                                            context,
+                                            context.getString(R.string.chat_voice_play_failed, error.message ?: "Unknown error"),
+                                            Toast.LENGTH_SHORT
+                                        ).show()
+                                    } finally {
+                                        isLoading = false
                                     }
-                                    player = mediaPlayer
-                                    isPlaying = true
-                                } catch (error: Exception) {
-                                    Toast.makeText(
-                                        context,
-                                        context.getString(R.string.chat_voice_play_failed, error.message ?: "Unknown error"),
-                                        Toast.LENGTH_SHORT
-                                    ).show()
-                                } finally {
-                                    isLoading = false
+                                }
+                            },
+                            onLongPress = {
+                                if (!transcript.isNullOrBlank()) {
+                                    showTranscript = !showTranscript
                                 }
                             }
-                        },
-                        onLongPress = {
-                            if (!transcript.isNullOrBlank()) {
-                                showTranscript = !showTranscript
-                            }
+                        )
+                    }
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(34.dp)
+                            .background(primary.copy(alpha = if (isUser) 0.18f else 0.10f), RoundedCornerShape(12.dp)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        when {
+                            isLoading -> CircularProgressIndicator(modifier = Modifier.size(17.dp), strokeWidth = 2.dp, color = primary)
+                            isPlaying -> Icon(Icons.Default.Pause, null, modifier = Modifier.size(18.dp), tint = primary)
+                            else -> Icon(Icons.Default.PlayArrow, null, modifier = Modifier.size(18.dp), tint = primary)
                         }
+                    }
+                    block.voiceDurationText?.let {
+                        Text(it, style = MaterialTheme.typography.bodySmall, color = primary, fontWeight = FontWeight.SemiBold)
+                    }
+                    Spacer(Modifier.weight(1f))
+                    VoiceWaveformBars(
+                        tint = primary.copy(alpha = if (isPlaying) 0.96f else 0.70f),
+                        isPlaying = isPlaying
                     )
                 }
-        ) {
-            Row(
-                modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
+            }
+            
+            if (!isRead) {
                 Box(
                     modifier = Modifier
-                        .size(34.dp)
-                        .background(primary.copy(alpha = if (isUser) 0.18f else 0.10f), RoundedCornerShape(12.dp)),
-                    contentAlignment = Alignment.Center
-                ) {
-                    when {
-                        isLoading -> CircularProgressIndicator(modifier = Modifier.size(17.dp), strokeWidth = 2.dp, color = primary)
-                        isPlaying -> Icon(Icons.Default.Pause, null, modifier = Modifier.size(18.dp), tint = primary)
-                        else -> Icon(Icons.Default.PlayArrow, null, modifier = Modifier.size(18.dp), tint = primary)
-                    }
-                }
-                block.voiceDurationText?.let {
-                    Text(it, style = MaterialTheme.typography.bodySmall, color = primary, fontWeight = FontWeight.SemiBold)
-                }
-                Spacer(Modifier.weight(1f))
-                VoiceWaveformBars(tint = primary.copy(alpha = if (isPlaying) 0.96f else 0.70f))
+                        .offset(x = 10.dp) // Pushed out further to match iOS (unreadDotDiameter + 2)
+                        .size(10.dp)
+                        .background(Color.White, androidx.compose.foundation.shape.CircleShape)
+                        .padding(1.2.dp)
+                        .background(Color(0xFFFF3B30), androidx.compose.foundation.shape.CircleShape)
+                )
             }
         }
 
@@ -533,14 +616,33 @@ private fun VoiceBlock(
 }
 
 @Composable
-private fun VoiceWaveformBars(tint: Color) {
+private fun VoiceWaveformBars(tint: Color, isPlaying: Boolean = false) {
     val heights = listOf(5.dp, 9.dp, 14.dp, 11.dp, 15.dp, 10.dp, 8.dp, 6.dp)
+    val infiniteTransition = androidx.compose.animation.core.rememberInfiniteTransition(label = "waveform")
+    
     Row(horizontalArrangement = Arrangement.spacedBy(3.dp), verticalAlignment = Alignment.CenterVertically) {
-        heights.forEach { height ->
+        heights.forEachIndexed { index, baseHeight ->
+            val animatedHeight = if (isPlaying) {
+                val animation = infiniteTransition.animateFloat(
+                    initialValue = 0.5f,
+                    targetValue = 1.5f,
+                    animationSpec = androidx.compose.animation.core.infiniteRepeatable(
+                        animation = androidx.compose.animation.core.tween(
+                            durationMillis = 400 + (index * 50),
+                            easing = androidx.compose.animation.core.LinearEasing
+                        ),
+                        repeatMode = androidx.compose.animation.core.RepeatMode.Reverse
+                    ),
+                    label = "bar_$index"
+                )
+                baseHeight * animation.value
+            } else {
+                baseHeight
+            }
             Box(
                 modifier = Modifier
                     .width(2.5.dp)
-                    .height(height)
+                    .height(animatedHeight)
                     .background(tint, RoundedCornerShape(2.dp))
             )
         }

@@ -112,6 +112,7 @@ fun ChatScreen(
         RemoteImageSizeCache.init(context.applicationContext)
         RemoteImageCache.init(context.applicationContext)
         RemoteAttachmentCache.init(context.applicationContext)
+        com.rethinkingstudio.clawlink.core.state.chat.VoicePlaybackReadStore.init(context.applicationContext)
     }
 
     DisposableEffect(viewModel) {
@@ -332,6 +333,16 @@ fun ChatScreen(
                                     isVoiceReplyTextOnly = isVoiceReplyTextOnly,
                                     relayBaseUrl = chatStore.relayBaseUrl,
                                     accessToken = chatStore.accessToken,
+                                    readVoicePlaybackIdentifiers = chatState.readVoicePlaybackIdentifiers,
+                                    onVoicePlaybackStart = { identifier ->
+                                        chatStore.markVoicePlaybackIdentifierRead(
+                                            identifier = identifier,
+                                            gatewayId = gatewayId,
+                                            sessionKey = chatState.currentSessionKey
+                                        )
+                                    },
+                                    gatewayId = gatewayId,
+                                    sessionKey = chatState.currentSessionKey,
                                     onImageClick = { block, url, fileName ->
                                         viewModel.imagePreview = ChatImagePreviewState(
                                             url = url,

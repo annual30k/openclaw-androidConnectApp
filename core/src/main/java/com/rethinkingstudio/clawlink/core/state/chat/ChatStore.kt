@@ -60,7 +60,8 @@ data class ChatState(
     val assistantVoiceRepliesEnabledAt: Double? = null,
     val voiceReplyVoiceIdentifier: String = "",
     val voiceReplyRatePercent: Int = 0,
-    val voiceReplyTextOnlyRunIds: Set<String> = emptySet()
+    val voiceReplyTextOnlyRunIds: Set<String> = emptySet(),
+    val readVoicePlaybackIdentifiers: Set<String> = emptySet()
 )
 
 class ChatStore(
@@ -82,6 +83,9 @@ class ChatStore(
     private var ignoreRunlessStoppedEventsUntilMs: Long = 0
 
     init {
+        _state.value = _state.value.copy(
+            readVoicePlaybackIdentifiers = VoicePlaybackReadStore.getReadIdentifiers()
+        )
         wsClient.events
             .onEach { event -> handleWsEvent(event) }
             .launchIn(scope)
@@ -1369,6 +1373,26 @@ class ChatStore(
         RemoteImageCache.clearSession(normalizedGatewayId, normalizedSessionKey)
         RemoteImageSizeCache.clearSession(normalizedGatewayId, normalizedSessionKey)
         RemoteAttachmentCache.clearSession(normalizedGatewayId, normalizedSessionKey)
+    }
+
+    fun markVoicePlaybackIdentifierRead(identifier: String, gatewayId: String?, sessionKey: String?) {
+        val storageKey = voicePlaybackReadStorageKey(identifier, gatewayId, sessionKey)
+        if (storageKey.isBlank()) return
+        
+        VoicePlaybackReadStore.markRead(storageKey)
+        _state.value = _state.value.copy(
+            readVoicePlaybackIdentifiers = _state.value.readVoicePlaybackIdentifiers + storageKey
+        )
+    }
+
+    private fun voicePlaybackReadStorageKey(identifier: String, gatewayId: String?, sessionKey: String?): String {
+        val normalizedIdentifier = identifier.trim()
+        if (normalizedIdentifier.isEmpty()) return ""
+        
+        val resolvedGatewayId = (gatewayId ?: _state.value.currentGatewayId ?: "gateway").trim()
+        val resolvedSessionKey = (sessionKey ?: _state.value.currentSessionKey.ifBlank { "main" }).trim()
+        
+        return "$resolvedGatewayId|$resolvedSessionKey|$normalizedIdentifier"
     }
 
     suspend fun deleteSession(gatewayId: String, sessionKey: String, deleteTranscript: Boolean = false): Boolean {
