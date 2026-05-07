@@ -467,7 +467,8 @@ data class APIErrorResponse(
 @Serializable
 data class AdvancedActionResponse(
     val requestId: String,
-    val status: String
+    val status: String,
+    val log: List<com.rethinkingstudio.clawlink.core.models.OpenClawDoctorFixLogEntry>? = null
 )
 
 @Serializable

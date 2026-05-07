@@ -261,22 +261,6 @@ fun SettingsScreen(
                 }
             }
 
-            // Section: About
-            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                ClawLinkSectionHeader(
-                    title = stringResource(R.string.settings_section_about),
-                    subtitle = stringResource(R.string.settings_section_about_subtitle)
-                )
-                ClawLinkCard(modifier = Modifier.fillMaxWidth()) {
-                    SettingsNavigationRow(
-                        icon = Icons.Default.Info,
-                        title = stringResource(R.string.settings_row_check_update),
-                        subtitle = stringResource(R.string.settings_row_check_update_detail),
-                        onClick = { /* Open App Store or External URL */ }
-                    )
-                }
-            }
-
             // Section: Account
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 ClawLinkSectionHeader(
@@ -338,16 +322,32 @@ fun SettingsScreen(
                 }
             }
 
+            // Section: About
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                ClawLinkSectionHeader(
+                    title = stringResource(R.string.settings_section_about),
+                    subtitle = stringResource(R.string.settings_section_about_subtitle)
+                )
+                ClawLinkCard(modifier = Modifier.fillMaxWidth()) {
+                    SettingsNavigationRow(
+                        icon = Icons.Default.Info,
+                        title = stringResource(R.string.settings_row_check_update),
+                        subtitle = stringResource(R.string.settings_row_check_update_detail),
+                        onClick = { /* Open App Store or External URL */ }
+                    )
+                }
+            }
+
             Spacer(modifier = Modifier.height(20.dp))
 
             Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
                 Text(
-                    "ClawLink v1.0.0",
+                    "ClawLink v${com.rethinkingstudio.clawlink.BuildConfig.VERSION_NAME}",
                     style = MaterialTheme.typography.bodySmall,
                     color = Color(0xFF9CA3AF)
                 )
             }
-            
+
             Spacer(modifier = Modifier.height(20.dp))
         }
     }

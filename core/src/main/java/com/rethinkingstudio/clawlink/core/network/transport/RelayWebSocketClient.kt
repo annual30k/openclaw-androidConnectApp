@@ -33,7 +33,8 @@ import java.util.concurrent.atomic.AtomicBoolean
 data class WsEvent(
     val type: String,
     val event: String? = null,
-    val payload: JsonElement? = null
+    val payload: JsonElement? = null,
+    val id: String? = null
 )
 
 enum class WsConnectionState {
@@ -91,7 +92,8 @@ class RelayWebSocketClient {
                     val obj = element as? JsonObject
                     val type = obj?.get("type")?.jsonPrimitive?.content ?: "unknown"
                     val event = obj?.get("event")?.jsonPrimitive?.content
-                    _events.tryEmit(WsEvent(type, event, element))
+                    val id = obj?.get("id")?.jsonPrimitive?.content
+                    _events.tryEmit(WsEvent(type, event, element, id))
                 } catch (_: Exception) {
                     _events.tryEmit(WsEvent("error", null, null))
                 }

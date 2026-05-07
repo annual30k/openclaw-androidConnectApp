@@ -53,9 +53,10 @@ fun ClawLinkScaffold(
             modifier = Modifier.fillMaxSize(),
             containerColor = Color.Transparent,
             topBar = topBar,
-            bottomBar = bottomBar,
-            content = content
-        )
+            bottomBar = bottomBar
+        ) { padding ->
+            content(padding)
+        }
     }
 }
 
