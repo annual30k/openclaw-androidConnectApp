@@ -76,6 +76,7 @@ fun AppNavigation(
     val voiceReplyEnabled by container.userPreferencesStore.assistantVoiceRepliesEnabled.collectAsState()
     val voiceIdentifier by container.userPreferencesStore.voiceReplyVoiceIdentifier.collectAsState()
     val voiceRatePercent by container.userPreferencesStore.voiceReplyRatePercent.collectAsState()
+    val showsToolInvocationProcess by container.userPreferencesStore.showsToolInvocationProcess.collectAsState()
     val scope = rememberCoroutineScope()
     val hasVoiceReplyGenerationSetup = remember(skillState.skills) {
         skillState.skills.any { it.isVoiceReplyGenerationSkillReady() }
@@ -145,6 +146,10 @@ fun AppNavigation(
             voiceIdentifier = voiceIdentifier,
             ratePercent = voiceRatePercent
         )
+    }
+
+    LaunchedEffect(showsToolInvocationProcess) {
+        container.chatStore.setShowInvocationProcess(showsToolInvocationProcess)
     }
 
     LaunchedEffect(voiceIdentifier, voiceRatePercent, chatState.currentGatewayId, chatState.currentSessionKey) {

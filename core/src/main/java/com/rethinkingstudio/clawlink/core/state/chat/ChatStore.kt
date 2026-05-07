@@ -1310,8 +1310,12 @@ class ChatStore(
         )
     }
 
+    fun setShowInvocationProcess(enabled: Boolean) {
+        _state.value = _state.value.copy(showInvocationProcess = enabled)
+    }
+
     fun toggleShowInvocation() {
-        _state.value = _state.value.copy(showInvocationProcess = !_state.value.showInvocationProcess)
+        setShowInvocationProcess(!_state.value.showInvocationProcess)
     }
 
     fun updateVoiceReplyConfig(
