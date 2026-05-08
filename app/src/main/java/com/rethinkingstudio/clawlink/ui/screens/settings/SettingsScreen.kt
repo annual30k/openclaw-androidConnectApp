@@ -136,9 +136,7 @@ fun SettingsScreen(
                         gateway = gw,
                         appRelayStatus = gatewayState.appRelayStatus,
                         onEditName = { newName ->
-                            scope.launch {
-                                gatewayStore.updateGatewayName(gw.id, newName)
-                            }
+                            gatewayStore.updateGatewayName(gw.id, newName)
                         },
                         onClick = onNavigateToGateways
                     )
@@ -449,4 +447,3 @@ private fun SettingsNavigationRow(
         }
     }
 }
-

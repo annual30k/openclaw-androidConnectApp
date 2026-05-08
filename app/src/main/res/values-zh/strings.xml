@@ -945,6 +945,7 @@
     <string name="settings_gateway_action_bind">绑定</string>
 
     <string name="settings_gateway_edit_name_placeholder">输入网关名称</string>
+    <string name="gateway_edit_name">编辑网关名称</string>
 
     <string name="settings_gateway_fallback_last_seen">暂无</string>
     <string name="settings_gateway_fallback_name">未知网关</string>

@@ -12,15 +12,19 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Cancel
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
@@ -30,28 +34,55 @@ import com.rethinkingstudio.clawlink.R
 import com.rethinkingstudio.clawlink.core.models.gateway.AggregateStatus
 import com.rethinkingstudio.clawlink.core.models.gateway.GatewaySummary
 import com.rethinkingstudio.clawlink.core.state.gateway.GatewayStore
+import kotlinx.coroutines.launch
 
 @Composable
 fun GatewayStatusCard(
     gateway: GatewaySummary,
     appRelayStatus: AggregateStatus,
-    onEditName: (String) -> Unit,
+    onEditName: suspend (String) -> Unit,
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     var isEditing by remember { mutableStateOf(false) }
+    var isSavingName by remember { mutableStateOf(false) }
     var editedName by remember { mutableStateOf(gateway.displayName) }
+    val trimmedEditedName = editedName.trim()
+    val nameFocusRequester = remember { FocusRequester() }
+    val componentScope = rememberCoroutineScope()
 
-    val effectiveStatus = if (appRelayStatus == AggregateStatus.online) {
-        gateway.aggregateStatus
-    } else {
-        appRelayStatus
+    LaunchedEffect(gateway.id, gateway.displayName) {
+        if (!isEditing) {
+            editedName = gateway.displayName
+        }
     }
 
+    LaunchedEffect(isEditing) {
+        if (isEditing && !isSavingName) {
+            nameFocusRequester.requestFocus()
+        }
+    }
+
+    fun saveEditedName() {
+        if (isSavingName || trimmedEditedName.isBlank()) return
+        isSavingName = true
+        componentScope.launch {
+            try {
+                onEditName(trimmedEditedName)
+                isEditing = false
+            } finally {
+                isSavingName = false
+            }
+        }
+    }
+
+    val effectiveStatus = gateway.aggregateStatus
+
     val statusColor = when (effectiveStatus) {
-        AggregateStatus.online -> Color(0xFF4ADE80)
-        AggregateStatus.partial -> MaterialTheme.colorScheme.tertiary
-        else -> MaterialTheme.colorScheme.error
+        AggregateStatus.online -> Color(0xFF2BBD66)
+        AggregateStatus.connecting -> Color(0xFFFAAF29)
+        AggregateStatus.partial -> Color(0xFF70ADFA)
+        AggregateStatus.offline -> Color(0xFFEF5450)
     }
 
     val statusText = when (effectiveStatus) {
@@ -64,130 +95,181 @@ fun GatewayStatusCard(
     Box(
         modifier = modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(32.dp))
-            .background(Color.White)
-            .drawWithContent {
-                drawContent()
-                drawRoundRect(
-                    color = Color.Black.copy(alpha = 0.05f),
-                    style = Stroke(width = 1.dp.toPx()),
-                    cornerRadius = androidx.compose.ui.geometry.CornerRadius(32.dp.toPx())
-                )
-            }
+            .shadow(22.dp, RoundedCornerShape(28.dp), clip = false)
+            .clip(RoundedCornerShape(28.dp))
+            .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.9f))
             .clickable { if (!isEditing) onClick() }
-            .padding(20.dp)
     ) {
-        Column(verticalArrangement = Arrangement.spacedBy(18.dp)) {
+        Box(
+            modifier = Modifier
+                .matchParentSize()
+                .background(
+                    Brush.linearGradient(
+                        colors = listOf(
+                            Color.White.copy(alpha = 0.36f),
+                            Color(0xFF70ADFA).copy(alpha = 0.08f),
+                            Color.White.copy(alpha = 0.10f)
+                        )
+                    )
+                )
+                .drawWithContent {
+                    drawContent()
+                    drawRoundRect(
+                        color = Color.White.copy(alpha = 0.30f),
+                        style = Stroke(width = 0.8.dp.toPx()),
+                        cornerRadius = androidx.compose.ui.geometry.CornerRadius(28.dp.toPx())
+                    )
+                }
+        )
+
+        Column(
+            verticalArrangement = Arrangement.spacedBy(16.dp),
+            modifier = Modifier.padding(18.dp)
+        ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+                verticalAlignment = Alignment.Top
             ) {
                 Column(
                     modifier = Modifier.weight(1f),
-                    verticalArrangement = Arrangement.spacedBy(2.dp)
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
                     if (isEditing) {
-                        OutlinedTextField(
-                            value = editedName,
-                            onValueChange = { editedName = it },
-                            modifier = Modifier.fillMaxWidth(),
-                            singleLine = true,
-                            textStyle = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
-                            keyboardActions = KeyboardActions(onDone = {
-                                onEditName(editedName)
-                                isEditing = false
-                            }),
-                            trailingIcon = {
-                                IconButton(onClick = {
-                                    onEditName(editedName)
-                                    isEditing = false
-                                }) {
-                                    Icon(Icons.Default.CheckCircle, null, tint = Color(0xFF4ADE80))
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            OutlinedTextField(
+                                value = editedName,
+                                onValueChange = { editedName = it },
+                                enabled = !isSavingName,
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .focusRequester(nameFocusRequester),
+                                singleLine = true,
+                                textStyle = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                                keyboardActions = KeyboardActions(onDone = { saveEditedName() })
+                            )
+
+                            IconButton(
+                                onClick = { saveEditedName() },
+                                enabled = trimmedEditedName.isNotBlank() && !isSavingName,
+                                modifier = Modifier.size(32.dp)
+                            ) {
+                                if (isSavingName) {
+                                    CircularProgressIndicator(
+                                        modifier = Modifier.size(18.dp),
+                                        strokeWidth = 2.dp,
+                                        color = Color(0xFF2BBD66)
+                                    )
+                                } else {
+                                    Icon(
+                                        Icons.Default.CheckCircle,
+                                        contentDescription = stringResource(R.string.common_action_save),
+                                        tint = Color(0xFF2BBD66)
+                                    )
                                 }
                             }
-                        )
+
+                            IconButton(
+                                onClick = {
+                                    editedName = gateway.displayName
+                                    isEditing = false
+                                },
+                                enabled = !isSavingName,
+                                modifier = Modifier.size(32.dp)
+                            ) {
+                                Icon(
+                                    Icons.Default.Cancel,
+                                    contentDescription = stringResource(R.string.common_action_cancel),
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
                     } else {
-                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            modifier = Modifier.clickable {
+                                editedName = gateway.displayName
+                                isEditing = true
+                            }
+                        ) {
                             Text(
                                 text = gateway.displayName,
-                                style = MaterialTheme.typography.titleLarge.copy(fontSize = 19.sp),
+                                style = MaterialTheme.typography.titleMedium.copy(fontSize = 17.sp),
                                 fontWeight = FontWeight.Bold,
-                                color = Color(0xFF1F2937)
+                                color = MaterialTheme.colorScheme.onSurface
                             )
                             IconButton(
-                                onClick = { isEditing = true },
-                                modifier = Modifier.size(24.dp)
+                                onClick = {
+                                    editedName = gateway.displayName
+                                    isEditing = true
+                                },
+                                modifier = Modifier.size(32.dp)
                             ) {
                                 Icon(
                                     Icons.Default.Edit,
-                                    null,
+                                    contentDescription = stringResource(R.string.gateway_edit_name),
                                     modifier = Modifier.size(18.dp),
-                                    tint = Color(0xFF3B82F6)
+                                    tint = Color(0xFF0F73ED)
                                 )
                             }
                         }
                     }
                     Text(
                         text = stringResource(R.string.gateway_card_last_seen, gateway.lastSeenAt),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = Color(0xFF6B7280)
+                        style = MaterialTheme.typography.labelSmall.copy(fontSize = 12.sp),
+                        fontWeight = FontWeight.Normal,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Text(
+                            text = stringResource(R.string.gateway_card_recent_model),
+                            style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp),
+                            fontWeight = FontWeight.Medium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Text(
+                            text = gateway.currentModel,
+                            style = MaterialTheme.typography.labelSmall.copy(fontSize = 12.sp),
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                    }
                 }
 
-                // Status Badge
                 Surface(
                     shape = CircleShape,
-                    color = statusColor.copy(alpha = 0.1f),
+                    color = statusColor.copy(alpha = 0.14f),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, statusColor.copy(alpha = 0.22f)),
                     modifier = Modifier.padding(start = 8.dp)
                 ) {
                     Row(
-                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
                         Box(
                             modifier = Modifier
-                                .size(8.dp)
+                                .size(9.dp)
                                 .background(statusColor, CircleShape)
                         )
                         Text(
                             text = statusText,
-                            style = MaterialTheme.typography.labelMedium,
-                            fontWeight = FontWeight.Bold,
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = FontWeight.SemiBold,
                             color = statusColor
                         )
                     }
                 }
             }
-
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                modifier = Modifier.padding(bottom = 4.dp)
-            ) {
-                Text(
-                    text = stringResource(R.string.gateway_card_recent_model),
-                    style = MaterialTheme.typography.labelMedium,
-                    color = Color(0xFF6B7280)
-                )
-                Surface(
-                    shape = RoundedCornerShape(8.dp),
-                    color = Color(0xFFF3F4F6),
-                    modifier = Modifier.padding(horizontal = 2.dp)
-                ) {
-                    Text(
-                        text = gateway.currentModel,
-                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
-                        style = MaterialTheme.typography.labelSmall,
-                        fontWeight = FontWeight.Bold,
-                        color = Color(0xFF374151)
-                    )
-                }
-            }
             
-            // Flow Panel
             val synthesizedStatuses = remember(gateway.statuses, appRelayStatus) {
                 GatewayStore.selectedGatewayStatuses(
                     selectedGateway = gateway,

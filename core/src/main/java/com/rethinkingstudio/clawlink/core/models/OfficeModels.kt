@@ -1,31 +1,94 @@
 package com.rethinkingstudio.clawlink.core.models
 
+import com.rethinkingstudio.clawlink.core.models.gateway.AggregateStatus
 import kotlinx.serialization.Serializable
 
 @Serializable
-data class OfficeActivity(
-    val kind: String? = null,
-    val title: String? = null,
-    val detail: String? = null,
-    val phase: String? = null,
-    val toolName: String? = null,
-    val toolCallId: String? = null,
-    val progress: Double? = null,
-    val updatedAt: String? = null
-)
+enum class OfficeActivityKind {
+    IDLE,
+    WRITING,
+    RESEARCHING,
+    EXECUTING,
+    SYNCING,
+    SLEEPING,
+    OFFLINE,
+    ERROR
+}
 
-data class OfficeNPC(
+@Serializable
+enum class OfficeStation {
+    DESK_LEFT,
+    DESK_CENTER,
+    COFFEE_DESK,
+    SOFA,
+    BED,
+    SERVER_RACK,
+    CORNER
+}
+
+@Serializable
+data class OfficeAgentSnapshot(
     val id: String,
+    val gatewayId: String,
     val displayName: String,
-    val x: Float,
-    val y: Float,
-    val spriteSheet: String,
-    val animationState: String = "idle"
+    val platform: String,
+    val currentModel: String,
+    val contextUsage: String,
+    val aggregateStatus: AggregateStatus,
+    val mobileControlStatus: String?,
+    val activityKind: OfficeActivityKind,
+    val activityTitle: String,
+    val activityDetail: String,
+    val activityPhase: String?,
+    val activityToolName: String?,
+    val activityToolCallId: String?,
+    val activityProgress: Double?,
+    val activityUpdatedAt: String?,
+    val isSelected: Boolean,
+    val motionSeed: Double
+) {
+    val isWorking: Boolean
+        get() = when (activityKind) {
+            OfficeActivityKind.SLEEPING, OfficeActivityKind.OFFLINE -> false
+            else -> true
+        }
+}
+
+@Serializable
+data class OfficeSceneSnapshot(
+    val agents: List<OfficeAgentSnapshot>
+) {
+    val focusAgent: OfficeAgentSnapshot?
+        get() = agents.find { it.isSelected } ?: agents.firstOrNull()
+
+    val primaryExecutingAgent: OfficeAgentSnapshot?
+        get() = agents.find { it.activityKind == OfficeActivityKind.EXECUTING }
+
+    val activeCount: Int
+        get() = agents.count { it.isWorking }
+
+    val onlineCount: Int
+        get() = agents.count { it.aggregateStatus != AggregateStatus.offline }
+
+    val offlineCount: Int
+        get() = agents.count { it.aggregateStatus == AggregateStatus.offline }
+}
+
+@Serializable
+data class OfficeNPC(
+    val id: Int,
+    val waypoints: List<PointF>,
+    val speed: Float,
+    val waitAtEachStop: Double,
+    val timeOffset: Double
 )
 
-data class OfficeSceneConfig(
-    val backgroundAsset: String = "OfficeBackground",
-    val npcPositions: List<OfficeNPC> = emptyList(),
-    val width: Int = 320,
-    val height: Int = 180
-)
+@Serializable
+data class PointF(
+    val x: Float,
+    val y: Float
+) {
+    companion object
+}
+
+

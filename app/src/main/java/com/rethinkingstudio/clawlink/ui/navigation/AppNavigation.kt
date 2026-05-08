@@ -295,7 +295,9 @@ fun AppNavigation(
         }
 
         composable(Routes.OFFICE) {
-            com.rethinkingstudio.clawlink.ui.screens.settings.OfficeScreen(
+            com.rethinkingstudio.clawlink.ui.screens.office.OfficeScreen(
+                authStore = container.authStore,
+                gatewayStore = container.gatewayStore,
                 onBack = { navController.popBackStack() }
             )
         }

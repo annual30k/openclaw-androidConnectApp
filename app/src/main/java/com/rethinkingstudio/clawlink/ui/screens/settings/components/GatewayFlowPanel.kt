@@ -90,7 +90,7 @@ fun GatewayFlowPanel(
     BoxWithConstraints(
         modifier = modifier
             .fillMaxWidth()
-            .height(140.dp)
+            .height(148.dp)
             .clip(RoundedCornerShape(24.dp))
             .background(
                 Brush.linearGradient(
@@ -112,16 +112,38 @@ fun GatewayFlowPanel(
         val width = constraints.maxWidth.toFloat()
         val height = constraints.maxHeight.toFloat()
         val density = LocalDensity.current
+        val dp34 = with(density) { 34.dp.toPx() }
+        val dp44 = with(density) { 44.dp.toPx() }
+        val dp52 = with(density) { 52.dp.toPx() }
+        val dp60 = with(density) { 60.dp.toPx() }
         val dp30 = with(density) { 30.dp.toPx() }
         val dp24 = with(density) { 24.dp.toPx() }
         
-        val horizontalInset = width * 0.15f
-        val nodeY = height * 0.45f
+        val horizontalInset = (width * 0.12f).coerceIn(dp34, dp44)
+        val nodeY = (height * 0.40f).coerceIn(dp52, dp60)
         val spacing = if (visibleStatuses.size > 1) (width - horizontalInset * 2) / (visibleStatuses.size - 1) else 0f
         
         val nodeCenters = visibleStatuses.indices.map { index ->
             Offset(horizontalInset + index * spacing, nodeY)
         }
+
+        Box(
+            modifier = Modifier
+                .align(Alignment.TopEnd)
+                .offset(x = 26.dp, y = (-40).dp)
+                .size(132.dp)
+                .clip(CircleShape)
+                .background(Color(0xFF0F73ED).copy(alpha = 0.12f))
+        )
+
+        Box(
+            modifier = Modifier
+                .align(Alignment.BottomStart)
+                .offset(x = (-16).dp, y = 24.dp)
+                .size(104.dp)
+                .clip(CircleShape)
+                .background(Color(0xFF2BBD66).copy(alpha = 0.09f))
+        )
 
         Canvas(modifier = Modifier.fillMaxSize()) {
             // Ambient Highlights

@@ -280,10 +280,12 @@ class GatewayStore(
     }
 
     suspend fun updateGatewayName(gatewayId: String, newName: String) {
+        val trimmedName = newName.trim()
+        if (trimmedName.isBlank()) return
         try {
-            apiClient.updateGateway(gatewayId, mapOf("display_name" to newName))
+            apiClient.updateGateway(gatewayId, mapOf("displayName" to trimmedName))
             val list = _state.value.gateways.map {
-                if (it.id == gatewayId) it.copy(displayName = newName) else it
+                if (it.id == gatewayId) it.copy(displayName = trimmedName) else it
             }
             _state.value = _state.value.copy(gateways = list)
         } catch (e: Exception) {

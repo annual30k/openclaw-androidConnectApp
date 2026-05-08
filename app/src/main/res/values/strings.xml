@@ -945,6 +945,7 @@ Tap the button below to refresh manually.</string>
     <string name="settings_gateway_action_bind">Bind</string>
 
     <string name="settings_gateway_edit_name_placeholder">Enter gateway name</string>
+    <string name="gateway_edit_name">Edit gateway name</string>
 
     <string name="settings_gateway_fallback_last_seen">N/A</string>
     <string name="settings_gateway_fallback_name">Unknown Gateway</string>
