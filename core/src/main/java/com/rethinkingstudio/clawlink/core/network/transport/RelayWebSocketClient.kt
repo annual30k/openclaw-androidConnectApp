@@ -70,6 +70,15 @@ class RelayWebSocketClient {
         .build()
 
     fun connect(url: String, token: String) {
+        if (
+            baseUrl == url &&
+            accessToken == token &&
+            (isConnected.get() ||
+                _connectionState.value == WsConnectionState.connecting ||
+                _connectionState.value == WsConnectionState.reconnecting)
+        ) {
+            return
+        }
         cancelReconnect()
         reconnectEnabled.set(true)
         baseUrl = url

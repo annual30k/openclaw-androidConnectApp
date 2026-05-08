@@ -35,6 +35,7 @@ import androidx.compose.ui.unit.sp
 import com.rethinkingstudio.clawlink.R
 import com.rethinkingstudio.clawlink.core.models.gateway.AggregateStatus
 import com.rethinkingstudio.clawlink.core.models.gateway.GatewaySummary
+import com.rethinkingstudio.clawlink.core.state.gateway.GatewayStore
 import com.rethinkingstudio.clawlink.ui.screens.chat.ChatColors
 
 @Composable
@@ -46,11 +47,7 @@ internal fun ChatTopBar(
     onSettings: () -> Unit,
     onBack: (() -> Unit)?
 ) {
-    val effectiveStatus = if (appRelayStatus == AggregateStatus.online) {
-        gateway?.aggregateStatus ?: AggregateStatus.offline
-    } else {
-        appRelayStatus
-    }
+    val effectiveStatus = GatewayStore.aggregateStatusForChain(gateway, appRelayStatus)
 
     val hasGateway = gateway != null
     val statusColor = when {

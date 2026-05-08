@@ -76,7 +76,7 @@ fun GatewayStatusCard(
         }
     }
 
-    val effectiveStatus = gateway.aggregateStatus
+    val effectiveStatus = GatewayStore.aggregateStatusForChain(gateway, appRelayStatus)
 
     val statusColor = when (effectiveStatus) {
         AggregateStatus.online -> Color(0xFF2BBD66)

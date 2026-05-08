@@ -273,18 +273,14 @@ fun AppNavigation(
                 onNavigateToSessions = { navController.navigate(Routes.SESSIONS) },
                 onNavigateToVoiceSetup = { navController.navigate(Routes.VOICE_SETUP) },
                 onNavigateToLanguage = { navController.navigate(Routes.LANGUAGE) },
-                onLogout = {
-                    scope.launch { container.authStore.logout() }
-                },
-                onDeleteAccount = {
-                    // Handle account deletion if needed
-                }
+                onLogout = {}
             )
         }
 
         composable(Routes.ADVANCED) {
             AdvancedScreen(
                 prefsStore = container.userPreferencesStore,
+                gatewayStore = container.gatewayStore,
                 onBack = { navController.popBackStack() },
                 onNavigateToRestartGateway = { navController.navigate(Routes.MAINTENANCE_RESTART) },
                 onNavigateToRemoteRestart = { navController.navigate(Routes.MAINTENANCE_REMOTE_RESTART) },

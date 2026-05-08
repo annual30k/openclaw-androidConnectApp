@@ -115,7 +115,7 @@ fun SessionsScreen(
     var issueMessage by remember { mutableStateOf<String?>(null) }
     var confirmDelete by remember { mutableStateOf<ChatSessionItem?>(null) }
 
-    val operationsLocked = gatewayState.restartingGatewayId != null
+    val operationsLocked = gatewayState.restartingGatewayId != null || !gatewayState.isSelectedGatewayChatChainReady
     val canSwitchSessions = gatewayId != null && !operationsLocked && !chatState.isStreaming && !chatState.isStoppingRun
     val currentSessionKey = chatState.currentSessionKey.ifBlank { "main" }
     val sessions = remember(chatState.sessions, currentSessionKey) {
@@ -137,6 +137,7 @@ fun SessionsScreen(
 
     suspend fun refreshSessions(forceError: Boolean = true) {
         val id = gatewayId ?: return
+        if (!gatewayState.isSelectedGatewayChatChainReady) return
         if (isRefreshing) return
         isRefreshing = true
         try {
@@ -149,7 +150,7 @@ fun SessionsScreen(
         }
     }
 
-    LaunchedEffect(gatewayId) {
+    LaunchedEffect(gatewayId, gatewayState.isSelectedGatewayChatChainReady) {
         refreshSessions(forceError = false)
     }
 
@@ -169,7 +170,7 @@ fun SessionsScreen(
                     actions = {
                         IconButton(
                             onClick = { scope.launch { refreshSessions(forceError = true) } },
-                            enabled = !isRefreshing && deletingKey == null
+                            enabled = gatewayState.isSelectedGatewayChatChainReady && !isRefreshing && deletingKey == null
                         ) {
                             if (isRefreshing) {
                                 CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
@@ -196,10 +197,7 @@ fun SessionsScreen(
                         canCreateSession = canSwitchSessions,
                         onSwitchGateway = onNavigateToGateways,
                         onCreateSession = {
-                            if (!canSwitchSessions) {
-                                issueMessage = lockMessage(gatewayId, operationsLocked, chatState.isStreaming, chatState.isStoppingRun)
-                                return@SessionManagerSummaryCard
-                            }
+                            if (!canSwitchSessions) return@SessionManagerSummaryCard
                             chatStore.newSession()
                             issueMessage = null
                             onBack()
@@ -207,18 +205,7 @@ fun SessionsScreen(
                     )
                 }
 
-                if (operationsLocked || gatewayId == null || chatState.isStreaming || chatState.isStoppingRun) {
-                    item {
-                        MaintenanceBanner(
-                            title = "会话锁定",
-                            message = lockMessage(gatewayId, operationsLocked, chatState.isStreaming, chatState.isStoppingRun),
-                            icon = Icons.Default.Lock,
-                            tint = WarningOrange
-                        )
-                    }
-                }
-
-                issueMessage?.let { message ->
+                if (gatewayState.isSelectedGatewayChatChainReady) issueMessage?.let { message ->
                     item {
                         MaintenanceBanner(
                             title = "会话列表",
@@ -333,10 +320,7 @@ fun SessionsScreen(
                                     if (isSwiped) {
                                         isSwiped = false
                                     } else {
-                                        if (!canSwitchSessions) {
-                                            issueMessage = lockMessage(gatewayId, operationsLocked, chatState.isStreaming, chatState.isStoppingRun)
-                                            return@SessionManagerSessionRow
-                                        }
+                                        if (!canSwitchSessions) return@SessionManagerSessionRow
                                         if (!isCurrent) {
                                             chatStore.selectSession(session.sessionKey)
                                         }
@@ -366,7 +350,7 @@ fun SessionsScreen(
             ProcessingOverlay(message = "正在删除会话", detail = "请稍候，正在同步云端状态...")
         }
 
-        issueMessage?.let { message ->
+        if (gatewayState.isSelectedGatewayChatChainReady) issueMessage?.let { message ->
             Snackbar(
                 modifier = Modifier
                     .align(Alignment.BottomCenter)

@@ -105,13 +105,13 @@ fun ModelCatalogScreen(
     val gatewayState by gatewayStore.state.collectAsState()
     val scope = rememberCoroutineScope()
     val gatewayId = gatewayState.selectedGatewayId
-    val operationsLocked = gatewayState.restartingGatewayId != null
+    val operationsLocked = gatewayState.restartingGatewayId != null || !gatewayState.isSelectedGatewayChatChainReady
 
     var searchText by remember { mutableStateOf("") }
     var modelToConfirm by remember { mutableStateOf<ModelItem?>(null) }
 
-    LaunchedEffect(gatewayId) {
-        if (gatewayId != null) modelStore.loadModels(gatewayId)
+    LaunchedEffect(gatewayId, gatewayState.isSelectedGatewayChatChainReady) {
+        if (gatewayId != null && gatewayState.isSelectedGatewayChatChainReady) modelStore.loadModels(gatewayId)
     }
 
     val groupedModels = remember(modelState.models) {
@@ -138,7 +138,7 @@ fun ModelCatalogScreen(
                     },
                     actions = {
                         IconButton(
-                            onClick = { if (gatewayId != null) scope.launch { modelStore.loadModels(gatewayId) } },
+                            onClick = { if (gatewayId != null && gatewayState.isSelectedGatewayChatChainReady) scope.launch { modelStore.loadModels(gatewayId) } },
                             enabled = !modelState.isLoading && !isProcessing
                         ) {
                             if (modelState.isLoading) {
@@ -195,7 +195,7 @@ fun ModelCatalogScreen(
                             isLoading = modelState.isLoading,
                             hasQuery = searchText.isNotBlank(),
                             errorMessage = modelState.errorMessage,
-                            onRefresh = { if (gatewayId != null) scope.launch { modelStore.loadModels(gatewayId) } },
+                            onRefresh = { if (gatewayId != null && gatewayState.isSelectedGatewayChatChainReady) scope.launch { modelStore.loadModels(gatewayId) } },
                             modifier = Modifier.animateItemPlacement()
                         )
                     }
@@ -216,7 +216,7 @@ fun ModelCatalogScreen(
                 .padding(bottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding() + 12.dp)
         )
 
-        modelState.errorMessage?.let { message ->
+        if (gatewayState.isSelectedGatewayChatChainReady) modelState.errorMessage?.let { message ->
             Snackbar(
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
@@ -238,7 +238,7 @@ fun ModelCatalogScreen(
                 TextButton(
                     onClick = {
                         modelToConfirm = null
-                        if (gatewayId != null) {
+                        if (gatewayId != null && gatewayState.isSelectedGatewayChatChainReady) {
                             scope.launch {
                                 val didUpdate = modelStore.setDefaultModel(gatewayId, model) {
                                     waitForGatewayRecoveryAfterDefaultModelChange(gatewayStore, gatewayId)

@@ -164,6 +164,23 @@ class AuthStore(
         _state.value = AuthState()
     }
 
+    suspend fun deleteAccount(): Boolean {
+        _state.value = _state.value.copy(isLoading = true, errorMessage = null)
+        return try {
+            apiClient.deleteAccount()
+            credentialStore.clearCredentials()
+            apiClient.clearSession()
+            _state.value = AuthState()
+            true
+        } catch (e: Exception) {
+            _state.value = _state.value.copy(
+                isLoading = false,
+                errorMessage = e.message ?: "Delete account failed"
+            )
+            false
+        }
+    }
+
     fun clearError() {
         _state.value = _state.value.copy(errorMessage = null, suggestRegister = false)
     }

@@ -44,7 +44,8 @@ import kotlin.math.sin
 fun PixelOfficeScene(
     scene: OfficeSceneSnapshot,
     modifier: Modifier = Modifier,
-    reduceMotion: Boolean = false
+    reduceMotion: Boolean = false,
+    showsOccupants: Boolean = true
 ) {
     val context = LocalContext.current
     val routePlanner = remember { OfficeRoutePlanner.getInstance(context) }
@@ -107,7 +108,7 @@ fun PixelOfficeScene(
             translate(offsetX, offsetY)
             scale(scale, scale, Offset.Zero)
         }) {
-            drawStage(bitmaps, scene, motionState, timeMillis, reduceMotion)
+            drawStage(bitmaps, scene, motionState, timeMillis, reduceMotion, showsOccupants)
         }
     }
 }
@@ -117,15 +118,18 @@ private fun DrawScope.drawStage(
     scene: OfficeSceneSnapshot,
     motionState: OfficeSceneMotionState,
     timeMillis: Long,
-    reduceMotion: Boolean
+    reduceMotion: Boolean,
+    showsOccupants: Boolean
 ) {
     bitmaps[R.drawable.office_background]?.let {
         drawContext.canvas.nativeCanvas.drawBitmap(it, null, Rect(0, 0, 1280, 720), null)
     }
 
-    drawFurniture(bitmaps, scene, timeMillis, reduceMotion)
-    drawNPCs(bitmaps, timeMillis)
-    drawAgents(bitmaps, scene, motionState, timeMillis, reduceMotion)
+    drawFurniture(bitmaps, scene, timeMillis, reduceMotion, showsOccupants)
+    if (showsOccupants) {
+        drawNPCs(bitmaps, timeMillis)
+        drawAgents(bitmaps, scene, motionState, timeMillis, reduceMotion)
+    }
     drawDeskOverlay(bitmaps)
     drawOfficeTitlePlaque()
 }
@@ -134,7 +138,8 @@ private fun DrawScope.drawFurniture(
     bitmaps: Map<Int, Bitmap>,
     scene: OfficeSceneSnapshot,
     timeMillis: Long,
-    reduceMotion: Boolean
+    reduceMotion: Boolean,
+    showsOccupants: Boolean
 ) {
     drawSpriteFrame(bitmaps[R.drawable.office_posters_sheet], 160, 160, 14, timeMillis, 1.0, centerRect(252f, 66f, 160f, 160f, 0.95f), reduceMotion)
     drawSpriteFrame(bitmaps[R.drawable.office_plants_sheet], 160, 160, 3, timeMillis, 1.0, centerRect(230f, 185f, 160f, 160f, 0.92f), reduceMotion)
@@ -162,7 +167,9 @@ private fun DrawScope.drawFurniture(
     }
 
     drawSpriteFrame(bitmaps[R.drawable.office_serverroom_sheet], 180, 251, null, timeMillis, 5.5, centerRect(1021f, 142f, 180f, 251f, 1.0f), reduceMotion)
-    drawSpriteFrame(bitmaps[R.drawable.office_cats_sheet], 160, 160, 6, timeMillis, 1.0, centerRect(94f, 557f, 160f, 160f, 0.94f), reduceMotion)
+    if (showsOccupants) {
+        drawSpriteFrame(bitmaps[R.drawable.office_cats_sheet], 160, 160, 6, timeMillis, 1.0, centerRect(94f, 557f, 160f, 160f, 0.94f), reduceMotion)
+    }
 }
 
 private fun DrawScope.drawNPCs(

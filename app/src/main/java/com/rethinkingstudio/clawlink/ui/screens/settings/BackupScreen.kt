@@ -146,18 +146,11 @@ fun BackupScreen(
     var confirmDelete by remember { mutableStateOf<BackupItem?>(null) }
     var confirmRestore by remember { mutableStateOf<BackupItem?>(null) }
 
-    val hasSession = gatewayState.gateways.isNotEmpty()
     val isLocked = gatewayState.restartingGatewayId != null
-    val canManage = hasSession && gatewayId != null && !isLocked
-
-    val accessHint = when {
-        !hasSession -> stringResource(R.string.backup_hint_no_session)
-        isLocked -> stringResource(R.string.backup_hint_locked)
-        else -> null
-    }
+    val canManage = gatewayId != null && !isLocked && gatewayState.isSelectedGatewayChatChainReady
 
     suspend fun refreshBackups() {
-        if (gatewayId == null) return
+        if (gatewayId == null || !gatewayState.isSelectedGatewayChatChainReady) return
         isLoading = true
         try {
             val response = apiClient.fetchBackups(gatewayId)
@@ -168,7 +161,7 @@ fun BackupScreen(
         isLoading = false
     }
 
-    LaunchedEffect(gatewayId) {
+    LaunchedEffect(gatewayId, gatewayState.isSelectedGatewayChatChainReady) {
         refreshBackups()
     }
 
@@ -194,7 +187,7 @@ fun BackupScreen(
                         }
                     },
                     actions = {
-                        IconButton(onClick = { scope.launch { refreshBackups() } }, enabled = !isLoading) {
+                        IconButton(onClick = { scope.launch { refreshBackups() } }, enabled = canManage && !isLoading) {
                             if (isLoading) CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp, color = Color(0xFF3B82F6))
                             else Icon(Icons.Default.Refresh, null, modifier = Modifier.size(20.dp), tint = Color(0xFF3B82F6))
                         }
@@ -228,19 +221,6 @@ fun BackupScreen(
                                     Icon(Icons.Default.CheckCircle, null, tint = Color(0xFF22C55E), modifier = Modifier.size(20.dp))
                                 }
                                 Text(actionMessage!!, color = Color(0xFF1F2937), fontSize = 13.sp, fontWeight = FontWeight.Medium)
-                            }
-                        }
-                    }
-                }
-
-                if (accessHint != null) {
-                    item {
-                        BackupGlassCard {
-                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                                Box(Modifier.size(40.dp).background(Color(0xFFF59E0B).copy(alpha = 0.1f), CircleShape), contentAlignment = Alignment.Center) {
-                                    Icon(Icons.Default.Lock, null, tint = Color(0xFFF59E0B), modifier = Modifier.size(20.dp))
-                                }
-                                Text(accessHint, color = Color(0xFF1F2937), fontSize = 13.sp, fontWeight = FontWeight.Medium)
                             }
                         }
                     }

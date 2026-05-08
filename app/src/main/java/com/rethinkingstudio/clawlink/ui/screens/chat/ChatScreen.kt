@@ -106,7 +106,21 @@ fun ChatScreen(
 
     val gatewayId = gatewayState.selectedGatewayId
     val hasSelectedGateway = gatewayState.selectedGateway != null
-    val hasActiveSession = hasSelectedGateway && chatState.currentSessionKey.isNotBlank()
+    val isChatChainReady = gatewayState.isSelectedGatewayChatChainReady
+    val hasActiveSession = hasSelectedGateway && chatState.currentSessionKey.isNotBlank() && isChatChainReady
+    val connectionIssueMessage = remember(
+        hasSelectedGateway,
+        gatewayState.appRelayStatus,
+        gatewayState.selectedGatewayAggregateStatus,
+        isChatChainReady
+    ) {
+        when {
+            !hasSelectedGateway -> null
+            gatewayState.appRelayStatus == AggregateStatus.offline -> "无法连接到 Relay 服务器，请确认服务已启动且地址可访问。"
+            !isChatChainReady -> "当前链路未全通，请确认 Relay 已连接到主机且 OpenClaw 已启动。"
+            else -> null
+        }
+    }
 
     LaunchedEffect(context) {
         RemoteImageSizeCache.init(context.applicationContext)
@@ -254,10 +268,10 @@ fun ChatScreen(
                         .padding(horizontal = 20.dp)
                         .padding(top = 0.dp)
                 ) {
-                    if (chatState.errorMessage != null || gatewayState.errorMessage != null || viewModel.composerNotice != null) {
+                    if (connectionIssueMessage != null || chatState.errorMessage != null || gatewayState.errorMessage != null || viewModel.composerNotice != null) {
                         StatusBanner(
-                            text = chatState.errorMessage ?: gatewayState.errorMessage ?: viewModel.composerNotice.orEmpty(),
-                            isError = chatState.errorMessage != null || gatewayState.errorMessage != null,
+                            text = connectionIssueMessage ?: chatState.errorMessage ?: gatewayState.errorMessage ?: viewModel.composerNotice.orEmpty(),
+                            isError = connectionIssueMessage != null || chatState.errorMessage != null || gatewayState.errorMessage != null,
                             onDismiss = { viewModel.clearError() }
                         )
                     }
@@ -405,7 +419,7 @@ fun ChatScreen(
                         isUploadingAttachment = viewModel.isUploadingAttachment,
                         hasActiveSession = hasActiveSession,
                         canEditComposer = hasActiveSession && !chatState.isStreaming && !viewModel.isUploadingAttachment && !chatState.isStoppingRun && !viewModel.voiceInputPhase.isBusy,
-                        canSendMessage = gatewayState.selectedGateway?.aggregateStatus == AggregateStatus.online,
+                        canSendMessage = isChatChainReady,
                         showAttachmentMenu = viewModel.showAttachmentMenu,
                         onDismissAttachmentMenu = { viewModel.showAttachmentMenu = false },
                         attachmentButtonPosition = viewModel.attachmentButtonPosition,

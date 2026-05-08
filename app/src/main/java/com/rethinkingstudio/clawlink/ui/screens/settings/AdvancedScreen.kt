@@ -11,6 +11,7 @@ import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -20,6 +21,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.rethinkingstudio.clawlink.R
 import com.rethinkingstudio.clawlink.core.state.UserPreferencesStore
+import com.rethinkingstudio.clawlink.core.state.gateway.GatewayStore
 import com.rethinkingstudio.clawlink.ui.components.ClawLinkCard
 import com.rethinkingstudio.clawlink.ui.components.ClawLinkScaffold
 
@@ -27,6 +29,7 @@ import com.rethinkingstudio.clawlink.ui.components.ClawLinkScaffold
 @Composable
 fun AdvancedScreen(
     prefsStore: UserPreferencesStore,
+    gatewayStore: GatewayStore,
     onBack: () -> Unit,
     onNavigateToRestartGateway: () -> Unit,
     onNavigateToRemoteRestart: () -> Unit,
@@ -35,6 +38,9 @@ fun AdvancedScreen(
     onNavigateToBackups: () -> Unit
 ) {
     val showsTools by prefsStore.showsToolInvocationProcess.collectAsState()
+    val gatewayState by gatewayStore.state.collectAsState()
+    val isNormalActionEnabled = gatewayState.isSelectedGatewayChatChainReady
+    val isRecoveryActionEnabled = gatewayState.canExecuteRemoteHostAction
 
     ClawLinkScaffold(
         topBar = {
@@ -65,6 +71,7 @@ fun AdvancedScreen(
                         title = stringResource(R.string.advanced_restart),
                         detail = stringResource(R.string.advanced_restart_detail),
                         tint = Color(0xFF3B82F6),
+                        enabled = isNormalActionEnabled,
                         onClick = onNavigateToRestartGateway
                     )
                     HorizontalDivider(modifier = Modifier.padding(start = 64.dp), color = Color(0xFFF3F4F6))
@@ -73,6 +80,7 @@ fun AdvancedScreen(
                         title = stringResource(R.string.advanced_remote_restart),
                         detail = stringResource(R.string.advanced_remote_restart_detail),
                         tint = Color(0xFF6366F1),
+                        enabled = isRecoveryActionEnabled,
                         onClick = onNavigateToRemoteRestart
                     )
                     HorizontalDivider(modifier = Modifier.padding(start = 64.dp), color = Color(0xFFF3F4F6))
@@ -81,6 +89,7 @@ fun AdvancedScreen(
                         title = stringResource(R.string.advanced_doctor_fix),
                         detail = stringResource(R.string.advanced_doctor_fix_detail),
                         tint = Color(0xFFF59E0B),
+                        enabled = isRecoveryActionEnabled,
                         onClick = onNavigateToDoctorFix
                     )
                     HorizontalDivider(modifier = Modifier.padding(start = 64.dp), color = Color(0xFFF3F4F6))
@@ -97,6 +106,7 @@ fun AdvancedScreen(
                         title = stringResource(R.string.advanced_backups),
                         detail = stringResource(R.string.advanced_backups_detail),
                         tint = Color(0xFF22C55E),
+                        enabled = isNormalActionEnabled,
                         onClick = onNavigateToBackups
                     )
                     HorizontalDivider(modifier = Modifier.padding(start = 64.dp), color = Color(0xFFF3F4F6))
@@ -122,15 +132,19 @@ private fun AdvancedFeatureRow(
     title: String,
     detail: String,
     tint: Color,
+    enabled: Boolean = true,
     onClick: () -> Unit
 ) {
     Surface(
         onClick = onClick,
+        enabled = enabled,
         modifier = Modifier.fillMaxWidth(),
         color = Color.Transparent
     ) {
         Row(
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
+            modifier = Modifier
+                .alpha(if (enabled) 1f else 0.38f)
+                .padding(horizontal = 16.dp, vertical = 14.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(14.dp)
         ) {

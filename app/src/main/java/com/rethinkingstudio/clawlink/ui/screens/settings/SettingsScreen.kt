@@ -14,6 +14,7 @@ import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -53,11 +54,11 @@ fun SettingsScreen(
     onNavigateToVoiceSetup: () -> Unit,
     onNavigateToLanguage: () -> Unit,
     onLogout: () -> Unit,
-    onDeleteAccount: () -> Unit
 ) {
     val authState by authStore.state.collectAsState()
     val gatewayState by gatewayStore.state.collectAsState()
     val scope = rememberCoroutineScope()
+    val isChatChainReady = gatewayState.isSelectedGatewayChatChainReady
 
     var showLogoutConfirm by remember { mutableStateOf(false) }
     var showDeleteConfirm by remember { mutableStateOf(false) }
@@ -188,12 +189,14 @@ fun SettingsScreen(
                         SettingsNavigationRow(
                             icon = Icons.Default.Task,
                             title = stringResource(R.string.settings_row_tasks),
+                            enabled = isChatChainReady,
                             onClick = onNavigateToTasks
                         )
                         HorizontalDivider(modifier = Modifier.padding(start = 64.dp), color = Color(0xFFF3F4F6))
                         SettingsNavigationRow(
                             icon = Icons.Default.Extension,
                             title = stringResource(R.string.settings_row_skills),
+                            enabled = isChatChainReady,
                             onClick = onNavigateToSkills
                         )
                     }
@@ -211,18 +214,21 @@ fun SettingsScreen(
                         SettingsNavigationRow(
                             icon = Icons.Default.Tune,
                             title = stringResource(R.string.settings_row_models),
+                            enabled = isChatChainReady,
                             onClick = onNavigateToModels
                         )
                         HorizontalDivider(modifier = Modifier.padding(start = 64.dp), color = Color(0xFFF3F4F6))
                         SettingsNavigationRow(
                             icon = Icons.Default.ChatBubble,
                             title = stringResource(R.string.settings_row_sessions),
+                            enabled = isChatChainReady,
                             onClick = onNavigateToSessions
                         )
                         HorizontalDivider(modifier = Modifier.padding(start = 64.dp), color = Color(0xFFF3F4F6))
                         SettingsNavigationRow(
                             icon = Icons.Default.Mic,
                             title = stringResource(R.string.settings_row_voice_setup),
+                            enabled = isChatChainReady,
                             onClick = onNavigateToVoiceSetup
                         )
                     }
@@ -269,6 +275,7 @@ fun SettingsScreen(
                     Column {
                         Surface(
                             onClick = { showLogoutConfirm = true },
+                            enabled = !authState.isLoading,
                             modifier = Modifier.fillMaxWidth(),
                             color = Color.Transparent
                         ) {
@@ -292,6 +299,7 @@ fun SettingsScreen(
                         HorizontalDivider(modifier = Modifier.padding(start = 64.dp), color = Color(0xFFF3F4F6))
                         Surface(
                             onClick = { showDeleteConfirm = true },
+                            enabled = !authState.isLoading,
                             modifier = Modifier.fillMaxWidth(),
                             color = Color.Transparent
                         ) {
@@ -385,16 +393,41 @@ fun SettingsScreen(
                 TextButton(
                     onClick = {
                         showDeleteConfirm = false
-                        onDeleteAccount()
+                        scope.launch {
+                            val didDelete = authStore.deleteAccount()
+                            if (didDelete) {
+                                wsClient.disconnect()
+                                notificationPort.cancelAll()
+                                onLogout()
+                            }
+                        }
                     },
+                    enabled = !authState.isLoading,
                     colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)
                 ) {
-                    Text(stringResource(R.string.settings_account_delete))
+                    if (authState.isLoading) {
+                        CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
+                    } else {
+                        Text(stringResource(R.string.settings_account_delete))
+                    }
                 }
             },
             dismissButton = {
                 TextButton(onClick = { showDeleteConfirm = false }) {
                     Text(stringResource(R.string.common_action_cancel))
+                }
+            }
+        )
+    }
+
+    authState.errorMessage?.let { message ->
+        AlertDialog(
+            onDismissRequest = authStore::clearError,
+            title = { Text("错误") },
+            text = { Text(message) },
+            confirmButton = {
+                TextButton(onClick = authStore::clearError) {
+                    Text(stringResource(R.string.common_action_ok))
                 }
             }
         )
@@ -407,15 +440,19 @@ private fun SettingsNavigationRow(
     title: String,
     subtitle: String? = null,
     value: String? = null,
+    enabled: Boolean = true,
     onClick: () -> Unit
 ) {
     Surface(
         onClick = onClick,
+        enabled = enabled,
         modifier = Modifier.fillMaxWidth(),
         color = Color.Transparent
     ) {
         Row(
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
+            modifier = Modifier
+                .alpha(if (enabled) 1f else 0.38f)
+                .padding(horizontal = 16.dp, vertical = 14.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(16.dp)
         ) {

@@ -113,13 +113,14 @@ fun SkillsScreen(
     val scope = rememberCoroutineScope()
     val gatewayId = gatewayState.selectedGatewayId
     val gatewayName = gatewayState.selectedGateway?.displayName ?: "未选择网关"
+    val canManageSkills = gatewayId != null && gatewayState.isSelectedGatewayChatChainReady
 
     var selectedFilter by remember { mutableStateOf(SkillListFilter.All) }
     var searchText by remember { mutableStateOf("") }
     var detailSkill by remember { mutableStateOf<SkillItem?>(null) }
 
-    LaunchedEffect(gatewayId) {
-        if (gatewayId != null) skillStore.loadSkills(gatewayId)
+    LaunchedEffect(gatewayId, gatewayState.isSelectedGatewayChatChainReady) {
+        if (canManageSkills) skillStore.loadSkills(gatewayId)
     }
 
     val sortedSkills = remember(skillState.skills) { SkillStore.sortSkills(skillState.skills) }
@@ -144,8 +145,8 @@ fun SkillsScreen(
                     },
                     actions = {
                         IconButton(
-                            onClick = { if (gatewayId != null) scope.launch { skillStore.loadSkills(gatewayId) } },
-                            enabled = !skillState.isLoading
+                            onClick = { if (canManageSkills) scope.launch { skillStore.loadSkills(gatewayId) } },
+                            enabled = canManageSkills && !skillState.isLoading
                         ) {
                             if (skillState.isLoading) {
                                 CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
@@ -170,7 +171,7 @@ fun SkillsScreen(
                     contentPadding = PaddingValues(start = 20.dp, end = 20.dp, top = 12.dp, bottom = 112.dp),
                     verticalArrangement = Arrangement.spacedBy(20.dp)
                 ) {
-                    if (gatewayState.restartingGatewayId != null) {
+                    if (gatewayState.restartingGatewayId != null && gatewayState.isSelectedGatewayChatChainReady) {
                         item {
                             SkillMaintenanceBanner(
                                 title = "网关维护中",
@@ -221,7 +222,7 @@ fun SkillsScreen(
                                     selectedFilter = SkillListFilter.All
                                     searchText = ""
                                 },
-                                onReload = { if (gatewayId != null) scope.launch { skillStore.loadSkills(gatewayId) } },
+                                onReload = { if (canManageSkills) scope.launch { skillStore.loadSkills(gatewayId) } },
                                 modifier = Modifier.animateItemPlacement()
                             )
                         }
@@ -229,11 +230,11 @@ fun SkillsScreen(
                         items(visibleSkills, key = { it.effectiveKey }) { skill ->
                             SkillListRow(
                                 skill = skill,
-                                canEdit = gatewayId != null,
+                                canEdit = canManageSkills,
                                 isBusy = skillState.isLoading,
                                 onOpen = { detailSkill = skill },
                                 onToggle = {
-                                    if (gatewayId != null) {
+                                    if (canManageSkills) {
                                         scope.launch {
                                             skillStore.updateSkill(gatewayId, skill.effectiveKey, !skill.isEnabled)
                                         }
@@ -256,7 +257,7 @@ fun SkillsScreen(
                 .padding(bottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding() + 12.dp)
         )
 
-        skillState.errorMessage?.let { message ->
+        if (gatewayState.isSelectedGatewayChatChainReady) skillState.errorMessage?.let { message ->
             Snackbar(
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
@@ -272,11 +273,11 @@ fun SkillsScreen(
     detailSkill?.let { skill ->
         SkillDetailSheet(
             skill = skill,
-            canEdit = gatewayId != null,
+            canEdit = canManageSkills,
             isBusy = skillState.isLoading,
             onDismiss = { detailSkill = null },
             onToggle = {
-                if (gatewayId != null) {
+                if (canManageSkills) {
                     scope.launch {
                         skillStore.updateSkill(gatewayId, skill.effectiveKey, !skill.isEnabled)
                         detailSkill = skill.copy(enabled = !skill.isEnabled, disabled = skill.isEnabled)

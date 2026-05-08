@@ -30,7 +30,6 @@ import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -273,8 +272,8 @@ private fun MarkdownTableRow(
                     color = textColor,
                     style = MaterialTheme.typography.bodySmall,
                     fontWeight = fontWeight,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
+                    lineHeight = 18.sp,
+                    softWrap = false
                 )
                 Canvas(modifier = Modifier.matchParentSize()) {
                     val stroke = 0.8.dp.toPx()
@@ -313,10 +312,23 @@ internal data class AndroidMarkdownTable(
 
     fun columnWidths(): List<Dp> {
         return (0 until maxOf(columnCount, 1)).map { column ->
-            val maxChars = (0..rows.size)
-                .maxOf { row -> cellText(row, column).length }
-                .coerceIn(6, 64)
-            (maxChars * 8 + 28).dp
+            val maxUnits = (0..rows.size)
+                .maxOf { row -> cellText(row, column).tableDisplayUnits() }
+                .coerceIn(8.0, 72.0)
+            (maxUnits * 11.5 + 44).dp
+        }
+    }
+}
+
+private fun String.tableDisplayUnits(): Double {
+    return fold(0.0) { total, char ->
+        total + when {
+            char.isHighSurrogate() || char.isLowSurrogate() -> 1.4
+            char.code in 0xFE00..0xFE0F -> 0.0
+            char.isWhitespace() -> 0.45
+            char.code <= 0x007F -> 0.72
+            char.code in 0xFF61..0xFF9F -> 0.72
+            else -> 1.0
         }
     }
 }

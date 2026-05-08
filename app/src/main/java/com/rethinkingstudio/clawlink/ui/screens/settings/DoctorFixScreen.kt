@@ -49,15 +49,8 @@ fun DoctorFixScreen(
     val isExecuting = gatewayState.isExecutingMaintenance
     val logEntries = gatewayState.doctorFixLogs
 
-    val hasSession = gatewayState.gateways.isNotEmpty()
     val isLocked = gatewayState.restartingGatewayId != null && gatewayState.restartingGatewayId != selectedGateway?.id
-    val canExecute = hasSession && selectedGateway != null && !isLocked && !isExecuting
-
-    val accessHint = when {
-        !hasSession -> stringResource(R.string.maintenance_hint_no_session)
-        isLocked -> stringResource(R.string.advanced_doctor_fix_hint_locked)
-        else -> null
-    }
+    val canExecute = selectedGateway != null && !isLocked && !isExecuting && gatewayState.canExecuteRemoteHostAction
 
     val listState = rememberLazyListState()
 
@@ -115,7 +108,8 @@ fun DoctorFixScreen(
                                                 fontSize = 12.sp, color = Color(0xFF6B7280)
                                             )
                                         }
-                                        val statusColor = when (selectedGateway?.aggregateStatus) {
+                                        val effectiveStatus = gatewayState.selectedGatewayAggregateStatus
+                                        val statusColor = when (effectiveStatus) {
                                             AggregateStatus.online -> Color(0xFF22C55E)
                                             AggregateStatus.partial -> Color(0xFFF59E0B)
                                             else -> Color(0xFFEF4444)
@@ -127,7 +121,7 @@ fun DoctorFixScreen(
                                         ) {
                                             Box(Modifier.size(6.dp).background(statusColor, CircleShape))
                                             Text(
-                                                when (selectedGateway?.aggregateStatus) {
+                                                when (effectiveStatus) {
                                                     AggregateStatus.online -> stringResource(R.string.gateway_aggregate_online)
                                                     AggregateStatus.connecting -> stringResource(R.string.gateway_aggregate_connecting)
                                                     AggregateStatus.partial -> stringResource(R.string.gateway_aggregate_partial)
@@ -147,11 +141,6 @@ fun DoctorFixScreen(
                                         Column {
                                             HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp), thickness = 0.8.dp, color = Color.Black.copy(alpha = 0.08f))
                                             Text(stringResource(R.string.advanced_doctor_fix_description), fontSize = 12.sp, color = Color(0xFF6B7280))
-
-                                            if (accessHint != null) {
-                                                Spacer(Modifier.height(8.dp))
-                                                Text(accessHint, fontSize = 12.sp, color = Color(0xFFF59E0B), fontWeight = FontWeight.Medium)
-                                            }
 
                                             Spacer(Modifier.height(12.dp))
                                             Button(

@@ -186,9 +186,12 @@ fun GatewayMaintenanceScreen(
 
     val title = if (isRemote) stringResource(R.string.maintenance_remote_restart) else stringResource(R.string.maintenance_restart_gateway)
 
-    val hasSession = gatewayState.gateways.isNotEmpty()
     val isLocked = gatewayState.restartingGatewayId != null && gatewayState.restartingGatewayId != selectedGateway?.id
-    val canManage = hasSession && selectedGateway != null && !isLocked && !isExecuting && !isWaitingForRecovery
+    val canManage = selectedGateway != null &&
+        !isLocked &&
+        !isExecuting &&
+        !isWaitingForRecovery &&
+        if (isRemote) gatewayState.canExecuteRemoteHostAction else gatewayState.isSelectedGatewayChatChainReady
 
     val listState = rememberLazyListState()
 
@@ -260,7 +263,8 @@ fun GatewayMaintenanceScreen(
                                                 fontSize = 12.sp, color = Color(0xFF6B7280)
                                             )
                                         }
-                                        val statusColor = when (selectedGateway?.aggregateStatus) {
+                                        val effectiveStatus = gatewayState.selectedGatewayAggregateStatus
+                                        val statusColor = when (effectiveStatus) {
                                             AggregateStatus.online -> Color(0xFF22C55E)
                                             AggregateStatus.partial -> Color(0xFFF59E0B)
                                             else -> Color(0xFFEF4444)
@@ -272,7 +276,7 @@ fun GatewayMaintenanceScreen(
                                         ) {
                                             Box(Modifier.size(6.dp).background(statusColor, CircleShape))
                                             Text(
-                                                when (selectedGateway?.aggregateStatus) {
+                                                when (effectiveStatus) {
                                                     AggregateStatus.online -> stringResource(R.string.gateway_aggregate_online)
                                                     AggregateStatus.connecting -> stringResource(R.string.gateway_aggregate_connecting)
                                                     AggregateStatus.partial -> stringResource(R.string.gateway_aggregate_partial)

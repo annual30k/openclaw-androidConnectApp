@@ -129,15 +129,15 @@ fun TasksScreen(
     val gatewayState by gatewayStore.state.collectAsState()
     val scope = rememberCoroutineScope()
     val gatewayId = gatewayState.selectedGatewayId
-    val canManageTasks = gatewayId != null
+    val canManageTasks = gatewayId != null && gatewayState.isSelectedGatewayChatChainReady
 
     var editorMode by remember { mutableStateOf<TaskEditorMode?>(null) }
     var deleteTarget by remember { mutableStateOf<TaskItem?>(null) }
     var selectedFilter by remember { mutableStateOf(TaskListFilter.All) }
     var searchText by remember { mutableStateOf("") }
 
-    LaunchedEffect(gatewayId) {
-        if (gatewayId != null) taskStore.loadTasks(gatewayId)
+    LaunchedEffect(gatewayId, gatewayState.isSelectedGatewayChatChainReady) {
+        if (canManageTasks) taskStore.loadTasks(gatewayId)
     }
 
     val sortedTasks = remember(taskState.tasks) { TaskListPresentationLogic.sortedTasks(taskState.tasks) }
@@ -161,8 +161,8 @@ fun TasksScreen(
                     },
                     actions = {
                         IconButton(
-                            onClick = { if (gatewayId != null) scope.launch { taskStore.loadTasks(gatewayId) } },
-                            enabled = !taskState.isLoading
+                            onClick = { if (canManageTasks) scope.launch { taskStore.loadTasks(gatewayId) } },
+                            enabled = canManageTasks && !taskState.isLoading
                         ) {
                             if (taskState.isLoading) {
                                 CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
@@ -188,7 +188,7 @@ fun TasksScreen(
                     verticalArrangement = Arrangement.spacedBy(20.dp)
                 ) {
                     item {
-                        if (gatewayState.restartingGatewayId != null) {
+                        if (gatewayState.restartingGatewayId != null && gatewayState.isSelectedGatewayChatChainReady) {
                             MaintenanceBanner(
                                 title = "网关维护中",
                                 message = androidx.compose.ui.res.stringResource(com.rethinkingstudio.clawlink.R.string.advanced_doctor_fix_hint_locked),
@@ -251,7 +251,7 @@ fun TasksScreen(
                                         onEdit = { editorMode = TaskEditorMode.Edit(it) },
                                         onDelete = { deleteTarget = it },
                                         onTogglePause = { item ->
-                                            if (gatewayId != null) {
+                                            if (canManageTasks) {
                                                 scope.launch { taskStore.toggleTask(gatewayId, item.id, !item.enabled) }
                                             }
                                         },
@@ -276,7 +276,7 @@ fun TasksScreen(
                                 onEdit = { editorMode = TaskEditorMode.Edit(it) },
                                 onDelete = { deleteTarget = it },
                                 onTogglePause = { item ->
-                                    if (gatewayId != null) {
+                                    if (canManageTasks) {
                                         scope.launch { taskStore.toggleTask(gatewayId, item.id, !item.enabled) }
                                     }
                                 },
@@ -297,7 +297,7 @@ fun TasksScreen(
                 .padding(bottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding() + 12.dp)
         )
 
-        taskState.errorMessage?.let { message ->
+        if (gatewayState.isSelectedGatewayChatChainReady) taskState.errorMessage?.let { message ->
             Snackbar(
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
@@ -316,7 +316,7 @@ fun TasksScreen(
             isSubmitting = taskState.updatingTaskId == mode.updatingId,
             onDismiss = { editorMode = null },
             onSubmit = { draft ->
-                if (gatewayId == null) return@TaskEditorSheet
+                if (!canManageTasks) return@TaskEditorSheet
                 scope.launch {
                     val success = when (mode) {
                         TaskEditorMode.Create -> taskStore.createTask(gatewayId, draft)
@@ -337,7 +337,7 @@ fun TasksScreen(
                 TextButton(
                     onClick = {
                         deleteTarget = null
-                        if (gatewayId != null) scope.launch { taskStore.deleteTask(gatewayId, task.id) }
+                        if (canManageTasks) scope.launch { taskStore.deleteTask(gatewayId, task.id) }
                     }
                 ) {
                     Text("删除", color = MaterialTheme.colorScheme.error)

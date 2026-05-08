@@ -67,6 +67,7 @@ fun OfficeScreen(
     Box(modifier = Modifier.fillMaxSize().background(Color.Black)) {
         PixelOfficeScene(
             scene = scene,
+            showsOccupants = gatewayState.isAppRelayOnline,
             modifier = Modifier
                 .fillMaxSize()
                 .clickable(
