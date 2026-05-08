@@ -30,6 +30,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.rethinkingstudio.clawlink.R
+import com.rethinkingstudio.clawlink.core.state.LocalizedText.choose
 import com.rethinkingstudio.clawlink.ui.components.ClawLinkCard
 import com.rethinkingstudio.clawlink.ui.screens.chat.ChatColors
 
@@ -200,7 +201,7 @@ internal fun ThinkingRow() {
             color = ChatColors.linkBlue
         )
         Text(
-            "ClawLink 正在思考…",
+            choose("ClawLink is thinking...", "ClawLink 正在思考…"),
             style = MaterialTheme.typography.labelMedium,
             color = ChatColors.secondaryText,
             fontWeight = FontWeight.Medium

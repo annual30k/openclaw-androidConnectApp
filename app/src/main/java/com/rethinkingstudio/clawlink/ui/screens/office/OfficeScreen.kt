@@ -43,6 +43,7 @@ import com.rethinkingstudio.clawlink.core.models.chat.MessageState
 import com.rethinkingstudio.clawlink.core.models.gateway.AggregateStatus
 import com.rethinkingstudio.clawlink.core.models.gateway.GatewaySummary
 import com.rethinkingstudio.clawlink.core.models.office.OfficeScenePlanner
+import com.rethinkingstudio.clawlink.core.state.LocalizedText.choose
 import com.rethinkingstudio.clawlink.core.state.auth.AuthStore
 import com.rethinkingstudio.clawlink.core.state.chat.ChatStore
 import com.rethinkingstudio.clawlink.core.state.gateway.GatewayStore
@@ -102,7 +103,7 @@ fun OfficeScreen(
                 } else {
                     gateway.copy(
                         officeActivityKind = gateway.officeActivityKind ?: "writing",
-                        officeActivityTitle = gateway.officeActivityTitle ?: "回复中",
+                        officeActivityTitle = gateway.officeActivityTitle ?: choose("Replying", "回复中"),
                         officeActivityDetail = activeOfficeReply,
                         officeActivityPhase = gateway.officeActivityPhase ?: "streaming",
                         officeActivityUpdatedAt = gateway.officeActivityUpdatedAt ?: java.time.Instant.now().toString()

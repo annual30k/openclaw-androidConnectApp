@@ -13,6 +13,7 @@ import com.rethinkingstudio.clawlink.core.network.RelayAPIClient
 import com.rethinkingstudio.clawlink.core.network.dto.RelayFileTransferItem
 import com.rethinkingstudio.clawlink.core.network.transport.RelayWebSocketClient
 import com.rethinkingstudio.clawlink.core.network.transport.WsEvent
+import com.rethinkingstudio.clawlink.core.state.LocalizedText.choose
 import com.rethinkingstudio.clawlink.core.state.chat.RemoteImageCache
 import com.rethinkingstudio.clawlink.core.state.chat.RemoteImageSizeCache
 import com.rethinkingstudio.clawlink.core.state.chat.RemoteAttachmentCache
@@ -139,7 +140,7 @@ class ChatStore(
                     if (!isSuccess && _state.value.isStreaming) {
                         val errorMsg = obj?.get("error")?.jsonObject?.get("message")?.jsonPrimitive?.content
                             ?: obj?.string("message")
-                            ?: "停止失败，请稍后重试。"
+                            ?: choose("Stop failed. Please try again later.", "停止失败，请稍后重试。")
                         _state.value = _state.value.copy(errorMessage = errorMsg)
                     }
                 } else if (obj?.get("ok")?.jsonPrimitive?.booleanOrNull == false) {
@@ -605,7 +606,7 @@ class ChatStore(
     private fun handleError(payload: JsonElement?) {
         val obj = payload as? JsonObject
         if (obj == null) {
-            _state.value = _state.value.copy(errorMessage = "Unknown error", isStreaming = false)
+            _state.value = _state.value.copy(errorMessage = choose("Unknown error", "未知错误"), isStreaming = false)
             return
         }
         handleError(obj, obj["payload"] as? JsonObject ?: obj)
@@ -1339,7 +1340,7 @@ class ChatStore(
             id = assistantMsgId,
             role = MessageRole.assistant,
             state = MessageState.streaming,
-            content = "正在连接...",
+            content = choose("Connecting...", "正在连接..."),
             createdAt = "",
             runId = clientRunId,
             sortTimestamp = System.currentTimeMillis() / 1000.0 + 0.001
@@ -1438,11 +1439,11 @@ class ChatStore(
         val sessionKey = _state.value.currentSessionKey
 
         if (gatewayId.isNullOrBlank()) {
-            _state.value = _state.value.copy(errorMessage = "网关未选择，请重新配对")
+            _state.value = _state.value.copy(errorMessage = choose("No gateway selected. Please pair again.", "网关未选择，请重新配对"))
             return
         }
         if (sessionKey.isBlank()) {
-            _state.value = _state.value.copy(errorMessage = "会话已失效，请重新配对")
+            _state.value = _state.value.copy(errorMessage = choose("Session expired. Please pair again.", "会话已失效，请重新配对"))
             return
         }
 

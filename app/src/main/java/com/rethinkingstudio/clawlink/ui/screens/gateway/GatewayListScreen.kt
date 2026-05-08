@@ -13,8 +13,10 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.rethinkingstudio.clawlink.R
 import com.rethinkingstudio.clawlink.core.models.gateway.AggregateStatus
 import com.rethinkingstudio.clawlink.core.models.gateway.GatewaySummary
 import com.rethinkingstudio.clawlink.core.state.gateway.GatewayStore
@@ -34,20 +36,20 @@ fun GatewayListScreen(
     ClawLinkScaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Gateways") },
+                title = { Text(stringResource(R.string.gateways_title)) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.back))
                     }
                 },
                 actions = {
                     IconButton(onClick = onNavigateToPairing) {
-                        Icon(Icons.Default.Add, "Add Gateway")
+                        Icon(Icons.Default.Add, stringResource(R.string.settings_gateway_action_add))
                     }
                     IconButton(onClick = {
                         scope.launch { gatewayStore.loadGateways() }
                     }) {
-                        Icon(Icons.Default.Refresh, "Refresh")
+                        Icon(Icons.Default.Refresh, stringResource(R.string.refresh))
                     }
                 }
             )
@@ -66,20 +68,20 @@ fun GatewayListScreen(
                 contentAlignment = Alignment.Center
             ) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text("No gateways found", style = MaterialTheme.typography.titleMedium)
+                    Text(stringResource(R.string.gateways_empty), style = MaterialTheme.typography.titleMedium)
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(
-                        "Make sure your relay server is running",
+                        stringResource(R.string.gateways_empty_hint),
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     Spacer(modifier = Modifier.height(16.dp))
                     Button(onClick = { scope.launch { gatewayStore.loadGateways() } }) {
-                        Text("Refresh")
+                        Text(stringResource(R.string.refresh))
                     }
                     Spacer(modifier = Modifier.height(8.dp))
                     TextButton(onClick = onNavigateToPairing) {
-                        Text("Add New Gateway")
+                        Text(stringResource(R.string.settings_gateway_action_add))
                     }
                 }
             }
@@ -155,7 +157,12 @@ private fun GatewayRow(
                     )
                     Spacer(modifier = Modifier.width(4.dp))
                     Text(
-                        effectiveStatus.name,
+                        when (effectiveStatus) {
+                            AggregateStatus.online -> stringResource(R.string.gateway_status_online)
+                            AggregateStatus.offline -> stringResource(R.string.gateway_status_offline)
+                            AggregateStatus.connecting -> stringResource(R.string.gateway_aggregate_connecting)
+                            AggregateStatus.partial -> stringResource(R.string.gateway_aggregate_partial)
+                        },
                         style = MaterialTheme.typography.labelMedium
                     )
                     Spacer(modifier = Modifier.width(8.dp))
@@ -170,7 +177,7 @@ private fun GatewayRow(
             if (isSelected) {
                 Icon(
                     Icons.Default.Check,
-                    "Selected",
+                    stringResource(R.string.models_selected),
                     tint = MaterialTheme.colorScheme.primary
                 )
             }

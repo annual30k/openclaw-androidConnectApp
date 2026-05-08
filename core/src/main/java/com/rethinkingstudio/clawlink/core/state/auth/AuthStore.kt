@@ -4,6 +4,7 @@ import com.rethinkingstudio.clawlink.core.domain.CredentialStore
 import com.rethinkingstudio.clawlink.core.models.SessionCredentials
 import com.rethinkingstudio.clawlink.core.network.RelayAPIClient
 import com.rethinkingstudio.clawlink.core.network.RelayAPIError
+import com.rethinkingstudio.clawlink.core.state.LocalizedText.choose
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -70,7 +71,7 @@ class AuthStore(
             )
             false
         } catch (e: Exception) {
-            _state.value = _state.value.copy(isLoading = false, errorMessage = "Connection failed: ${e.message}")
+            _state.value = _state.value.copy(isLoading = false, errorMessage = choose("Connection failed: ${e.message}", "连接失败：${e.message}"))
             false
         }
     }
@@ -99,7 +100,10 @@ class AuthStore(
                             isLoading = false,
                             pendingVerificationEmail = null,
                             pendingVerificationExpiresAt = null,
-                            errorMessage = "This private relay still requires email verification. Set EMAIL_VERIFICATION_REQUIRED=false and restart the relay."
+                            errorMessage = choose(
+                                "This private relay still requires email verification. Set EMAIL_VERIFICATION_REQUIRED=false and restart the relay.",
+                                "当前私有 Relay 仍要求邮箱验证。请设置 EMAIL_VERIFICATION_REQUIRED=false 并重启 Relay。"
+                            )
                         )
                     } else {
                         _state.value = _state.value.copy(
@@ -113,7 +117,7 @@ class AuthStore(
                 }
             }
         } catch (e: Exception) {
-            _state.value = _state.value.copy(isLoading = false, errorMessage = e.message ?: "Registration failed")
+            _state.value = _state.value.copy(isLoading = false, errorMessage = e.message ?: choose("Registration failed", "注册失败"))
             false
         }
     }
@@ -122,11 +126,11 @@ class AuthStore(
         val email = _state.value.pendingVerificationEmail
         val normalizedCode = code.trim()
         if (email.isNullOrBlank()) {
-            _state.value = _state.value.copy(errorMessage = "Submit registration details before entering the email verification code.")
+            _state.value = _state.value.copy(errorMessage = choose("Submit registration details before entering the email verification code.", "请先提交注册信息，再输入邮箱验证码。"))
             return false
         }
         if (!Regex("^\\d{6}$").matches(normalizedCode)) {
-            _state.value = _state.value.copy(errorMessage = "Enter the 6-digit verification code.")
+            _state.value = _state.value.copy(errorMessage = choose("Enter the 6-digit verification code.", "请输入 6 位验证码。"))
             return false
         }
 
@@ -139,7 +143,7 @@ class AuthStore(
             _state.value = AuthState(isLoggedIn = true, isPaired = true, accessToken = creds.accessToken, relayBaseUrl = creds.relayBaseURL)
             true
         } catch (e: Exception) {
-            _state.value = _state.value.copy(isLoading = false, errorMessage = e.message ?: "Verification failed")
+            _state.value = _state.value.copy(isLoading = false, errorMessage = e.message ?: choose("Verification failed", "验证失败"))
             false
         }
     }
@@ -153,7 +157,7 @@ class AuthStore(
             _state.value = _state.value.copy(isLoading = false, isLoggedIn = true, isPaired = true, accessToken = creds.accessToken)
             true
         } catch (e: Exception) {
-            _state.value = _state.value.copy(isLoading = false, errorMessage = e.message ?: "Pairing failed")
+            _state.value = _state.value.copy(isLoading = false, errorMessage = e.message ?: choose("Pairing failed", "配对失败"))
             false
         }
     }
@@ -175,7 +179,7 @@ class AuthStore(
         } catch (e: Exception) {
             _state.value = _state.value.copy(
                 isLoading = false,
-                errorMessage = e.message ?: "Delete account failed"
+                errorMessage = e.message ?: choose("Delete account failed", "注销账号失败")
             )
             false
         }
@@ -194,15 +198,15 @@ class AuthStore(
     }
 
     private fun validateLogin(email: String, password: String): String? {
-        if (!isValidEmail(email)) return "Enter a valid email address."
-        if (password.isEmpty()) return "Enter your password."
+        if (!isValidEmail(email)) return choose("Enter a valid email address.", "请输入有效邮箱地址。")
+        if (password.isEmpty()) return choose("Enter your password.", "请输入密码。")
         return null
     }
 
     private fun validateRegistration(name: String, email: String, password: String): String? {
-        if (name.trim().isEmpty()) return "Enter your name."
-        if (!isValidEmail(email)) return "Enter a valid email address."
-        if (password.length < 8) return "Password must be at least 8 characters."
+        if (name.trim().isEmpty()) return choose("Enter your name.", "请输入昵称。")
+        if (!isValidEmail(email)) return choose("Enter a valid email address.", "请输入有效邮箱地址。")
+        if (password.length < 8) return choose("Password must be at least 8 characters.", "密码至少需要 8 位。")
         return null
     }
 

@@ -6,6 +6,7 @@ import android.os.Bundle
 import android.speech.RecognitionListener
 import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
+import com.rethinkingstudio.clawlink.core.state.LocalizedText.choose
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -14,11 +15,11 @@ import java.util.Locale
 import java.util.UUID
 
 internal sealed class VoiceInputError(message: String) : Exception(message) {
-    data object AlreadyRecording : VoiceInputError("语音输入正在进行中。")
-    data object Unsupported : VoiceInputError("当前设备暂不支持语音识别。")
-    data object Unavailable : VoiceInputError("语音识别服务当前不可用，请稍后再试。")
-    data object NoSpeech : VoiceInputError("没有识别到有效语音，请再试一次。")
-    data object PermissionDenied : VoiceInputError("未获得麦克风权限，请到系统设置中允许后再试。")
+    data object AlreadyRecording : VoiceInputError(choose("Voice input is already in progress.", "语音输入正在进行中。"))
+    data object Unsupported : VoiceInputError(choose("Speech recognition is not supported on this device.", "当前设备暂不支持语音识别。"))
+    data object Unavailable : VoiceInputError(choose("Speech recognition service is unavailable. Please try again later.", "语音识别服务当前不可用，请稍后再试。"))
+    data object NoSpeech : VoiceInputError(choose("No valid speech was recognized. Please try again.", "没有识别到有效语音，请再试一次。"))
+    data object PermissionDenied : VoiceInputError(choose("Microphone permission denied. Please enable it in Settings and try again.", "未获得麦克风权限，请到系统设置中允许后再试。"))
     data class RecognitionFailed(val detail: String) : VoiceInputError(detail)
 }
 
@@ -60,7 +61,7 @@ internal class ComposerSpeechCoordinator(
         }.onFailure { error ->
             cleanup()
             currentSessionId = null
-            throw VoiceInputError.RecognitionFailed(error.localizedMessage ?: "语音识别启动失败，请重试。")
+            throw VoiceInputError.RecognitionFailed(error.localizedMessage ?: choose("Speech recognition failed to start. Please try again.", "语音识别启动失败，请重试。"))
         }
     }
 

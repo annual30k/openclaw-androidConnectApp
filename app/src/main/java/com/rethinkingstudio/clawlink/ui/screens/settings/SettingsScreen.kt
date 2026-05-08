@@ -26,6 +26,7 @@ import com.rethinkingstudio.clawlink.R
 import com.rethinkingstudio.clawlink.core.domain.NotificationPort
 import com.rethinkingstudio.clawlink.core.network.transport.RelayWebSocketClient
 import com.rethinkingstudio.clawlink.core.state.LanguageManager
+import com.rethinkingstudio.clawlink.core.state.LocalizedText.choose
 import com.rethinkingstudio.clawlink.core.state.auth.AuthStore
 import com.rethinkingstudio.clawlink.core.state.gateway.GatewayStore
 import com.rethinkingstudio.clawlink.ui.components.ClawLinkCard
@@ -362,7 +363,7 @@ fun SettingsScreen(
         AlertDialog(
             onDismissRequest = { showLogoutConfirm = false },
             title = { Text(stringResource(R.string.settings_account_sign_out)) },
-            text = { Text("Are you sure you want to sign out?") },
+            text = { Text(choose("Are you sure you want to sign out?", "确定要退出登录吗？")) },
             confirmButton = {
                 TextButton(onClick = {
                     showLogoutConfirm = false
@@ -423,7 +424,7 @@ fun SettingsScreen(
     authState.errorMessage?.let { message ->
         AlertDialog(
             onDismissRequest = authStore::clearError,
-            title = { Text("错误") },
+            title = { Text(choose("Error", "错误")) },
             text = { Text(message) },
             confirmButton = {
                 TextButton(onClick = authStore::clearError) {

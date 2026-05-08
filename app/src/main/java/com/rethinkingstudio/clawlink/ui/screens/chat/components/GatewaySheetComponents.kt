@@ -58,6 +58,7 @@ import com.rethinkingstudio.clawlink.R
 import com.rethinkingstudio.clawlink.core.models.chat.ChatSessionItem
 import com.rethinkingstudio.clawlink.core.models.gateway.AggregateStatus
 import com.rethinkingstudio.clawlink.core.models.gateway.GatewaySummary
+import com.rethinkingstudio.clawlink.core.state.LocalizedText.choose
 import com.rethinkingstudio.clawlink.core.state.gateway.GatewayStore
 import com.rethinkingstudio.clawlink.ui.screens.chat.ChatColors
 import com.rethinkingstudio.clawlink.ui.screens.chat.formatChatTimestamp
@@ -73,13 +74,13 @@ private val ChatSessionItem.displayTitle: String
         ?: sessionDisplayName(sessionKey)
 
 private val ChatSessionItem.activityText: String
-    get() = lastActivityAt?.trim()?.takeIf { it.isNotEmpty() }?.let { "最近活动 ${formatChatTimestamp(it)}" }.orEmpty()
+    get() = lastActivityAt?.trim()?.takeIf { it.isNotEmpty() }?.let { choose("Recent activity ${formatChatTimestamp(it)}", "最近活动 ${formatChatTimestamp(it)}") }.orEmpty()
 
 internal fun sessionDisplayName(key: String): String {
     val normalized = key.trim().ifBlank { "main" }
     return when (normalized) {
-        "main" -> "主会话"
-        else -> normalized.removePrefix("session_").takeLast(8).ifBlank { "Session" }
+        "main" -> choose("Main session", "主会话")
+        else -> normalized.removePrefix("session_").takeLast(8).ifBlank { choose("Session", "会话") }
     }
 }
 
@@ -512,7 +513,7 @@ private fun EmptyGatewaySheetState() {
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             Icon(Icons.Default.Settings, null, tint = ChatColors.secondaryText, modifier = Modifier.size(36.dp))
-            Text("暂无网关", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Black, color = Color.Black)
+            Text(choose("No gateways", "暂无网关"), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Black, color = Color.Black)
             Text(stringResource(R.string.gateway_connectivity_prompt), style = MaterialTheme.typography.bodySmall, color = ChatColors.secondaryText)
         }
     }

@@ -1,5 +1,6 @@
 package com.rethinkingstudio.clawlink.core.models.tasks
 
+import com.rethinkingstudio.clawlink.core.state.LocalizedText.choose
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.Serializable
@@ -33,42 +34,42 @@ data class TaskItem(
     val updatedAt: String
 ) {
     val isPaused: Boolean get() = !enabled
-    val template: String get() = prompt.trim().ifEmpty { "Custom" }
-    val promptPreview: String get() = prompt.trim().ifEmpty { "(empty)" }
+    val template: String get() = prompt.trim().ifEmpty { choose("Custom", "自定义") }
+    val promptPreview: String get() = prompt.trim().ifEmpty { choose("(empty)", "（空）") }
     val scheduleDate: Instant? get() = TaskDateCodec.instantFrom(scheduleAt)
     val nextRunDate: Instant? get() = TaskDateCodec.instantFrom(nextRunAt)
 
     val schedule: String
         get() = when (scheduleKind) {
-            "once" -> TaskDateCodec.displayString(scheduleAt)?.let { "一次性 - $it" } ?: "一次性任务"
+            "once" -> TaskDateCodec.displayString(scheduleAt)?.let { choose("Once - $it", "一次性 - $it") } ?: choose("One-time task", "一次性任务")
             "repeat" -> {
                 val amount = repeatAmount?.trim().orEmpty()
                 val unit = localizedRepeatUnit(repeatUnit)
                 val startText = TaskDateCodec.displayString(scheduleAt)
                 when {
-                    amount.isEmpty() && startText == null -> "重复任务"
-                    amount.isEmpty() -> "重复任务，首次 $startText"
-                    startText == null -> "每 $amount $unit"
-                    else -> "每 $amount $unit，首次 $startText"
+                    amount.isEmpty() && startText == null -> choose("Repeating task", "重复任务")
+                    amount.isEmpty() -> choose("Repeating task, first at $startText", "重复任务，首次 $startText")
+                    startText == null -> choose("Every $amount $unit", "每 $amount $unit")
+                    else -> choose("Every $amount $unit, first at $startText", "每 $amount $unit，首次 $startText")
                 }
             }
-            else -> scheduleKind.ifBlank { "未设置" }
+            else -> scheduleKind.ifBlank { choose("Not set", "未设置") }
         }
 
     val nextRunSummary: String
-        get() = TaskDateCodec.displayString(nextRunAt)?.let { "下次 $it" } ?: "暂无下次执行"
+        get() = TaskDateCodec.displayString(nextRunAt)?.let { choose("Next $it", "下次 $it") } ?: choose("No next run", "暂无下次执行")
 
     val lastResultSummary: String
-        get() = lastResult.trim().ifEmpty { "暂无执行结果" }
+        get() = lastResult.trim().ifEmpty { choose("No result yet", "暂无执行结果") }
 
     companion object {
         fun localizedRepeatUnit(value: String?): String {
             return when (value?.trim()?.lowercase()) {
-                "minutes" -> "分钟"
-                "hours" -> "小时"
-                "days" -> "天"
-                "weeks" -> "周"
-                else -> value?.trim()?.ifEmpty { null } ?: "次"
+                "minutes" -> choose("minutes", "分钟")
+                "hours" -> choose("hours", "小时")
+                "days" -> choose("days", "天")
+                "weeks" -> choose("weeks", "周")
+                else -> value?.trim()?.ifEmpty { null } ?: choose("times", "次")
             }
         }
     }

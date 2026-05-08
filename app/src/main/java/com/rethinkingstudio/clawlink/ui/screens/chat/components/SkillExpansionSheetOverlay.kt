@@ -23,6 +23,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.rethinkingstudio.clawlink.R
+import com.rethinkingstudio.clawlink.core.state.LocalizedText.choose
 import com.rethinkingstudio.clawlink.ui.screens.chat.ChatColors
 import kotlinx.coroutines.launch
 
@@ -34,10 +35,10 @@ data class SkillExpansionGuideStep(
 )
 
 object SkillExpansionGuideFile {
-    val title = "启动文件互传"
-    val heroTitle = "让 OpenClaw 帮你收发文件"
-    val heroSubtitle = "不用手写技能内容，点一下就能让它自己创建并验证。"
-    val installButtonTitle = "让 OpenClaw 安装文件互传"
+    val title get() = choose("Start file transfer", "启动文件互传")
+    val heroTitle get() = choose("Let OpenClaw send and receive files", "让 OpenClaw 帮你收发文件")
+    val heroSubtitle get() = choose("No need to write skill content manually. One tap lets OpenClaw create and verify it.", "不用手写技能内容，点一下就能让它自己创建并验证。")
+    val installButtonTitle get() = choose("Ask OpenClaw to install file transfer", "让 OpenClaw 安装文件互传")
     val installPrompt = """
     先确认 OpenClaw 里是否已经可用 `skill-creator`；如果可用，直接使用 OpenClaw 的 `skill-creator`，把 `file-transfer` 技能写到 OpenClaw 的技能存放目录 `~/.openclaw/workspace/.agents/skills/file-transfer/SKILL.md`。如果本地已经存在 `file-transfer` skill，先判断是否需要更新；如果不需要更新，就直接告诉用户本地已存在，不要重复创建。不要写到 `~/.codex/skills`，也不要放到 Codex 的技能目录里。
 
@@ -62,18 +63,18 @@ object SkillExpansionGuideFile {
     使用 OpenClaw 的 `skill-creator` 创建或更新一个 OpenClaw skill，名称必须是 `file-transfer`，位置存放在 OpenClaw 技能存放的默认位置。不要让我手写技能内容，直接生成完整的技能文件。
     """.trimIndent()
 
-    val steps = listOf(
-        SkillExpansionGuideStep("understand-capability", 1, "了解这个能力", "配置完成后，ClawLink 可以把电脑上的文件通过 `clawconnect send-file` 发到手机，手机端也能把文件通过附件入口回传到聊天中。"),
-        SkillExpansionGuideStep("confirm-source", 2, "确认技能来源", "这个能力依赖 `skill-creator` 和 `clawconnect-agent` 的 send-file 流程，先确认工具已安装，再按固定模板生成正确的 `file-transfer` 技能。"),
-        SkillExpansionGuideStep("install-verify", 3, "安装并验证文件互传", "点底部按钮后，OpenClaw 会先读懂 `clawconnect send-file` 的用法，再自己生成 `file-transfer` 技能、验证 relay 上传流程，并把偏好写进记忆。")
+    val steps get() = listOf(
+        SkillExpansionGuideStep("understand-capability", 1, choose("Understand this capability", "了解这个能力"), choose("After setup, ClawLink can send computer files to mobile via `clawconnect send-file`, and mobile can send files back through chat attachments.", "配置完成后，ClawLink 可以把电脑上的文件通过 `clawconnect send-file` 发到手机，手机端也能把文件通过附件入口回传到聊天中。")),
+        SkillExpansionGuideStep("confirm-source", 2, choose("Confirm skill source", "确认技能来源"), choose("This depends on `skill-creator` and the `clawconnect-agent` send-file flow. Confirm tools first, then generate the correct `file-transfer` skill from the fixed template.", "这个能力依赖 `skill-creator` 和 `clawconnect-agent` 的 send-file 流程，先确认工具已安装，再按固定模板生成正确的 `file-transfer` 技能。")),
+        SkillExpansionGuideStep("install-verify", 3, choose("Install and verify file transfer", "安装并验证文件互传"), choose("After tapping the bottom button, OpenClaw will understand `clawconnect send-file`, generate the `file-transfer` skill, verify relay upload, and save the preference.", "点底部按钮后，OpenClaw 会先读懂 `clawconnect send-file` 的用法，再自己生成 `file-transfer` 技能、验证 relay 上传流程，并把偏好写进记忆。"))
     )
 }
 
 object SkillExpansionGuideVoice {
-    val title = "配置语音发送"
-    val heroTitle = "让 OpenClaw 把回复变成语音"
-    val heroSubtitle = "先装 edge-tts-universal，再把默认音色和语速写进配置，受限时自动回退到系统语音。"
-    val installButtonTitle = "让 OpenClaw 配置语音发送"
+    val title get() = choose("Configure voice sending", "配置语音发送")
+    val heroTitle get() = choose("Let OpenClaw turn replies into voice", "让 OpenClaw 把回复变成语音")
+    val heroSubtitle get() = choose("Install edge-tts-universal, write the default voice and speed into config, and fall back to system voice if limited.", "先装 edge-tts-universal，再把默认音色和语速写进配置，受限时自动回退到系统语音。")
+    val installButtonTitle get() = choose("Ask OpenClaw to configure voice sending", "让 OpenClaw 配置语音发送")
     val installPrompt = """
     先确认 OpenClaw 里是否已经可用 `skill-creator`；如果可用，直接使用 OpenClaw 的 `skill-creator`，把 `edge-tts-universal` 技能写到 OpenClaw 的技能存放目录 `~/.openclaw/workspace/.agents/skills/edge-tts-universal/SKILL.md`。如果本地已经存在 `edge-tts-universal` skill，先判断是否需要更新；如果不需要更新，就直接告诉用户本地已存在，不要重复创建。不要写到 `~/.codex/skills`，也不要放到 Codex 的技能目录里。
 
@@ -131,10 +132,10 @@ object SkillExpansionGuideVoice {
     如果环境里已经存在对应技能，就直接复用或更新，不要重复创建；只有不存在时，才用 `skill-creator` 创建。
     """.trimIndent()
 
-    val steps = listOf(
-        SkillExpansionGuideStep("understand-capability", 1, "了解这个能力", "先把 `edge-tts-universal`、默认音色和系统语音的兜底关系理清楚，这样语音回复在生成受限时也不会断。"),
-        SkillExpansionGuideStep("confirm-source", 2, "确认技能来源", "这个能力依赖 `skill-creator`、`edge-tts-universal` 和宿主机语音引擎，先确认可用再继续生成技能，并把音色和语速默认值写进去。"),
-        SkillExpansionGuideStep("install-verify", 3, "安装并验证语音发送", "点底部按钮后，OpenClaw 会先安装并验证 `edge-tts-universal`，再把测试语音发到手机。")
+    val steps get() = listOf(
+        SkillExpansionGuideStep("understand-capability", 1, choose("Understand this capability", "了解这个能力"), choose("Clarify `edge-tts-universal`, default voice, and system voice fallback so voice replies keep working under generation limits.", "先把 `edge-tts-universal`、默认音色和系统语音的兜底关系理清楚，这样语音回复在生成受限时也不会断。")),
+        SkillExpansionGuideStep("confirm-source", 2, choose("Confirm skill source", "确认技能来源"), choose("This depends on `skill-creator`, `edge-tts-universal`, and the host voice engine. Confirm availability before generating the skill and writing default voice and speed.", "这个能力依赖 `skill-creator`、`edge-tts-universal` 和宿主机语音引擎，先确认可用再继续生成技能，并把音色和语速默认值写进去。")),
+        SkillExpansionGuideStep("install-verify", 3, choose("Install and verify voice sending", "安装并验证语音发送"), choose("After tapping the bottom button, OpenClaw will install and verify `edge-tts-universal`, then send test voice to mobile.", "点底部按钮后，OpenClaw 会先安装并验证 `edge-tts-universal`，再把测试语音发到手机。"))
     )
 }
 

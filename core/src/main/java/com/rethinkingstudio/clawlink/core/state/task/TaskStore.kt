@@ -4,6 +4,7 @@ import com.rethinkingstudio.clawlink.core.models.tasks.TaskDateCodec
 import com.rethinkingstudio.clawlink.core.models.tasks.TaskDraft
 import com.rethinkingstudio.clawlink.core.models.tasks.TaskItem
 import com.rethinkingstudio.clawlink.core.network.RelayAPIClient
+import com.rethinkingstudio.clawlink.core.state.LocalizedText.choose
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -132,16 +133,16 @@ class TaskStore(
         }
 
         fun validateDraft(draft: TaskDraft): String? {
-            if (draft.prompt.trim().isEmpty()) return "请输入任务内容"
+            if (draft.prompt.trim().isEmpty()) return choose("Enter the task prompt.", "请输入任务内容")
             return when (draft.scheduleKind) {
-                "once" -> if (draft.scheduleAt.isBlank()) "请选择执行时间" else null
+                "once" -> if (draft.scheduleAt.isBlank()) choose("Choose a run time.", "请选择执行时间") else null
                 "repeat" -> when {
-                    draft.scheduleAt.isBlank() -> "请选择首次执行时间"
-                    draft.repeatAmount.toIntOrNull()?.let { it > 0 } != true -> "重复间隔必须大于 0"
-                    draft.repeatUnit.isBlank() -> "请选择时间单位"
+                    draft.scheduleAt.isBlank() -> choose("Choose the first run time.", "请选择首次执行时间")
+                    draft.repeatAmount.toIntOrNull()?.let { it > 0 } != true -> choose("Repeat interval must be greater than 0.", "重复间隔必须大于 0")
+                    draft.repeatUnit.isBlank() -> choose("Choose a time unit.", "请选择时间单位")
                     else -> null
                 }
-                else -> "请选择执行模式"
+                else -> choose("Choose a schedule mode.", "请选择执行模式")
             }
         }
 

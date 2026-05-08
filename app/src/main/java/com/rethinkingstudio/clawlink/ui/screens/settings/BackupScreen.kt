@@ -39,6 +39,7 @@ import com.rethinkingstudio.clawlink.R
 import com.rethinkingstudio.clawlink.core.models.backups.BackupDraft
 import com.rethinkingstudio.clawlink.core.models.backups.BackupItem
 import com.rethinkingstudio.clawlink.core.network.RelayAPIClient
+import com.rethinkingstudio.clawlink.core.state.LocalizedText.choose
 import com.rethinkingstudio.clawlink.core.state.gateway.GatewayStore
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
@@ -385,7 +386,7 @@ private fun createInitialDraft(): BackupDraft {
     val titleSdf = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault())
     val fileSdf = SimpleDateFormat("yyyyMMdd-HHmmss", Locale.getDefault())
     return BackupDraft(
-        title = "备份 ${titleSdf.format(now)}",
+        title = choose("Backup ${titleSdf.format(now)}", "备份 ${titleSdf.format(now)}"),
         detail = "",
         filename = "openclaw-${fileSdf.format(now)}.json"
     )
@@ -552,10 +553,10 @@ private fun BackupEditorSheet(
             item {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                        Text(if (isCreate) "新建备份" else "编辑备份", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-                        Text(if (isCreate) "填写名称、详情和文件名，备份会保存在宿主机本地。" else "可以调整备份的展示名、备注和文件名。", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text(if (isCreate) choose("New backup", "新建备份") else choose("Edit backup", "编辑备份"), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                        Text(if (isCreate) choose("Fill in name, details, and filename. The backup is saved locally on the host.", "填写名称、详情和文件名，备份会保存在宿主机本地。") else choose("Adjust the backup display name, notes, and filename.", "可以调整备份的展示名、备注和文件名。"), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
-                    TextButton(onClick = onDismiss) { Text("取消") }
+                    TextButton(onClick = onDismiss) { Text(choose("Cancel", "取消")) }
                     Button(
                         onClick = { 
                             isSubmitting = true
@@ -565,19 +566,19 @@ private fun BackupEditorSheet(
                         shape = PillShape,
                         contentPadding = PaddingValues(horizontal = 18.dp, vertical = 10.dp)
                     ) {
-                        if (isSubmitting) CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp) else Text("保存")
+                        if (isSubmitting) CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp) else Text(choose("Save", "保存"))
                     }
                 }
             }
 
             item {
                 Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    FieldLabel("备份名称")
+                    FieldLabel(choose("Backup name", "备份名称"))
                     IosTextField(
                         value = draft.title,
                         onValueChange = { draft = draft.copy(title = it) },
                         modifier = Modifier.fillMaxWidth(),
-                        placeholder = "例如：2026-05-08 备份",
+                        placeholder = choose("Example: 2026-05-08 backup", "例如：2026-05-08 备份"),
                         singleLine = true
                     )
                 }
@@ -585,12 +586,12 @@ private fun BackupEditorSheet(
 
             item {
                 Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    FieldLabel("备注详情")
+                    FieldLabel(choose("Notes", "备注详情"))
                     IosTextField(
                         value = draft.detail,
                         onValueChange = { draft = draft.copy(detail = it) },
                         modifier = Modifier.fillMaxWidth(),
-                        placeholder = "填写一些关于此备份的描述...",
+                        placeholder = choose("Describe this backup...", "填写一些关于此备份的描述..."),
                         minLines = 3,
                         maxLines = 5
                     )
@@ -599,7 +600,7 @@ private fun BackupEditorSheet(
 
             item {
                 Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    FieldLabel("文件名称")
+                    FieldLabel(choose("Filename", "文件名称"))
                     IosTextField(
                         value = draft.filename,
                         onValueChange = { draft = draft.copy(filename = it) },
@@ -607,19 +608,19 @@ private fun BackupEditorSheet(
                         placeholder = "example.json",
                         singleLine = true
                     )
-                    Text("提示：文件名必须以 .json 结尾", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(choose("Tip: filename must end with .json", "提示：文件名必须以 .json 结尾"), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
 
             item {
                 Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    FieldLabel("效果预览")
+                    FieldLabel(choose("Preview", "效果预览"))
                     BackupRowCard(
                         backup = BackupItem(
                             id = "preview",
-                            title = draft.title.ifBlank { "未命名备份" },
-                            detail = draft.detail.ifBlank { "没有备注" },
-                            filename = draft.filename.ifBlank { "自动生成文件名" },
+                            title = draft.title.ifBlank { choose("Untitled backup", "未命名备份") },
+                            detail = draft.detail.ifBlank { choose("No notes", "没有备注") },
+                            filename = draft.filename.ifBlank { choose("Auto-generated filename", "自动生成文件名") },
                             createdAt = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.getDefault()).format(Date()),
                             sizeBytes = 1024 * 1024 // Mock size
                         ),

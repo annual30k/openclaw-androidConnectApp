@@ -42,6 +42,7 @@ import androidx.compose.ui.unit.sp
 import com.rethinkingstudio.clawlink.R
 import com.rethinkingstudio.clawlink.core.network.RelayAPIClient
 import com.rethinkingstudio.clawlink.core.network.dto.LogTailResponse
+import com.rethinkingstudio.clawlink.core.state.LocalizedText.choose
 import com.rethinkingstudio.clawlink.core.state.gateway.GatewayStore
 import kotlinx.coroutines.launch
 
@@ -363,7 +364,7 @@ private fun LogSearchBar(searchText: String, onSearchTextChange: (String) -> Uni
         )
         if (searchText.isNotEmpty()) {
             IconButton(onClick = { onSearchTextChange("") }, modifier = Modifier.size(30.dp)) {
-                Icon(Icons.Default.Close, contentDescription = "Clear", modifier = Modifier.size(18.dp), tint = Color(0xFF9CA3AF))
+                Icon(Icons.Default.Close, contentDescription = choose("Clear", "清空"), modifier = Modifier.size(18.dp), tint = Color(0xFF9CA3AF))
             }
         }
     }

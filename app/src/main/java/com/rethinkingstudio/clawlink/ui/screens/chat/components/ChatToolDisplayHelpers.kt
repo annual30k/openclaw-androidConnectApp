@@ -2,6 +2,7 @@ package com.rethinkingstudio.clawlink.ui.screens.chat.components
 
 import com.rethinkingstudio.clawlink.core.models.chat.ChatMessage
 import com.rethinkingstudio.clawlink.core.models.chat.RelayChatContentBlock
+import com.rethinkingstudio.clawlink.core.state.LocalizedText.choose
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
@@ -31,9 +32,9 @@ internal sealed class ToolDisplayContent {
                 }
             }
         }
-        is TerminalCommand -> listOf(command.condensedToolPreview().ifBlank { "Shell command" }, workdir).filter { !it.isNullOrBlank() }.joinToString(" - ")
+        is TerminalCommand -> listOf(command.condensedToolPreview().ifBlank { choose("Shell command", "Shell 命令") }, workdir).filter { !it.isNullOrBlank() }.joinToString(" - ")
         is TerminalOutput -> {
-            val prefix = if (isError) "Shell error" else "Shell output"
+            val prefix = if (isError) choose("Shell error", "Shell 错误") else choose("Shell output", "Shell 输出")
             listOf(text.condensedToolPreview().ifBlank { prefix }.let { if (it == prefix) it else "$prefix: $it" }, workdir).filter { !it.isNullOrBlank() }.joinToString(" - ")
         }
         is Text -> jsonPreviewSummary(text)?.let { "JSON: $it" } ?: text.condensedToolPreview().ifBlank { text.trim() }
@@ -63,7 +64,7 @@ internal fun RelayChatContentBlock.toolDisplayContent(associatedToolCallBlock: R
     val workdir = toolWorkingDirectory(associatedToolCallBlock)
     val fallback = displayText() ?: resolvedPayload()?.renderedText(toolPreferredKeys) ?: resolvedArguments()?.renderedText(toolPreferredKeys) ?: ""
     val trimmed = fallback.trim()
-    if (trimmed.isEmpty()) return ToolDisplayContent.Text("Completed")
+    if (trimmed.isEmpty()) return ToolDisplayContent.Text(choose("Completed", "已完成"))
     prettyPrintedJson(trimmed)?.let { return ToolDisplayContent.Code("json", it) }
     if (toolName.isCommandToolName()) {
         if (isToolCallBlock) { val command = toolCommandText(); if (!command.isNullOrBlank()) return ToolDisplayContent.TerminalCommand(command.trim(), workdir) }

@@ -75,6 +75,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.FileProvider
 import com.rethinkingstudio.clawlink.core.models.chat.RelayChatContentBlock
+import com.rethinkingstudio.clawlink.core.state.LocalizedText.choose
 import com.rethinkingstudio.clawlink.core.state.chat.RemoteAttachmentCache
 import org.apache.poi.ss.usermodel.DataFormatter
 import org.apache.poi.ss.usermodel.WorkbookFactory
@@ -375,7 +376,7 @@ private fun DocumentTopBar(
             Box(contentAlignment = Alignment.Center) {
                 Icon(
                     imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                    contentDescription = "关闭",
+                    contentDescription = choose("Close", "关闭"),
                     tint = Color.White,
                     modifier = Modifier.size(18.dp)
                 )
@@ -410,7 +411,7 @@ private fun DocumentTopBar(
                 Box(contentAlignment = Alignment.Center) {
                     Icon(
                         imageVector = Icons.Default.MoreVert,
-                        contentDescription = "更多",
+                        contentDescription = choose("More", "更多"),
                         tint = Color.White,
                         modifier = Modifier.size(18.dp)
                     )
@@ -422,7 +423,7 @@ private fun DocumentTopBar(
                 onDismissRequest = { showMenu = false }
             ) {
                 DropdownMenuItem(
-                    text = { Text("分享") },
+                    text = { Text(choose("Share", "分享")) },
                     leadingIcon = { Icon(Icons.Default.Share, contentDescription = null) },
                     onClick = {
                         showMenu = false
@@ -430,7 +431,7 @@ private fun DocumentTopBar(
                     }
                 )
                 DropdownMenuItem(
-                    text = { Text("保存到本地") },
+                    text = { Text(choose("Save locally", "保存到本地")) },
                     leadingIcon = { Icon(Icons.Default.Description, contentDescription = null) },
                     onClick = {
                         showMenu = false
@@ -438,7 +439,7 @@ private fun DocumentTopBar(
                     }
                 )
                 DropdownMenuItem(
-                    text = { Text("用其他应用打开") },
+                    text = { Text(choose("Open with another app", "用其他应用打开")) },
                     leadingIcon = { Icon(Icons.Default.Description, contentDescription = null) },
                     onClick = {
                         showMenu = false
@@ -446,7 +447,7 @@ private fun DocumentTopBar(
                     }
                 )
                 DropdownMenuItem(
-                    text = { Text("复制文件名") },
+                    text = { Text(choose("Copy filename", "复制文件名")) },
                     leadingIcon = { Icon(Icons.Default.ContentCopy, contentDescription = null) },
                     onClick = {
                         showMenu = false
@@ -454,7 +455,7 @@ private fun DocumentTopBar(
                     }
                 )
                 DropdownMenuItem(
-                    text = { Text("关闭") },
+                    text = { Text(choose("Close", "关闭")) },
                     leadingIcon = { Icon(Icons.Default.Close, contentDescription = null) },
                     onClick = {
                         showMenu = false
@@ -479,7 +480,7 @@ private fun DocumentLoadingPreview(title: String, isLoading: Boolean) {
                 overflow = TextOverflow.Ellipsis
             )
             Text(
-                text = if (isLoading) "正在打开文档..." else "文档暂时不可预览",
+                text = if (isLoading) choose("Opening document...", "正在打开文档...") else choose("Document preview is temporarily unavailable", "文档暂时不可预览"),
                 style = MaterialTheme.typography.bodySmall,
                 color = Color(0xFF6B7280)
             )
@@ -508,7 +509,7 @@ private fun UnsupportedDocumentPreview(
                 overflow = TextOverflow.Ellipsis
             )
             Text(
-                text = "这个文件类型暂不支持原生预览",
+                text = choose("Native preview is not supported for this file type.", "这个文件类型暂不支持原生预览"),
                 style = MaterialTheme.typography.bodySmall,
                 color = Color(0xFF6B7280)
             )
@@ -519,7 +520,7 @@ private fun UnsupportedDocumentPreview(
                 modifier = Modifier.padding(top = 6.dp)
             ) {
                 Text(
-                    text = "关闭",
+                    text = choose("Close", "关闭"),
                     modifier = Modifier.padding(horizontal = 18.dp, vertical = 10.dp),
                     color = Color.White,
                     style = MaterialTheme.typography.labelLarge
@@ -635,7 +636,7 @@ private fun PdfPagePreview(
         if (bitmap != null) {
             Image(
                 bitmap = bitmap.asImageBitmap(),
-                contentDescription = "PDF page $pageIndex",
+                contentDescription = choose("PDF page $pageIndex", "PDF 第 $pageIndex 页"),
                 contentScale = ContentScale.Fit,
                 modifier = Modifier
                     .fillMaxWidth()
@@ -732,7 +733,7 @@ private fun loadDocxMarkdownPreview(file: File): String {
                 }
             }
             return markdownBlocks.joinToString("\n\n").trim().ifBlank {
-                "这个 Word 文档没有可提取的文本内容。"
+                choose("This Word document has no extractable text content.", "这个 Word 文档没有可提取的文本内容。")
             }
         }
     }
@@ -746,7 +747,7 @@ private fun loadDocMarkdownPreview(file: File): String {
                     .map { it.replace("\u0007", "").trim() }
                     .filter { it.isNotBlank() }
                 paragraphs.joinToString("\n\n").trim().ifBlank {
-                    "这个 Word 97-2003 文档没有可提取的文本内容。"
+                    choose("This Word 97-2003 document has no extractable text content.", "这个 Word 97-2003 文档没有可提取的文本内容。")
                 }
             }
         }
@@ -783,10 +784,10 @@ private fun loadSpreadsheetMarkdownPreview(file: File): String {
                         }
                     }.trim()
                 } else {
-                    blocks += "这个表格没有可提取的文本内容。"
+                    blocks += choose("This spreadsheet has no extractable text content.", "这个表格没有可提取的文本内容。")
                 }
             }
-            return blocks.joinToString("\n\n").trim().ifBlank { "这个表格没有可提取的文本内容。" }
+            return blocks.joinToString("\n\n").trim().ifBlank { choose("This spreadsheet has no extractable text content.", "这个表格没有可提取的文本内容。") }
         }
     }
 }
@@ -800,7 +801,7 @@ private fun loadLegacySpreadsheetMarkdownPreview(file: File): String {
                 if (text.isNotBlank()) {
                     text.lines().map { line -> line.trim() }.filter { it.isNotBlank() }.joinToString("\n")
                 } else {
-                    "这个 Excel 97-2003 文档没有可提取的文本内容。"
+                    choose("This Excel 97-2003 document has no extractable text content.", "这个 Excel 97-2003 文档没有可提取的文本内容。")
                 }
             }
         }
@@ -820,10 +821,10 @@ private fun loadPresentationMarkdownPreview(file: File): String {
                 if (texts.isNotEmpty()) {
                     blocks += texts.joinToString("\n") { "- $it" }
                 } else {
-                    blocks += "这一页没有可提取的文本内容。"
+                    blocks += choose("This slide has no extractable text content.", "这一页没有可提取的文本内容。")
                 }
             }
-            return blocks.joinToString("\n\n").trim().ifBlank { "这个演示文稿没有可提取的文本内容。" }
+            return blocks.joinToString("\n\n").trim().ifBlank { choose("This presentation has no extractable text content.", "这个演示文稿没有可提取的文本内容。") }
         }
     }
 }
@@ -844,10 +845,10 @@ private fun loadLegacyPresentationMarkdownPreview(file: File): String {
                 if (texts.isNotEmpty()) {
                     blocks += texts.joinToString("\n") { "- $it" }
                 } else {
-                    blocks += "这一页没有可提取的文本内容。"
+                    blocks += choose("This slide has no extractable text content.", "这一页没有可提取的文本内容。")
                 }
             }
-            return blocks.joinToString("\n\n").trim().ifBlank { "这个 PowerPoint 97-2003 文档没有可提取的文本内容。" }
+            return blocks.joinToString("\n\n").trim().ifBlank { choose("This PowerPoint 97-2003 document has no extractable text content.", "这个 PowerPoint 97-2003 文档没有可提取的文本内容。") }
         }
     }
 }
@@ -931,7 +932,7 @@ private fun shareDocument(context: Context, file: File, fileName: String?, mimeT
         clipData = ClipData.newRawUri(file.name, uri)
         addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
     }
-    context.startActivity(Intent.createChooser(shareIntent, "分享文件"))
+    context.startActivity(Intent.createChooser(shareIntent, choose("Share file", "分享文件")))
 }
 
 private fun openDocumentWithOtherApp(context: Context, file: File, fileName: String?, mimeType: String?) {
@@ -942,15 +943,15 @@ private fun openDocumentWithOtherApp(context: Context, file: File, fileName: Str
         addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
         addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
     }
-    val chooser = Intent.createChooser(viewIntent, "用其他应用打开").apply {
+    val chooser = Intent.createChooser(viewIntent, choose("Open with another app", "用其他应用打开")).apply {
         addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
     }
     try {
         context.startActivity(chooser)
     } catch (_: ActivityNotFoundException) {
-        Toast.makeText(context, "没有可用于打开该文件的应用", Toast.LENGTH_SHORT).show()
+        Toast.makeText(context, choose("No app can open this file", "没有可用于打开该文件的应用"), Toast.LENGTH_SHORT).show()
     } catch (e: Exception) {
-        Toast.makeText(context, "打开失败：${e.message ?: "Unknown error"}", Toast.LENGTH_SHORT).show()
+        Toast.makeText(context, choose("Open failed: ${e.message ?: "Unknown error"}", "打开失败：${e.message ?: "未知错误"}"), Toast.LENGTH_SHORT).show()
     }
 }
 
@@ -973,19 +974,19 @@ private fun saveDocumentToDownloads(context: Context, file: File, fileName: Stri
         } else {
             MediaStore.Files.getContentUri("external")
         }
-        val uri = resolver.insert(collection, values) ?: throw IllegalStateException("无法创建保存位置")
+        val uri = resolver.insert(collection, values) ?: throw IllegalStateException(choose("Unable to create save location", "无法创建保存位置"))
         resolver.openOutputStream(uri)?.use { output ->
             FileInputStream(file).use { input -> input.copyTo(output) }
-        } ?: throw IllegalStateException("无法写入文件")
+        } ?: throw IllegalStateException(choose("Unable to write file", "无法写入文件"))
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             values.clear()
             values.put(MediaStore.MediaColumns.IS_PENDING, 0)
             resolver.update(uri, values, null, null)
         }
-        Toast.makeText(context, "已保存到下载目录", Toast.LENGTH_SHORT).show()
+        Toast.makeText(context, choose("Saved to Downloads", "已保存到下载目录"), Toast.LENGTH_SHORT).show()
         true
     } catch (e: Exception) {
-        Toast.makeText(context, "保存失败：${e.message ?: "Unknown error"}", Toast.LENGTH_SHORT).show()
+        Toast.makeText(context, choose("Save failed: ${e.message ?: "Unknown error"}", "保存失败：${e.message ?: "未知错误"}"), Toast.LENGTH_SHORT).show()
         false
     }
 }

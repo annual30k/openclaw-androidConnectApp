@@ -77,6 +77,7 @@ import androidx.compose.ui.zIndex
 import androidx.core.content.FileProvider
 import androidx.compose.foundation.layout.fillMaxHeight
 import com.rethinkingstudio.clawlink.core.models.chat.RelayChatContentBlock
+import com.rethinkingstudio.clawlink.core.state.LocalizedText.choose
 import com.rethinkingstudio.clawlink.core.state.chat.RemoteImageCache
 import com.rethinkingstudio.clawlink.core.state.chat.RemoteImageSizeCache
 import com.rethinkingstudio.clawlink.core.state.chat.chatImageCacheKey
@@ -263,7 +264,7 @@ private fun ImageLoadingPlaceholder(isFailed: Boolean, modifier: Modifier = Modi
         Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
             if (isFailed) {
                 Icon(Icons.Default.Image, contentDescription = null, tint = Color(0xFFA0A4AF), modifier = Modifier.size(28.dp))
-                Text("图片加载失败", style = MaterialTheme.typography.labelSmall, color = Color(0xFFA0A4AF))
+                Text(choose("Image load failed", "图片加载失败"), style = MaterialTheme.typography.labelSmall, color = Color(0xFFA0A4AF))
             } else {
                 CircularProgressIndicator(modifier = Modifier.size(22.dp), strokeWidth = 2.dp, color = ChatColors.linkBlue.copy(alpha = 0.72f))
             }
@@ -312,7 +313,7 @@ internal fun ImageFullscreenOverlay(
                 bmp != null -> Image(bitmap = bmp.asImageBitmap(), contentDescription = fileName, contentScale = ContentScale.Fit, modifier = Modifier.fillMaxSize())
                 didFail -> Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     Icon(Icons.Default.Image, contentDescription = null, tint = Color.White.copy(alpha = 0.80f), modifier = Modifier.size(42.dp))
-                    Text("图片加载失败", style = MaterialTheme.typography.bodyMedium, color = Color.White.copy(alpha = 0.74f))
+                    Text(choose("Image load failed", "图片加载失败"), style = MaterialTheme.typography.bodyMedium, color = Color.White.copy(alpha = 0.74f))
                 }
                 else -> CircularProgressIndicator(modifier = Modifier.size(32.dp), color = Color.White.copy(alpha = 0.80f), strokeWidth = 2.5.dp)
             }
@@ -320,7 +321,7 @@ internal fun ImageFullscreenOverlay(
         // Top bar
         Row(modifier = Modifier.fillMaxWidth().statusBarsPadding().padding(horizontal = 14.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
             Surface(onClick = onDismiss, shape = CircleShape, color = Color(0xFF2A2D36).copy(alpha = 0.92f), border = BorderStroke(1.dp, Color.White.copy(alpha = 0.08f)), modifier = Modifier.size(40.dp)) {
-                Box(contentAlignment = Alignment.Center) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "关闭", tint = Color.White, modifier = Modifier.size(18.dp)) }
+                Box(contentAlignment = Alignment.Center) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = choose("Close", "关闭"), tint = Color.White, modifier = Modifier.size(18.dp)) }
             }
             Spacer(Modifier.size(12.dp))
             Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.Center) {
@@ -341,7 +342,7 @@ internal fun ImageFullscreenOverlay(
                     onDismissRequest = { showTopMenu = false }
                 ) {
                     DropdownMenuItem(
-                        text = { Text("分享") },
+                        text = { Text(choose("Share", "分享")) },
                         leadingIcon = { Icon(Icons.Default.Share, contentDescription = null) },
                         onClick = {
                             shareCurrentImage(context, bitmap, localCopyFile)
@@ -349,7 +350,7 @@ internal fun ImageFullscreenOverlay(
                         }
                     )
                     DropdownMenuItem(
-                        text = { Text("保存到本地") },
+                        text = { Text(choose("Save locally", "保存到本地")) },
                         leadingIcon = { Icon(Icons.Default.SaveAlt, contentDescription = null) },
                         onClick = {
                             saveImageToLocal(context, bitmap, localCopyFile, fileName)
@@ -357,7 +358,7 @@ internal fun ImageFullscreenOverlay(
                         }
                     )
                     DropdownMenuItem(
-                        text = { Text("复制文件名") },
+                        text = { Text(choose("Copy filename", "复制文件名")) },
                         leadingIcon = { Icon(Icons.Default.ContentCopy, contentDescription = null) },
                         onClick = {
                             val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
@@ -366,7 +367,7 @@ internal fun ImageFullscreenOverlay(
                         }
                     )
                     DropdownMenuItem(
-                        text = { Text("关闭") },
+                        text = { Text(choose("Close", "关闭")) },
                         leadingIcon = { Icon(Icons.Default.Close, contentDescription = null) },
                         onClick = {
                             showTopMenu = false
@@ -407,13 +408,13 @@ private fun shareCurrentImage(context: Context, bmp: Bitmap?, localCopyFile: Fil
         putExtra(Intent.EXTRA_STREAM, uri)
         addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
     }
-    context.startActivity(Intent.createChooser(shareIntent, "分享图片"))
+    context.startActivity(Intent.createChooser(shareIntent, choose("Share image", "分享图片")))
 }
 
 private fun saveImageToLocal(context: Context, bmp: Bitmap?, localCopyFile: File?, fileName: String?) {
     val sourceFile = localCopyFile?.takeIf { it.exists() } ?: run {
         val image = bmp ?: run {
-            Toast.makeText(context, "图片尚未加载完成", Toast.LENGTH_SHORT).show()
+            Toast.makeText(context, choose("Image has not finished loading", "图片尚未加载完成"), Toast.LENGTH_SHORT).show()
             return
         }
         val generated = File(context.cacheDir, "saved_image_${System.currentTimeMillis()}.png")
@@ -438,18 +439,18 @@ private fun saveImageToLocal(context: Context, bmp: Bitmap?, localCopyFile: File
     }
 
     try {
-        val uri = resolver.insert(collection, values) ?: throw IllegalStateException("无法创建保存位置")
+        val uri = resolver.insert(collection, values) ?: throw IllegalStateException(choose("Unable to create save location", "无法创建保存位置"))
         resolver.openOutputStream(uri)?.use { output ->
             sourceFile.inputStream().use { input -> input.copyTo(output) }
-        } ?: throw IllegalStateException("无法写入文件")
+        } ?: throw IllegalStateException(choose("Unable to write file", "无法写入文件"))
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             values.clear()
             values.put(MediaStore.MediaColumns.IS_PENDING, 0)
             resolver.update(uri, values, null, null)
         }
-        Toast.makeText(context, "已保存到本地", Toast.LENGTH_SHORT).show()
+        Toast.makeText(context, choose("Saved locally", "已保存到本地"), Toast.LENGTH_SHORT).show()
     } catch (e: Exception) {
-        Toast.makeText(context, "保存失败：${e.message ?: "Unknown error"}", Toast.LENGTH_SHORT).show()
+        Toast.makeText(context, choose("Save failed: ${e.message ?: "Unknown error"}", "保存失败：${e.message ?: "未知错误"}"), Toast.LENGTH_SHORT).show()
     }
 }
 
@@ -466,7 +467,7 @@ private fun deleteCachedLocalCopy(
         }
         onDeleted()
     } catch (e: Exception) {
-        Toast.makeText(context, "删除失败：${e.message ?: "Unknown error"}", Toast.LENGTH_SHORT).show()
+        Toast.makeText(context, choose("Delete failed: ${e.message ?: "Unknown error"}", "删除失败：${e.message ?: "未知错误"}"), Toast.LENGTH_SHORT).show()
     }
 }
 

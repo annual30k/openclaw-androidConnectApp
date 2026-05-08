@@ -1,5 +1,6 @@
 package com.rethinkingstudio.clawlink.ui.screens.chat
 
+import com.rethinkingstudio.clawlink.core.state.LocalizedText
 import java.time.Duration
 import java.time.Instant
 import java.time.LocalDateTime
@@ -13,7 +14,7 @@ private val localDateTimeParser: DateTimeFormatter = DateTimeFormatter.ofPattern
 
 internal fun formatChatTimestamp(raw: String, now: Instant = Instant.now()): String {
     val trimmed = raw.trim()
-    if (trimmed.isBlank()) return "刚刚"
+    if (trimmed.isBlank()) return LocalizedText.choose("Just now", "刚刚")
 
     val zoneId = ZoneId.systemDefault()
     val nowDateTime = ZonedDateTime.ofInstant(now, zoneId)
@@ -50,11 +51,11 @@ private fun parseChatTimestamp(raw: String, zoneId: ZoneId): ZonedDateTime? {
 private fun formatRelativeChatTimestamp(dateTime: ZonedDateTime, now: ZonedDateTime): String {
     val deltaSeconds = Duration.between(dateTime.toInstant(), now.toInstant()).seconds
     if (deltaSeconds < 45) {
-        return if (isChineseLocale()) "刚刚" else "Just now"
+        return LocalizedText.choose("Just now", "刚刚")
     }
     if (deltaSeconds < 3600) {
         val minutes = maxOf(1, deltaSeconds / 60)
-        return if (isChineseLocale()) "${minutes}分钟前" else "${minutes} min ago"
+        return LocalizedText.choose("${minutes} min ago", "${minutes}分钟前")
     }
 
     return when {
@@ -81,5 +82,5 @@ private fun yearMonthDayFormatter(): DateTimeFormatter {
 }
 
 private fun isChineseLocale(): Boolean {
-    return Locale.getDefault().language.equals(Locale.CHINESE.language, ignoreCase = true)
+    return LocalizedText.isChinese()
 }

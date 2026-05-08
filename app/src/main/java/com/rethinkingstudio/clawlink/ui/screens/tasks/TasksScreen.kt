@@ -98,6 +98,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import com.rethinkingstudio.clawlink.core.models.tasks.TaskDateCodec
 import com.rethinkingstudio.clawlink.core.models.tasks.TaskDraft
 import com.rethinkingstudio.clawlink.core.models.tasks.TaskItem
+import com.rethinkingstudio.clawlink.core.state.LocalizedText.choose
 import com.rethinkingstudio.clawlink.core.state.gateway.GatewayStore
 import com.rethinkingstudio.clawlink.core.state.task.TaskStore
 import kotlinx.coroutines.launch
@@ -153,10 +154,10 @@ fun TasksScreen(
             containerColor = Color.Transparent,
             topBar = {
                 TopAppBar(
-                    title = { Text("定时任务", fontWeight = FontWeight.Bold) },
+                    title = { Text(choose("Scheduled Tasks", "定时任务"), fontWeight = FontWeight.Bold) },
                     navigationIcon = {
                         IconButton(onClick = onBack) {
-                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回")
+                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = choose("Back", "返回"))
                         }
                     },
                     actions = {
@@ -167,7 +168,7 @@ fun TasksScreen(
                             if (taskState.isLoading) {
                                 CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
                             } else {
-                                Icon(Icons.Default.Refresh, contentDescription = "刷新")
+                                Icon(Icons.Default.Refresh, contentDescription = choose("Refresh", "刷新"))
                             }
                         }
                     },
@@ -190,7 +191,7 @@ fun TasksScreen(
                     item {
                         if (gatewayState.restartingGatewayId != null && gatewayState.isSelectedGatewayChatChainReady) {
                             MaintenanceBanner(
-                                title = "网关维护中",
+                                title = choose("Gateway maintenance", "网关维护中"),
                                 message = androidx.compose.ui.res.stringResource(com.rethinkingstudio.clawlink.R.string.advanced_doctor_fix_hint_locked),
                                 icon = Icons.Default.Bolt,
                                 tint = WarningOrange
@@ -221,7 +222,7 @@ fun TasksScreen(
                     item(key = "section_list_title") {
                         Box(Modifier.animateItemPlacement()) {
                             SectionTitle(
-                                title = "任务列表",
+                                title = choose("Task list", "任务列表"),
                                 subtitle = TaskListPresentationLogic.listSectionSubtitle(selectedFilter, searchText)
                             )
                         }
@@ -239,7 +240,7 @@ fun TasksScreen(
                             sections.forEach { section ->
                                 item(key = "section_${section.filter.title}") {
                                     Box(Modifier.animateItemPlacement()) {
-                                        SectionTitle(title = section.filter.title, subtitle = "${section.tasks.size} 个任务")
+                                        SectionTitle(title = section.filter.title, subtitle = choose("${section.tasks.size} tasks", "${section.tasks.size} 个任务"))
                                     }
                                 }
                                 items(section.tasks, key = { it.id }) { task ->
@@ -303,7 +304,7 @@ fun TasksScreen(
                     .align(Alignment.BottomCenter)
                     .padding(16.dp)
                     .padding(bottom = 72.dp),
-                action = { TextButton(onClick = taskStore::clearError) { Text("关闭") } }
+                action = { TextButton(onClick = taskStore::clearError) { Text(choose("Close", "关闭")) } }
             ) {
                 Text(message)
             }
@@ -331,8 +332,8 @@ fun TasksScreen(
     deleteTarget?.let { task ->
         AlertDialog(
             onDismissRequest = { deleteTarget = null },
-            title = { Text("删除「${task.title}」？") },
-            text = { Text("删除后这个定时任务不会再执行。") },
+            title = { Text(choose("Delete \"${task.title}\"?", "删除「${task.title}」？")) },
+            text = { Text(choose("This scheduled task will not run after deletion.", "删除后这个定时任务不会再执行。")) },
             confirmButton = {
                 TextButton(
                     onClick = {
@@ -340,10 +341,10 @@ fun TasksScreen(
                         if (canManageTasks) scope.launch { taskStore.deleteTask(gatewayId, task.id) }
                     }
                 ) {
-                    Text("删除", color = MaterialTheme.colorScheme.error)
+                    Text(choose("Delete", "删除"), color = MaterialTheme.colorScheme.error)
                 }
             },
-            dismissButton = { TextButton(onClick = { deleteTarget = null }) { Text("保留") } }
+            dismissButton = { TextButton(onClick = { deleteTarget = null }) { Text(choose("Keep", "保留")) } }
         )
     }
 }
@@ -452,11 +453,19 @@ private fun MaintenanceBanner(
     }
 }
 
-private enum class TaskListFilter(val title: String) {
-    All("全部"),
-    Active("运行中"),
-    Paused("已暂停"),
-    Completed("已完成");
+private enum class TaskListFilter {
+    All,
+    Active,
+    Paused,
+    Completed;
+
+    val title: String
+        get() = when (this) {
+            All -> choose("All", "全部")
+            Active -> choose("Active", "运行中")
+            Paused -> choose("Paused", "已暂停")
+            Completed -> choose("Completed", "已完成")
+        }
 
     fun matches(task: TaskItem): Boolean = when (this) {
         All -> true
@@ -475,8 +484,8 @@ private sealed interface TaskEditorMode {
     val updatingId: String
 
     data object Create : TaskEditorMode {
-        override val title = "新建任务"
-        override val subtitle = "设置任务内容、执行时间和重复规则。"
+        override val title get() = choose("New task", "新建任务")
+        override val subtitle get() = choose("Set task content, run time, and repeat rules.", "设置任务内容、执行时间和重复规则。")
         override val initialDraft = TaskDraft(
             scheduleKind = "once",
             scheduleAt = TaskDateCodec.isoString(Instant.now().plusSeconds(15 * 60)),
@@ -487,8 +496,8 @@ private sealed interface TaskEditorMode {
     }
 
     data class Edit(val task: TaskItem) : TaskEditorMode {
-        override val title = "编辑任务"
-        override val subtitle = "调整任务内容、执行时间和重复规则。"
+        override val title get() = choose("Edit task", "编辑任务")
+        override val subtitle get() = choose("Adjust task content, run time, and repeat rules.", "调整任务内容、执行时间和重复规则。")
         override val initialDraft = TaskDraft(
             title = task.title,
             prompt = task.prompt,
@@ -523,9 +532,9 @@ private object TaskListPresentationLogic {
     fun listSectionSubtitle(selectedFilter: TaskListFilter, searchText: String): String {
         val term = searchText.trim()
         return when {
-            shouldGroupVisibleTasks(selectedFilter, searchText) -> "按运行状态自动分组"
-            term.isNotEmpty() -> "正在搜索「$term」"
-            else -> "显示当前筛选结果"
+            shouldGroupVisibleTasks(selectedFilter, searchText) -> choose("Grouped automatically by run status", "按运行状态自动分组")
+            term.isNotEmpty() -> choose("Searching \"$term\"", "正在搜索「$term」")
+            else -> choose("Showing current filter results", "显示当前筛选结果")
         }
     }
 
@@ -534,10 +543,10 @@ private object TaskListPresentationLogic {
     }
 
     fun taskBadgeTitle(task: TaskItem): String = when {
-        task.enabled && task.nextRunDate != null -> "待执行"
-        task.enabled -> "已启用"
-        isCompletedOnceTask(task) -> "已完成"
-        else -> "已暂停"
+        task.enabled && task.nextRunDate != null -> choose("Scheduled", "待执行")
+        task.enabled -> choose("Enabled", "已启用")
+        isCompletedOnceTask(task) -> choose("Completed", "已完成")
+        else -> choose("Paused", "已暂停")
     }
 
     fun isCompletedOnceTask(task: TaskItem): Boolean = task.scheduleKind == "once" && task.nextRunDate == null
@@ -563,7 +572,7 @@ private fun TasksOverviewCard(
         Row(verticalAlignment = Alignment.CenterVertically) {
             Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Text(
-                    "定时任务",
+                    choose("Scheduled Tasks", "定时任务"),
                     style = MaterialTheme.typography.headlineLarge.copy(
                         brush = Brush.linearGradient(
                             colors = listOf(
@@ -575,7 +584,7 @@ private fun TasksOverviewCard(
                     fontWeight = FontWeight.Bold
                 )
                 Text(
-                    nextTask?.nextRunSummary ?: "暂无待执行任务",
+                    nextTask?.nextRunSummary ?: choose("No pending tasks", "暂无待执行任务"),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.9f),
                     fontWeight = FontWeight.SemiBold
@@ -589,14 +598,14 @@ private fun TasksOverviewCard(
                     .shadow(elevation = 8.dp, shape = CircleShape, spotColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.25f))
                     .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.15f), CircleShape)
             ) {
-                Icon(Icons.Default.Add, contentDescription = "添加", tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(22.dp))
+                Icon(Icons.Default.Add, contentDescription = choose("Add", "添加"), tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(22.dp))
             }
         }
 
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.horizontalScroll(rememberScrollState())) {
-            TaskSmallStatChip("全部", totalCount, AccentBlue)
-            TaskSmallStatChip("运行中", enabledCount, SuccessGreen)
-            if (pausedCount > 0) TaskSmallStatChip("已暂停", pausedCount, WarningOrange)
+            TaskSmallStatChip(choose("All", "全部"), totalCount, AccentBlue)
+            TaskSmallStatChip(choose("Active", "运行中"), enabledCount, SuccessGreen)
+            if (pausedCount > 0) TaskSmallStatChip(choose("Paused", "已暂停"), pausedCount, WarningOrange)
         }
     }
 }
@@ -818,7 +827,7 @@ private fun TasksTaskCard(
                     TaskCircleButton(
                         icon = if (task.enabled) Icons.Default.Pause else Icons.Default.PlayArrow,
                         tint = if (task.enabled) WarningOrange else SuccessGreen,
-                        contentDescription = if (task.enabled) "暂停" else "恢复",
+                        contentDescription = if (task.enabled) choose("Pause", "暂停") else choose("Resume", "恢复"),
                         enabled = !disabled,
                         busy = busy,
                         onClick = { onTogglePause(task) }
@@ -826,14 +835,14 @@ private fun TasksTaskCard(
                     TaskCircleButton(
                         icon = Icons.Default.Edit,
                         tint = AccentBlue,
-                        contentDescription = "编辑",
+                        contentDescription = choose("Edit", "编辑"),
                         enabled = !disabled,
                         onClick = { onEdit(task) }
                     )
                     TaskCircleButton(
                         icon = Icons.Default.Delete,
                         tint = MaterialTheme.colorScheme.error.copy(alpha = 0.9f),
-                        contentDescription = "删除",
+                        contentDescription = choose("Delete", "删除"),
                         enabled = !disabled,
                         onClick = { onDelete(task) }
                     )
@@ -907,14 +916,14 @@ private fun TasksEmptyStateCard(tasks: List<TaskItem>, searchText: String, onRes
                 )
             }
             Text(
-                if (tasks.isEmpty()) "还没有定时任务" else "没有匹配的任务",
+                if (tasks.isEmpty()) choose("No scheduled tasks yet", "还没有定时任务") else choose("No matching tasks", "没有匹配的任务"),
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold
             )
             Text(
-                if (tasks.isEmpty()) "创建第一个任务后，OpenClaw 会按计划自动执行。"
-                else if (searchText.isNotBlank()) "换个关键词再试，或清空搜索。"
-                else "当前筛选条件下没有任务。",
+                if (tasks.isEmpty()) choose("After creating the first task, OpenClaw will run it on schedule.", "创建第一个任务后，OpenClaw 会按计划自动执行。")
+                else if (searchText.isNotBlank()) choose("Try another keyword or clear search.", "换个关键词再试，或清空搜索。")
+                else choose("No tasks match the current filters.", "当前筛选条件下没有任务。"),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f)
             )
@@ -927,7 +936,7 @@ private fun TasksEmptyStateCard(tasks: List<TaskItem>, searchText: String, onRes
                     shape = PillShape
                 ) {
                     Text(
-                        if (searchText.isNotBlank()) "清空搜索" else "查看全部",
+                        if (searchText.isNotBlank()) choose("Clear search", "清空搜索") else choose("View all", "查看全部"),
                         color = MaterialTheme.colorScheme.onSurface,
                         fontWeight = FontWeight.Bold
                     )
@@ -982,7 +991,7 @@ private fun TaskSearchBar(searchText: String, onSearchTextChange: (String) -> Un
                 Box {
                     if (searchText.isEmpty()) {
                         Text(
-                            "搜索任务名称、内容或时间",
+                            choose("Search task name, content, or time", "搜索任务名称、内容或时间"),
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.72f),
                             fontWeight = FontWeight.SemiBold
@@ -994,7 +1003,7 @@ private fun TaskSearchBar(searchText: String, onSearchTextChange: (String) -> Un
         )
         if (searchText.isNotEmpty()) {
             IconButton(onClick = { onSearchTextChange("") }, modifier = Modifier.size(30.dp)) {
-                Icon(Icons.Default.Close, contentDescription = "清空", modifier = Modifier.size(18.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f))
+                Icon(Icons.Default.Close, contentDescription = choose("Clear", "清空"), modifier = Modifier.size(18.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f))
             }
         }
     }
@@ -1039,26 +1048,26 @@ private fun TaskEditorSheet(
                         Text(mode.title, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
                         Text(mode.subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
-                    TextButton(onClick = onDismiss) { Text("取消") }
+                    TextButton(onClick = onDismiss) { Text(choose("Cancel", "取消")) }
                     Button(
                         onClick = { onSubmit(normalizedDraft) },
                         enabled = validation == null && !isSubmitting,
                         shape = PillShape,
                         contentPadding = PaddingValues(horizontal = 18.dp, vertical = 10.dp)
                     ) {
-                        if (isSubmitting) CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp) else Text("保存")
+                        if (isSubmitting) CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp) else Text(choose("Save", "保存"))
                     }
                 }
             }
 
             item {
                 Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    FieldLabel("任务内容")
+                    FieldLabel(choose("Task content", "任务内容"))
                     IosTextField(
                         value = draft.prompt,
                         onValueChange = { draft = draft.copy(prompt = it) },
                         modifier = Modifier.fillMaxWidth(),
-                        placeholder = "例如：每天整理今天的待办并发送给我",
+                        placeholder = choose("For example: summarize today's todos and send them to me every day", "例如：每天整理今天的待办并发送给我"),
                         minLines = 4,
                         maxLines = 8
                     )
@@ -1067,12 +1076,12 @@ private fun TaskEditorSheet(
 
             item {
                 Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    FieldLabel("任务名称")
+                    FieldLabel(choose("Task name", "任务名称"))
                     IosTextField(
                         value = draft.title,
                         onValueChange = { draft = draft.copy(title = it) },
                         modifier = Modifier.fillMaxWidth(),
-                        placeholder = "留空时自动从任务内容生成",
+                        placeholder = choose("Leave blank to generate from task content", "留空时自动从任务内容生成"),
                         singleLine = true
                     )
                 }
@@ -1084,7 +1093,7 @@ private fun TaskEditorSheet(
 
             item {
                 Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    FieldLabel("预览")
+                    FieldLabel(choose("Preview", "预览"))
                     TasksTaskCard(
                         task = previewTask(normalizedDraft),
                         updatingTaskId = null,
@@ -1160,7 +1169,7 @@ private fun ExecutionSettingsCard(draft: TaskDraft, onDraftChange: (TaskDraft) -
             .animateContentSize()
     ) {
         Column(modifier = Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(18.dp)) {
-            FieldLabel("执行设置")
+            FieldLabel(choose("Execution settings", "执行设置"))
             Row(
                 modifier = Modifier
                     .clip(PillShape)
@@ -1168,16 +1177,16 @@ private fun ExecutionSettingsCard(draft: TaskDraft, onDraftChange: (TaskDraft) -
                     .padding(6.dp),
                 horizontalArrangement = Arrangement.spacedBy(6.dp)
             ) {
-                ModeButton("一次性", Icons.Default.Bolt, draft.scheduleKind == "once", Modifier.weight(1f)) {
+                ModeButton(choose("Once", "一次性"), Icons.Default.Bolt, draft.scheduleKind == "once", Modifier.weight(1f)) {
                     onDraftChange(draft.copy(scheduleKind = "once"))
                 }
-                ModeButton("重复", Icons.Default.Repeat, draft.scheduleKind == "repeat", Modifier.weight(1f)) {
+                ModeButton(choose("Repeat", "重复"), Icons.Default.Repeat, draft.scheduleKind == "repeat", Modifier.weight(1f)) {
                     onDraftChange(draft.copy(scheduleKind = "repeat"))
                 }
             }
 
             SchedulePickerRow(
-                label = if (draft.scheduleKind == "once") "执行时间" else "首次执行时间",
+                label = if (draft.scheduleKind == "once") choose("Run time", "执行时间") else choose("First run time", "首次执行时间"),
                 value = draft.scheduleAt,
                 onChange = { onDraftChange(draft.copy(scheduleAt = it)) }
             )
@@ -1185,7 +1194,7 @@ private fun ExecutionSettingsCard(draft: TaskDraft, onDraftChange: (TaskDraft) -
             if (draft.scheduleKind == "repeat") {
                 Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
                     Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        FieldLabel("间隔")
+                        FieldLabel(choose("Interval", "间隔"))
                         IosTextField(
                             value = draft.repeatAmount,
                             onValueChange = { value -> onDraftChange(draft.copy(repeatAmount = value.filter { it.isDigit() })) },
@@ -1196,9 +1205,14 @@ private fun ExecutionSettingsCard(draft: TaskDraft, onDraftChange: (TaskDraft) -
                         )
                     }
                     Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        FieldLabel("单位")
+                        FieldLabel(choose("Unit", "单位"))
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.horizontalScroll(rememberScrollState())) {
-                            listOf("minutes" to "分钟", "hours" to "小时", "days" to "天", "weeks" to "周").forEach { (value, title) ->
+                            listOf(
+                                "minutes" to choose("Minutes", "分钟"),
+                                "hours" to choose("Hours", "小时"),
+                                "days" to choose("Days", "天"),
+                                "weeks" to choose("Weeks", "周")
+                            ).forEach { (value, title) ->
                                 IosTinyPill(
                                     title = title,
                                     selected = draft.repeatUnit == value,
@@ -1259,7 +1273,7 @@ private fun SchedulePickerRow(label: String, value: String, onChange: (String) -
     val context = LocalContext.current
     val zone = ZoneId.systemDefault()
     val current = TaskDateCodec.instantFrom(value)?.atZone(zone)?.toLocalDateTime() ?: LocalDateTime.now().plusMinutes(15)
-    val display = TaskDateCodec.displayString(value) ?: "选择时间"
+    val display = TaskDateCodec.displayString(value) ?: choose("Choose time", "选择时间")
 
     Row(
         modifier = Modifier
@@ -1303,7 +1317,7 @@ private fun SchedulePickerRow(label: String, value: String, onChange: (String) -
             colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f), contentColor = MaterialTheme.colorScheme.primary),
             elevation = ButtonDefaults.buttonElevation(defaultElevation = 0.dp)
         ) {
-            Text("选择")
+            Text(choose("Choose", "选择"))
         }
     }
 }
@@ -1313,19 +1327,19 @@ private fun PresetStrip(draft: TaskDraft, onDraftChange: (TaskDraft) -> Unit) {
     val now = remember { LocalDateTime.now() }
     val zone = ZoneId.systemDefault()
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        FieldLabel("快捷预设")
+        FieldLabel(choose("Quick presets", "快捷预设"))
         Row(modifier = Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            PresetButton("15 分钟后", Icons.Default.AccessTime) {
+            PresetButton(choose("In 15 minutes", "15 分钟后"), Icons.Default.AccessTime) {
                 onDraftChange(draft.copy(scheduleKind = "once", scheduleAt = TaskDateCodec.isoString(Instant.now().plusSeconds(15 * 60))))
             }
-            PresetButton("1 小时后", Icons.Default.Timer) {
+            PresetButton(choose("In 1 hour", "1 小时后"), Icons.Default.Timer) {
                 onDraftChange(draft.copy(scheduleKind = "once", scheduleAt = TaskDateCodec.isoString(Instant.now().plusSeconds(60 * 60))))
             }
-            PresetButton("明天 9 点", Icons.Default.WbSunny) {
+            PresetButton(choose("Tomorrow 9 AM", "明天 9 点"), Icons.Default.WbSunny) {
                 val tomorrowNine = now.toLocalDate().plusDays(1).atTime(9, 0)
                 onDraftChange(draft.copy(scheduleKind = "once", scheduleAt = TaskDateCodec.isoString(tomorrowNine.atZone(zone).toInstant())))
             }
-            PresetButton("每天一次", Icons.Default.Repeat) {
+            PresetButton(choose("Once daily", "每天一次"), Icons.Default.Repeat) {
                 onDraftChange(draft.copy(scheduleKind = "repeat", repeatAmount = "1", repeatUnit = "days"))
             }
         }
@@ -1358,7 +1372,7 @@ private fun FieldLabel(text: String) {
 }
 
 private fun previewTask(draft: TaskDraft): TaskItem {
-    val title = draft.title.ifBlank { TaskStore.deriveTaskTitle(draft.prompt).ifBlank { "新任务" } }
+    val title = draft.title.ifBlank { TaskStore.deriveTaskTitle(draft.prompt).ifBlank { choose("New task", "新任务") } }
     return TaskItem(
         id = "preview",
         title = title,

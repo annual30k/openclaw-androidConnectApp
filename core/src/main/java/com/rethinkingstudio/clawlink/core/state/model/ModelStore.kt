@@ -2,6 +2,7 @@ package com.rethinkingstudio.clawlink.core.state.model
 
 import com.rethinkingstudio.clawlink.core.models.catalog.ModelItem
 import com.rethinkingstudio.clawlink.core.network.RelayAPIClient
+import com.rethinkingstudio.clawlink.core.state.LocalizedText.choose
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -15,7 +16,7 @@ data class ModelState(
     val errorMessage: String? = null
 ) {
     val selectedModel: ModelItem? get() = models.find { it.isSelected }
-    val selectedModelDisplay: String get() = selectedModel?.displayName ?: "No model"
+    val selectedModelDisplay: String get() = selectedModel?.displayName ?: choose("No model", "未选择模型")
     val defaultModel: ModelItem? get() = models.find { it.isDefault }
     val groupedModels: Map<String, List<ModelItem>> get() = models.groupBy { it.provider.ifBlank { it.providerId } }
 }
@@ -67,7 +68,10 @@ class ModelStore(
                 _state.value = _state.value.copy(
                     isUpdatingDefault = false,
                     updatingDefaultModelKey = null,
-                    errorMessage = "设置默认模型后等待 OpenClaw 恢复超时，已解除等待锁定，请稍后重试。"
+                    errorMessage = choose(
+                        "Timed out waiting for OpenClaw to recover after setting the default model. The wait lock has been released. Please try again later.",
+                        "设置默认模型后等待 OpenClaw 恢复超时，已解除等待锁定，请稍后重试。"
+                    )
                 )
                 return false
             }

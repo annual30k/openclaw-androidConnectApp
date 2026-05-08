@@ -76,6 +76,7 @@ import androidx.compose.ui.unit.dp
 import com.rethinkingstudio.clawlink.R
 import com.rethinkingstudio.clawlink.core.models.chat.ChatSessionItem
 import com.rethinkingstudio.clawlink.core.network.RelayAPIClient
+import com.rethinkingstudio.clawlink.core.state.LocalizedText.choose
 import com.rethinkingstudio.clawlink.core.state.chat.ChatStore
 import com.rethinkingstudio.clawlink.core.state.gateway.GatewayStore
 import kotlinx.coroutines.launch
@@ -144,7 +145,7 @@ fun SessionsScreen(
             chatStore.loadSessions(id)
             issueMessage = null
         } catch (e: Exception) {
-            if (forceError) issueMessage = "刷新会话失败：${e.message ?: "未知错误"}"
+            if (forceError) issueMessage = choose("Failed to refresh sessions: ${e.message ?: "Unknown error"}", "刷新会话失败：${e.message ?: "未知错误"}")
         } finally {
             isRefreshing = false
         }
@@ -175,7 +176,7 @@ fun SessionsScreen(
                             if (isRefreshing) {
                                 CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
                             } else {
-                                Icon(Icons.Default.Refresh, contentDescription = "刷新")
+                                Icon(Icons.Default.Refresh, contentDescription = choose("Refresh", "刷新"))
                             }
                         }
                     },
@@ -208,7 +209,7 @@ fun SessionsScreen(
                 if (gatewayState.isSelectedGatewayChatChainReady) issueMessage?.let { message ->
                     item {
                         MaintenanceBanner(
-                            title = "会话列表",
+                            title = choose("Session list", "会话列表"),
                             message = message,
                             icon = Icons.Default.Warning,
                             tint = WarningOrange
@@ -221,7 +222,7 @@ fun SessionsScreen(
                         title = stringResource(R.string.session_recent),
                         subtitle = when {
                             canShowDeleteHint -> stringResource(R.string.session_recent_subtitle_can_delete)
-                            hasDedicatedSession -> "当前会话固定置顶，联调会话受保护。"
+                            hasDedicatedSession -> choose("The current session is pinned, and the lab session is protected.", "当前会话固定置顶，联调会话受保护。")
                             else -> stringResource(R.string.session_recent_subtitle_default)
                         }
                     )
@@ -290,7 +291,7 @@ fun SessionsScreen(
                                             )
                                         }
                                         Text(
-                                            "删除",
+                                            choose("Delete", "删除"),
                                             style = MaterialTheme.typography.labelSmall,
                                             fontWeight = FontWeight.Bold,
                                             color = AccentBlue
@@ -336,7 +337,7 @@ fun SessionsScreen(
                 item {
                     Text(
                         if (canShowDeleteHint) stringResource(R.string.session_hint_can_delete)
-                        else if (hasDedicatedSession) "主会话与联调会话不支持删除。"
+                        else if (hasDedicatedSession) choose("Main and lab sessions cannot be deleted.", "主会话与联调会话不支持删除。")
                         else stringResource(R.string.session_hint_cannot_delete),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.82f),
@@ -347,7 +348,7 @@ fun SessionsScreen(
         }
 
         if (deletingKey != null) {
-            ProcessingOverlay(message = "正在删除会话", detail = "请稍候，正在同步云端状态...")
+            ProcessingOverlay(message = choose("Deleting session", "正在删除会话"), detail = choose("Please wait while cloud state is syncing...", "请稍候，正在同步云端状态..."))
         }
 
         if (gatewayState.isSelectedGatewayChatChainReady) issueMessage?.let { message ->
@@ -355,7 +356,7 @@ fun SessionsScreen(
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
                     .padding(16.dp),
-                action = { TextButton(onClick = { issueMessage = null }) { Text("关闭") } }
+                action = { TextButton(onClick = { issueMessage = null }) { Text(choose("Close", "关闭")) } }
             ) {
                 Text(message)
             }
@@ -365,7 +366,7 @@ fun SessionsScreen(
     confirmDelete?.let { session ->
         AlertDialog(
             onDismissRequest = { confirmDelete = null },
-            title = { Text("删除「${session.displayTitle}」？") },
+            title = { Text(choose("Delete \"${session.displayTitle}\"?", "删除「${session.displayTitle}」？")) },
             text = { Text(stringResource(R.string.session_delete_message)) },
             confirmButton = {
                 TextButton(
@@ -374,7 +375,7 @@ fun SessionsScreen(
                         val id = gatewayId
                         confirmDelete = null
                         if (id == null) {
-                            issueMessage = "会话已失效，请重新配对"
+                            issueMessage = choose("Session expired. Please pair again.", "会话已失效，请重新配对")
                             return@TextButton
                         }
                         deletingKey = target.normalizedSessionKey
@@ -385,10 +386,10 @@ fun SessionsScreen(
                                     chatStore.loadSessions(id)
                                     issueMessage = null
                                 } else {
-                                    issueMessage = "删除会话失败：会话仍未移除，请刷新后重试。"
+                                    issueMessage = choose("Failed to delete session: the session is still present. Refresh and try again.", "删除会话失败：会话仍未移除，请刷新后重试。")
                                 }
                             } catch (e: Exception) {
-                                issueMessage = "删除会话失败：${e.message ?: "未知错误"}"
+                                issueMessage = choose("Failed to delete session: ${e.message ?: "Unknown error"}", "删除会话失败：${e.message ?: "未知错误"}")
                             } finally {
                                 deletingKey = null
                             }
@@ -486,7 +487,7 @@ private fun SessionManagerSummaryCard(
                 horizontalArrangement = Arrangement.spacedBy(4.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text("当前网关", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(choose("Current gateway", "当前网关"), style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 Text(gatewayName, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Black, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
             Row(
@@ -497,7 +498,7 @@ private fun SessionManagerSummaryCard(
                 horizontalArrangement = Arrangement.spacedBy(6.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text("会话", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, fontWeight = FontWeight.Bold)
+                Text(choose("Sessions", "会话"), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, fontWeight = FontWeight.Bold)
                 Text(sessionCount.toString(), style = MaterialTheme.typography.titleMedium, color = AccentBlue, fontWeight = FontWeight.Black)
             }
         }
@@ -505,7 +506,7 @@ private fun SessionManagerSummaryCard(
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             SessionManagerActionTile(
                 title = stringResource(R.string.session_action_switch_gateway),
-                detail = "选择另一台主机",
+                detail = choose("Choose another host", "选择另一台主机"),
                 icon = Icons.Default.Memory,
                 tint = AccentBlue,
                 modifier = Modifier.weight(1f),
@@ -513,7 +514,7 @@ private fun SessionManagerSummaryCard(
             )
             SessionManagerActionTile(
                 title = stringResource(R.string.session_action_create_session),
-                detail = "开启独立上下文",
+                detail = choose("Start an independent context", "开启独立上下文"),
                 icon = Icons.Default.Add,
                 tint = SuccessGreen,
                 enabled = canCreateSession,
@@ -693,10 +694,10 @@ private val ChatSessionItem.displaySubtitle: String
         val kindValue = kind?.trim()?.lowercase()
         if (kindValue != null) {
             when (kindValue) {
-                "direct" -> return "直连会话"
-                "group" -> return "群组会话"
-                "global" -> return "全局作用域"
-                "unknown" -> return "未分类会话"
+                "direct" -> return choose("Direct session", "直连会话")
+                "group" -> return choose("Group session", "群组会话")
+                "global" -> return choose("Global scope", "全局作用域")
+                "unknown" -> return choose("Uncategorized session", "未分类会话")
             }
         }
         return displaySubtitleForKey(sessionKey)
@@ -711,10 +712,10 @@ private fun firstPresentationText(vararg values: String?): String? {
 
 private fun displayTitleForKey(rawSessionKey: String): String {
     val normalized = rawSessionKey.trim().lowercase()
-    if (normalized.isEmpty()) return "未命名会话"
-    if (normalized == "main" || normalized.endsWith(":main")) return "主会话"
-    if (normalized == "global") return "全局会话"
-    if (isDedicatedSession(normalized)) return "文件联调"
+    if (normalized.isEmpty()) return choose("Untitled session", "未命名会话")
+    if (normalized == "main" || normalized.endsWith(":main")) return choose("Main session", "主会话")
+    if (normalized == "global") return choose("Global session", "全局会话")
+    if (isDedicatedSession(normalized)) return choose("File transfer lab", "文件联调")
 
     val localComponent = normalized.split(":").lastOrNull().orEmpty().ifBlank { normalized }
     if (listOf("ios-", "mobile-", "tui-", "session_").any { localComponent.startsWith(it) }) {
@@ -725,7 +726,7 @@ private fun displayTitleForKey(rawSessionKey: String): String {
             .removePrefix("session_")
             .takeLast(4)
             .uppercase()
-        return if (suffix.isBlank()) "新会话" else "新会话 · $suffix"
+        return if (suffix.isBlank()) choose("New session", "新会话") else choose("New session · $suffix", "新会话 · $suffix")
     }
 
     return normalized.split(":").lastOrNull()?.takeIf { it.isNotBlank() } ?: normalized
@@ -733,14 +734,14 @@ private fun displayTitleForKey(rawSessionKey: String): String {
 
 private fun displaySubtitleForKey(rawSessionKey: String): String {
     val normalized = rawSessionKey.trim().lowercase()
-    if (normalized.isEmpty()) return "暂无标识"
-    if (normalized == "main" || normalized.endsWith(":main")) return "默认会话"
-    if (normalized == "global") return "全局作用域"
-    if (isDedicatedSession(normalized)) return "专用测试会话"
+    if (normalized.isEmpty()) return choose("No identifier", "暂无标识")
+    if (normalized == "main" || normalized.endsWith(":main")) return choose("Default session", "默认会话")
+    if (normalized == "global") return choose("Global scope", "全局作用域")
+    if (isDedicatedSession(normalized)) return choose("Dedicated test session", "专用测试会话")
 
     val localComponent = normalized.split(":").lastOrNull().orEmpty().ifBlank { normalized }
     if (listOf("ios-", "mobile-", "tui-", "session_").any { localComponent.startsWith(it) }) {
-        return "本地创建"
+        return choose("Created locally", "本地创建")
     }
 
     val parts = normalized.split(":")
@@ -748,15 +749,15 @@ private fun displaySubtitleForKey(rawSessionKey: String): String {
 }
 
 private fun activityText(rawValue: String?): String {
-    val instant = parseInstant(rawValue) ?: return "暂无活动"
+    val instant = parseInstant(rawValue) ?: return choose("No activity yet", "暂无活动")
     val now = Instant.now()
     val deltaSeconds = abs(now.epochSecond - instant.epochSecond)
     return when {
-        deltaSeconds < 45 -> "刚刚"
-        deltaSeconds < 3600 -> "${maxOf(1, deltaSeconds / 60)} 分钟前"
+        deltaSeconds < 45 -> choose("Just now", "刚刚")
+        deltaSeconds < 3600 -> choose("${maxOf(1, deltaSeconds / 60)} min ago", "${maxOf(1, deltaSeconds / 60)} 分钟前")
         isToday(instant) -> DateTimeFormatter.ofPattern("HH:mm").withZone(ZoneId.systemDefault()).format(instant)
-        isSameYear(instant) -> DateTimeFormatter.ofPattern("M月d日 HH:mm").withZone(ZoneId.systemDefault()).format(instant)
-        else -> DateTimeFormatter.ofPattern("yyyy年M月d日 HH:mm").withZone(ZoneId.systemDefault()).format(instant)
+        isSameYear(instant) -> DateTimeFormatter.ofPattern(if (com.rethinkingstudio.clawlink.core.state.LocalizedText.isChinese()) "M月d日 HH:mm" else "MMM d HH:mm").withZone(ZoneId.systemDefault()).format(instant)
+        else -> DateTimeFormatter.ofPattern(if (com.rethinkingstudio.clawlink.core.state.LocalizedText.isChinese()) "yyyy年M月d日 HH:mm" else "MMM d, yyyy HH:mm").withZone(ZoneId.systemDefault()).format(instant)
     }
 }
 
@@ -809,11 +810,11 @@ private fun canDeleteSession(
 
 private fun lockMessage(gatewayId: String?, operationsLocked: Boolean, isStreaming: Boolean, isStoppingRun: Boolean): String {
     return when {
-        gatewayId == null -> "请先完成配对后再切换会话。"
-        operationsLocked -> "当前网关正在重启恢复中，暂不能切换会话。"
-        isStreaming -> "当前会话还有未完成回复，请先等待或停止后再切换。"
-        isStoppingRun -> "消息正在停止中，请稍后再切换会话。"
-        else -> "当前不可切换会话。"
+        gatewayId == null -> choose("Pair a gateway before switching sessions.", "请先完成配对后再切换会话。")
+        operationsLocked -> choose("The current gateway is recovering from restart. Session switching is temporarily unavailable.", "当前网关正在重启恢复中，暂不能切换会话。")
+        isStreaming -> choose("The current session still has an unfinished reply. Wait or stop it before switching.", "当前会话还有未完成回复，请先等待或停止后再切换。")
+        isStoppingRun -> choose("The message is still stopping. Switch sessions later.", "消息正在停止中，请稍后再切换会话。")
+        else -> choose("Session switching is currently unavailable.", "当前不可切换会话。")
     }
 }
 

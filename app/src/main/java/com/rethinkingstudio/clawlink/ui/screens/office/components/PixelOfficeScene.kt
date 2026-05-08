@@ -32,6 +32,7 @@ import com.rethinkingstudio.clawlink.core.models.OfficeSceneSnapshot
 import com.rethinkingstudio.clawlink.core.models.OfficeStation
 import com.rethinkingstudio.clawlink.core.models.PointF
 import com.rethinkingstudio.clawlink.core.models.gateway.AggregateStatus
+import com.rethinkingstudio.clawlink.core.state.LocalizedText.choose
 import com.rethinkingstudio.clawlink.ui.screens.office.logic.OfficeNPCCast
 import com.rethinkingstudio.clawlink.ui.screens.office.logic.OfficeRoutePlanner
 import com.rethinkingstudio.clawlink.ui.screens.office.logic.OfficeSceneMotionState
@@ -501,7 +502,7 @@ private fun DrawScope.drawOfficeTitlePlaque() {
         textAlign = Paint.Align.CENTER
         typeface = android.graphics.Typeface.create(android.graphics.Typeface.MONOSPACE, android.graphics.Typeface.BOLD)
     }
-    drawContext.canvas.nativeCanvas.drawText("像素办公室", rect.centerX().toFloat(), rect.centerY().toFloat() + 6f, paint)
+    drawContext.canvas.nativeCanvas.drawText(choose("Pixel Office", "像素办公室"), rect.centerX().toFloat(), rect.centerY().toFloat() + 6f, paint)
 }
 
 private fun DrawScope.drawPixelFrame(rect: Rect, fillColor: Color, borderColor: Color) {
@@ -568,18 +569,18 @@ private fun resolveStation(agent: OfficeAgentSnapshot): OfficeStation {
 
 private fun bubbleText(agent: OfficeAgentSnapshot): String {
     if (agent.aggregateStatus == AggregateStatus.offline) {
-        return "离线"
+        return choose("Offline", "离线")
     }
     return agent.activityTitle.ifBlank {
         when (agent.activityKind) {
-            OfficeActivityKind.IDLE -> "待命"
-            OfficeActivityKind.WRITING -> "写作中"
-            OfficeActivityKind.RESEARCHING -> "检索中"
-            OfficeActivityKind.EXECUTING -> "执行中"
-            OfficeActivityKind.SYNCING -> "同步中"
-            OfficeActivityKind.SLEEPING -> "睡觉中"
-            OfficeActivityKind.OFFLINE -> "离线"
-            OfficeActivityKind.ERROR -> "异常"
+            OfficeActivityKind.IDLE -> choose("Idle", "待命")
+            OfficeActivityKind.WRITING -> choose("Writing", "写作中")
+            OfficeActivityKind.RESEARCHING -> choose("Researching", "检索中")
+            OfficeActivityKind.EXECUTING -> choose("Executing", "执行中")
+            OfficeActivityKind.SYNCING -> choose("Syncing", "同步中")
+            OfficeActivityKind.SLEEPING -> choose("Sleeping", "睡觉中")
+            OfficeActivityKind.OFFLINE -> choose("Offline", "离线")
+            OfficeActivityKind.ERROR -> choose("Issue", "异常")
         }
     }
 }

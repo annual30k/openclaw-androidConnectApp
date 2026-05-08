@@ -27,6 +27,7 @@ import com.rethinkingstudio.clawlink.core.models.gateway.GatewayStatus
 import com.rethinkingstudio.clawlink.core.models.gateway.GatewaySummary
 import com.rethinkingstudio.clawlink.core.models.gateway.ConnectionPhase
 import com.rethinkingstudio.clawlink.core.models.MaintenanceLogEntry
+import com.rethinkingstudio.clawlink.core.state.LocalizedText.choose
 import java.util.UUID
 import java.util.Date
 import java.util.Locale
@@ -316,7 +317,7 @@ class GatewayStore(
             }
             _state.value = _state.value.copy(gateways = list)
         } catch (e: Exception) {
-            _state.value = _state.value.copy(errorMessage = "Failed to update name: ${e.message}")
+            _state.value = _state.value.copy(errorMessage = choose("Failed to update name: ${e.message}", "名称更新失败：${e.message}"))
         }
     }
 
@@ -325,7 +326,7 @@ class GatewayStore(
         try {
             apiClient.restartGateway(gatewayId)
         } catch (e: Exception) {
-            _state.value = _state.value.copy(errorMessage = "Failed to restart: ${e.message}")
+            _state.value = _state.value.copy(errorMessage = choose("Failed to restart: ${e.message}", "重启失败：${e.message}"))
         } finally {
             _state.value = _state.value.copy(restartingGatewayId = null)
         }
@@ -405,7 +406,7 @@ class GatewayStore(
                 attempts++
                 
                 val timestamp = SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(Date())
-                appendMaintenanceLog(requestId, "sys", "[$timestamp] [MONITOR] 正在轮询主机状态...")
+                appendMaintenanceLog(requestId, "sys", choose("[$timestamp] [MONITOR] Polling host status...", "[$timestamp] [MONITOR] 正在轮询主机状态..."))
                 
                 try {
                     val gateways = apiClient.fetchGateways()
@@ -413,12 +414,12 @@ class GatewayStore(
                     
                     if (gateway != null) {
                         val statusLabel = when (gateway.aggregateStatus) {
-                            AggregateStatus.online -> "在线"
-                            AggregateStatus.partial -> "半可用"
-                            AggregateStatus.connecting -> "连接中"
-                            AggregateStatus.offline -> "离线"
+                            AggregateStatus.online -> choose("Online", "在线")
+                            AggregateStatus.partial -> choose("Partial", "半可用")
+                            AggregateStatus.connecting -> choose("Connecting", "连接中")
+                            AggregateStatus.offline -> choose("Offline", "离线")
                         }
-                        appendMaintenanceLog(requestId, "sys", "  - 当前状态: $statusLabel")
+                        appendMaintenanceLog(requestId, "sys", choose("  - Current status: $statusLabel", "  - 当前状态: $statusLabel"))
                         
                         for (status in gateway.statuses) {
                             appendMaintenanceLog(requestId, "sys", "    - ${status.phase}: ${status.status} ${status.detail}")
@@ -427,7 +428,7 @@ class GatewayStore(
 
                     val isInitialGracePeriod = System.currentTimeMillis() - startedAt < 10000
                     if (!isInitialGracePeriod && gatewayIsFullyOnline(gateway)) {
-                        appendMaintenanceLog(requestId, "sys", "[$timestamp] [WAIT] 主机核心组件已就绪，正在进行最终就绪性检查...")
+                        appendMaintenanceLog(requestId, "sys", choose("[$timestamp] [WAIT] Host core components are ready. Running final readiness check...", "[$timestamp] [WAIT] 主机核心组件已就绪，正在进行最终就绪性检查..."))
                         
                         // Double check if desktop chat is ready
                         val isChatReady = try {
@@ -437,7 +438,7 @@ class GatewayStore(
                         }
                         
                         if (isChatReady) {
-                            appendMaintenanceLog(requestId, "sys", "[$timestamp] [OK] 网关已完全恢复。")
+                            appendMaintenanceLog(requestId, "sys", choose("[$timestamp] [OK] Gateway fully recovered.", "[$timestamp] [OK] 网关已完全恢复。"))
                             _state.value = _state.value.copy(
                                 isWaitingForRecovery = false,
                                 restartingGatewayId = null,
@@ -447,11 +448,11 @@ class GatewayStore(
                             loadGateways() // Refresh local state
                             break
                         } else {
-                            appendMaintenanceLog(requestId, "sys", "  - 桌面端服务尚未完全就绪，继续等待...")
+                            appendMaintenanceLog(requestId, "sys", choose("  - Desktop service is not fully ready yet. Waiting...", "  - 桌面端服务尚未完全就绪，继续等待..."))
                         }
                     }
                 } catch (e: Exception) {
-                    appendMaintenanceLog(requestId, "sys", "  - 轮询出错: ${e.message}")
+                    appendMaintenanceLog(requestId, "sys", choose("  - Polling error: ${e.message}", "  - 轮询出错: ${e.message}"))
                 }
             }
             if (_state.value.isWaitingForRecovery) {
@@ -552,19 +553,23 @@ class GatewayStore(
         fun selectedGatewayStatuses(
             selectedGateway: GatewaySummary?,
             appRelayStatus: AggregateStatus,
-            appRelayDetail: String = if (appRelayStatus == AggregateStatus.online) "Session active" else "Session not established"
+            appRelayDetail: String = if (appRelayStatus == AggregateStatus.online) {
+                choose("Session active", "会话有效")
+            } else {
+                choose("Session not established", "会话未建立")
+            }
         ): List<GatewayStatus> {
             val relayHost = selectedGateway?.statuses?.find { it.phase == com.rethinkingstudio.clawlink.core.models.gateway.ConnectionPhase.relayHost }
                 ?: GatewayStatus(
                     phase = com.rethinkingstudio.clawlink.core.models.gateway.ConnectionPhase.relayHost,
                     status = AggregateStatus.offline,
-                    detail = "Relay is not connected to the host"
+                    detail = choose("Relay is not connected to the host", "Relay 未连接到主机")
                 )
             val hostGateway = selectedGateway?.statuses?.find { it.phase == com.rethinkingstudio.clawlink.core.models.gateway.ConnectionPhase.hostGateway }
                 ?: GatewayStatus(
                     phase = com.rethinkingstudio.clawlink.core.models.gateway.ConnectionPhase.hostGateway,
                     status = AggregateStatus.offline,
-                    detail = "OpenClaw is not connected"
+                    detail = choose("OpenClaw is not connected", "OpenClaw 未连接")
                 )
 
             return listOf(

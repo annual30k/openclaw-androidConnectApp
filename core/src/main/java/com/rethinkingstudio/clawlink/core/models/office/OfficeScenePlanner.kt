@@ -3,6 +3,7 @@ package com.rethinkingstudio.clawlink.core.models.office
 import com.rethinkingstudio.clawlink.core.models.*
 import com.rethinkingstudio.clawlink.core.models.gateway.AggregateStatus
 import com.rethinkingstudio.clawlink.core.models.gateway.GatewaySummary
+import com.rethinkingstudio.clawlink.core.state.LocalizedText.choose
 import java.util.*
 
 object OfficeScenePlanner {
@@ -136,7 +137,7 @@ object OfficeScenePlanner {
         
         if ((kind == OfficeActivityKind.EXECUTING || kind == OfficeActivityKind.WRITING) && 
             (title == "待命" || title == "待命中")) {
-            return "工作中" // Simplified L("office.activity.working")
+            return choose("Working", "工作中")
         }
         
         return title
@@ -155,18 +156,18 @@ object OfficeScenePlanner {
         return when (kind) {
             OfficeActivityKind.IDLE -> {
                 if (gateway.currentModel != "--" && gateway.currentModel.isNotBlank()) {
-                    "模型 ${gateway.currentModel} 正在待命"
+                    choose("Model ${gateway.currentModel} is standing by", "模型 ${gateway.currentModel} 正在待命")
                 } else {
-                    "等待下一次任务"
+                    choose("Waiting for the next task", "等待下一次任务")
                 }
             }
-            OfficeActivityKind.WRITING -> "正在组织回复和状态"
-            OfficeActivityKind.RESEARCHING -> "正在查找资料和上下文"
-            OfficeActivityKind.EXECUTING -> "正在执行工具和动作"
-            OfficeActivityKind.SYNCING -> "正在同步运行状态"
-            OfficeActivityKind.SLEEPING -> "Gateway 已离线，正在床上休息"
-            OfficeActivityKind.OFFLINE -> "主机暂时离线"
-            OfficeActivityKind.ERROR -> "需要检查连接或任务状态"
+            OfficeActivityKind.WRITING -> choose("Composing replies and status", "正在组织回复和状态")
+            OfficeActivityKind.RESEARCHING -> choose("Looking up references and context", "正在查找资料和上下文")
+            OfficeActivityKind.EXECUTING -> choose("Running tools and actions", "正在执行工具和动作")
+            OfficeActivityKind.SYNCING -> choose("Syncing runtime status", "正在同步运行状态")
+            OfficeActivityKind.SLEEPING -> choose("Gateway is offline", "Gateway 已离线")
+            OfficeActivityKind.OFFLINE -> choose("Host is temporarily offline", "主机暂时离线")
+            OfficeActivityKind.ERROR -> choose("Check the connection or task status", "需要检查连接或任务状态")
         }
     }
 

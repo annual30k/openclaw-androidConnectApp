@@ -62,6 +62,7 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.rethinkingstudio.clawlink.R
+import com.rethinkingstudio.clawlink.core.state.LocalizedText.choose
 import com.rethinkingstudio.clawlink.core.state.auth.AuthStore
 import com.rethinkingstudio.clawlink.ui.components.ClawLinkCard
 import com.rethinkingstudio.clawlink.ui.components.ClawLinkScaffold
@@ -294,7 +295,7 @@ fun LoginScreen(
                 AccountLoginSection(isLoading = state.isLoading)
 
                 TextButton(onClick = { showingMoreSettings = true }) {
-                    Text("More", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(choose("More", "更多"), color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
         }
@@ -524,7 +525,7 @@ private fun AccountLoginSection(isLoading: Boolean) {
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Box(Modifier.weight(1f).background(MaterialTheme.colorScheme.outline.copy(alpha = 0.35f)).padding(top = 1.dp))
-            Text("  or  ", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(choose("  or  ", "  或  "), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Box(Modifier.weight(1f).background(MaterialTheme.colorScheme.outline.copy(alpha = 0.35f)).padding(top = 1.dp))
         }
         Surface(
@@ -535,7 +536,7 @@ private fun AccountLoginSection(isLoading: Boolean) {
             color = Color.Black
         ) {
             Text(
-                "Sign in with Apple",
+                choose("Sign in with Apple", "使用 Apple 登录"),
                 modifier = Modifier.padding(vertical = 16.dp),
                 color = Color.White,
                 textAlign = TextAlign.Center,
@@ -556,14 +557,14 @@ private fun MoreSettingsDialog(
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("More settings") },
+        title = { Text(choose("More settings", "更多设置")) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Column(modifier = Modifier.weight(1f)) {
-                        Text("Private deployment", fontWeight = FontWeight.SemiBold)
+                        Text(choose("Private deployment", "私有化部署"), fontWeight = FontWeight.SemiBold)
                         Text(
-                            "Use a custom Relay Server URL instead of the default hosted relay.",
+                            choose("Use a custom Relay Server URL instead of the default hosted relay.", "使用自定义 Relay Server 地址，而不是默认托管 Relay。"),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -575,7 +576,7 @@ private fun MoreSettingsDialog(
                     AuthField(
                         value = serverUrl,
                         onValueChange = onServerUrlChange,
-                        label = "Relay address",
+                        label = choose("Relay address", "Relay 地址"),
                         placeholder = AuthStore.DEFAULT_RELAY_SERVER_URL,
                         icon = Icons.Default.Storage,
                         keyboardType = KeyboardType.Uri,
@@ -586,7 +587,7 @@ private fun MoreSettingsDialog(
         },
         confirmButton = {
             TextButton(onClick = onDismiss) {
-                Text("Done")
+                Text(choose("Done", "完成"))
             }
         }
     )
@@ -644,15 +645,15 @@ private fun isValidEmail(email: String): Boolean {
 
 @Composable
 private fun loginFieldColors(tint: Color) = OutlinedTextFieldDefaults.colors(
-    focusedBorderColor = tint,
-    unfocusedBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.7f),
+    focusedBorderColor = Color.Transparent,
+    unfocusedBorderColor = Color.Transparent,
     focusedTextColor = MaterialTheme.colorScheme.onSurface,
     unfocusedTextColor = MaterialTheme.colorScheme.onSurface,
     focusedLabelColor = tint,
     unfocusedLabelColor = MaterialTheme.colorScheme.onSurfaceVariant,
     cursorColor = tint,
-    focusedContainerColor = MaterialTheme.colorScheme.surface,
-    unfocusedContainerColor = MaterialTheme.colorScheme.surface,
+    focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.46f),
+    unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.46f),
     disabledContainerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.58f),
-    disabledBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.35f)
+    disabledBorderColor = Color.Transparent
 )

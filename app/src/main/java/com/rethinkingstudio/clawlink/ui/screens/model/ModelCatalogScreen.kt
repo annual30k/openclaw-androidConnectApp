@@ -80,6 +80,7 @@ import com.rethinkingstudio.clawlink.core.models.catalog.ModelItem
 import com.rethinkingstudio.clawlink.core.models.gateway.AggregateStatus
 import com.rethinkingstudio.clawlink.core.models.gateway.ConnectionPhase
 import com.rethinkingstudio.clawlink.core.models.gateway.GatewaySummary
+import com.rethinkingstudio.clawlink.core.state.LocalizedText.choose
 import com.rethinkingstudio.clawlink.core.state.gateway.GatewayStore
 import com.rethinkingstudio.clawlink.core.state.model.ModelStore
 import kotlinx.coroutines.delay
@@ -130,10 +131,10 @@ fun ModelCatalogScreen(
             containerColor = Color.Transparent,
             topBar = {
                 TopAppBar(
-                    title = { Text("模型", fontWeight = FontWeight.Bold) },
+                    title = { Text(choose("Models", "模型"), fontWeight = FontWeight.Bold) },
                     navigationIcon = {
                         IconButton(onClick = onBack) {
-                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回")
+                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = choose("Back", "返回"))
                         }
                     },
                     actions = {
@@ -144,7 +145,7 @@ fun ModelCatalogScreen(
                             if (modelState.isLoading) {
                                 CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
                             } else {
-                                Icon(Icons.Default.Refresh, contentDescription = "刷新")
+                                Icon(Icons.Default.Refresh, contentDescription = choose("Refresh", "刷新"))
                             }
                         }
                     },
@@ -222,7 +223,7 @@ fun ModelCatalogScreen(
                     .align(Alignment.BottomCenter)
                     .padding(16.dp)
                     .padding(bottom = 72.dp),
-                action = { TextButton(onClick = modelStore::clearError) { Text("关闭") } }
+                action = { TextButton(onClick = modelStore::clearError) { Text(choose("Close", "关闭")) } }
             ) {
                 Text(message)
             }
@@ -232,8 +233,8 @@ fun ModelCatalogScreen(
     modelToConfirm?.let { model ->
         AlertDialog(
             onDismissRequest = { modelToConfirm = null },
-            title = { Text("设为全局默认模型？") },
-            text = { Text("将「${model.displayName}」设为 OpenClaw 的全局默认模型。主机可能会短暂重启恢复。") },
+            title = { Text(choose("Set as global default model?", "设为全局默认模型？")) },
+            text = { Text(choose("Set \"${model.displayName}\" as OpenClaw's global default model. The host may briefly restart and recover.", "将「${model.displayName}」设为 OpenClaw 的全局默认模型。主机可能会短暂重启恢复。")) },
             confirmButton = {
                 TextButton(
                     onClick = {
@@ -250,10 +251,10 @@ fun ModelCatalogScreen(
                         }
                     }
                 ) {
-                    Text("设为默认", color = MaterialTheme.colorScheme.error)
+                    Text(choose("Set as default", "设为默认"), color = MaterialTheme.colorScheme.error)
                 }
             },
-            dismissButton = { TextButton(onClick = { modelToConfirm = null }) { Text("取消") } }
+            dismissButton = { TextButton(onClick = { modelToConfirm = null }) { Text(choose("Cancel", "取消")) } }
         )
     }
 }
@@ -316,8 +317,8 @@ private fun ModelScreenBackdrop() {
 @Composable
 private fun MetricsSection(providerCount: Int, modelCount: Int, modifier: Modifier = Modifier) {
     Row(modifier = modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-        MetricsChip("供应商", providerCount.toString(), Icons.Default.Business, AccentBlue, Modifier.weight(1f))
-        MetricsChip("可用模型", modelCount.toString(), Icons.Default.Memory, MetricPurple, Modifier.weight(1f))
+        MetricsChip(choose("Providers", "供应商"), providerCount.toString(), Icons.Default.Business, AccentBlue, Modifier.weight(1f))
+        MetricsChip(choose("Available models", "可用模型"), modelCount.toString(), Icons.Default.Memory, MetricPurple, Modifier.weight(1f))
     }
 }
 
@@ -365,7 +366,7 @@ private fun DefaultModelHero(model: ModelItem, modifier: Modifier = Modifier) {
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
             Icon(Icons.Default.Star, contentDescription = null, tint = WarningOrange, modifier = Modifier.size(14.dp))
             Text(
-                "全局默认模型",
+                choose("Global default model", "全局默认模型"),
                 style = MaterialTheme.typography.labelSmall,
                 fontWeight = FontWeight.Black,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -453,7 +454,7 @@ private fun ModelRow(model: ModelItem, isUpdating: Boolean, enabled: Boolean, on
         }
         when {
             isUpdating -> CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp, color = AccentBlue)
-            model.isDefault -> Icon(Icons.Default.Star, contentDescription = "默认模型", tint = WarningOrange, modifier = Modifier.size(16.dp))
+            model.isDefault -> Icon(Icons.Default.Star, contentDescription = choose("Default model", "默认模型"), tint = WarningOrange, modifier = Modifier.size(16.dp))
             else -> Box(Modifier.width(16.dp))
         }
     }
@@ -523,7 +524,7 @@ private fun ModelSearchBar(searchText: String, onSearchTextChange: (String) -> U
                 Box {
                     if (searchText.isEmpty()) {
                         Text(
-                            "搜索模型或提供商",
+                            choose("Search models or providers", "搜索模型或提供商"),
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.72f),
                             fontWeight = FontWeight.SemiBold
@@ -535,7 +536,7 @@ private fun ModelSearchBar(searchText: String, onSearchTextChange: (String) -> U
         )
         if (searchText.isNotEmpty()) {
             IconButton(onClick = { onSearchTextChange("") }, modifier = Modifier.size(30.dp)) {
-                Icon(Icons.Default.Close, contentDescription = "清空", modifier = Modifier.size(18.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f))
+                Icon(Icons.Default.Close, contentDescription = choose("Clear", "清空"), modifier = Modifier.size(18.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f))
             }
         }
     }
@@ -558,7 +559,7 @@ private fun ModelEmptyState(
     ) {
         if (isLoading) {
             CircularProgressIndicator(modifier = Modifier.size(48.dp), color = AccentBlue)
-            Text("正在同步模型目录...", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(choose("Syncing model catalog...", "正在同步模型目录..."), style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurfaceVariant)
         } else {
             Box(
                 modifier = Modifier.size(80.dp).background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.05f), CircleShape),
@@ -568,12 +569,12 @@ private fun ModelEmptyState(
             }
             Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(
-                    if (hasQuery) "没有匹配的模型" else "暂无可用模型",
+                    if (hasQuery) choose("No matching models", "没有匹配的模型") else choose("No models available", "暂无可用模型"),
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold
                 )
                 Text(
-                    errorMessage ?: if (hasQuery) "换个关键词再试。" else "请确认网关在线，并且模型提供商已正确配置。",
+                    errorMessage ?: if (hasQuery) choose("Try another keyword.", "换个关键词再试。") else choose("Make sure the gateway is online and model providers are configured correctly.", "请确认网关在线，并且模型提供商已正确配置。"),
                     modifier = Modifier.padding(horizontal = 32.dp),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -589,7 +590,7 @@ private fun ModelEmptyState(
                 ) {
                     Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(16.dp), tint = MaterialTheme.colorScheme.onSurface)
                     Spacer(Modifier.width(8.dp))
-                    Text("立即刷新", color = MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.Bold)
+                    Text(choose("Refresh now", "立即刷新"), color = MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.Bold)
                 }
             }
         }
@@ -632,13 +633,13 @@ private fun ProcessingOverlay(operationsLocked: Boolean) {
             
             Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(
-                    if (operationsLocked) "网关正在恢复" else "等待 OpenClaw 响应",
+                    if (operationsLocked) choose("Gateway is recovering", "网关正在恢复") else choose("Waiting for OpenClaw", "等待 OpenClaw 响应"),
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.onSurface
                 )
                 Text(
-                    if (operationsLocked) "默认模型变更后，主机可能需要短暂重启恢复。" else "正在设置全局默认模型，请稍候。",
+                    if (operationsLocked) choose("After changing the default model, the host may need a brief restart and recovery.", "默认模型变更后，主机可能需要短暂重启恢复。") else choose("Setting the global default model. Please wait.", "正在设置全局默认模型，请稍候。"),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     textAlign = TextAlign.Center

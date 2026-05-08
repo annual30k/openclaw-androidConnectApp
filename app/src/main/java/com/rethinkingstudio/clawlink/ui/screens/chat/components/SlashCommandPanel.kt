@@ -43,6 +43,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.rethinkingstudio.clawlink.core.models.chat.ChatSlashCommand
+import com.rethinkingstudio.clawlink.core.state.LocalizedText.choose
 
 internal data class SlashAction(
     val command: String,
@@ -52,15 +53,15 @@ internal data class SlashAction(
     val icon: ImageVector
 )
 
-private val defaultSlashActions = listOf(
-    SlashAction("/new", "新会话", "开启一个新的聊天会话", "SESSION", Icons.Default.Add),
-    SlashAction("/model", "切模型", "选择当前会话使用的模型", "SESSION", Icons.Default.SmartToy),
-    SlashAction("/status", "看状态", "查看当前链路和网关状态", "SYSTEM", Icons.Default.GraphicEq),
-    SlashAction("/doctor", "做诊断", "检查 Relay、网关和会话链路", "SYSTEM", Icons.Default.CheckCircle),
-    SlashAction("/config", "配设置", "查看或调整当前配置", "SYSTEM", Icons.Default.Settings),
-    SlashAction("/skills list", "skills", "List available skills.", "SKILLS", Icons.Default.AutoAwesome),
-    SlashAction("/channels list", "channels", "List available channels.", "SYSTEM", Icons.Default.Terminal),
-    SlashAction("/cron list", "cron", "List scheduled tasks.", "SYSTEM", Icons.Default.Refresh)
+private fun defaultSlashActions() = listOf(
+    SlashAction("/new", choose("New session", "新会话"), choose("Start a new chat session", "开启一个新的聊天会话"), "SESSION", Icons.Default.Add),
+    SlashAction("/model", choose("Switch model", "切模型"), choose("Choose the model for the current session", "选择当前会话使用的模型"), "SESSION", Icons.Default.SmartToy),
+    SlashAction("/status", choose("Status", "看状态"), choose("View current connection and gateway status", "查看当前链路和网关状态"), "SYSTEM", Icons.Default.GraphicEq),
+    SlashAction("/doctor", choose("Diagnose", "做诊断"), choose("Check Relay, gateway, and session links", "检查 Relay、网关和会话链路"), "SYSTEM", Icons.Default.CheckCircle),
+    SlashAction("/config", choose("Settings", "配设置"), choose("View or adjust current settings", "查看或调整当前配置"), "SYSTEM", Icons.Default.Settings),
+    SlashAction("/skills list", choose("Skills", "Skills"), choose("List available skills.", "列出可用技能。"), "SKILLS", Icons.Default.AutoAwesome),
+    SlashAction("/channels list", choose("Channels", "Channels"), choose("List available channels.", "列出可用频道。"), "SYSTEM", Icons.Default.Terminal),
+    SlashAction("/cron list", choose("Tasks", "Tasks"), choose("List scheduled tasks.", "列出定时任务。"), "SYSTEM", Icons.Default.Refresh)
 )
 
 internal fun slashCommandSuggestions(
@@ -84,7 +85,7 @@ internal fun slashCommandSuggestions(
 private fun mergedSlashActions(remoteCommands: List<ChatSlashCommand>?): List<SlashAction> {
     val merged = mutableListOf<SlashAction>()
     val seen = mutableSetOf<String>()
-    ((remoteCommands.orEmpty().mapNotNull { it.toSlashAction() }) + defaultSlashActions).forEach { action ->
+    ((remoteCommands.orEmpty().mapNotNull { it.toSlashAction() }) + defaultSlashActions()).forEach { action ->
         if (seen.add(action.command.normalizedSlashCommand())) {
             merged += action
         }
@@ -182,10 +183,10 @@ internal fun SlashCommandPanel(actions: List<SlashAction>, onAction: (SlashActio
                 categoryOrder.forEach { category ->
                     val categoryActions = grouped[category] ?: return@forEach
                     val categoryLabel = when (category) {
-                        "SESSION" -> "会话"
-                        "TOOLS" -> "工具"
+                        "SESSION" -> choose("Session", "会话")
+                        "TOOLS" -> choose("Tools", "工具")
                         "SKILLS" -> "Skills"
-                        else -> "系统"
+                        else -> choose("System", "系统")
                     }
                     // Category group
                     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {

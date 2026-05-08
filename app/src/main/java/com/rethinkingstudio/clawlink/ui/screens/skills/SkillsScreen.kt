@@ -86,6 +86,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.rethinkingstudio.clawlink.core.models.skills.SkillCommand
 import com.rethinkingstudio.clawlink.core.models.skills.SkillItem
+import com.rethinkingstudio.clawlink.core.state.LocalizedText.choose
 import com.rethinkingstudio.clawlink.core.state.gateway.GatewayStore
 import com.rethinkingstudio.clawlink.core.state.skill.SkillStore
 import kotlinx.coroutines.launch
@@ -112,7 +113,7 @@ fun SkillsScreen(
     val gatewayState by gatewayStore.state.collectAsState()
     val scope = rememberCoroutineScope()
     val gatewayId = gatewayState.selectedGatewayId
-    val gatewayName = gatewayState.selectedGateway?.displayName ?: "未选择网关"
+    val gatewayName = gatewayState.selectedGateway?.displayName ?: choose("No gateway selected", "未选择网关")
     val canManageSkills = gatewayId != null && gatewayState.isSelectedGatewayChatChainReady
 
     var selectedFilter by remember { mutableStateOf(SkillListFilter.All) }
@@ -137,10 +138,10 @@ fun SkillsScreen(
             containerColor = Color.Transparent,
             topBar = {
                 TopAppBar(
-                    title = { Text("技能", fontWeight = FontWeight.Bold) },
+                    title = { Text(choose("Skills", "技能"), fontWeight = FontWeight.Bold) },
                     navigationIcon = {
                         IconButton(onClick = onBack) {
-                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回")
+                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = choose("Back", "返回"))
                         }
                     },
                     actions = {
@@ -151,7 +152,7 @@ fun SkillsScreen(
                             if (skillState.isLoading) {
                                 CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
                             } else {
-                                Icon(Icons.Default.Refresh, contentDescription = "刷新")
+                                Icon(Icons.Default.Refresh, contentDescription = choose("Refresh", "刷新"))
                             }
                         }
                     },
@@ -174,8 +175,8 @@ fun SkillsScreen(
                     if (gatewayState.restartingGatewayId != null && gatewayState.isSelectedGatewayChatChainReady) {
                         item {
                             SkillMaintenanceBanner(
-                                title = "网关维护中",
-                                message = "重启期间技能刷新已暂停，恢复后会自动继续。",
+                                title = choose("Gateway maintenance", "网关维护中"),
+                                message = choose("Skill refresh is paused during restart and will continue after recovery.", "重启期间技能刷新已暂停，恢复后会自动继续。"),
                                 icon = Icons.Default.Lock,
                                 tint = WarningOrange
                             )
@@ -203,11 +204,11 @@ fun SkillsScreen(
 
                     item(key = "section_title") {
                         SectionTitle(
-                            title = "技能列表",
+                            title = choose("Skill list", "技能列表"),
                             subtitle = when {
-                                searchText.isNotBlank() -> "正在搜索「${searchText.trim()}」"
-                                selectedFilter == SkillListFilter.All -> "按可用状态排序展示"
-                                else -> "显示${selectedFilter.title}技能"
+                                searchText.isNotBlank() -> choose("Searching \"${searchText.trim()}\"", "正在搜索「${searchText.trim()}」")
+                                selectedFilter == SkillListFilter.All -> choose("Sorted by availability", "按可用状态排序展示")
+                                else -> choose("Showing ${selectedFilter.title.lowercase()} skills", "显示${selectedFilter.title}技能")
                             },
                             modifier = Modifier.animateItemPlacement()
                         )
@@ -263,7 +264,7 @@ fun SkillsScreen(
                     .align(Alignment.BottomCenter)
                     .padding(16.dp)
                     .padding(bottom = 72.dp),
-                action = { TextButton(onClick = skillStore::clearError) { Text("关闭") } }
+                action = { TextButton(onClick = skillStore::clearError) { Text(choose("Close", "关闭")) } }
             ) {
                 Text(message)
             }
@@ -356,7 +357,7 @@ private fun SkillOverviewCard(
         Row(verticalAlignment = Alignment.CenterVertically) {
             Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Text(
-                    "已安装技能",
+                    choose("Installed skills", "已安装技能"),
                     style = MaterialTheme.typography.headlineLarge.copy(
                         brush = Brush.linearGradient(
                             listOf(
@@ -393,10 +394,10 @@ private fun SkillOverviewCard(
         }
 
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.horizontalScroll(rememberScrollState())) {
-            SkillSmallStatChip("全部", totalCount, AccentBlue)
-            SkillSmallStatChip("就绪", readyCount, SuccessGreen)
-            if (needsSetupCount > 0) SkillSmallStatChip("待配置", needsSetupCount, WarningOrange)
-            if (disabledCount > 0) SkillSmallStatChip("停用", disabledCount, MutedGray)
+            SkillSmallStatChip(choose("All", "全部"), totalCount, AccentBlue)
+            SkillSmallStatChip(choose("Ready", "就绪"), readyCount, SuccessGreen)
+            if (needsSetupCount > 0) SkillSmallStatChip(choose("Needs setup", "待配置"), needsSetupCount, WarningOrange)
+            if (disabledCount > 0) SkillSmallStatChip(choose("Disabled", "停用"), disabledCount, MutedGray)
         }
     }
 }
@@ -551,7 +552,7 @@ private fun SkillListRow(
                 } else {
                     Icon(
                         if (skill.isEnabled) Icons.Default.Pause else Icons.Default.PlayArrow,
-                        contentDescription = if (skill.isEnabled) "停用" else "启用",
+                        contentDescription = if (skill.isEnabled) choose("Disable", "停用") else choose("Enable", "启用"),
                         tint = if (skill.isEnabled) DangerRed else AccentBlue,
                         modifier = Modifier.size(16.dp)
                     )
@@ -626,9 +627,9 @@ private fun SkillEmptyStateCard(
             ) {
                 Icon(Icons.Default.Extension, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(24.dp))
             }
-            Text(if (hasSkills) "没有匹配的技能" else "未找到技能", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+            Text(if (hasSkills) choose("No matching skills", "没有匹配的技能") else choose("No skills found", "未找到技能"), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
             Text(
-                if (hasSkills) "换个关键词或筛选条件再试。" else "刷新后会从当前网关同步 OpenClaw 技能目录。",
+                if (hasSkills) choose("Try another keyword or filter.", "换个关键词或筛选条件再试。") else choose("Refresh to sync the OpenClaw skill catalog from the current gateway.", "刷新后会从当前网关同步 OpenClaw 技能目录。"),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f)
             )
@@ -640,7 +641,7 @@ private fun SkillEmptyStateCard(
                 shape = PillShape
             ) {
                 Text(
-                    if (hasSkills && searchText.isNotBlank()) "清空搜索" else if (hasSkills) "查看全部" else "重新加载",
+                    if (hasSkills && searchText.isNotBlank()) choose("Clear search", "清空搜索") else if (hasSkills) choose("View all", "查看全部") else choose("Reload", "重新加载"),
                     color = MaterialTheme.colorScheme.onSurface,
                     fontWeight = FontWeight.Bold
                 )
@@ -694,7 +695,7 @@ private fun SkillSearchBar(searchText: String, onSearchTextChange: (String) -> U
                 Box {
                     if (searchText.isEmpty()) {
                         Text(
-                            "搜索技能名称、用途或来源",
+                            choose("Search skill name, purpose, or source", "搜索技能名称、用途或来源"),
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.72f),
                             fontWeight = FontWeight.SemiBold
@@ -706,7 +707,7 @@ private fun SkillSearchBar(searchText: String, onSearchTextChange: (String) -> U
         )
         if (searchText.isNotEmpty()) {
             IconButton(onClick = { onSearchTextChange("") }, modifier = Modifier.size(30.dp)) {
-                Icon(Icons.Default.Close, contentDescription = "清空", modifier = Modifier.size(18.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f))
+                Icon(Icons.Default.Close, contentDescription = choose("Clear", "清空"), modifier = Modifier.size(18.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f))
             }
         }
     }
@@ -769,29 +770,29 @@ private fun SkillDetailSheet(
                 SkillDetailHero(skill = skill, canEdit = canEdit, isBusy = isBusy, onToggle = onToggle)
             }
             item {
-                SkillDetailSection("状态与来源") {
-                    SkillInfoRow("当前状态", skill.availability.title, skill.availability.tint)
-                    SkillInfoRow("来源", skill.sourceLabel)
-                    SkillInfoRow("安装路径", skill.filePath ?: skill.baseDir ?: skill.effectiveKey)
-                    skill.primaryEnv?.takeIf { it.isNotBlank() }?.let { SkillInfoRow("主要环境变量", it) }
-                    skill.homepage?.takeIf { it.isNotBlank() }?.let { SkillInfoRow("主页", it) }
+                SkillDetailSection(choose("Status and source", "状态与来源")) {
+                    SkillInfoRow(choose("Current status", "当前状态"), skill.availability.title, skill.availability.tint)
+                    SkillInfoRow(choose("Source", "来源"), skill.sourceLabel)
+                    SkillInfoRow(choose("Install path", "安装路径"), skill.filePath ?: skill.baseDir ?: skill.effectiveKey)
+                    skill.primaryEnv?.takeIf { it.isNotBlank() }?.let { SkillInfoRow(choose("Primary environment variable", "主要环境变量"), it) }
+                    skill.homepage?.takeIf { it.isNotBlank() }?.let { SkillInfoRow(choose("Homepage", "主页"), it) }
                 }
             }
             item {
-                SkillDetailSection("运行要求") {
-                    RequirementBlock("命令", skill.requirements.bins, skill.missing.bins)
-                    RequirementBlock("任一命令", skill.requirements.anyBins, skill.missing.anyBins)
-                    RequirementBlock("环境变量", mergedEnvRequirements(skill), skill.missing.env)
-                    RequirementBlock("配置文件", skill.requirements.config, skill.missing.config)
-                    RequirementBlock("平台", skill.requirements.os, skill.missing.os)
+                SkillDetailSection(choose("Runtime requirements", "运行要求")) {
+                    RequirementBlock(choose("Commands", "命令"), skill.requirements.bins, skill.missing.bins)
+                    RequirementBlock(choose("Any command", "任一命令"), skill.requirements.anyBins, skill.missing.anyBins)
+                    RequirementBlock(choose("Environment variables", "环境变量"), mergedEnvRequirements(skill), skill.missing.env)
+                    RequirementBlock(choose("Config files", "配置文件"), skill.requirements.config, skill.missing.config)
+                    RequirementBlock(choose("Platform", "平台"), skill.requirements.os, skill.missing.os)
                     if (skill.requirements.isEmpty && skill.missing.isEmpty && skill.envKeys.isNullOrEmpty()) {
-                        Text("没有额外要求", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text(choose("No extra requirements", "没有额外要求"), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
             }
             if (skill.configChecks.isNotEmpty()) {
                 item {
-                    SkillDetailSection("配置检查") {
+                    SkillDetailSection(choose("Config checks", "配置检查")) {
                         skill.configChecks.forEach { check ->
                             Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.Top) {
                                 Icon(
@@ -802,7 +803,7 @@ private fun SkillDetailSheet(
                                 )
                                 Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                                     Text(check.path, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
-                                    Text(if (check.satisfied) "已满足" else "未满足", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    Text(if (check.satisfied) choose("Satisfied", "已满足") else choose("Not satisfied", "未满足"), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                 }
                             }
                         }
@@ -812,7 +813,7 @@ private fun SkillDetailSheet(
             val commands = skill.commands.orEmpty()
             if (commands.isNotEmpty()) {
                 item {
-                    SkillDetailSection("可用命令") {
+                    SkillDetailSection(choose("Available commands", "可用命令")) {
                         commands.forEach { command -> SkillCommandRow(command) }
                     }
                 }
@@ -848,7 +849,7 @@ private fun SkillDetailHero(skill: SkillItem, canEdit: Boolean, isBusy: Boolean,
                     SkillStatusBadge(skill.availability)
                     if (skill.always) {
                         Text(
-                            "常驻加载",
+                            choose("Always loaded", "常驻加载"),
                             modifier = Modifier.clip(PillShape).background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.52f)).padding(horizontal = 8.dp, vertical = 4.dp),
                             style = MaterialTheme.typography.labelSmall,
                             fontWeight = FontWeight.Bold,
@@ -862,8 +863,8 @@ private fun SkillDetailHero(skill: SkillItem, canEdit: Boolean, isBusy: Boolean,
         Box(Modifier.fillMaxWidth().height(1.dp).background(MaterialTheme.colorScheme.outline.copy(alpha = 0.14f)))
         Row(verticalAlignment = Alignment.CenterVertically) {
             Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Text("当前状态", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Black, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                Text(if (skill.isEnabled) "已启用" else "已停用", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold, color = if (skill.isEnabled) SuccessGreen else MaterialTheme.colorScheme.onSurface)
+                Text(choose("Current status", "当前状态"), style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Black, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(if (skill.isEnabled) choose("Enabled", "已启用") else choose("Disabled", "已停用"), style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold, color = if (skill.isEnabled) SuccessGreen else MaterialTheme.colorScheme.onSurface)
             }
             Button(
                 onClick = onToggle,
@@ -877,7 +878,7 @@ private fun SkillDetailHero(skill: SkillItem, canEdit: Boolean, isBusy: Boolean,
                 } else {
                     Icon(if (skill.isEnabled) Icons.Default.Pause else Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(15.dp))
                     Spacer(Modifier.width(8.dp))
-                    Text(if (skill.isEnabled) "停用" else "启用", fontWeight = FontWeight.Bold)
+                    Text(if (skill.isEnabled) choose("Disable", "停用") else choose("Enable", "启用"), fontWeight = FontWeight.Bold)
                 }
             }
         }
@@ -946,11 +947,19 @@ private fun SkillCommandRow(command: SkillCommand) {
     }
 }
 
-private enum class SkillListFilter(val title: String, val tint: Color) {
-    All("全部", AccentBlue),
-    Ready("就绪", SuccessGreen),
-    NeedsSetup("待配置", WarningOrange),
-    Disabled("已停用", MutedGray);
+private enum class SkillListFilter(val tint: Color) {
+    All(AccentBlue),
+    Ready(SuccessGreen),
+    NeedsSetup(WarningOrange),
+    Disabled(MutedGray);
+
+    val title: String
+        get() = when (this) {
+            All -> choose("All", "全部")
+            Ready -> choose("Ready", "就绪")
+            NeedsSetup -> choose("Needs setup", "待配置")
+            Disabled -> choose("Disabled", "已停用")
+        }
 
     fun matches(skill: SkillItem): Boolean = when (this) {
         All -> true
@@ -960,11 +969,19 @@ private enum class SkillListFilter(val title: String, val tint: Color) {
     }
 }
 
-private enum class SkillAvailability(val title: String, val tint: Color, val icon: ImageVector) {
-    Ready("就绪", SuccessGreen, Icons.Default.CheckCircle),
-    NeedsSetup("待配置", WarningOrange, Icons.Default.Build),
-    Disabled("已停用", MutedGray, Icons.Default.PauseCircle),
-    Blocked("已限制", DangerRed, Icons.Default.Shield)
+private enum class SkillAvailability(val tint: Color, val icon: ImageVector) {
+    Ready(SuccessGreen, Icons.Default.CheckCircle),
+    NeedsSetup(WarningOrange, Icons.Default.Build),
+    Disabled(MutedGray, Icons.Default.PauseCircle),
+    Blocked(DangerRed, Icons.Default.Shield);
+
+    val title: String
+        get() = when (this) {
+            Ready -> choose("Ready", "就绪")
+            NeedsSetup -> choose("Needs setup", "待配置")
+            Disabled -> choose("Disabled", "已停用")
+            Blocked -> choose("Blocked", "已限制")
+        }
 }
 
 private val SkillItem.availability: SkillAvailability
@@ -977,21 +994,25 @@ private val SkillItem.availability: SkillAvailability
 
 private val SkillItem.sourceLabel: String
     get() = when (source?.trim()) {
-        "openclaw-bundled" -> "内置"
-        "openclaw-managed", "openclaw-hosted" -> "托管"
-        "openclaw-workspace" -> "工作区"
-        "openclaw-extra" -> "扩展"
-        "openclaw-plugin" -> "插件"
-        null, "" -> "未标记"
+        "openclaw-bundled" -> choose("Bundled", "内置")
+        "openclaw-managed", "openclaw-hosted" -> choose("Managed", "托管")
+        "openclaw-workspace" -> choose("Workspace", "工作区")
+        "openclaw-extra" -> choose("Extra", "扩展")
+        "openclaw-plugin" -> choose("Plugin", "插件")
+        null, "" -> choose("Untagged", "未标记")
         else -> source.orEmpty()
     }
 
 private val SkillItem.statusDetailText: String
     get() = statusDetail?.takeIf { it.isNotBlank() } ?: when (availability) {
-        SkillAvailability.Ready -> "依赖已满足，可直接使用。"
-        SkillAvailability.NeedsSetup -> if (missing.count > 0) "缺少 ${missing.count} 项配置或依赖。" else "需要完成配置后才能使用。"
-        SkillAvailability.Disabled -> "技能已停用，需要启用后才会参与会话。"
-        SkillAvailability.Blocked -> "技能被 allowlist 限制，当前不可启用。"
+        SkillAvailability.Ready -> choose("Dependencies are satisfied and the skill is ready to use.", "依赖已满足，可直接使用。")
+        SkillAvailability.NeedsSetup -> if (missing.count > 0) {
+            choose("${missing.count} config or dependency items are missing.", "缺少 ${missing.count} 项配置或依赖。")
+        } else {
+            choose("Complete setup before using this skill.", "需要完成配置后才能使用。")
+        }
+        SkillAvailability.Disabled -> choose("The skill is disabled and will not participate in sessions until enabled.", "技能已停用，需要启用后才会参与会话。")
+        SkillAvailability.Blocked -> choose("The skill is restricted by the allowlist and cannot be enabled now.", "技能被 allowlist 限制，当前不可启用。")
     }
 
 private fun SkillItem.matchesSearch(query: String): Boolean {

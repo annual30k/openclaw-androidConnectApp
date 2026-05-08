@@ -69,6 +69,7 @@ import com.rethinkingstudio.clawlink.core.models.chat.ChatMessage
 import com.rethinkingstudio.clawlink.core.models.chat.MessageRole
 import com.rethinkingstudio.clawlink.core.models.chat.MessageState
 import com.rethinkingstudio.clawlink.core.models.chat.RelayChatContentBlock
+import com.rethinkingstudio.clawlink.core.state.LocalizedText.choose
 import com.rethinkingstudio.clawlink.core.state.chat.RemoteAttachmentCache
 import com.rethinkingstudio.clawlink.core.state.chat.chatAttachmentCacheKey
 import com.rethinkingstudio.clawlink.core.state.chat.chatImageCacheKey
@@ -430,7 +431,7 @@ private fun FileBlock(block: RelayChatContentBlock, isUser: Boolean, messageStat
                 }
                 if (downloadUrl != null && !isUploadCard) { Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null, modifier = Modifier.padding(top = 5.dp).size(15.dp), tint = secondaryText) }
             }
-            block.expiresAt?.takeIf { it.isNotBlank() }?.let { Text("Expires $it", maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.labelSmall, color = secondaryText) }
+            block.expiresAt?.takeIf { it.isNotBlank() }?.let { Text(choose("Expires $it", "有效期至 $it"), maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.labelSmall, color = secondaryText) }
         }
     }
 }
