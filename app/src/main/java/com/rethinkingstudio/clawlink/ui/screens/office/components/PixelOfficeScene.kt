@@ -103,7 +103,7 @@ fun PixelOfficeScene(
         val offsetX = (size.width - stageWidth * scale) / 2f
         val offsetY = (size.height - stageHeight * scale) / 2f
 
-        drawRect(Color.Black, size = size)
+        drawRect(OfficeSceneLetterboxColor, size = size)
         withTransform({
             translate(offsetX, offsetY)
             scale(scale, scale, Offset.Zero)
@@ -112,6 +112,8 @@ fun PixelOfficeScene(
         }
     }
 }
+
+private val OfficeSceneLetterboxColor = Color(0xFFEDE3CC)
 
 private fun DrawScope.drawStage(
     bitmaps: Map<Int, Bitmap>,

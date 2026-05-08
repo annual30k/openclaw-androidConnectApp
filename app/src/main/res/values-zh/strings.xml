@@ -932,6 +932,12 @@
 
     <string name="office_recent_online">最近在线 %s</string>
 
+    <string name="office_stat_offline">离线</string>
+
+    <string name="office_stat_online">在线</string>
+
+    <string name="office_stat_working">工作</string>
+
     <string name="office_title">像素办公室</string>
 
     <string name="settings_about_console">OpenClaw Remote Control Console</string>

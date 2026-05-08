@@ -294,6 +294,7 @@ fun AppNavigation(
             com.rethinkingstudio.clawlink.ui.screens.office.OfficeScreen(
                 authStore = container.authStore,
                 gatewayStore = container.gatewayStore,
+                chatStore = container.chatStore,
                 onBack = { navController.popBackStack() }
             )
         }

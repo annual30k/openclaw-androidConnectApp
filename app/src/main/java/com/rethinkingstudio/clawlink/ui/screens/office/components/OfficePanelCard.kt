@@ -1,18 +1,17 @@
 package com.rethinkingstudio.clawlink.ui.screens.office.components
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.blur
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
@@ -20,54 +19,49 @@ import androidx.compose.ui.unit.sp
 fun OfficePanelCard(
     modifier: Modifier = Modifier,
     title: String? = null,
+    subtitle: String? = null,
+    accent: Color = Color(0xFF61A7E8),
     content: @Composable ColumnScope.() -> Unit
 ) {
     Surface(
         modifier = modifier,
-        color = Color.Transparent,
-        shape = RoundedCornerShape(16.dp)
+        color = Color(0xFF1F222E).copy(alpha = 0.95f),
+        shape = RoundedCornerShape(22.dp),
+        border = androidx.compose.foundation.BorderStroke(1.5.dp, accent.copy(alpha = 0.72f)),
+        shadowElevation = 8.dp,
+        tonalElevation = 0.dp
     ) {
-        Box {
-            // Glass effect background
-            Box(
-                modifier = Modifier
-                    .matchParentSize()
-                    .blur(20.dp)
-                    .background(
-                        Brush.verticalGradient(
-                            listOf(
-                                Color.White.copy(alpha = 0.15f),
-                                Color.White.copy(alpha = 0.05f)
-                            )
-                        )
-                    )
-                    .border(
-                        1.dp,
-                        Brush.verticalGradient(
-                            listOf(
-                                Color.White.copy(alpha = 0.2f),
-                                Color.White.copy(alpha = 0.05f)
-                            )
-                        ),
-                        RoundedCornerShape(16.dp)
-                    )
-            )
-
-            Column(
-                modifier = Modifier
-                    .padding(16.dp)
-            ) {
-                if (title != null) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(14.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            if (title != null) {
+                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                     Text(
-                        text = title.uppercase(),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = Color.White.copy(alpha = 0.5f),
-                        letterSpacing = 1.sp,
-                        modifier = Modifier.padding(bottom = 12.dp)
+                        text = title,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        style = MaterialTheme.typography.labelSmall.copy(fontSize = 13.sp),
+                        color = Color(0xFFF7DB47),
+                        fontWeight = FontWeight.Medium,
+                        fontFamily = FontFamily.Monospace
                     )
+                    if (!subtitle.isNullOrBlank()) {
+                        Text(
+                            text = subtitle,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp),
+                            color = Color.White.copy(alpha = 0.58f),
+                            fontWeight = FontWeight.SemiBold,
+                            fontFamily = FontFamily.Monospace
+                        )
+                    }
                 }
-                content()
             }
+            content()
         }
     }
 }

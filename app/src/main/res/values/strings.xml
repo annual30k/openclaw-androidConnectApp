@@ -932,6 +932,12 @@ Tap the button below to refresh manually.</string>
 
     <string name="office_recent_online">Recently online %s</string>
 
+    <string name="office_stat_offline">Offline</string>
+
+    <string name="office_stat_online">Online</string>
+
+    <string name="office_stat_working">Working</string>
+
     <string name="office_title">Pixel Office</string>
 
     <string name="settings_about_console">OpenClaw Remote Control Console</string>

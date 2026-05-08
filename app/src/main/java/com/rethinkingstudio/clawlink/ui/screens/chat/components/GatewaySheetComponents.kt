@@ -60,6 +60,7 @@ import com.rethinkingstudio.clawlink.core.models.gateway.AggregateStatus
 import com.rethinkingstudio.clawlink.core.models.gateway.GatewaySummary
 import com.rethinkingstudio.clawlink.core.state.gateway.GatewayStore
 import com.rethinkingstudio.clawlink.ui.screens.chat.ChatColors
+import com.rethinkingstudio.clawlink.ui.screens.chat.formatChatTimestamp
 import com.rethinkingstudio.clawlink.ui.screens.settings.components.GatewayFlowPanel
 
 private val ChatSessionItem.normalizedSessionKey: String
@@ -72,7 +73,7 @@ private val ChatSessionItem.displayTitle: String
         ?: sessionDisplayName(sessionKey)
 
 private val ChatSessionItem.activityText: String
-    get() = lastActivityAt?.trim()?.takeIf { it.isNotEmpty() }?.let { "最近活动 $it" }.orEmpty()
+    get() = lastActivityAt?.trim()?.takeIf { it.isNotEmpty() }?.let { "最近活动 ${formatChatTimestamp(it)}" }.orEmpty()
 
 internal fun sessionDisplayName(key: String): String {
     val normalized = key.trim().ifBlank { "main" }
@@ -217,7 +218,7 @@ private fun GatewayItemCard(
                         color = Color.Black
                     )
                     Text(
-                        stringResource(R.string.gateway_last_seen, gateway.lastSeenAt),
+                        stringResource(R.string.gateway_last_seen, formatChatTimestamp(gateway.lastSeenAt)),
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                         style = MaterialTheme.typography.labelMedium,

@@ -73,6 +73,7 @@ import com.rethinkingstudio.clawlink.core.state.chat.RemoteAttachmentCache
 import com.rethinkingstudio.clawlink.core.state.chat.chatAttachmentCacheKey
 import com.rethinkingstudio.clawlink.core.state.chat.chatImageCacheKey
 import com.rethinkingstudio.clawlink.ui.screens.chat.ChatColors
+import com.rethinkingstudio.clawlink.ui.screens.chat.formatChatTimestamp
 import java.io.File
 import java.net.HttpURLConnection
 import java.net.URL
@@ -197,7 +198,7 @@ private fun MessageFooter(title: String, createdAt: String, isUser: Boolean, mod
         val footerColor = if (isUser) Color.White.copy(alpha = 0.72f) else ChatColors.secondaryText
         Text(title, style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp), color = footerColor, fontWeight = FontWeight.Medium)
         Spacer(Modifier.weight(1f))
-        Text(createdAt, style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp), color = footerColor, fontWeight = FontWeight.Medium)
+        Text(formatChatTimestamp(createdAt), style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp), color = footerColor, fontWeight = FontWeight.Medium)
     }
 }
 
