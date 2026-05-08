@@ -176,6 +176,9 @@ class OfficeRoutePlanner private constructor(context: Context? = null) {
         val coffeeTableRect = RectF(544f, 282f, 744f, 462f)
         val serverRoomRect = RectF(931f, 17f, 1111f, 268f)
         val partitionRect = RectF(375f, 0f, 415f, 620f)
+        val catBedRect = RectF(18f, 482f, 170f, 632f)
+        val bedroomWallRect = RectF(206f, 578f, 560f, 660f)
+        val bedroomInteriorRect = RectF(330f, 620f, 560f, 720f)
 
         for (row in 0 until rows) {
             for (col in 0 until cols) {
@@ -200,7 +203,10 @@ class OfficeRoutePlanner private constructor(context: Context? = null) {
                 val isFurniture = RectF.intersects(cellRect, deskRect) ||
                         RectF.intersects(cellRect, sofaRect) ||
                         RectF.intersects(cellRect, coffeeTableRect) ||
-                        RectF.intersects(cellRect, serverRoomRect)
+                        RectF.intersects(cellRect, serverRoomRect) ||
+                        RectF.intersects(cellRect, catBedRect) ||
+                        RectF.intersects(cellRect, bedroomWallRect) ||
+                        RectF.intersects(cellRect, bedroomInteriorRect)
                 
                 val isPartition = RectF.intersects(cellRect, partitionRect)
 

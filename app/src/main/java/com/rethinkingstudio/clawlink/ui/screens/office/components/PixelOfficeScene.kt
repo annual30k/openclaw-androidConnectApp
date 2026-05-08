@@ -49,6 +49,7 @@ fun PixelOfficeScene(
 ) {
     val context = LocalContext.current
     val routePlanner = remember { OfficeRoutePlanner.getInstance(context) }
+    val officeNpcs = remember(routePlanner) { OfficeNPCCast.routed(routePlanner) }
     val motionState = remember { OfficeSceneMotionState() }
     var timeMillis by remember { mutableStateOf(System.currentTimeMillis()) }
 
@@ -69,7 +70,6 @@ fun PixelOfficeScene(
             R.drawable.office_coffee_machine_shadow,
             R.drawable.office_coffee_machine_sheet,
             R.drawable.office_desk,
-            R.drawable.office_npc_robot,
             R.drawable.office_posters_sheet,
             R.drawable.star_idle_sheet,
             R.drawable.star_working_sheet,
@@ -108,7 +108,7 @@ fun PixelOfficeScene(
             translate(offsetX, offsetY)
             scale(scale, scale, Offset.Zero)
         }) {
-            drawStage(bitmaps, scene, motionState, timeMillis, reduceMotion, showsOccupants)
+            drawStage(bitmaps, scene, motionState, officeNpcs, timeMillis, reduceMotion, showsOccupants)
         }
     }
 }
@@ -119,6 +119,7 @@ private fun DrawScope.drawStage(
     bitmaps: Map<Int, Bitmap>,
     scene: OfficeSceneSnapshot,
     motionState: OfficeSceneMotionState,
+    officeNpcs: List<com.rethinkingstudio.clawlink.ui.screens.office.logic.OfficeNPC>,
     timeMillis: Long,
     reduceMotion: Boolean,
     showsOccupants: Boolean
@@ -129,7 +130,7 @@ private fun DrawScope.drawStage(
 
     drawFurniture(bitmaps, scene, timeMillis, reduceMotion, showsOccupants)
     if (showsOccupants) {
-        drawNPCs(bitmaps, timeMillis)
+        drawNPCs(officeNpcs, timeMillis)
         drawAgents(bitmaps, scene, motionState, timeMillis, reduceMotion)
     }
     drawDeskOverlay(bitmaps)
@@ -175,22 +176,21 @@ private fun DrawScope.drawFurniture(
 }
 
 private fun DrawScope.drawNPCs(
-    bitmaps: Map<Int, Bitmap>,
+    officeNpcs: List<com.rethinkingstudio.clawlink.ui.screens.office.logic.OfficeNPC>,
     timeMillis: Long
 ) {
-    OfficeNPCCast.npcs.forEach { npc ->
+    officeNpcs.forEach { npc ->
         val snapshot = npc.snapshotAt(timeMillis / 1000.0)
         val npcTime = timeMillis + npc.id * 310L
         if (npc.id == 0) {
-            drawOfficeNpcBitmap(
-                bitmap = bitmaps[R.drawable.office_npc_robot],
+            drawOfficeCourierNpc(
                 position = snapshot.position,
                 isWaiting = snapshot.isWaiting,
                 direction = snapshot.facingDirection,
                 timeMillis = npcTime
             )
         } else {
-            drawRobotDogNpc(
+            drawOfficeFileCartNpc(
                 position = snapshot.position,
                 isWaiting = snapshot.isWaiting,
                 direction = snapshot.facingDirection,
@@ -200,98 +200,120 @@ private fun DrawScope.drawNPCs(
     }
 }
 
-private fun DrawScope.drawOfficeNpcBitmap(
-    bitmap: Bitmap?,
+private fun DrawScope.drawOfficeCourierNpc(
     position: PointF,
     isWaiting: Boolean,
     direction: Float,
     timeMillis: Long
 ) {
-    if (bitmap == null) return
-
-    val phase = timeMillis / 1000.0
-    val idleBob = if (isWaiting) sin(phase * Math.PI * 2.0).toFloat() * 1.25f else 0f
-    val walkSway = if (isWaiting) 0f else sin(phase * Math.PI * 8.0).toFloat()
-    val x = (position.x + walkSway * 2f).roundToInt()
-    val y = (position.y + idleBob).roundToInt()
-    val size = if (isWaiting) 74 else 70
-    val dstRect = Rect(-size / 2, -size, size / 2, 0)
-    val lean = if (isWaiting) 0f else walkSway * 4f
-
-    drawOval(
-        color = Color.Black.copy(alpha = 0.18f),
-        topLeft = Offset(x - 22f, y - 6f),
-        size = Size(44f, 12f)
-    )
-
-    val canvas = drawContext.canvas.nativeCanvas
-    canvas.save()
-    canvas.translate(x.toFloat(), y.toFloat())
-    canvas.scale(if (direction < 0f) -1f else 1f, 1f)
-    canvas.rotate(lean)
-    canvas.drawBitmap(bitmap, null, dstRect, null)
-    canvas.restore()
-}
-
-private fun DrawScope.drawRobotDogNpc(
-    position: PointF,
-    isWaiting: Boolean,
-    direction: Float,
-    timeMillis: Long
-) {
-    val phase = timeMillis / 1000.0
-    val walk = if (isWaiting) 0f else sin(phase * Math.PI * 8.0).toFloat()
-    val tail = sin(phase * Math.PI * if (isWaiting) 3.0 else 10.0).toFloat()
+    val step = if (isWaiting) 0 else ((timeMillis / 120L) % 4L).toInt()
+    val idleStep = if (isWaiting) ((timeMillis / 460L) % 2L).toInt() else 0
     val x = position.x.roundToInt()
-    val y = position.y.roundToInt()
-    val red = Color(0xFFE6372E)
-    val redLight = Color(0xFFFF6A4D)
-    val cream = Color(0xFFFFF0D6)
-    val screen = Color(0xFF101820)
-    val cyan = Color(0xFF65F2E4)
-    val outline = Color(0xFF3A1B18)
-    val metal = Color(0xFF55606A)
-    val legA = walk.roundToInt() * 4
-    val legB = -legA
+    val y = position.y.roundToInt() - idleStep
+    val outline = Color(0xFF3B2A1F)
+    val shadow = Color(0x6633281F)
+    val cream = Color(0xFFF0DDB8)
+    val panel = Color(0xFFB9895A)
+    val panelDark = Color(0xFF7D5239)
+    val tealDark = Color(0xFF224B4A)
+    val amber = Color(0xFFF2C94C)
+    val metal = Color(0xFF6C716D)
+    val tire = Color(0xFF2D2D2A)
+    val armA = if (step == 1 || step == 2) 1 else -1
+    val wheelMark = when (step) {
+        0 -> -2
+        1 -> 0
+        2 -> 2
+        else -> 0
+    }
 
-    drawOval(
-        color = Color.Black.copy(alpha = 0.18f),
-        topLeft = Offset(x - 32f, y - 7f),
-        size = Size(64f, 13f)
-    )
+    drawRect(shadow, Offset(x - 28f, y - 7f), Size(56f, 8f))
+    drawRect(shadow.copy(alpha = 0.18f), Offset(x - 20f, y - 10f), Size(40f, 4f))
 
     withTransform({
         if (direction < 0f) {
             scale(-1f, 1f, Offset(x.toFloat(), y.toFloat()))
         }
     }) {
-        // Tail and antenna make the silhouette read as a small office robot dog.
-        drawPixelFrame(Rect(x - 38, y - 41 + (tail * 3f).roundToInt(), x - 28, y - 35 + (tail * 3f).roundToInt()), redLight, outline)
-        drawPixelFrame(Rect(x + 31, y - 62, x + 35, y - 50), redLight, outline)
-        drawPixelFrame(Rect(x + 34, y - 66, x + 42, y - 58), redLight, outline)
+        // Drawn in chunky 4px cells so the NPC reads like a sprite, not vector UI.
+        drawPixelFrame(Rect(x - 24, y - 52, x + 20, y - 16), outline, outline)
+        drawPixelFrame(Rect(x - 20, y - 48, x + 16, y - 20), panel, panel)
+        drawRect(panelDark, Offset(x - 16f, y - 44f), Size(28f, 8f))
+        drawPixelFrame(Rect(x - 12, y - 40, x + 12, y - 28), tealDark, outline)
+        drawRect(amber, Offset(x - 8f, y - 36f), Size(4f, 4f))
+        drawRect(amber, Offset(x + 4f, y - 36f), Size(4f, 4f))
+        drawRect(cream, Offset(x - 16f, y - 26f), Size(28f, 6f))
 
-        // Body.
-        drawPixelFrame(Rect(x - 29, y - 48, x + 19, y - 22), red, outline)
-        drawPixelFrame(Rect(x - 21, y - 42, x + 10, y - 28), redLight, red)
-        drawPixelFrame(Rect(x - 5, y - 39, x + 7, y - 30), cream, outline)
-        drawPixelFrame(Rect(x - 1, y - 36, x + 4, y - 33), cyan, cyan)
+        drawPixelFrame(Rect(x + 18, y - 42 + armA * 4, x + 30, y - 34 + armA * 4), metal, outline)
+        drawPixelFrame(Rect(x + 28, y - 38 + armA * 4, x + 40, y - 30 + armA * 4), cream, outline)
+        drawPixelFrame(Rect(x - 34, y - 38 - armA * 4, x - 22, y - 30 - armA * 4), metal, outline)
+        drawPixelFrame(Rect(x - 42, y - 34 - armA * 4, x - 30, y - 26 - armA * 4), cream, outline)
 
-        // Head/monitor snout.
-        drawPixelFrame(Rect(x + 13, y - 62, x + 43, y - 37), cream, outline)
-        drawPixelFrame(Rect(x + 17, y - 58, x + 39, y - 42), screen, outline)
-        drawPixelFrame(Rect(x + 22, y - 53, x + 26, y - 49), cyan, cyan)
-        drawPixelFrame(Rect(x + 32, y - 53, x + 36, y - 49), cyan, cyan)
-        drawPixelFrame(Rect(x + 40, y - 48, x + 49, y - 41), redLight, outline)
+        drawPixelFrame(Rect(x - 24, y - 18, x + 20, y - 8), metal, outline)
+        drawPixelFrame(Rect(x - 24, y - 10, x - 8, y + 2), tire, outline)
+        drawPixelFrame(Rect(x + 4, y - 10, x + 20, y + 2), tire, outline)
+        drawRect(amber, Offset(x - 18f + wheelMark, y - 6f), Size(6f, 4f))
+        drawRect(amber, Offset(x + 10f + wheelMark, y - 6f), Size(6f, 4f))
+        drawPixelFrame(Rect(x - 4, y - 64, x + 4, y - 52), metal, outline)
+        drawPixelFrame(Rect(x - 12, y - 72, x + 12, y - 60), amber, outline)
+    }
+}
 
-        // Four-leg walk cycle. Opposite legs alternate forward/back.
-        drawPixelFrame(Rect(x - 22 + legA, y - 24, x - 14 + legA, y - 8), metal, outline)
-        drawPixelFrame(Rect(x - 11 + legB, y - 24, x - 3 + legB, y - 8), metal, outline)
-        drawPixelFrame(Rect(x + 2 + legB, y - 24, x + 10 + legB, y - 8), metal, outline)
-        drawPixelFrame(Rect(x + 13 + legA, y - 24, x + 21 + legA, y - 8), metal, outline)
-        drawPixelFrame(Rect(x - 24 + legA, y - 9, x - 12 + legA, y - 3), red, outline)
-        drawPixelFrame(Rect(x - 13 + legB, y - 9, x - 1 + legB, y - 3), red, outline)
-        drawPixelFrame(Rect(x + legB, y - 9, x + 12 + legB, y - 3), red, outline)
-        drawPixelFrame(Rect(x + 11 + legA, y - 9, x + 23 + legA, y - 3), red, outline)
+private fun DrawScope.drawOfficeFileCartNpc(
+    position: PointF,
+    isWaiting: Boolean,
+    direction: Float,
+    timeMillis: Long
+) {
+    val step = if (isWaiting) 0 else ((timeMillis / 115L) % 4L).toInt()
+    val idleStep = if (isWaiting) ((timeMillis / 520L) % 2L).toInt() else 0
+    val x = position.x.roundToInt()
+    val y = position.y.roundToInt() - idleStep
+    val outline = Color(0xFF3B2A1F)
+    val shadow = Color(0x5533281F)
+    val wood = Color(0xFFA86F45)
+    val woodDark = Color(0xFF6F4932)
+    val paper = Color(0xFFF3E5C4)
+    val paperEdge = Color(0xFFB99A6E)
+    val green = Color(0xFF5E8C5A)
+    val amber = Color(0xFFF2C94C)
+    val metal = Color(0xFF596160)
+    val tire = Color(0xFF2F2C28)
+    val wheelA = when (step) {
+        0 -> -3
+        1 -> 0
+        2 -> 3
+        else -> 0
+    }
+    val handleBob = if (step == 1 || step == 2 || idleStep == 1) -4 else 0
+
+    drawRect(shadow, Offset(x - 34f, y - 7f), Size(68f, 8f))
+    drawRect(shadow.copy(alpha = 0.18f), Offset(x - 22f, y - 10f), Size(44f, 4f))
+
+    withTransform({
+        if (direction < 0f) {
+            scale(-1f, 1f, Offset(x.toFloat(), y.toFloat()))
+        }
+    }) {
+        // Office supply cart: not another robot, so it does not compete with the patrol helper.
+        drawPixelFrame(Rect(x - 30, y - 50, x + 28, y - 14), outline, outline)
+        drawPixelFrame(Rect(x - 26, y - 46, x + 24, y - 18), wood, wood)
+        drawRect(woodDark, Offset(x - 22f, y - 42f), Size(42f, 6f))
+        drawRect(woodDark, Offset(x - 22f, y - 28f), Size(42f, 4f))
+        drawPixelFrame(Rect(x - 18, y - 64, x - 2, y - 44), paper, outline)
+        drawPixelFrame(Rect(x - 2, y - 68, x + 16, y - 44), paper, outline)
+        drawRect(paperEdge, Offset(x + 2f, y - 60f), Size(10f, 4f))
+        drawPixelFrame(Rect(x + 12, y - 58, x + 30, y - 42), green, outline)
+        drawRect(amber, Offset(x + 18f, y - 52f), Size(6f, 6f))
+
+        drawPixelFrame(Rect(x - 38, y - 42 + handleBob, x - 28, y - 34 + handleBob), metal, outline)
+        drawPixelFrame(Rect(x + 28, y - 42 - handleBob, x + 38, y - 34 - handleBob), metal, outline)
+
+        drawPixelFrame(Rect(x - 30, y - 16, x + 28, y - 8), metal, outline)
+        drawPixelFrame(Rect(x - 28, y - 10, x - 12, y + 2), tire, outline)
+        drawPixelFrame(Rect(x + 12, y - 10, x + 28, y + 2), tire, outline)
+        drawRect(amber, Offset(x - 22f + wheelA, y - 6f), Size(6f, 4f))
+        drawRect(amber, Offset(x + 18f + wheelA, y - 6f), Size(6f, 4f))
     }
 }
 

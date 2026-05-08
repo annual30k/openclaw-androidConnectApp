@@ -213,6 +213,7 @@ data class ChatHistoryItem(
 
 object ChatHistoryItemSerializer : KSerializer<ChatHistoryItem> {
     override val descriptor: SerialDescriptor = JsonElement.serializer().descriptor
+    private val blockJson = Json { ignoreUnknownKeys = true }
 
     override fun serialize(encoder: Encoder, value: ChatHistoryItem) {
         val obj = buildJsonObject {
@@ -259,7 +260,11 @@ object ChatHistoryItemSerializer : KSerializer<ChatHistoryItem> {
         return arrays.flatMap { array ->
             array.mapNotNull { element ->
                 runCatching {
-                    Json.decodeFromJsonElement(com.rethinkingstudio.clawlink.core.models.chat.RelayChatContentBlock.serializer(), element)
+                    val blockObject = element as? JsonObject ?: return@runCatching null
+                    blockJson.decodeFromJsonElement(
+                        com.rethinkingstudio.clawlink.core.models.chat.RelayChatContentBlock.serializer(),
+                        normalizeContentBlockObject(blockObject)
+                    )
                 }.getOrNull()
             }
         }.filter { block ->
@@ -275,6 +280,40 @@ object ChatHistoryItemSerializer : KSerializer<ChatHistoryItem> {
                     block.status.orEmpty()
                 ).joinToString("|")
             )
+        }
+    }
+
+    private fun normalizeContentBlockObject(obj: JsonObject): JsonObject {
+        val aliases = mapOf(
+            "file_id" to "fileId",
+            "file_name" to "fileName",
+            "mime_type" to "mimeType",
+            "size_bytes" to "sizeBytes",
+            "duration_ms" to "durationMs",
+            "image_width" to "imageWidth",
+            "image_height" to "imageHeight",
+            "download_url" to "downloadUrl",
+            "download_path" to "downloadPath",
+            "thumbnail_url" to "thumbnailUrl",
+            "expires_at" to "expiresAt",
+            "sender_display_name" to "senderDisplayName",
+            "gateway_id" to "gatewayId",
+            "session_key" to "sessionKey",
+            "partial_result" to "partialResult",
+            "tool_call_id" to "toolCallId",
+            "tool_use_id" to "toolUseId",
+            "tool_name" to "toolName",
+            "is_error" to "isError"
+        )
+        return buildJsonObject {
+            obj.forEach { (key, value) ->
+                put(key, value)
+                aliases[key]?.let { alias ->
+                    if (!obj.containsKey(alias)) {
+                        put(alias, value)
+                    }
+                }
+            }
         }
     }
 

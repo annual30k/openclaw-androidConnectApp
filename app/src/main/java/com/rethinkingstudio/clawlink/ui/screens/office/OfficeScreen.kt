@@ -186,18 +186,16 @@ private fun OfficeStatusOverlay(
     onDismiss: () -> Unit
 ) {
     val prefersExpandedTaskLayout = toolAgent?.prefersExpandedTaskLayout() == true
-    val overlaySafeInsets = WindowInsets.safeDrawing.union(WindowInsets.displayCutout)
     Box(
         modifier = Modifier
             .fillMaxSize()
             .background(Color(0xFF1A1E29))
-            .windowInsetsPadding(overlaySafeInsets)
             .clickable(
                 indication = null,
                 interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
                 onClick = onDismiss
             )
-            .padding(start = 80.dp, top = 24.dp, end = 80.dp, bottom = 28.dp)
+            .padding(start = 48.dp, top = 5.dp, end = 48.dp, bottom = 5.dp)
     ) {
         if (prefersExpandedTaskLayout) {
             Column(

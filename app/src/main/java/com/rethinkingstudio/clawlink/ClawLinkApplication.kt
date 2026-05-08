@@ -16,6 +16,7 @@ import com.rethinkingstudio.clawlink.core.network.transport.RelayWebSocketClient
 import com.rethinkingstudio.clawlink.core.state.auth.AuthStore
 import com.rethinkingstudio.clawlink.core.state.backup.BackupStore
 import com.rethinkingstudio.clawlink.core.state.chat.ChatStore
+import com.rethinkingstudio.clawlink.core.state.chat.ChatSessionSelectionStore
 import com.rethinkingstudio.clawlink.core.state.gateway.GatewayStore
 import com.rethinkingstudio.clawlink.core.state.model.ModelStore
 import com.rethinkingstudio.clawlink.core.state.skill.SkillStore
@@ -85,10 +86,11 @@ class AppContainer(context: Context) {
     val apiClient: RelayAPIClient = RelayAPIClient()
     val wsClient: RelayWebSocketClient = RelayWebSocketClient()
     val notificationPort: NotificationPort = AndroidNotificationPort(context)
+    val chatSessionSelectionStore: ChatSessionSelectionStore = ChatSessionSelectionStore(context)
 
     val authStore: AuthStore = AuthStore(apiClient, credentialStore)
     val gatewayStore: GatewayStore = GatewayStore(apiClient, credentialStore, wsClient)
-    val chatStore: ChatStore = ChatStore(apiClient, wsClient, notificationPort)
+    val chatStore: ChatStore = ChatStore(apiClient, wsClient, notificationPort, chatSessionSelectionStore)
     val modelStore: ModelStore = ModelStore(apiClient)
     val skillStore: SkillStore = SkillStore(apiClient)
     val taskStore: TaskStore = TaskStore(apiClient)

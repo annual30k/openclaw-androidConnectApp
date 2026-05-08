@@ -140,9 +140,9 @@ class RelayWebSocketClient {
         idempotencyKey: String? = null,
         voiceReplyEnabled: Boolean = false,
         voiceReplyVoiceIdentifier: String? = null,
-        voiceReplyRatePercent: Int? = null
-    ) {
-        val requestId = UUID.randomUUID().toString()
+        voiceReplyRatePercent: Int? = null,
+        requestId: String = UUID.randomUUID().toString()
+    ): String {
         val params = buildJsonObject {
             put("sessionKey", JsonPrimitive(sessionKey))
             put("message", JsonPrimitive(content))
@@ -164,6 +164,7 @@ class RelayWebSocketClient {
             put("params", params)
         }
         send(payload.toString())
+        return requestId
     }
 
     fun executeCommand(gatewayId: String, method: String, params: JsonObject? = null, requestId: String = UUID.randomUUID().toString()) {
@@ -204,8 +205,12 @@ class RelayWebSocketClient {
         send(payload.toString())
     }
 
-    fun sendCommand(gatewayId: String, sessionKey: String, command: String) {
-        val requestId = UUID.randomUUID().toString()
+    fun sendCommand(
+        gatewayId: String,
+        sessionKey: String,
+        command: String,
+        requestId: String = UUID.randomUUID().toString()
+    ): String {
         val params = buildJsonObject {
             put("sessionKey", JsonPrimitive(sessionKey))
             put("message", JsonPrimitive(command))
@@ -219,6 +224,7 @@ class RelayWebSocketClient {
             put("params", params)
         }
         send(payload.toString())
+        return requestId
     }
 
     fun abortChatRun(gatewayId: String, sessionKey: String, runId: String?, requestId: String = UUID.randomUUID().toString()) {

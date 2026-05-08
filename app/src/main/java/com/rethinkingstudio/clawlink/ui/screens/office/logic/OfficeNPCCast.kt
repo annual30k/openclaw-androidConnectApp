@@ -1,6 +1,7 @@
 package com.rethinkingstudio.clawlink.ui.screens.office.logic
 
 import androidx.compose.ui.graphics.Color
+import com.rethinkingstudio.clawlink.core.models.OfficeStation
 import com.rethinkingstudio.clawlink.core.models.PointF
 import com.rethinkingstudio.clawlink.ui.screens.office.logic.Zero
 import kotlin.math.sqrt
@@ -69,6 +70,29 @@ data class OfficeNPC(
         return Snapshot(waypoints[0], true, 1f)
     }
 
+    fun routed(routePlanner: OfficeRoutePlanner): OfficeNPC {
+        if (waypoints.size < 2) return this
+
+        val routedWaypoints = mutableListOf<PointF>()
+        for (index in waypoints.indices) {
+            val from = waypoints[index]
+            val to = waypoints[(index + 1) % waypoints.size]
+            val segment = routePlanner.route(
+                from = from,
+                sourceStation = null,
+                to = to,
+                targetStation = OfficeStation.CORNER
+            )
+            segment.forEach { point ->
+                if ((routedWaypoints.lastOrNull()?.distance(point) ?: Float.MAX_VALUE) > 0.5f) {
+                    routedWaypoints.add(point)
+                }
+            }
+        }
+
+        return copy(waypoints = routedWaypoints.ifEmpty { waypoints })
+    }
+
     private data class NPCSegment(
         val waitDuration: Double,
         val travelDuration: Double,
@@ -78,20 +102,35 @@ data class OfficeNPC(
 }
 
 object OfficeNPCCast {
+    private fun markedActivityPoints(): List<PointF> = listOf(
+        PointF(210f, 552f),
+        PointF(74f, 430f),
+        PointF(128f, 330f),
+        PointF(248f, 292f),
+        PointF(342f, 308f),
+        PointF(348f, 520f),
+        PointF(438f, 632f),
+        PointF(560f, 602f),
+        PointF(644f, 548f),
+        PointF(780f, 500f),
+        PointF(900f, 510f),
+        PointF(1018f, 570f),
+        PointF(928f, 626f),
+        PointF(754f, 628f),
+        PointF(600f, 570f),
+        PointF(360f, 560f),
+        PointF(210f, 552f)
+    )
+
     val npcs = listOf(
         OfficeNPC(
             id = 0,
             bodyColor = Color(0xFF599EE0),
             faceColor = Color(0xFFE6EDF7),
             outlineColor = Color(0xFF264066),
-            waypoints = listOf(
-                PointF(480f, 580f),
-                PointF(620f, 580f),
-                PointF(620f, 640f),
-                PointF(480f, 640f)
-            ),
-            speed = 42f,
-            waitAtEachStop = 4.0,
+            waypoints = markedActivityPoints(),
+            speed = 34f,
+            waitAtEachStop = 1.6,
             timeOffset = 0.0
         ),
         OfficeNPC(
@@ -99,15 +138,14 @@ object OfficeNPCCast {
             bodyColor = Color(0xFF61BD6B),
             faceColor = Color(0xFFE6F7E6),
             outlineColor = Color(0xFF29572E),
-            waypoints = listOf(
-                PointF(160f, 620f),
-                PointF(320f, 620f),
-                PointF(320f, 660f),
-                PointF(160f, 660f)
-            ),
-            speed = 36f,
-            waitAtEachStop = 5.0,
-            timeOffset = 3.0
+            waypoints = markedActivityPoints().asReversed(),
+            speed = 31f,
+            waitAtEachStop = 1.8,
+            timeOffset = 28.0
         )
     )
+
+    fun routed(routePlanner: OfficeRoutePlanner): List<OfficeNPC> {
+        return npcs.map { it.routed(routePlanner) }
+    }
 }

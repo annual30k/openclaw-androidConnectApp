@@ -42,6 +42,8 @@ import kotlinx.serialization.json.longOrNull
 import kotlinx.serialization.json.jsonPrimitive
 import java.io.File
 import java.net.SocketTimeoutException
+import java.time.Instant
+import java.time.format.DateTimeParseException
 import java.util.UUID
 
 data class ChatState(
@@ -64,10 +66,29 @@ data class ChatState(
     val readVoicePlaybackIdentifiers: Set<String> = emptySet()
 )
 
+private data class ChatRunScope(
+    val gatewayId: String,
+    val sessionKey: String,
+    val assistantMessageId: String? = null
+)
+
+private data class ChatEventScope(
+    val gatewayId: String?,
+    val sessionKey: String,
+    val hasSessionKey: Boolean = true,
+    val runScope: ChatRunScope? = null
+)
+
+private data class ParsedAgentSessionKey(
+    val agentId: String,
+    val rest: String
+)
+
 class ChatStore(
     private val apiClient: RelayAPIClient,
     private val wsClient: RelayWebSocketClient,
-    private val notificationPort: NotificationPort
+    private val notificationPort: NotificationPort,
+    private val sessionSelectionStore: ChatSessionSelectionStore? = null
 ) {
     val relayBaseUrl: String get() = apiClient.baseUrl
     val accessToken: String get() = apiClient.accessToken
@@ -78,6 +99,7 @@ class ChatStore(
 
     private var streamingMessageId: String? = null
     private var streamingContent = StringBuilder()
+    private val chatRunScopes = linkedMapOf<String, ChatRunScope>()
     private val abortRequestIds = mutableSetOf<String>()
     private val locallyStoppedRunIds = mutableSetOf<String>()
     private var ignoreRunlessStoppedEventsUntilMs: Long = 0
@@ -109,6 +131,7 @@ class ChatStore(
                 // Command response: {type: "res", ok: true/false, ...}
                 val obj = event.payload?.jsonObject
                 val responseId = obj?.get("id")?.jsonPrimitive?.content
+                bindResolvedRunScope(responseId, obj)
                 if (responseId != null && abortRequestIds.remove(responseId)) {
                     // This is an abort ACK
                     val isSuccess = obj?.get("ok")?.jsonPrimitive?.booleanOrNull != false
@@ -137,14 +160,14 @@ class ChatStore(
             ?: ""
 
         when (phase) {
-            "streaming", "delta", "in_progress" -> handleDelta(payloadObj)
+            "streaming", "delta", "in_progress" -> handleDelta(obj, payloadObj)
             "completed", "complete", "done", "final" -> {
                 _state.value = _state.value.copy(isStoppingRun = false)
-                handleFinal(payloadObj)
+                handleFinal(obj, payloadObj)
             }
             "error", "failed", "fail", "aborted" -> {
                 _state.value = _state.value.copy(isStoppingRun = false)
-                handleError(payloadObj)
+                handleError(obj, payloadObj)
             }
         }
     }
@@ -156,7 +179,7 @@ class ChatStore(
         val stream = payloadObj["stream"]?.jsonPrimitive?.content?.trim()?.lowercase()
         if (stream == "tool") {
             ChatPayloadTool.extract(payloadObj)?.let { toolPayload ->
-                handleToolPayload(payloadObj, toolPayload)
+                handleToolPayload(obj, payloadObj, toolPayload)
                 return
             }
         }
@@ -165,11 +188,16 @@ class ChatStore(
         handleChatPayload(payload)
     }
 
-    private fun handleToolPayload(payload: JsonObject, toolPayload: ChatPayloadTool.ToolPayload) {
+    private fun handleToolPayload(envelope: JsonObject, payload: JsonObject, toolPayload: ChatPayloadTool.ToolPayload) {
         val toolCallId = toolPayload.toolCallId
             ?: payload.string("runId", "run_id")
             ?: payload.string("toolRunId", "tool_run_id")
             ?: UUID.randomUUID().toString()
+        val scope = resolveChatEventScope(envelope, payload, toolCallId)
+        if (!isCurrentChatScope(scope)) {
+            noteSessionActivity(scope)
+            return
+        }
         val toolRunId = "tool:$toolCallId"
         val explicitBlocks = parseContentBlocks(payload)
         val contentBlocks = if (explicitBlocks.any { it.isToolCallBlock || it.isToolResultBlock }) {
@@ -309,11 +337,29 @@ class ChatStore(
         _state.value = _state.value.copy(messages = messages)
     }
 
-    private fun handleDelta(payload: JsonElement?) {
+    private fun handleDelta(envelope: JsonObject, payload: JsonElement?) {
         val obj = payload as? JsonObject ?: return
         val content = ChatPayloadText.extract(obj)
-        val runId = obj["runId"]?.jsonPrimitive?.content ?: ""
+        val runId = obj.string("runId", "run_id").orEmpty()
+        val scope = resolveChatEventScope(envelope, obj, runId)
+        if (!isCurrentChatScope(scope)) {
+            noteSessionActivity(scope)
+            return
+        }
         if (shouldIgnoreLocallyStoppedEvent(runId)) {
+            return
+        }
+
+        scope.runScope?.assistantMessageId?.let { scopedAssistantMessageId ->
+            val existingMessage = _state.value.messages.firstOrNull { it.id == scopedAssistantMessageId }
+            if (existingMessage != null && streamingMessageId != scopedAssistantMessageId) {
+                streamingMessageId = scopedAssistantMessageId
+                streamingContent.clear()
+                streamingContent.append(existingMessage.content)
+            }
+        }
+
+        if (streamingMessageId != null && !shouldUseStreamingMessage(runId, scope)) {
             return
         }
 
@@ -341,7 +387,7 @@ class ChatStore(
         if (idx >= 0) {
             val existing = messages[idx]
             // If the message only contains a transient status text, replace it instead of appending
-            val updatedContent = if (existing.content.startsWith("正在连接") || existing.content.startsWith("正在同步")) {
+            val updatedContent = if (isTransientAssistantPlaceholder(existing)) {
                 content
             } else {
                 existing.content + content
@@ -356,14 +402,14 @@ class ChatStore(
         }
     }
 
-    private fun handleFinal(payload: JsonElement?) {
+    private fun handleFinal(envelope: JsonObject, payload: JsonElement?) {
         val obj = payload as? JsonObject ?: return
-        val runId = obj["runId"]?.jsonPrimitive?.content ?: ""
+        val runId = obj.string("runId", "run_id").orEmpty()
+        val scope = resolveChatEventScope(envelope, obj, runId)
         if (shouldIgnoreLocallyStoppedEvent(runId)) {
             return
         }
-        val sessionKey = obj["sessionKey"]?.jsonPrimitive?.content ?: _state.value.currentSessionKey
-        val content = ChatPayloadText.extract(obj).ifBlank { streamingContent.toString() }
+        val extractedContent = ChatPayloadText.extract(obj)
         val contentBlocks = parseContentBlocks(obj)
         val role = try {
             MessageRole.valueOf(
@@ -373,6 +419,11 @@ class ChatStore(
             )
         } catch (_: Exception) {
             MessageRole.assistant
+        }
+        val content = if (role == MessageRole.user) {
+            extractedContent
+        } else {
+            extractedContent.ifBlank { streamingContent.toString() }
         }
 
         val finalContentBlocks = contentBlocks
@@ -384,7 +435,44 @@ class ChatStore(
 
         val finalRole = if (finalContentBlocks.any { it.isToolCallBlock || it.isToolResultBlock }) MessageRole.tool else role
 
-        if (streamingMessageId != null) {
+        val preview = buildNotificationPreview(content, contentBlocks)
+        if (!isCurrentChatScope(scope)) {
+            noteSessionActivity(scope, lastActivityAt = eventTimestampIso(obj))
+            if (finalRole != MessageRole.user && scope.hasSessionKey && preview.isNotBlank()) {
+                notificationPort.showReplyNotification(
+                    sessionKey = scope.sessionKey,
+                    title = "PocketClaw reply",
+                    body = preview
+                )
+            }
+            completeHiddenRunIfNeeded(runId, scope.runScope)
+            forgetRunScope(runId, scope.runScope)
+            return
+        }
+
+        if (finalRole == MessageRole.user) {
+            appendOrMergeRemoteUserMessage(
+                content = content,
+                contentBlocks = finalContentBlocks,
+                runId = runId,
+                sortTimestamp = eventTimestampMillis(obj)?.toDouble()?.div(1000.0)
+            )
+            noteSessionActivity(scope, lastActivityAt = eventTimestampIso(obj))
+            return
+        }
+
+        if (finalRole != MessageRole.user) {
+            scope.runScope?.assistantMessageId?.let { scopedAssistantMessageId ->
+                val existingMessage = _state.value.messages.firstOrNull { it.id == scopedAssistantMessageId }
+                if (existingMessage != null && streamingMessageId != scopedAssistantMessageId) {
+                    streamingMessageId = scopedAssistantMessageId
+                    streamingContent.clear()
+                    streamingContent.append(existingMessage.content)
+                }
+            }
+        }
+
+        if (streamingMessageId != null && finalRole != MessageRole.user && shouldUseStreamingMessage(runId, scope)) {
             val messages = _state.value.messages.toMutableList()
             val idx = messages.indexOfFirst { it.id == streamingMessageId }
             if (idx >= 0) {
@@ -392,7 +480,8 @@ class ChatStore(
                     role = finalRole,
                     content = content,
                     contentBlocks = finalContentBlocks,
-                    state = MessageState.completed
+                    state = MessageState.completed,
+                    runId = runId.ifBlank { messages[idx].runId }
                 )
                 _state.value = _state.value.copy(
                     messages = messages,
@@ -404,6 +493,7 @@ class ChatStore(
                     }
                 )
             }
+            forgetRunScope(runId, scope.runScope)
         } else {
             val msg = ChatMessage(
                 id = UUID.randomUUID().toString(),
@@ -434,6 +524,7 @@ class ChatStore(
                     removeDuplicateFileMessages(mergedMessage)
                     streamingContent.clear()
                     streamingMessageId = null
+                    forgetRunScope(runId, scope.runScope)
                     return
                 }
             }
@@ -446,12 +537,13 @@ class ChatStore(
                     _state.value.voiceReplyTextOnlyRunIds
                 }
             )
+            forgetRunScope(runId, scope.runScope)
         }
 
-        val preview = buildNotificationPreview(content, contentBlocks)
-        if (sessionKey.isNotBlank() && preview.isNotBlank()) {
+        noteSessionActivity(scope, lastActivityAt = eventTimestampIso(obj))
+        if (scope.sessionKey.isNotBlank() && preview.isNotBlank()) {
             notificationPort.showReplyNotification(
-                sessionKey = sessionKey,
+                sessionKey = scope.sessionKey,
                 title = "PocketClaw reply",
                 body = preview
             )
@@ -461,10 +553,75 @@ class ChatStore(
         streamingContent.clear()
     }
 
+    private fun appendOrMergeRemoteUserMessage(
+        content: String,
+        contentBlocks: List<RelayChatContentBlock>,
+        runId: String,
+        sortTimestamp: Double?
+    ) {
+        val trimmed = content.trim()
+        if (trimmed.isBlank() && contentBlocks.isEmpty()) return
+
+        val messages = _state.value.messages.toMutableList()
+        val localIndex = messages.indexOfLast { message ->
+            message.role == MessageRole.user &&
+                message.runId.startsWith("local-user-") &&
+                message.content.trim() == trimmed
+        }
+        if (localIndex >= 0) {
+            val existing = messages[localIndex]
+            messages[localIndex] = existing.copy(
+                state = MessageState.completed,
+                contentBlocks = if (existing.contentBlocks.isEmpty()) contentBlocks else existing.contentBlocks
+            )
+            _state.value = _state.value.copy(messages = messages)
+            return
+        }
+
+        val last = messages.lastOrNull()
+        if (last != null &&
+            last.role == MessageRole.user &&
+            last.content.trim() == trimmed &&
+            (runId.isBlank() || last.runId == runId)
+        ) {
+            return
+        }
+
+        messages.add(
+            ChatMessage(
+                id = UUID.randomUUID().toString(),
+                role = MessageRole.user,
+                state = MessageState.completed,
+                content = trimmed,
+                contentBlocks = contentBlocks,
+                createdAt = "",
+                runId = runId.ifBlank { "remote-user-${UUID.randomUUID().toString().take(8)}" },
+                sortTimestamp = sortTimestamp ?: (System.currentTimeMillis() / 1000.0)
+            )
+        )
+        _state.value = _state.value.copy(messages = messages)
+    }
+
     private fun handleError(payload: JsonElement?) {
         val obj = payload as? JsonObject
+        if (obj == null) {
+            _state.value = _state.value.copy(errorMessage = "Unknown error", isStreaming = false)
+            return
+        }
+        handleError(obj, obj["payload"] as? JsonObject ?: obj)
+    }
+
+    private fun handleError(envelope: JsonObject, payload: JsonElement?) {
+        val obj = payload as? JsonObject
         val runId = obj?.string("runId", "run_id")
+        val scope = obj?.let { resolveChatEventScope(envelope, it, runId.orEmpty()) }
         if (shouldIgnoreLocallyStoppedEvent(runId.orEmpty())) {
+            return
+        }
+        if (scope != null && !isCurrentChatScope(scope)) {
+            noteSessionActivity(scope)
+            completeHiddenRunIfNeeded(runId.orEmpty(), scope.runScope)
+            forgetRunScope(runId.orEmpty(), scope.runScope)
             return
         }
         val errorObj = obj?.get("error") as? JsonObject
@@ -472,6 +629,7 @@ class ChatStore(
             ?: obj?.string("message", "errorMessage")
             ?: "Unknown error"
         _state.value = _state.value.copy(errorMessage = msg, isStreaming = false)
+        forgetRunScope(runId.orEmpty(), scope?.runScope)
     }
 
     private fun parseContentBlocks(root: JsonObject): List<RelayChatContentBlock> {
@@ -593,6 +751,240 @@ class ChatStore(
         return keys.firstNotNullOfOrNull { key ->
             val primitive = this[key] as? kotlinx.serialization.json.JsonPrimitive ?: return@firstNotNullOfOrNull null
             primitive.intOrNull ?: primitive.longOrNull?.coerceAtMost(Int.MAX_VALUE.toLong())?.toInt()
+        }
+    }
+
+    private fun bindResolvedRunScope(responseId: String?, response: JsonObject?) {
+        val normalizedResponseId = responseId?.trim()?.takeIf { it.isNotEmpty() } ?: return
+        val scope = chatRunScopes[normalizedResponseId] ?: return
+        val payload = response?.get("payload") as? JsonObject
+        val result = response?.get("result") as? JsonObject
+        val resolvedRunId = payload?.deepString("runId", "run_id")
+            ?: payload?.string("id")
+            ?: result?.deepString("runId", "run_id")
+            ?: result?.string("id")
+            ?: response?.string("runId", "run_id")
+        if (!resolvedRunId.isNullOrBlank()) {
+            rememberRunScope(resolvedRunId, scope)
+        }
+    }
+
+    private fun resolveChatEventScope(envelope: JsonObject, payload: JsonObject, runId: String): ChatEventScope {
+        val normalizedRunId = runId.trim()
+        val explicitGatewayId = envelope.deepString("gatewayId", "gateway_id")
+            ?: payload.deepString("gatewayId", "gateway_id")
+        val explicitSessionKey = payload.deepString("sessionKey", "session_key")
+            ?: envelope.deepString("sessionKey", "session_key")
+        val provisionalGatewayId = explicitGatewayId ?: _state.value.currentGatewayId
+        val provisionalSessionKey = normalizeSessionKey(explicitSessionKey ?: _state.value.currentSessionKey)
+        val directRunScope = normalizedRunId.takeIf { it.isNotEmpty() }?.let { chatRunScopes[it] }
+        val pendingRunScope = directRunScope ?: singlePendingRunScope(provisionalGatewayId, provisionalSessionKey)
+        if (directRunScope == null && pendingRunScope != null && normalizedRunId.isNotBlank()) {
+            rememberRunScope(normalizedRunId, pendingRunScope)
+        }
+        val gatewayId = explicitGatewayId
+            ?: pendingRunScope?.gatewayId
+            ?: _state.value.currentGatewayId
+        val sessionKey = explicitSessionKey ?: pendingRunScope?.sessionKey
+
+        return ChatEventScope(
+            gatewayId = gatewayId?.trim()?.takeIf { it.isNotEmpty() },
+            sessionKey = normalizeSessionKey(sessionKey),
+            hasSessionKey = !sessionKey.isNullOrBlank(),
+            runScope = pendingRunScope
+        )
+    }
+
+    private fun isCurrentChatScope(scope: ChatEventScope): Boolean {
+        if (!scope.hasSessionKey) return false
+        val current = _state.value
+        val currentGatewayId = current.currentGatewayId?.trim().orEmpty()
+        val eventGatewayId = scope.gatewayId?.trim().orEmpty()
+        val gatewayMatches = eventGatewayId.isBlank() ||
+            currentGatewayId.isBlank() ||
+            eventGatewayId == currentGatewayId
+        return gatewayMatches && sameSessionKey(current.currentSessionKey, scope.sessionKey)
+    }
+
+    private fun rememberRunScope(runId: String, scope: ChatRunScope) {
+        val normalizedRunId = runId.trim()
+        if (normalizedRunId.isBlank()) return
+        chatRunScopes[normalizedRunId] = scope.copy(
+            gatewayId = scope.gatewayId.trim(),
+            sessionKey = normalizeSessionKey(scope.sessionKey)
+        )
+        while (chatRunScopes.size > maxChatRunScopes) {
+            val oldestKey = chatRunScopes.keys.firstOrNull() ?: break
+            chatRunScopes.remove(oldestKey)
+        }
+    }
+
+    private fun forgetRunScope(runId: String, runScope: ChatRunScope? = null) {
+        val normalizedRunId = runId.trim()
+        val scope = normalizedRunId.takeIf { it.isNotEmpty() }?.let { chatRunScopes[it] }
+            ?: runScope
+            ?: return
+        val iterator = chatRunScopes.entries.iterator()
+        while (iterator.hasNext()) {
+            if (iterator.next().value == scope) {
+                iterator.remove()
+            }
+        }
+    }
+
+    private fun singlePendingRunScope(gatewayId: String?, sessionKey: String): ChatRunScope? {
+        val normalizedGatewayId = gatewayId?.trim().orEmpty()
+        val normalizedSessionKey = normalizeSessionKey(sessionKey)
+        val currentMessages = _state.value.messages
+        val pendingScopes = chatRunScopes.values
+            .distinctBy { it.assistantMessageId }
+            .filter { runScope ->
+                val assistantMessageId = runScope.assistantMessageId ?: return@filter false
+                val gatewayMatches = normalizedGatewayId.isBlank() || runScope.gatewayId == normalizedGatewayId
+                val sessionMatches = sameSessionKey(runScope.sessionKey, normalizedSessionKey)
+                val hasStreamingMessage = currentMessages.any { message ->
+                    message.id == assistantMessageId &&
+                        message.role == MessageRole.assistant &&
+                        message.state == MessageState.streaming
+                }
+                gatewayMatches && sessionMatches && hasStreamingMessage
+            }
+        return pendingScopes.singleOrNull()
+    }
+
+    private fun shouldUseStreamingMessage(runId: String, scope: ChatEventScope): Boolean {
+        val currentStreamingMessageId = streamingMessageId ?: return false
+        scope.runScope?.assistantMessageId?.let { scopedAssistantMessageId ->
+            return scopedAssistantMessageId == currentStreamingMessageId
+        }
+        val normalizedRunId = runId.trim()
+        if (normalizedRunId.isBlank()) return true
+        val streamingMessage = _state.value.messages.firstOrNull { it.id == currentStreamingMessageId } ?: return false
+        return streamingMessage.runId.isNotBlank() && streamingMessage.runId == normalizedRunId
+    }
+
+    private fun completeHiddenRunIfNeeded(runId: String, runScope: ChatRunScope?) {
+        val assistantMessageId = runScope?.assistantMessageId ?: return
+        if (assistantMessageId != streamingMessageId) return
+        streamingMessageId = null
+        streamingContent.clear()
+        _state.value = _state.value.copy(
+            isStreaming = false,
+            isStoppingRun = false,
+            voiceReplyTextOnlyRunIds = if (runId.isNotBlank()) {
+                _state.value.voiceReplyTextOnlyRunIds - runId
+            } else {
+                _state.value.voiceReplyTextOnlyRunIds
+            }
+        )
+    }
+
+    private fun noteSessionActivity(scope: ChatEventScope, lastActivityAt: String? = null) {
+        if (!scope.hasSessionKey) return
+        noteSessionActivity(scope.gatewayId, scope.sessionKey, lastActivityAt)
+    }
+
+    private fun noteSessionActivity(gatewayId: String?, sessionKey: String, lastActivityAt: String? = null) {
+        val normalizedSessionKey = normalizeSessionKey(sessionKey)
+        val current = _state.value
+        val currentGatewayId = current.currentGatewayId?.trim().orEmpty()
+        val normalizedGatewayId = gatewayId?.trim().orEmpty()
+        if (normalizedGatewayId.isNotBlank() && currentGatewayId.isNotBlank() && normalizedGatewayId != currentGatewayId) {
+            return
+        }
+
+        val activityAt = lastActivityAt?.trim()?.takeIf { it.isNotEmpty() } ?: Instant.now().toString()
+        val existingIndex = current.sessions.indexOfFirst { sameSessionKey(it.sessionKey, normalizedSessionKey) }
+        val updatedSessions = if (existingIndex >= 0) {
+            current.sessions.mapIndexed { index, item ->
+                if (index == existingIndex) item.copy(lastActivityAt = activityAt) else item
+            }
+        } else {
+            listOf(ChatSessionItem(sessionKey = normalizedSessionKey, lastActivityAt = activityAt)) + current.sessions
+        }
+        _state.value = current.copy(
+            sessions = updatedSessions.distinctBy { normalizeSessionKey(it.sessionKey).lowercase() }
+        )
+    }
+
+    private fun eventTimestampIso(payload: JsonObject): String {
+        eventTimestampMillis(payload)?.let { return Instant.ofEpochMilli(it).toString() }
+        return payload.string("createdAt", "created_at")
+            ?: (payload["message"] as? JsonObject)?.string("createdAt", "created_at")
+            ?: Instant.now().toString()
+    }
+
+    private fun eventTimestampMillis(payload: JsonObject): Long? {
+        val raw = payload.firstPrimitiveContent("ts", "timestamp", "createdAt", "created_at", "time")
+            ?: (payload["message"] as? JsonObject)?.firstPrimitiveContent("timestamp", "createdAt", "created_at")
+            ?: return null
+        raw.toDoubleOrNull()?.let { numeric ->
+            return if (numeric > 10_000_000_000.0) numeric.toLong() else (numeric * 1000).toLong()
+        }
+        return runCatching { Instant.parse(raw).toEpochMilli() }.getOrNull()
+    }
+
+    private fun persistSelectedSession(gatewayId: String, sessionKey: String) {
+        val normalizedGatewayId = gatewayId.trim()
+        if (normalizedGatewayId.isBlank()) return
+        sessionSelectionStore?.save(normalizedGatewayId, normalizeSessionKey(sessionKey))
+    }
+
+    private fun List<ChatSessionItem>.matchingSessionKey(candidate: String): String? {
+        val normalizedCandidate = normalizeSessionKey(candidate)
+        return firstOrNull { sameSessionKey(it.sessionKey, normalizedCandidate) }
+            ?.sessionKey
+            ?.trim()
+            ?.ifBlank { defaultSessionKey }
+    }
+
+    private fun sameSessionKey(left: String?, right: String?): Boolean {
+        val normalizedLeft = normalizeSessionKey(left)
+        val normalizedRight = normalizeSessionKey(right)
+        if (normalizedLeft == normalizedRight) return true
+
+        val parsedLeft = parseAgentSessionKey(normalizedLeft)
+        val parsedRight = parseAgentSessionKey(normalizedRight)
+        if (parsedLeft != null && parsedRight != null) {
+            return parsedLeft.agentId == parsedRight.agentId && parsedLeft.rest == parsedRight.rest
+        }
+        if (parsedLeft != null) {
+            return parsedLeft.rest == normalizedRight
+        }
+        if (parsedRight != null) {
+            return normalizedLeft == parsedRight.rest
+        }
+        return false
+    }
+
+    private fun normalizeSessionKey(sessionKey: String?): String {
+        return sessionKey?.trim()?.takeIf { it.isNotEmpty() } ?: defaultSessionKey
+    }
+
+    private fun parseAgentSessionKey(sessionKey: String): ParsedAgentSessionKey? {
+        if (!sessionKey.startsWith("agent:")) return null
+        val segments = sessionKey.split(":", limit = 3)
+        if (segments.size < 3) return null
+        val agentId = segments[1].trim()
+        val rest = segments[2].trim()
+        if (agentId.isBlank() || rest.isBlank()) return null
+        return ParsedAgentSessionKey(agentId = agentId, rest = rest)
+    }
+
+    private fun JsonObject.deepString(vararg keys: String): String? {
+        string(*keys)?.let { return it }
+        val nestedKeys = listOf("payload", "params", "message", "data", "office")
+        return nestedKeys.firstNotNullOfOrNull { nestedKey ->
+            (this[nestedKey] as? JsonObject)?.string(*keys)
+        }
+    }
+
+    private fun JsonObject.firstPrimitiveContent(vararg keys: String): String? {
+        return keys.firstNotNullOfOrNull { key ->
+            (this[key] as? kotlinx.serialization.json.JsonPrimitive)
+                ?.contentOrNull
+                ?.trim()
+                ?.takeIf { it.isNotEmpty() }
         }
     }
 
@@ -930,6 +1322,7 @@ class ChatStore(
         if (sessionKey.isBlank()) return
 
         val clientRunId = UUID.randomUUID().toString()
+        val requestId = UUID.randomUUID().toString()
         val userMsg = ChatMessage(
             id = UUID.randomUUID().toString(),
             role = MessageRole.user,
@@ -955,6 +1348,14 @@ class ChatStore(
         streamingMessageId = assistantMsgId
         streamingContent.setLength(0)
         streamingContent.append(assistantMsg.content)
+        val runScope = ChatRunScope(
+            gatewayId = gatewayId,
+            sessionKey = sessionKey,
+            assistantMessageId = assistantMsgId
+        )
+        rememberRunScope(clientRunId, runScope)
+        rememberRunScope(requestId, runScope)
+        persistSelectedSession(gatewayId, sessionKey)
 
         _state.value = _state.value.copy(
             messages = _state.value.messages + userMsg + assistantMsg,
@@ -974,7 +1375,8 @@ class ChatStore(
             idempotencyKey = clientRunId,
             voiceReplyEnabled = current.assistantVoiceRepliesEffectiveEnabled,
             voiceReplyVoiceIdentifier = current.voiceReplyVoiceIdentifier.takeIf { it.isNotBlank() },
-            voiceReplyRatePercent = current.voiceReplyRatePercent
+            voiceReplyRatePercent = current.voiceReplyRatePercent,
+            requestId = requestId
         )
     }
 
@@ -1021,7 +1423,10 @@ class ChatStore(
     fun sendCommand(gatewayId: String, command: String) {
         val sessionKey = _state.value.currentSessionKey
         if (sessionKey.isNotBlank()) {
-            wsClient.sendCommand(gatewayId, sessionKey, command)
+            val requestId = UUID.randomUUID().toString()
+            rememberRunScope(requestId, ChatRunScope(gatewayId = gatewayId, sessionKey = sessionKey))
+            persistSelectedSession(gatewayId, sessionKey)
+            wsClient.sendCommand(gatewayId, sessionKey, command, requestId)
         }
     }
 
@@ -1094,6 +1499,7 @@ class ChatStore(
             currentSessionKey = normalizedSessionKey,
             isLoading = true
         )
+        persistSelectedSession(normalizedGatewayId, normalizedSessionKey)
         try {
             val items = retryOnceOnTransientFailure(
                 operationName = "chat history for $normalizedGatewayId/$normalizedSessionKey"
@@ -1103,13 +1509,13 @@ class ChatStore(
             val rawHistoryMessages = items.map { item ->
                 val extractedContent = extractContent(item)
                 val sourceBlocks = item.contentBlocks ?: emptyList()
-                val normalizedRole = item.role.trim().lowercase().replace("_", "")
+                val normalizedRole = normalizedMessageRole(item.role)
                 val isToolRole = normalizedRole in listOf("tool", "toolresult")
                 val isToolHistory = isToolRole || sourceBlocks.any { it.isToolCallBlock || it.isToolResultBlock }
                 val role = if (isToolHistory) {
                     MessageRole.tool
                 } else {
-                    try { MessageRole.valueOf(item.role) } catch (_: Exception) { MessageRole.system }
+                    messageRole(item.role)
                 }
                 val contentBlocks = sourceBlocks
                 val content = when {
@@ -1129,8 +1535,8 @@ class ChatStore(
                     content = content,
                     contentBlocks = contentBlocks,
                     createdAt = item.createdAt ?: "",
-                    runId = "",
-                    sortTimestamp = null
+                    runId = item.id,
+                    sortTimestamp = parseHistoryTimestamp(item.createdAt)
                 )
             }
             val historyMessages = rawHistoryMessages
@@ -1188,19 +1594,26 @@ class ChatStore(
             val currentState = _state.value
             val current = currentState.currentSessionKey
             val isNewGateway = currentState.currentGatewayId != normalizedGatewayId
+            val shouldKeepCurrent = !currentState.isSwitchingSession &&
+                !isNewGateway &&
+                current.isNotBlank()
+            val persisted = sessionSelectionStore?.load(normalizedGatewayId)
             val selected = when {
-                !isNewGateway && current.isNotBlank() -> current
-                sessions.any { it.sessionKey == defaultSessionKey } -> defaultSessionKey
+                shouldKeepCurrent -> current
+                persisted != null -> sessions.matchingSessionKey(persisted) ?: persisted
+                sessions.matchingSessionKey(defaultSessionKey) != null ->
+                    sessions.matchingSessionKey(defaultSessionKey) ?: defaultSessionKey
                 sessions.isNotEmpty() -> sessions.first().sessionKey
                 else -> defaultSessionKey
             }
+            persistSelectedSession(normalizedGatewayId, selected)
             
             _state.value = currentState.copy(
                 sessions = sessions,
                 currentGatewayId = normalizedGatewayId,
                 currentSessionKey = selected,
                 messages = if (isNewGateway || selected != current) emptyList() else currentState.messages,
-                isSwitchingSession = isNewGateway || selected != current,
+                isSwitchingSession = currentState.isSwitchingSession || isNewGateway || selected != current,
                 errorMessage = null
             )
         } catch (e: CancellationException) {
@@ -1267,10 +1680,11 @@ class ChatStore(
         val normalizedGatewayId = gatewayId.trim().takeIf { it.isNotEmpty() } ?: return
         val current = _state.value
         if (current.currentGatewayId == normalizedGatewayId) return
+        val selectedSessionKey = sessionSelectionStore?.load(normalizedGatewayId) ?: defaultSessionKey
         _state.value = current.copy(
             currentGatewayId = normalizedGatewayId,
-            currentSessionKey = defaultSessionKey,
-            sessions = listOf(ChatSessionItem(sessionKey = defaultSessionKey, lastActivityAt = null)),
+            currentSessionKey = selectedSessionKey,
+            sessions = listOf(ChatSessionItem(sessionKey = selectedSessionKey, lastActivityAt = null)),
             messages = emptyList(),
             isSwitchingSession = true,
             isStreaming = false,
@@ -1281,18 +1695,26 @@ class ChatStore(
         streamingContent.clear()
         abortRequestIds.clear()
         locallyStoppedRunIds.clear()
+        chatRunScopes.clear()
         ignoreRunlessStoppedEventsUntilMs = 0
     }
 
     fun selectSession(sessionKey: String) {
         val normalized = sessionKey.trim().ifBlank { "main" }
         if (_state.value.currentSessionKey == normalized) return
+        _state.value.currentGatewayId?.let { gatewayId ->
+            persistSelectedSession(gatewayId, normalized)
+        }
         _state.value = _state.value.copy(
             currentSessionKey = normalized,
             messages = emptyList(),
             isSwitchingSession = true,
+            isStreaming = false,
+            isStoppingRun = false,
             errorMessage = null
         )
+        streamingMessageId = null
+        streamingContent.clear()
     }
 
     fun newSession() {
@@ -1306,8 +1728,15 @@ class ChatStore(
             sessions = sessions,
             messages = emptyList(),
             isSwitchingSession = false,
+            isStreaming = false,
+            isStoppingRun = false,
             errorMessage = null
         )
+        current.currentGatewayId?.let { gatewayId ->
+            persistSelectedSession(gatewayId, key)
+        }
+        streamingMessageId = null
+        streamingContent.clear()
     }
 
     fun setShowInvocationProcess(enabled: Boolean) {
@@ -1363,6 +1792,7 @@ class ChatStore(
         streamingContent.clear()
         abortRequestIds.clear()
         locallyStoppedRunIds.clear()
+        chatRunScopes.clear()
         ignoreRunlessStoppedEventsUntilMs = 0
     }
 
@@ -1406,6 +1836,7 @@ class ChatStore(
         val deleted = apiClient.deleteChatSession(normalizedGatewayId, normalizedSessionKey, deleteTranscript)
         if (deleted) {
             clearSessionImageCaches(normalizedGatewayId, normalizedSessionKey)
+            sessionSelectionStore?.clear(normalizedGatewayId, normalizedSessionKey)
         }
         return deleted
     }
@@ -1414,9 +1845,45 @@ class ChatStore(
         val content = item.content ?: return ""
         return when {
             content is kotlinx.serialization.json.JsonPrimitive && content.isString -> content.content
+            content is JsonArray -> content.mapNotNull { element ->
+                (element as? JsonObject)?.let { block ->
+                    block.string("text")
+                        ?: block["content"]?.let { nested ->
+                            when {
+                                nested is kotlinx.serialization.json.JsonPrimitive && nested.isString -> nested.content
+                                else -> null
+                            }
+                        }
+                }
+            }.joinToString("\n\n").trim()
             else -> try {
                 content.jsonObject["text"]?.jsonPrimitive?.content ?: ""
             } catch (_: Exception) { "" }
+        }
+    }
+
+    private fun normalizedMessageRole(role: String): String {
+        return role.trim().lowercase().replace("_", "")
+    }
+
+    private fun messageRole(role: String): MessageRole {
+        return when (normalizedMessageRole(role)) {
+            "user" -> MessageRole.user
+            "assistant" -> MessageRole.assistant
+            "system" -> MessageRole.system
+            "tool", "toolresult" -> MessageRole.tool
+            else -> MessageRole.assistant
+        }
+    }
+
+    private fun parseHistoryTimestamp(raw: String?): Double? {
+        val trimmed = raw?.trim()?.takeIf { it.isNotEmpty() } ?: return null
+        return try {
+            Instant.parse(trimmed).toEpochMilli() / 1000.0
+        } catch (_: DateTimeParseException) {
+            null
+        } catch (_: IllegalArgumentException) {
+            null
         }
     }
 
@@ -1438,23 +1905,83 @@ class ChatStore(
         if (currentMessages.isEmpty()) return historyMessages
 
         val merged = historyMessages.toMutableList()
-        currentMessages.forEach { message ->
-            if (!message.hasFileContent && !message.runId.startsWith("file-")) {
-                return@forEach
+        currentMessages.forEachIndexed { index, message ->
+            if (!shouldPreserveCurrentMessageAcrossHistoryRefresh(message)) {
+                return@forEachIndexed
             }
 
             val matchIndex = merged.indexOfFirst { existing ->
-                existing.runId == message.runId || sameFileMessage(existing, message)
+                (existing.runId.isNotBlank() && existing.runId == message.runId) || sameFileMessage(existing, message)
             }
 
-            if (matchIndex < 0) {
-                merged.add(message)
-            } else {
+            if (matchIndex >= 0) {
                 merged[matchIndex] = mergeFileMessage(existing = merged[matchIndex], candidate = message)
+                return@forEachIndexed
             }
+
+            val matchingIndices = merged.indices.filter { mergedIndex ->
+                isSameChatMessageInstance(merged[mergedIndex], message)
+            }
+            val sameContentCurrentCount = currentMessages
+                .take(index + 1)
+                .count { isSameChatMessageInstance(it, message) }
+
+            if (matchingIndices.count() >= sameContentCurrentCount) {
+                return@forEachIndexed
+            }
+
+            merged.add(message)
         }
 
-        return merged
+        return merged.sortedWith(
+            compareBy<ChatMessage> { it.sortTimestamp ?: Double.MAX_VALUE }
+                .thenBy { it.createdAt }
+        )
+    }
+
+    private fun shouldPreserveCurrentMessageAcrossHistoryRefresh(message: ChatMessage): Boolean {
+        if (isTransientAssistantPlaceholder(message)) {
+            val isTrackedPending = chatRunScopes.values.any { it.assistantMessageId == message.id }
+            return message.state == MessageState.streaming &&
+                (message.id == streamingMessageId || isTrackedPending)
+        }
+        if (message.hasFileContent || message.hasVoiceContent || message.runId.startsWith("file-")) return true
+        if (message.runId.startsWith("local-user-")) return true
+        if (message.state == MessageState.streaming || message.state == MessageState.failed) return true
+        if (message.role != MessageRole.assistant || message.content.trim().isEmpty()) return false
+        return message.runId.isNotBlank()
+    }
+
+    private fun isTransientAssistantPlaceholder(message: ChatMessage): Boolean {
+        if (message.role != MessageRole.assistant) return false
+        if (message.hasFileContent || message.hasVoiceContent || message.hasToolContent) return false
+        val trimmed = message.content.trim()
+        return trimmed.isEmpty() ||
+            trimmed.startsWith("正在连接") ||
+            trimmed.startsWith("Connecting") ||
+            trimmed.startsWith("连接中断") ||
+            trimmed.startsWith("Connection interrupted") ||
+            trimmed == "正在同步回复..." ||
+            trimmed == "Syncing reply..." ||
+            trimmed == "已完成，但未返回文本。" ||
+            trimmed == "Completed, but no text was returned." ||
+            trimmed == "正在同步最终内容..." ||
+            trimmed == "Syncing final content..."
+    }
+
+    private fun isSameChatMessageInstance(existing: ChatMessage, candidate: ChatMessage): Boolean {
+        if (existing.runId.isNotBlank() && candidate.runId.isNotBlank() && existing.runId == candidate.runId) {
+            return true
+        }
+        if (existing.role != candidate.role || existing.content != candidate.content) {
+            return false
+        }
+        val existingTime = existing.sortTimestamp
+        val candidateTime = candidate.sortTimestamp
+        if (existingTime != null && candidateTime != null) {
+            return kotlin.math.abs(existingTime - candidateTime) < 120.0
+        }
+        return true
     }
 
     private fun sameFileMessage(existing: ChatMessage, candidate: ChatMessage): Boolean {
@@ -1562,6 +2089,7 @@ class ChatStore(
         const val defaultSessionKey = "main"
         const val stoppedRunlessEventIgnoreWindowMs = 15_000L
         const val maxLocallyStoppedRunIds = 64
+        const val maxChatRunScopes = 256
     }
 }
 
