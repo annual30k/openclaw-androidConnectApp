@@ -35,6 +35,7 @@ import com.rethinkingstudio.clawlink.core.models.gateway.GatewayStatus
 import com.rethinkingstudio.clawlink.core.models.gateway.GatewaySummary
 import com.rethinkingstudio.clawlink.core.state.LocalizedText.choose
 import com.rethinkingstudio.clawlink.core.state.gateway.GatewayStore
+import com.rethinkingstudio.clawlink.ui.screens.chat.formatChatTimestamp
 import kotlinx.coroutines.launch
 
 @Composable
@@ -198,7 +199,7 @@ fun GatewayStatusCard(
                         }
                     }
                     Text(
-                        text = stringResource(R.string.gateway_card_last_seen, gateway.lastSeenAt),
+                        text = stringResource(R.string.gateway_card_last_seen, formatChatTimestamp(gateway.lastSeenAt)),
                         style = MaterialTheme.typography.labelSmall.copy(fontSize = 12.sp),
                         fontWeight = FontWeight.Normal,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,

@@ -16,8 +16,10 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -128,7 +130,7 @@ LazyColumn(
         detectTapGestures(onTap = { onDismissKeyboard() })
     },
     state = listState,
-    contentPadding = PaddingValues(top = 14.dp, bottom = viewModel.composerHeight + 18.dp),
+    contentPadding = PaddingValues(top = 14.dp, bottom = 18.dp),
     verticalArrangement = Arrangement.spacedBy(16.dp)
 ) {
     if (!hasSelectedGateway && gatewayState.isLoading) {
@@ -198,6 +200,14 @@ LazyColumn(
 
     if (chatState.isStreaming && !hasStreamingAssistantMessage) {
         item { ThinkingRow() }
+    }
+
+    item(key = "$conversationAnimationKey:chat-bottom") {
+        Spacer(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(1.dp)
+        )
     }
 }
 }

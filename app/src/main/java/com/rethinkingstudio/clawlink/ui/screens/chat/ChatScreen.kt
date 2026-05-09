@@ -15,19 +15,29 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowDownward
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -35,6 +45,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.onGloballyPositioned
@@ -43,6 +54,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.core.view.WindowCompat
 import com.google.accompanist.permissions.ExperimentalPermissionsApi
@@ -82,6 +94,7 @@ import com.rethinkingstudio.clawlink.ui.screens.chat.components.ThinkingRow
 import com.rethinkingstudio.clawlink.ui.screens.chat.components.UsageGuidePromptCard
 import com.rethinkingstudio.clawlink.ui.screens.chat.components.VoiceInputOverlay
 import com.rethinkingstudio.clawlink.ui.screens.chat.components.visibleToolContentBlocks
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalPermissionsApi::class)
@@ -105,6 +118,7 @@ fun ChatScreen(
     val listState = rememberLazyListState()
     val context = LocalContext.current
     val density = LocalDensity.current
+    val imeBottomPx = WindowInsets.ime.getBottom(density)
     val view = LocalView.current
     val focusManager = LocalFocusManager.current
     val keyboardController = LocalSoftwareKeyboardController.current
@@ -136,6 +150,78 @@ fun ChatScreen(
     val statusAlertMessage = connectionIssueMessage ?: chatState.errorMessage ?: gatewayState.errorMessage ?: viewModel.composerNotice
     val isStatusAlertError = connectionIssueMessage != null || chatState.errorMessage != null || gatewayState.errorMessage != null
     var dismissedStatusAlertMessage by remember { mutableStateOf<String?>(null) }
+    var lastObservedVisibleMessageCount by remember { mutableStateOf(0) }
+    var lastObservedMessageSignature by remember { mutableStateOf("") }
+    var hasPendingMessagesBelow by remember { mutableStateOf(false) }
+    val visibleMessagesForScroll = remember(
+        chatState.messages,
+        chatState.showInvocationProcess,
+        chatState.assistantVoiceRepliesEffectiveEnabled,
+        chatState.assistantVoiceRepliesEnabledAt,
+        chatState.voiceReplyTextOnlyRunIds
+    ) {
+        val now = System.currentTimeMillis() / 1000.0
+        chatState.messages.filter { message ->
+            val forceDisplayText = message.isVoiceReplyTextOnlyCandidate(
+                assistantVoiceRepliesEffectiveEnabled = chatState.assistantVoiceRepliesEffectiveEnabled,
+                assistantVoiceRepliesEnabledAt = chatState.assistantVoiceRepliesEnabledAt,
+                voiceReplyTextOnlyRunIds = chatState.voiceReplyTextOnlyRunIds,
+                now = now
+            )
+            message.shouldDisplayInChat(
+                showInvocationProcess = chatState.showInvocationProcess,
+                assistantVoiceRepliesEnabled = chatState.assistantVoiceRepliesEffectiveEnabled,
+                assistantVoiceRepliesEnabledAt = chatState.assistantVoiceRepliesEnabledAt,
+                forceDisplayTextWhenVoiceRepliesEnabled = forceDisplayText
+            ) ||
+                message.state == MessageState.streaming && message.role == MessageRole.assistant
+        }
+    }
+    val messageUpdateSignature = remember(visibleMessagesForScroll) {
+        visibleMessagesForScroll.joinToString(separator = "\u001F") { message ->
+            listOf(
+                message.id,
+                message.role.name,
+                message.state.name,
+                message.runId,
+                message.content,
+                message.contentBlocks.hashCode().toString()
+            ).joinToString(separator = "\u001E")
+        }
+    }
+    val isNearListBottom by remember {
+        derivedStateOf {
+            val layoutInfo = listState.layoutInfo
+            val totalItems = layoutInfo.totalItemsCount
+            if (totalItems == 0) return@derivedStateOf true
+            val lastVisible = layoutInfo.visibleItemsInfo.lastOrNull() ?: return@derivedStateOf true
+            val bottomGap = layoutInfo.viewportEndOffset - (lastVisible.offset + lastVisible.size)
+            lastVisible.index >= totalItems - 1 && bottomGap <= with(density) { 40.dp.roundToPx() }
+        }
+    }
+
+    suspend fun scrollChatToBottom(animated: Boolean = true) {
+        val totalItems = listState.layoutInfo.totalItemsCount
+        if (totalItems <= 0) return
+        if (animated) {
+            listState.animateScrollToItem(totalItems - 1)
+        } else {
+            listState.scrollToItem(totalItems - 1)
+        }
+        hasPendingMessagesBelow = false
+    }
+
+    fun requestBottomScrollForComposerFocus() {
+        if (chatState.messages.isEmpty()) return
+        hasPendingMessagesBelow = false
+        scope.launch {
+            scrollChatToBottom(animated = true)
+            delay(120)
+            scrollChatToBottom(animated = true)
+            delay(220)
+            scrollChatToBottom(animated = true)
+        }
+    }
 
     LaunchedEffect(statusAlertMessage) {
         if (statusAlertMessage == null) {
@@ -250,9 +336,45 @@ fun ChatScreen(
         }
     }
 
-    LaunchedEffect(chatState.messages.size) {
-        if (chatState.messages.isNotEmpty()) {
-            listState.animateScrollToItem(chatState.messages.size - 1)
+    LaunchedEffect(messageUpdateSignature) {
+        val messageCount = visibleMessagesForScroll.size
+        if (messageUpdateSignature.isEmpty() || messageCount == 0) {
+            lastObservedVisibleMessageCount = 0
+            lastObservedMessageSignature = ""
+            hasPendingMessagesBelow = false
+            return@LaunchedEffect
+        }
+
+        val previousCount = lastObservedVisibleMessageCount
+        val previousSignature = lastObservedMessageSignature
+        val isInitialLoad = previousSignature.isEmpty()
+        val appended = messageCount > previousCount
+        val isOwnNewMessage = appended &&
+            visibleMessagesForScroll.drop(previousCount.coerceAtMost(messageCount)).any { it.role == MessageRole.user }
+        lastObservedVisibleMessageCount = messageCount
+        lastObservedMessageSignature = messageUpdateSignature
+
+        if (isInitialLoad || isOwnNewMessage || isNearListBottom) {
+            scrollChatToBottom(animated = !isInitialLoad)
+        } else {
+            hasPendingMessagesBelow = true
+        }
+    }
+
+    LaunchedEffect(imeBottomPx) {
+        if (imeBottomPx > 0 && chatState.messages.isNotEmpty()) {
+            hasPendingMessagesBelow = false
+            scrollChatToBottom(animated = true)
+            delay(120)
+            scrollChatToBottom(animated = true)
+            delay(220)
+            scrollChatToBottom(animated = true)
+        }
+    }
+
+    LaunchedEffect(isNearListBottom) {
+        if (isNearListBottom) {
+            hasPendingMessagesBelow = false
         }
     }
 
@@ -288,7 +410,6 @@ fun ChatScreen(
                 Column(
                     modifier = Modifier
                         .fillMaxSize()
-                        .padding(horizontal = 20.dp)
                         .padding(top = 0.dp)
                 ) {
                     ChatConversationList(
@@ -305,7 +426,111 @@ fun ChatScreen(
                         modifier = Modifier
                             .fillMaxWidth()
                             .weight(1f)
+                            .padding(horizontal = 20.dp)
                     )
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .imePadding()
+                            .onGloballyPositioned { coordinates ->
+                                val height = coordinates.size.height
+                                viewModel.composerHeight = with(density) { height.toDp() }
+                            }
+                    ) {
+                        AnimatedVisibility(
+                            slashActions.isNotEmpty() && hasActiveSession && !viewModel.voiceMode && !viewModel.voiceInputPhase.isBusy,
+                            enter = fadeIn() + expandVertically(),
+                            exit = fadeOut() + shrinkVertically()
+                        ) {
+                            SlashCommandPanel(
+                                actions = slashActions,
+                                onAction = { action ->
+                                    viewModel.messageText = action.command
+                                }
+                            )
+                        }
+
+                        ComposerDock(
+                            messageText = viewModel.messageText,
+                            onMessageTextChange = { viewModel.messageText = it },
+                            selectedModelText = modelState.selectedModelDisplay,
+                            isStreaming = chatState.isStreaming,
+                            isStoppingRun = chatState.isStoppingRun,
+                            voiceMode = viewModel.voiceMode,
+                            voiceInputPhase = viewModel.voiceInputPhase,
+                            voiceInputCancelPreview = viewModel.voiceInputCancelPreview,
+                            attachments = viewModel.composerAttachments,
+                            isUploadingAttachment = viewModel.isUploadingAttachment,
+                            hasActiveSession = hasActiveSession,
+                            canEditComposer = hasActiveSession && !chatState.isStreaming && !viewModel.isUploadingAttachment && !chatState.isStoppingRun && !viewModel.voiceInputPhase.isBusy,
+                            canSendMessage = isChatChainReady,
+                            showAttachmentMenu = viewModel.showAttachmentMenu,
+                            onDismissAttachmentMenu = { viewModel.showAttachmentMenu = false },
+                            attachmentButtonPosition = viewModel.attachmentButtonPosition,
+                            attachmentButtonSize = viewModel.attachmentButtonSize,
+                            onAttachmentButtonPositionChanged = { viewModel.attachmentButtonPosition = it },
+                            onAttachmentButtonSizeChanged = { viewModel.attachmentButtonSize = it },
+                            onPickFiles = {
+                                dismissKeyboard()
+                                viewModel.showAttachmentMenu = false
+                                filePickerLauncher.launch(attachmentPickerMimeTypes(ComposerAttachmentPickTarget.FILES))
+                            },
+                            onPickAlbum = {
+                                dismissKeyboard()
+                                viewModel.showAttachmentMenu = false
+                                imagePickerLauncher.launch(attachmentPickerMimeTypes(ComposerAttachmentPickTarget.IMAGES))
+                            },
+                            onPickCamera = {
+                                dismissKeyboard()
+                                viewModel.showAttachmentMenu = false
+                                if (cameraPermissionState.status.isGranted) {
+                                    runCatching {
+                                        cameraLauncher.launch(null)
+                                    }.onFailure {
+                                        viewModel.composerNotice = context.getString(R.string.chat_composer_camera_unavailable)
+                                    }
+                                } else {
+                                    cameraPermissionState.launchPermissionRequest()
+                                }
+                            },
+                            onRemoveAttachment = { attachment ->
+                                viewModel.removeAttachment(attachment)
+                            },
+                            onOpenModelPicker = {
+                                viewModel.toggleModelPicker()
+                            },
+                            onShowSkillSheet = { viewModel.showSkillExpansionSheet = true },
+                            onOpenAttachment = {
+                                dismissKeyboard()
+                                viewModel.showAttachmentMenu = !viewModel.showAttachmentMenu
+                            },
+                            onToggleVoiceMode = {
+                                dismissKeyboard()
+                                viewModel.toggleVoiceMode()
+                            },
+                            onBeginVoiceInputHold = {
+                                dismissKeyboard()
+                                if (recordAudioPermissionState.status.isGranted) {
+                                    viewModel.beginVoiceInputHold(
+                                        context = context,
+                                        hasRecordAudioPermission = true
+                                    )
+                                } else {
+                                    recordAudioPermissionState.launchPermissionRequest()
+                                }
+                            },
+                            onEndVoiceInputHold = { viewModel.endVoiceInputHold() },
+                            onCancelVoiceInput = { viewModel.cancelVoiceInput() },
+                            onVoiceInputCancelPreviewChange = { viewModel.voiceInputCancelPreview = it },
+                            onTextFieldFocusChanged = { isFocused ->
+                                if (isFocused) {
+                                    requestBottomScrollForComposerFocus()
+                                }
+                            },
+                            onSend = { viewModel.onSend(context) },
+                            onAbort = { chatStore.abortRun() }
+                        )
+                    }
                 }
                 if (!statusAlertMessage.isNullOrBlank() && dismissedStatusAlertMessage != statusAlertMessage) {
                     ClawLinkAlertDialog(
@@ -322,106 +547,41 @@ fun ChatScreen(
                         }
                     )
                 }
-                Column(
-                    modifier = Modifier
-                        .align(Alignment.BottomCenter)
-                        .fillMaxWidth()
-                        .imePadding()
-                        .onGloballyPositioned { coordinates ->
-                            val height = coordinates.size.height
-                            viewModel.composerHeight = with(density) { height.toDp() }
-                        }
-                ) {
-                    AnimatedVisibility(
-                        slashActions.isNotEmpty() && hasActiveSession && !viewModel.voiceMode && !viewModel.voiceInputPhase.isBusy,
-                        enter = fadeIn() + expandVertically(),
-                        exit = fadeOut() + shrinkVertically()
+                if (hasPendingMessagesBelow) {
+                    Surface(
+                        onClick = {
+                            scope.launch {
+                                scrollChatToBottom(animated = true)
+                            }
+                        },
+                        shape = androidx.compose.foundation.shape.CircleShape,
+                        color = Color.White.copy(alpha = 0.98f),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFE1E4EA)),
+                        shadowElevation = 10.dp,
+                        modifier = Modifier
+                            .align(Alignment.BottomCenter)
+                            .padding(bottom = viewModel.composerHeight + 18.dp)
                     ) {
-                        SlashCommandPanel(
-                            actions = slashActions,
-                            onAction = { action ->
-                                viewModel.messageText = action.command
-                            }
-                        )
+                        Row(
+                            modifier = Modifier.padding(horizontal = 18.dp, vertical = 11.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Text(
+                                text = context.getString(R.string.chat_new_messages),
+                                color = Color(0xFF111827),
+                                fontWeight = FontWeight.SemiBold,
+                                style = androidx.compose.material3.MaterialTheme.typography.labelMedium
+                            )
+                            Icon(
+                                Icons.Default.ArrowDownward,
+                                contentDescription = null,
+                                tint = Color(0xFF111827),
+                                modifier = Modifier.size(15.dp)
+                            )
+                        }
                     }
-
-                    ComposerDock(
-                        messageText = viewModel.messageText,
-                        onMessageTextChange = { viewModel.messageText = it },
-                        selectedModelText = modelState.selectedModelDisplay,
-                        isStreaming = chatState.isStreaming,
-                        isStoppingRun = chatState.isStoppingRun,
-                        voiceMode = viewModel.voiceMode,
-                        voiceInputPhase = viewModel.voiceInputPhase,
-                        voiceInputCancelPreview = viewModel.voiceInputCancelPreview,
-                        attachments = viewModel.composerAttachments,
-                        isUploadingAttachment = viewModel.isUploadingAttachment,
-                        hasActiveSession = hasActiveSession,
-                        canEditComposer = hasActiveSession && !chatState.isStreaming && !viewModel.isUploadingAttachment && !chatState.isStoppingRun && !viewModel.voiceInputPhase.isBusy,
-                        canSendMessage = isChatChainReady,
-                        showAttachmentMenu = viewModel.showAttachmentMenu,
-                        onDismissAttachmentMenu = { viewModel.showAttachmentMenu = false },
-                        attachmentButtonPosition = viewModel.attachmentButtonPosition,
-                        attachmentButtonSize = viewModel.attachmentButtonSize,
-                        onAttachmentButtonPositionChanged = { viewModel.attachmentButtonPosition = it },
-                        onAttachmentButtonSizeChanged = { viewModel.attachmentButtonSize = it },
-                        onPickFiles = {
-                            dismissKeyboard()
-                            viewModel.showAttachmentMenu = false
-                            filePickerLauncher.launch(attachmentPickerMimeTypes(ComposerAttachmentPickTarget.FILES))
-                        },
-                        onPickAlbum = {
-                            dismissKeyboard()
-                            viewModel.showAttachmentMenu = false
-                            imagePickerLauncher.launch(attachmentPickerMimeTypes(ComposerAttachmentPickTarget.IMAGES))
-                        },
-                        onPickCamera = {
-                            dismissKeyboard()
-                            viewModel.showAttachmentMenu = false
-                            if (cameraPermissionState.status.isGranted) {
-                                runCatching {
-                                    cameraLauncher.launch(null)
-                                }.onFailure {
-                                    viewModel.composerNotice = context.getString(R.string.chat_composer_camera_unavailable)
-                                }
-                            } else {
-                                cameraPermissionState.launchPermissionRequest()
-                            }
-                        },
-                        onRemoveAttachment = { attachment ->
-                            viewModel.removeAttachment(attachment)
-                        },
-                        onOpenModelPicker = {
-                            viewModel.toggleModelPicker()
-                        },
-                        onShowSkillSheet = { viewModel.showSkillExpansionSheet = true },
-                        onOpenAttachment = {
-                            dismissKeyboard()
-                            viewModel.showAttachmentMenu = !viewModel.showAttachmentMenu
-                        },
-                        onToggleVoiceMode = {
-                            dismissKeyboard()
-                            viewModel.toggleVoiceMode()
-                        },
-                        onBeginVoiceInputHold = {
-                            dismissKeyboard()
-                            if (recordAudioPermissionState.status.isGranted) {
-                                viewModel.beginVoiceInputHold(
-                                    context = context,
-                                    hasRecordAudioPermission = true
-                                )
-                            } else {
-                                recordAudioPermissionState.launchPermissionRequest()
-                            }
-                        },
-                        onEndVoiceInputHold = { viewModel.endVoiceInputHold() },
-                        onCancelVoiceInput = { viewModel.cancelVoiceInput() },
-                        onVoiceInputCancelPreviewChange = { viewModel.voiceInputCancelPreview = it },
-                        onSend = { viewModel.onSend(context) },
-                        onAbort = { chatStore.abortRun() }
-                    )
                 }
-
                 if (viewModel.showGatewaySheet) {
                     GatewaySheetOverlay(
                         gateways = gatewayState.gateways,

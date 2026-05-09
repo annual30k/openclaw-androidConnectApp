@@ -54,6 +54,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalDensity
@@ -107,6 +108,7 @@ internal fun ComposerDock(
     onEndVoiceInputHold: () -> Unit,
     onCancelVoiceInput: () -> Unit,
     onVoiceInputCancelPreviewChange: (Boolean) -> Unit,
+    onTextFieldFocusChanged: (Boolean) -> Unit = {},
     onSend: () -> Unit,
     onAbort: () -> Unit
 ) {
@@ -165,7 +167,12 @@ internal fun ComposerDock(
                     BasicTextField(
                         value = messageText,
                         onValueChange = onMessageTextChange,
-                        modifier = Modifier.weight(1f).height(42.dp),
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(42.dp)
+                            .onFocusChanged { focusState ->
+                                onTextFieldFocusChanged(focusState.isFocused)
+                            },
                         enabled = canEditComposer,
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Text, imeAction = ImeAction.Send),
                         keyboardActions = KeyboardActions(onSend = { onSend() }),

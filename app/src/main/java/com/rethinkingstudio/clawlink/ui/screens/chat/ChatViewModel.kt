@@ -111,6 +111,23 @@ internal class ChatViewModel(
         }
     }
 
+    private fun resetComposerForNewSession() {
+        val pendingAttachments = composerAttachments
+        val uploadItems = composerAttachmentUploadItems
+        messageText = ""
+        composerNotice = null
+        composerAttachments = emptyList()
+        composerAttachmentUploadItems = emptyList()
+        isUploadingAttachment = false
+        showAttachmentMenu = false
+        imagePreview = null
+        documentPreview = null
+        resetVoiceInputState(restoreComposer = false)
+        (pendingAttachments.map { it.filePath } + uploadItems.map { it.attachment.filePath })
+            .distinct()
+            .forEach { filePath -> runCatching { File(filePath).delete() } }
+    }
+
     fun toggleModelPicker() {
         showModelPicker = !showModelPicker
         if (showModelPicker && modelStore.state.value.models.isEmpty()) {
@@ -360,8 +377,13 @@ internal class ChatViewModel(
                 gatewayId = gatewayId,
                 command = trimmed
             )
-            messageText = ""
-            composerNotice = null
+            if (trimmed == "/new") {
+                chatStore.newSession()
+                resetComposerForNewSession()
+            } else {
+                messageText = ""
+                composerNotice = null
+            }
             return
         }
 
