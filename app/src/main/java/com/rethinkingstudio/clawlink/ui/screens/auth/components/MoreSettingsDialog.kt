@@ -31,7 +31,6 @@ import androidx.compose.material.icons.filled.PersonAdd
 import androidx.compose.material.icons.filled.Storage
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -68,6 +67,7 @@ import androidx.compose.ui.unit.dp
 import com.rethinkingstudio.clawlink.R
 import com.rethinkingstudio.clawlink.core.state.LocalizedText.choose
 import com.rethinkingstudio.clawlink.core.state.auth.AuthStore
+import com.rethinkingstudio.clawlink.ui.components.ClawLinkAlertDialog
 import com.rethinkingstudio.clawlink.ui.components.ClawLinkCard
 import com.rethinkingstudio.clawlink.ui.components.ClawLinkScaffold
 import kotlinx.coroutines.delay
@@ -82,11 +82,16 @@ internal fun MoreSettingsDialog(
     onServerUrlChange: (String) -> Unit,
     onDismiss: () -> Unit
 ) {
-    AlertDialog(
+    ClawLinkAlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(choose("More settings", "更多设置")) },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+        title = choose("More settings", "更多设置"),
+        confirmText = choose("Done", "完成"),
+        onConfirm = onDismiss,
+        content = {
+            Column(
+                modifier = Modifier.padding(top = 4.dp),
+                verticalArrangement = Arrangement.spacedBy(14.dp)
+            ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Column(modifier = Modifier.weight(1f)) {
                         Text(choose("Private deployment", "私有化部署"), fontWeight = FontWeight.SemiBold)
@@ -111,12 +116,6 @@ internal fun MoreSettingsDialog(
                     )
                 }
             }
-        },
-        confirmButton = {
-            TextButton(onClick = onDismiss) {
-                Text(choose("Done", "完成"))
-            }
         }
     )
 }
-

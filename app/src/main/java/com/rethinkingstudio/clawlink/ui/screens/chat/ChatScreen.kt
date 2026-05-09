@@ -29,8 +29,10 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.toArgb
@@ -60,6 +62,7 @@ import com.rethinkingstudio.clawlink.core.state.chat.chatAttachmentCacheKey
 import com.rethinkingstudio.clawlink.core.state.chat.chatImageCacheKey
 import com.rethinkingstudio.clawlink.core.state.gateway.GatewayStore
 import com.rethinkingstudio.clawlink.core.state.model.ModelStore
+import com.rethinkingstudio.clawlink.ui.components.ClawLinkAlertDialog
 import com.rethinkingstudio.clawlink.ui.components.ClawLinkScaffold
 import com.rethinkingstudio.clawlink.ui.screens.chat.components.ChatSessionLoadingCard
 import com.rethinkingstudio.clawlink.ui.screens.chat.components.ChatSessionSwitchLoadingOverlay
@@ -75,7 +78,6 @@ import com.rethinkingstudio.clawlink.ui.screens.chat.components.SkillExpansionSh
 import com.rethinkingstudio.clawlink.ui.screens.chat.components.slashCommandSuggestions
 import com.rethinkingstudio.clawlink.ui.screens.chat.components.documentPreviewKind
 import com.rethinkingstudio.clawlink.ui.screens.chat.components.SlashCommandPanel
-import com.rethinkingstudio.clawlink.ui.screens.chat.components.StatusBanner
 import com.rethinkingstudio.clawlink.ui.screens.chat.components.ThinkingRow
 import com.rethinkingstudio.clawlink.ui.screens.chat.components.UsageGuidePromptCard
 import com.rethinkingstudio.clawlink.ui.screens.chat.components.VoiceInputOverlay
@@ -129,6 +131,15 @@ fun ChatScreen(
             gatewayState.appRelayStatus == AggregateStatus.offline -> "无法连接到 Relay 服务器，请确认服务已启动且地址可访问。"
             !isChatChainReady -> "当前链路未全通，请确认 Relay 已连接到主机且 OpenClaw 已启动。"
             else -> null
+        }
+    }
+    val statusAlertMessage = connectionIssueMessage ?: chatState.errorMessage ?: gatewayState.errorMessage ?: viewModel.composerNotice
+    val isStatusAlertError = connectionIssueMessage != null || chatState.errorMessage != null || gatewayState.errorMessage != null
+    var dismissedStatusAlertMessage by remember { mutableStateOf<String?>(null) }
+
+    LaunchedEffect(statusAlertMessage) {
+        if (statusAlertMessage == null) {
+            dismissedStatusAlertMessage = null
         }
     }
 
@@ -280,14 +291,6 @@ fun ChatScreen(
                         .padding(horizontal = 20.dp)
                         .padding(top = 0.dp)
                 ) {
-                    if (connectionIssueMessage != null || chatState.errorMessage != null || gatewayState.errorMessage != null || viewModel.composerNotice != null) {
-                        StatusBanner(
-                            text = connectionIssueMessage ?: chatState.errorMessage ?: gatewayState.errorMessage ?: viewModel.composerNotice.orEmpty(),
-                            isError = connectionIssueMessage != null || chatState.errorMessage != null || gatewayState.errorMessage != null,
-                            onDismiss = { viewModel.clearError() }
-                        )
-                    }
-
                     ChatConversationList(
                         chatState = chatState,
                         gatewayState = gatewayState,
@@ -302,6 +305,21 @@ fun ChatScreen(
                         modifier = Modifier
                             .fillMaxWidth()
                             .weight(1f)
+                    )
+                }
+                if (!statusAlertMessage.isNullOrBlank() && dismissedStatusAlertMessage != statusAlertMessage) {
+                    ClawLinkAlertDialog(
+                        onDismissRequest = {
+                            dismissedStatusAlertMessage = statusAlertMessage
+                            viewModel.clearError()
+                        },
+                        title = if (isStatusAlertError) choose("Error", "错误") else choose("Notice", "提示"),
+                        message = statusAlertMessage,
+                        confirmText = choose("Close", "关闭"),
+                        onConfirm = {
+                            dismissedStatusAlertMessage = statusAlertMessage
+                            viewModel.clearError()
+                        }
                     )
                 }
                 Column(

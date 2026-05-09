@@ -36,7 +36,6 @@ import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.SmartToy
 import androidx.compose.material.icons.filled.Star
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -83,6 +82,8 @@ import com.rethinkingstudio.clawlink.core.models.gateway.GatewaySummary
 import com.rethinkingstudio.clawlink.core.state.LocalizedText.choose
 import com.rethinkingstudio.clawlink.core.state.gateway.GatewayStore
 import com.rethinkingstudio.clawlink.core.state.model.ModelStore
+import com.rethinkingstudio.clawlink.ui.components.ClawLinkAlertActionRole
+import com.rethinkingstudio.clawlink.ui.components.ClawLinkAlertDialog
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
@@ -222,30 +223,27 @@ fun ModelCatalogScreen(
     }
 
     modelToConfirm?.let { model ->
-        AlertDialog(
+        ClawLinkAlertDialog(
             onDismissRequest = { modelToConfirm = null },
-            title = { Text(choose("Set as global default model?", "设为全局默认模型？")) },
-            text = { Text(choose("Set \"${model.displayName}\" as OpenClaw's global default model. The host may briefly restart and recover.", "将「${model.displayName}」设为 OpenClaw 的全局默认模型。主机可能会短暂重启恢复。")) },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        modelToConfirm = null
-                        if (gatewayId != null && gatewayState.isSelectedGatewayChatChainReady) {
-                            scope.launch {
-                                val didUpdate = modelStore.setDefaultModel(gatewayId, model) {
-                                    waitForGatewayRecoveryAfterDefaultModelChange(gatewayStore, gatewayId)
-                                }
-                                if (didUpdate) {
-                                    modelStore.loadModels(gatewayId)
-                                }
-                            }
+            title = choose("Set as global default model?", "设为全局默认模型？"),
+            message = choose("Set \"${model.displayName}\" as OpenClaw's global default model. The host may briefly restart and recover.", "将「${model.displayName}」设为 OpenClaw 的全局默认模型。主机可能会短暂重启恢复。"),
+            confirmText = choose("Set as default", "设为默认"),
+            confirmRole = ClawLinkAlertActionRole.Destructive,
+            onConfirm = {
+                modelToConfirm = null
+                if (gatewayId != null && gatewayState.isSelectedGatewayChatChainReady) {
+                    scope.launch {
+                        val didUpdate = modelStore.setDefaultModel(gatewayId, model) {
+                            waitForGatewayRecoveryAfterDefaultModelChange(gatewayStore, gatewayId)
+                        }
+                        if (didUpdate) {
+                            modelStore.loadModels(gatewayId)
                         }
                     }
-                ) {
-                    Text(choose("Set as default", "设为默认"), color = MaterialTheme.colorScheme.error)
                 }
             },
-            dismissButton = { TextButton(onClick = { modelToConfirm = null }) { Text(choose("Cancel", "取消")) } }
+            dismissText = choose("Cancel", "取消"),
+            onDismissAction = { modelToConfirm = null }
         )
     }
 }

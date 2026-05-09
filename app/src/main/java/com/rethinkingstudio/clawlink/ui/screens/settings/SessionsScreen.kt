@@ -32,7 +32,6 @@ import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Memory
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Warning
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -79,6 +78,8 @@ import com.rethinkingstudio.clawlink.core.network.RelayAPIClient
 import com.rethinkingstudio.clawlink.core.state.LocalizedText.choose
 import com.rethinkingstudio.clawlink.core.state.chat.ChatStore
 import com.rethinkingstudio.clawlink.core.state.gateway.GatewayStore
+import com.rethinkingstudio.clawlink.ui.components.ClawLinkAlertActionRole
+import com.rethinkingstudio.clawlink.ui.components.ClawLinkAlertDialog
 import kotlinx.coroutines.launch
 import java.time.Instant
 import java.time.ZoneId
@@ -354,47 +355,39 @@ fun SessionsScreen(
     }
 
     confirmDelete?.let { session ->
-        AlertDialog(
+        ClawLinkAlertDialog(
             onDismissRequest = { confirmDelete = null },
-            title = { Text(choose("Delete \"${session.displayTitle}\"?", "删除「${session.displayTitle}」？")) },
-            text = { Text(stringResource(R.string.session_delete_message)) },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        val target = session
-                        val id = gatewayId
-                        confirmDelete = null
-                        if (id == null) {
-                            issueMessage = choose("Session expired. Please pair again.", "会话已失效，请重新配对")
-                            return@TextButton
+            title = choose("Delete \"${session.displayTitle}\"?", "删除「${session.displayTitle}」？"),
+            message = stringResource(R.string.session_delete_message),
+            confirmText = stringResource(R.string.session_delete_action),
+            confirmRole = ClawLinkAlertActionRole.Destructive,
+            onConfirm = {
+                val target = session
+                val id = gatewayId
+                confirmDelete = null
+                if (id == null) {
+                    issueMessage = choose("Session expired. Please pair again.", "会话已失效，请重新配对")
+                    return@ClawLinkAlertDialog
+                }
+                deletingKey = target.normalizedSessionKey
+                scope.launch {
+                    try {
+                        val deleted = chatStore.deleteSession(id, target.sessionKey)
+                        if (deleted) {
+                            chatStore.loadSessions(id)
+                            issueMessage = null
+                        } else {
+                            issueMessage = choose("Failed to delete session: the session is still present. Refresh and try again.", "删除会话失败：会话仍未移除，请刷新后重试。")
                         }
-                        deletingKey = target.normalizedSessionKey
-                        scope.launch {
-                            try {
-                                val deleted = chatStore.deleteSession(id, target.sessionKey)
-                                if (deleted) {
-                                    chatStore.loadSessions(id)
-                                    issueMessage = null
-                                } else {
-                                    issueMessage = choose("Failed to delete session: the session is still present. Refresh and try again.", "删除会话失败：会话仍未移除，请刷新后重试。")
-                                }
-                            } catch (e: Exception) {
-                                issueMessage = choose("Failed to delete session: ${e.message ?: "Unknown error"}", "删除会话失败：${e.message ?: "未知错误"}")
-                            } finally {
-                                deletingKey = null
-                            }
-                        }
-                    },
-                    colors = ButtonDefaults.textButtonColors(contentColor = SessionDangerRed)
-                ) {
-                    Text(stringResource(R.string.session_delete_action))
+                    } catch (e: Exception) {
+                        issueMessage = choose("Failed to delete session: ${e.message ?: "Unknown error"}", "删除会话失败：${e.message ?: "未知错误"}")
+                    } finally {
+                        deletingKey = null
+                    }
                 }
             },
-            dismissButton = {
-                TextButton(onClick = { confirmDelete = null }) {
-                    Text(stringResource(R.string.common_action_cancel))
-                }
-            }
+            dismissText = stringResource(R.string.common_action_cancel),
+            onDismissAction = { confirmDelete = null }
         )
     }
 }

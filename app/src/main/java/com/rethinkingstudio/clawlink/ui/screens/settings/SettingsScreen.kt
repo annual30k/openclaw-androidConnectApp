@@ -33,6 +33,8 @@ import com.rethinkingstudio.clawlink.core.state.LanguageManager
 import com.rethinkingstudio.clawlink.core.state.LocalizedText.choose
 import com.rethinkingstudio.clawlink.core.state.auth.AuthStore
 import com.rethinkingstudio.clawlink.core.state.gateway.GatewayStore
+import com.rethinkingstudio.clawlink.ui.components.ClawLinkAlertActionRole
+import com.rethinkingstudio.clawlink.ui.components.ClawLinkAlertDialog
 import com.rethinkingstudio.clawlink.ui.components.ClawLinkScaffold
 import com.rethinkingstudio.clawlink.ui.components.ClawLinkSectionHeader
 import com.rethinkingstudio.clawlink.ui.screens.settings.components.EmptyGatewayStatusCard
@@ -317,28 +319,22 @@ fun SettingsScreen(
     }
 
     if (showLogoutConfirm) {
-        AlertDialog(
+        ClawLinkAlertDialog(
             onDismissRequest = { showLogoutConfirm = false },
-            title = { Text(stringResource(R.string.settings_account_sign_out)) },
-            text = { Text(choose("Are you sure you want to sign out?", "确定要退出登录吗？")) },
-            confirmButton = {
-                TextButton(onClick = {
-                    showLogoutConfirm = false
-                    scope.launch {
-                        wsClient.disconnect()
-                        notificationPort.cancelAll()
-                        authStore.logout()
-                        onLogout()
-                    }
-                }) {
-                    Text(stringResource(R.string.settings_account_sign_out))
+            title = stringResource(R.string.settings_account_sign_out),
+            message = choose("Are you sure you want to sign out?", "确定要退出登录吗？"),
+            confirmText = stringResource(R.string.settings_account_sign_out),
+            onConfirm = {
+                showLogoutConfirm = false
+                scope.launch {
+                    wsClient.disconnect()
+                    notificationPort.cancelAll()
+                    authStore.logout()
+                    onLogout()
                 }
             },
-            dismissButton = {
-                TextButton(onClick = { showLogoutConfirm = false }) {
-                    Text(stringResource(R.string.common_action_cancel))
-                }
-            }
+            dismissText = stringResource(R.string.common_action_cancel),
+            onDismissAction = { showLogoutConfirm = false }
         )
     }
 
@@ -361,51 +357,37 @@ fun SettingsScreen(
     }
 
     if (showDeleteConfirm) {
-        AlertDialog(
+        ClawLinkAlertDialog(
             onDismissRequest = { showDeleteConfirm = false },
-            title = { Text(stringResource(R.string.alert_delete_account_title)) },
-            text = { Text(stringResource(R.string.alert_delete_account_message)) },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        showDeleteConfirm = false
-                        scope.launch {
-                            val didDelete = authStore.deleteAccount()
-                            if (didDelete) {
-                                wsClient.disconnect()
-                                notificationPort.cancelAll()
-                                onLogout()
-                            }
-                        }
-                    },
-                    enabled = !authState.isLoading,
-                    colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)
-                ) {
-                    if (authState.isLoading) {
-                        CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
-                    } else {
-                        Text(stringResource(R.string.settings_account_delete))
+            title = stringResource(R.string.alert_delete_account_title),
+            message = stringResource(R.string.alert_delete_account_message),
+            confirmText = stringResource(R.string.settings_account_delete),
+            confirmRole = ClawLinkAlertActionRole.Destructive,
+            confirmEnabled = !authState.isLoading,
+            confirmLoading = authState.isLoading,
+            onConfirm = {
+                showDeleteConfirm = false
+                scope.launch {
+                    val didDelete = authStore.deleteAccount()
+                    if (didDelete) {
+                        wsClient.disconnect()
+                        notificationPort.cancelAll()
+                        onLogout()
                     }
                 }
             },
-            dismissButton = {
-                TextButton(onClick = { showDeleteConfirm = false }) {
-                    Text(stringResource(R.string.common_action_cancel))
-                }
-            }
+            dismissText = stringResource(R.string.common_action_cancel),
+            onDismissAction = { showDeleteConfirm = false }
         )
     }
 
     authState.errorMessage?.let { message ->
-        AlertDialog(
+        ClawLinkAlertDialog(
             onDismissRequest = authStore::clearError,
-            title = { Text(choose("Error", "错误")) },
-            text = { Text(message) },
-            confirmButton = {
-                TextButton(onClick = authStore::clearError) {
-                    Text(stringResource(R.string.common_action_ok))
-                }
-            }
+            title = choose("Error", "错误"),
+            message = message,
+            confirmText = stringResource(R.string.common_action_ok),
+            onConfirm = authStore::clearError
         )
     }
 }

@@ -50,7 +50,6 @@ import androidx.compose.material.icons.filled.Repeat
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Timer
 import androidx.compose.material.icons.filled.WbSunny
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -101,6 +100,8 @@ import com.rethinkingstudio.clawlink.core.models.tasks.TaskItem
 import com.rethinkingstudio.clawlink.core.state.LocalizedText.choose
 import com.rethinkingstudio.clawlink.core.state.gateway.GatewayStore
 import com.rethinkingstudio.clawlink.core.state.task.TaskStore
+import com.rethinkingstudio.clawlink.ui.components.ClawLinkAlertActionRole
+import com.rethinkingstudio.clawlink.ui.components.ClawLinkAlertDialog
 import kotlinx.coroutines.launch
 import java.time.Instant
 import java.time.LocalDate
@@ -320,21 +321,18 @@ fun TasksScreen(
     }
 
     deleteTarget?.let { task ->
-        AlertDialog(
+        ClawLinkAlertDialog(
             onDismissRequest = { deleteTarget = null },
-            title = { Text(choose("Delete \"${task.title}\"?", "删除「${task.title}」？")) },
-            text = { Text(choose("This scheduled task will not run after deletion.", "删除后这个定时任务不会再执行。")) },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        deleteTarget = null
-                        if (canManageTasks) scope.launch { taskStore.deleteTask(gatewayId, task.id) }
-                    }
-                ) {
-                    Text(choose("Delete", "删除"), color = MaterialTheme.colorScheme.error)
-                }
+            title = choose("Delete \"${task.title}\"?", "删除「${task.title}」？"),
+            message = choose("This scheduled task will not run after deletion.", "删除后这个定时任务不会再执行。"),
+            confirmText = choose("Delete", "删除"),
+            confirmRole = ClawLinkAlertActionRole.Destructive,
+            onConfirm = {
+                deleteTarget = null
+                if (canManageTasks) scope.launch { taskStore.deleteTask(gatewayId, task.id) }
             },
-            dismissButton = { TextButton(onClick = { deleteTarget = null }) { Text(choose("Keep", "保留")) } }
+            dismissText = choose("Keep", "保留"),
+            onDismissAction = { deleteTarget = null }
         )
     }
 }

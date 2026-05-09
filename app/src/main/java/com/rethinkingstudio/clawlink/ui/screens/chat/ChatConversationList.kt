@@ -73,7 +73,6 @@ import com.rethinkingstudio.clawlink.ui.screens.chat.components.SkillExpansionSh
 import com.rethinkingstudio.clawlink.ui.screens.chat.components.slashCommandSuggestions
 import com.rethinkingstudio.clawlink.ui.screens.chat.components.documentPreviewKind
 import com.rethinkingstudio.clawlink.ui.screens.chat.components.SlashCommandPanel
-import com.rethinkingstudio.clawlink.ui.screens.chat.components.StatusBanner
 import com.rethinkingstudio.clawlink.ui.screens.chat.components.ThinkingRow
 import com.rethinkingstudio.clawlink.ui.screens.chat.components.UsageGuidePromptCard
 import com.rethinkingstudio.clawlink.ui.screens.chat.components.VoiceInputOverlay

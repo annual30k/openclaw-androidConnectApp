@@ -41,6 +41,8 @@ import com.rethinkingstudio.clawlink.core.models.backups.BackupItem
 import com.rethinkingstudio.clawlink.core.network.RelayAPIClient
 import com.rethinkingstudio.clawlink.core.state.LocalizedText.choose
 import com.rethinkingstudio.clawlink.core.state.gateway.GatewayStore
+import com.rethinkingstudio.clawlink.ui.components.ClawLinkAlertActionRole
+import com.rethinkingstudio.clawlink.ui.components.ClawLinkAlertDialog
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.*
@@ -244,59 +246,58 @@ fun BackupScreen(
 
     // Delete confirmation
     confirmDelete?.let { backup ->
-        AlertDialog(
+        ClawLinkAlertDialog(
             onDismissRequest = { confirmDelete = null },
-            title = { Text(stringResource(R.string.backup_delete_title), fontWeight = FontWeight.Bold) },
-            text = { Text(stringResource(R.string.backup_delete_message, backup.displayLabel)) },
-            confirmButton = {
-                TextButton(onClick = {
-                    val b = backup
-                    confirmDelete = null
-                    if (gatewayId != null) {
-                        scope.launch {
-                            try {
-                                val response = apiClient.deleteBackup(gatewayId, b.id)
-                                backups = response.backups
-                                maxBackups = response.maxBackups
-                                storagePath = response.storagePath
-                                actionMessage = choose("Backup deleted", "备份已删除")
-                            } catch (_: Exception) { }
+            title = stringResource(R.string.backup_delete_title),
+            message = stringResource(R.string.backup_delete_message, backup.displayLabel),
+            confirmText = stringResource(R.string.backup_delete_action),
+            confirmRole = ClawLinkAlertActionRole.Destructive,
+            onConfirm = {
+                val b = backup
+                confirmDelete = null
+                if (gatewayId != null) {
+                    scope.launch {
+                        try {
+                            val response = apiClient.deleteBackup(gatewayId, b.id)
+                            backups = response.backups
+                            maxBackups = response.maxBackups
+                            storagePath = response.storagePath
+                            actionMessage = choose("Backup deleted", "备份已删除")
+                        } catch (_: Exception) {
                         }
                     }
-                }, colors = ButtonDefaults.textButtonColors(contentColor = Color(0xFFEF4444))) {
-                    Text(stringResource(R.string.backup_delete_action), fontWeight = FontWeight.Bold)
                 }
             },
-            dismissButton = { TextButton(onClick = { confirmDelete = null }) { Text(stringResource(R.string.common_action_cancel)) } }
+            dismissText = stringResource(R.string.common_action_cancel),
+            onDismissAction = { confirmDelete = null }
         )
     }
 
     // Restore confirmation
     confirmRestore?.let { backup ->
-        AlertDialog(
+        ClawLinkAlertDialog(
             onDismissRequest = { confirmRestore = null },
-            title = { Text(stringResource(R.string.backup_restore_title), fontWeight = FontWeight.Bold) },
-            text = { Text(stringResource(R.string.backup_restore_message, backup.displayLabel)) },
-            confirmButton = {
-                TextButton(onClick = {
-                    val b = backup
-                    confirmRestore = null
-                    if (gatewayId != null) {
-                        scope.launch {
-                            try {
-                                val response = apiClient.restoreBackup(gatewayId, b.id)
-                                backups = response.backups
-                                maxBackups = response.maxBackups
-                                storagePath = response.storagePath
-                                actionMessage = choose("Backup restored successfully", "备份恢复成功")
-                            } catch (_: Exception) { }
+            title = stringResource(R.string.backup_restore_title),
+            message = stringResource(R.string.backup_restore_message, backup.displayLabel),
+            confirmText = stringResource(R.string.backup_restore_action),
+            onConfirm = {
+                val b = backup
+                confirmRestore = null
+                if (gatewayId != null) {
+                    scope.launch {
+                        try {
+                            val response = apiClient.restoreBackup(gatewayId, b.id)
+                            backups = response.backups
+                            maxBackups = response.maxBackups
+                            storagePath = response.storagePath
+                            actionMessage = choose("Backup restored successfully", "备份恢复成功")
+                        } catch (_: Exception) {
                         }
                     }
-                }, colors = ButtonDefaults.textButtonColors(contentColor = Color(0xFF22C55E))) {
-                    Text(stringResource(R.string.backup_restore_action), fontWeight = FontWeight.Bold)
                 }
             },
-            dismissButton = { TextButton(onClick = { confirmRestore = null }) { Text(stringResource(R.string.common_action_cancel)) } }
+            dismissText = stringResource(R.string.common_action_cancel),
+            onDismissAction = { confirmRestore = null }
         )
     }
 }
