@@ -4,6 +4,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
@@ -19,9 +20,15 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -57,17 +64,24 @@ fun ClawLinkAlertDialog(
             decorFitsSystemWindows = false
         )
     ) {
-        Box(
+        BoxWithConstraints(
             modifier = Modifier
                 .fillMaxSize()
-                .background(Color(0x8A8E969F)),
-            contentAlignment = Alignment.Center
+                .background(Color(0x8A8E969F))
         ) {
+            val density = LocalDensity.current
+            var dialogHeightPx by remember { mutableIntStateOf(0) }
+            val containerHeightPx = with(density) { maxHeight.roundToPx() }
+            val visualLiftPx = with(density) { 48.dp.roundToPx() }
+            val centeredTopPx = ((containerHeightPx - dialogHeightPx) / 2 - visualLiftPx).coerceAtLeast(0)
+
             Surface(
                 modifier = modifier
+                    .align(Alignment.TopCenter)
+                    .padding(top = with(density) { centeredTopPx.toDp() })
                     .fillMaxWidth(0.72f)
                     .widthIn(max = 360.dp)
-                    .padding(horizontal = 0.dp),
+                    .onSizeChanged { dialogHeightPx = it.height },
                 shape = RoundedCornerShape(34.dp),
                 color = Color(0xFFF2F7FC),
                 contentColor = Color(0xFF111111),

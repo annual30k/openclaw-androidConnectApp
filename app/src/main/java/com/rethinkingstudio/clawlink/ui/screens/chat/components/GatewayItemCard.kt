@@ -85,13 +85,14 @@ internal fun GatewayItemCard(
 
     Surface(
         onClick = onClick,
+        modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(22.dp),
-        color = Color.White.copy(alpha = 0.86f),
-        border = BorderStroke(if (selected) 2.dp else 1.dp, if (selected) ChatColors.selectionBlue else Color.White.copy(alpha = 0.55f))
+        color = Color(0xFFF8F9FB),
+        shadowElevation = if (selected) 14.dp else 10.dp,
+        border = BorderStroke(if (selected) 2.dp else 1.dp, if (selected) ChatColors.selectionBlue else Color(0xFFF8F9FB))
     ) {
         Column(
             modifier = Modifier
-                .fillMaxWidth()
                 .padding(18.dp),
             verticalArrangement = Arrangement.spacedBy(6.dp)
         ) {
@@ -108,8 +109,8 @@ internal fun GatewayItemCard(
                         gateway.displayName,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
-                        style = MaterialTheme.typography.titleLarge.copy(fontSize = 17.sp),
-                        fontWeight = FontWeight.Black,
+                        style = MaterialTheme.typography.titleMedium.copy(fontSize = 16.sp),
+                        fontWeight = FontWeight.Bold,
                         color = Color.Black
                     )
                     Text(

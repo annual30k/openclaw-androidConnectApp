@@ -18,11 +18,8 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.draw.shadow
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.res.stringResource
@@ -95,37 +92,14 @@ fun GatewayStatusCard(
         AggregateStatus.partial -> stringResource(R.string.gateway_aggregate_partial)
         AggregateStatus.offline -> stringResource(R.string.gateway_aggregate_offline)
     }
-
     Box(
         modifier = modifier
             .fillMaxWidth()
             .shadow(22.dp, RoundedCornerShape(28.dp), clip = false)
             .clip(RoundedCornerShape(28.dp))
-            .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.9f))
+            .background(MaterialTheme.colorScheme.surface)
             .clickable { if (!isEditing) onClick() }
     ) {
-        Box(
-            modifier = Modifier
-                .matchParentSize()
-                .background(
-                    Brush.linearGradient(
-                        colors = listOf(
-                            Color.White.copy(alpha = 0.36f),
-                            Color(0xFF70ADFA).copy(alpha = 0.08f),
-                            Color.White.copy(alpha = 0.10f)
-                        )
-                    )
-                )
-                .drawWithContent {
-                    drawContent()
-                    drawRoundRect(
-                        color = Color.White.copy(alpha = 0.30f),
-                        style = Stroke(width = 0.8.dp.toPx()),
-                        cornerRadius = androidx.compose.ui.geometry.CornerRadius(28.dp.toPx())
-                    )
-                }
-        )
-
         Column(
             verticalArrangement = Arrangement.spacedBy(16.dp),
             modifier = Modifier.padding(18.dp)
@@ -319,37 +293,14 @@ fun EmptyGatewayStatusCard(
             )
         )
     }
-
     Box(
         modifier = modifier
             .fillMaxWidth()
             .shadow(22.dp, RoundedCornerShape(28.dp), clip = false)
             .clip(RoundedCornerShape(28.dp))
-            .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.9f))
+            .background(MaterialTheme.colorScheme.surface)
             .clickable { onClick() }
     ) {
-        Box(
-            modifier = Modifier
-                .matchParentSize()
-                .background(
-                    Brush.linearGradient(
-                        colors = listOf(
-                            Color.White.copy(alpha = 0.36f),
-                            Color(0xFF70ADFA).copy(alpha = 0.08f),
-                            Color.White.copy(alpha = 0.10f)
-                        )
-                    )
-                )
-                .drawWithContent {
-                    drawContent()
-                    drawRoundRect(
-                        color = Color.White.copy(alpha = 0.30f),
-                        style = Stroke(width = 0.8.dp.toPx()),
-                        cornerRadius = androidx.compose.ui.geometry.CornerRadius(28.dp.toPx())
-                    )
-                }
-        )
-
         Column(
             verticalArrangement = Arrangement.spacedBy(16.dp),
             modifier = Modifier.padding(18.dp)

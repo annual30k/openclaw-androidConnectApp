@@ -110,7 +110,12 @@ internal fun GatewaySheetOverlay(
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
                 CircleHeaderButton(Icons.Default.Close, stringResource(R.string.common_action_close), onDismiss)
-                Text(stringResource(R.string.gateways_list_title), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Black, color = Color.Black)
+                Text(
+                    stringResource(R.string.gateways_list_title),
+                    style = MaterialTheme.typography.titleMedium.copy(fontSize = 20.sp),
+                    fontWeight = FontWeight.Bold,
+                    color = Color.Black
+                )
                 CircleHeaderButton(Icons.Default.Refresh, stringResource(R.string.gateways_refresh), onRefresh)
             }
 
