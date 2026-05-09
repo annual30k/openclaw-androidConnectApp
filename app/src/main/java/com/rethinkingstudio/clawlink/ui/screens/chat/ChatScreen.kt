@@ -275,112 +275,21 @@ fun ChatScreen(
                         )
                     }
 
-                    val displayMessages = remember(
-                        chatState.messages,
-                        chatState.showInvocationProcess,
-                        chatState.assistantVoiceRepliesEffectiveEnabled,
-                        chatState.assistantVoiceRepliesEnabledAt,
-                        chatState.voiceReplyTextOnlyRunIds
-                    ) {
-                        val now = System.currentTimeMillis() / 1000.0
-                        chatState.messages.filter { message ->
-                            val forceDisplayText = message.isVoiceReplyTextOnlyCandidate(
-                                assistantVoiceRepliesEffectiveEnabled = chatState.assistantVoiceRepliesEffectiveEnabled,
-                                assistantVoiceRepliesEnabledAt = chatState.assistantVoiceRepliesEnabledAt,
-                                voiceReplyTextOnlyRunIds = chatState.voiceReplyTextOnlyRunIds,
-                                now = now
-                            )
-                            message.shouldDisplayInChat(
-                                showInvocationProcess = chatState.showInvocationProcess,
-                                assistantVoiceRepliesEnabled = chatState.assistantVoiceRepliesEffectiveEnabled,
-                                assistantVoiceRepliesEnabledAt = chatState.assistantVoiceRepliesEnabledAt,
-                                forceDisplayTextWhenVoiceRepliesEnabled = forceDisplayText
-                            ) ||
-                                message.state == MessageState.streaming && message.role == MessageRole.assistant
-                        }
-                    }
-                    val hasStreamingAssistantMessage = displayMessages.any {
-                        it.role == MessageRole.assistant && it.state == MessageState.streaming
-                    }
-                    val conversationAnimationKey = "${gatewayId.orEmpty()}::${chatState.currentSessionKey}"
-
-                    LazyColumn(
+                    ChatConversationList(
+                        chatState = chatState,
+                        gatewayState = gatewayState,
+                        listState = listState,
+                        viewModel = viewModel,
+                        chatStore = chatStore,
+                        gatewayId = gatewayId,
+                        hasSelectedGateway = hasSelectedGateway,
+                        onOpenUsageGuide = onOpenUsageGuide,
+                        onOpenSettings = onOpenSettings,
                         modifier = Modifier
                             .fillMaxWidth()
-                            .weight(1f),
-                        state = listState,
-                        contentPadding = PaddingValues(top = 14.dp, bottom = viewModel.composerHeight + 18.dp),
-                        verticalArrangement = Arrangement.spacedBy(16.dp)
-                    ) {
-                        if (!hasSelectedGateway && gatewayState.isLoading) {
-                            item { ChatSessionLoadingCard() }
-                        } else if (!hasSelectedGateway) {
-                            item {
-                                UsageGuidePromptCard(onOpenUsageGuide = onOpenUsageGuide ?: onOpenSettings)
-                            }
-                            item {
-                                EmptyGatewayCard(onOpenSettings = onOpenSettings)
-                            }
-                        }
-
-                        if (chatState.isLoading && displayMessages.isEmpty() && !chatState.isSwitchingSession) {
-                            item { ChatSessionLoadingCard() }
-                        }
-
-                        items(displayMessages, key = { message -> "$conversationAnimationKey:${message.id}" }) { message ->
-                            val isVoiceReplyTextOnly = message.isVoiceReplyTextOnlyCandidate(
-                                assistantVoiceRepliesEffectiveEnabled = chatState.assistantVoiceRepliesEffectiveEnabled,
-                                assistantVoiceRepliesEnabledAt = chatState.assistantVoiceRepliesEnabledAt,
-                                voiceReplyTextOnlyRunIds = chatState.voiceReplyTextOnlyRunIds,
-                                now = System.currentTimeMillis() / 1000.0
-                            )
-                            ConversationMessageEnterAnimation(
-                                role = message.role,
-                                animationKey = "$conversationAnimationKey:${message.id}"
-                            ) {
-                                MessageBubble(
-                                    message = message,
-                                    showInvocationProcess = chatState.showInvocationProcess,
-                                    isVoiceReplyTextOnly = isVoiceReplyTextOnly,
-                                    relayBaseUrl = chatStore.relayBaseUrl,
-                                    accessToken = chatStore.accessToken,
-                                    readVoicePlaybackIdentifiers = chatState.readVoicePlaybackIdentifiers,
-                                    onVoicePlaybackStart = { identifier ->
-                                        chatStore.markVoicePlaybackIdentifierRead(
-                                            identifier = identifier,
-                                            gatewayId = gatewayId,
-                                            sessionKey = chatState.currentSessionKey
-                                        )
-                                    },
-                                    gatewayId = gatewayId,
-                                    sessionKey = chatState.currentSessionKey,
-                                    onImageClick = { block, url, fileName ->
-                                        viewModel.imagePreview = ChatImagePreviewState(
-                                            url = url,
-                                            accessToken = chatStore.accessToken,
-                                            fileName = fileName,
-                                            cacheKey = block.chatImageCacheKey()
-                                        )
-                                    },
-                                    onFileClick = { block, url, fileName ->
-                                        viewModel.documentPreview = ChatDocumentPreviewState(
-                                            url = url,
-                                            accessToken = chatStore.accessToken,
-                                            fileName = fileName,
-                                            mimeType = block.mimeType,
-                                            cacheKey = block.chatAttachmentCacheKey()
-                                        )
-                                    }
-                                )
-                            }
-                        }
-
-                        if (chatState.isStreaming && !hasStreamingAssistantMessage) {
-                            item { ThinkingRow() }
-                        }
-                    }
+                            .weight(1f)
+                    )
                 }
-
                 Column(
                     modifier = Modifier
                         .align(Alignment.BottomCenter)
@@ -580,65 +489,4 @@ fun ChatScreen(
             modifier = Modifier.matchParentSize()
         )
     }
-}
-
-@Composable
-private fun ConversationMessageEnterAnimation(
-    role: MessageRole,
-    animationKey: String,
-    content: @Composable () -> Unit
-) {
-    val density = LocalDensity.current
-    val startOffsetPx = with(density) {
-        val direction = if (role == MessageRole.user) 1 else -1
-        28.dp.toPx() * direction
-    }
-    val offsetX = remember(animationKey) { Animatable(startOffsetPx) }
-    val alpha = remember(animationKey) { Animatable(0f) }
-
-    LaunchedEffect(animationKey) {
-        offsetX.snapTo(startOffsetPx)
-        alpha.snapTo(0f)
-        launch {
-            offsetX.animateTo(
-                targetValue = 0f,
-                animationSpec = tween(
-                    durationMillis = 240,
-                    easing = LinearOutSlowInEasing
-                )
-            )
-        }
-        launch {
-            alpha.animateTo(
-                targetValue = 1f,
-                animationSpec = tween(
-                    durationMillis = 240,
-                    easing = LinearOutSlowInEasing
-                )
-            )
-        }
-    }
-
-    Box(
-        modifier = Modifier.graphicsLayer {
-            translationX = offsetX.value
-            this.alpha = alpha.value
-        }
-    ) {
-        content()
-    }
-}
-
-private fun ChatMessage.isVoiceReplyTextOnlyCandidate(
-    assistantVoiceRepliesEffectiveEnabled: Boolean,
-    assistantVoiceRepliesEnabledAt: Double?,
-    voiceReplyTextOnlyRunIds: Set<String>,
-    now: Double
-): Boolean {
-    if (hasVoiceContent || hasFileContent) return false
-    if (role != MessageRole.assistant || !assistantVoiceRepliesEffectiveEnabled) return false
-    if (state == MessageState.streaming) return true
-    val timestamp = sortTimestamp ?: return false
-    val enabledAt = assistantVoiceRepliesEnabledAt ?: return false
-    return timestamp >= enabledAt - 2.0 && now - timestamp < 120.0
 }

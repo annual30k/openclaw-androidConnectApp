@@ -34,43 +34,6 @@ import java.util.Locale
 import java.text.SimpleDateFormat
 import kotlinx.coroutines.delay
 
-data class GatewayState(
-    val gateways: List<GatewaySummary> = emptyList(),
-    val selectedGatewayId: String? = null,
-    val isLoading: Boolean = false,
-    val errorMessage: String? = null,
-    val appRelayStatus: AggregateStatus = AggregateStatus.offline,
-    val restartLogs: List<MaintenanceLogEntry> = emptyList(),
-    val remoteRestartLogs: List<MaintenanceLogEntry> = emptyList(),
-    val doctorFixLogs: List<MaintenanceLogEntry> = emptyList(),
-    val restartRequestId: String? = null,
-    val remoteRestartRequestId: String? = null,
-    val doctorFixRequestId: String? = null,
-    val restartingGatewayId: String? = null,
-    val selectedChatSessionKey: String? = null,
-    val isExecutingMaintenance: Boolean = false,
-    val isWaitingForRecovery: Boolean = false,
-    val maintenanceError: String? = null,
-    val maintenanceStartedAt: Long? = null
-) {
-    val selectedGateway: GatewaySummary? get() = gateways.find { it.id == selectedGatewayId }
-    val selectedGatewayStatuses: List<GatewayStatus>
-        get() = GatewayStore.selectedGatewayStatuses(selectedGateway, appRelayStatus)
-    val selectedGatewayAggregateStatus: AggregateStatus
-        get() = GatewayStore.aggregateStatusForChain(selectedGateway, appRelayStatus)
-    val isAppRelayOnline: Boolean get() = appRelayStatus == AggregateStatus.online
-    val isRelayHostOnline: Boolean
-        get() = selectedGatewayStatuses.find { it.phase == ConnectionPhase.relayHost }?.status == AggregateStatus.online
-    val isHostGatewayOnline: Boolean
-        get() = selectedGatewayStatuses.find { it.phase == ConnectionPhase.hostGateway }?.status == AggregateStatus.online
-    val isSelectedGatewayChatChainReady: Boolean
-        get() = isAppRelayOnline && GatewayStore.gatewayIsFullyOnline(selectedGateway)
-    val canExecuteRecoveryAction: Boolean
-        get() = selectedGateway != null && isAppRelayOnline && isRelayHostOnline && !isHostGatewayOnline
-    val canExecuteRemoteHostAction: Boolean
-        get() = isSelectedGatewayChatChainReady || canExecuteRecoveryAction
-}
-
 class GatewayStore(
     private val apiClient: RelayAPIClient,
     private val credentialStore: CredentialStore,
@@ -181,24 +144,6 @@ class GatewayStore(
         if (runId == _state.value.doctorFixRequestId) {
             _state.value = _state.value.copy(isExecutingMaintenance = false)
         }
-    }
-
-    private fun createLogEntry(payload: JsonObject): MaintenanceLogEntry {
-        val text = payload["text"]?.jsonPrimitive?.content
-            ?: payload["delta"]?.jsonPrimitive?.content
-            ?: payload["errorMessage"]?.jsonPrimitive?.content
-            ?: payload["error_message"]?.jsonPrimitive?.content
-            ?: payload["data"]?.jsonObject?.get("text")?.jsonPrimitive?.content
-            ?: payload["data"]?.jsonObject?.get("delta")?.jsonPrimitive?.content
-            ?: payload["data"]?.jsonObject?.get("error")?.jsonPrimitive?.content
-            ?: payload["data"]?.jsonObject?.get("result")?.jsonPrimitive?.content
-            ?: ""
-        val stream = payload["stream"]?.jsonPrimitive?.content ?: "stdout"
-        return MaintenanceLogEntry(
-            timestamp = System.currentTimeMillis(),
-            stream = stream,
-            text = text
-        )
     }
 
     private fun handleHello(payload: JsonElement?) {
@@ -515,40 +460,9 @@ class GatewayStore(
         fun aggregateStatusForChain(
             selectedGateway: GatewaySummary?,
             appRelayStatus: AggregateStatus
-        ): AggregateStatus {
-            if (selectedGateway == null) return AggregateStatus.offline
-            if (appRelayStatus != AggregateStatus.online) return appRelayStatus
-            if (gatewayIsFullyOnline(selectedGateway)) return AggregateStatus.online
-            val statuses = selectedGatewayStatuses(selectedGateway, appRelayStatus)
-            return when {
-                statuses.any { it.status == AggregateStatus.offline } -> AggregateStatus.offline
-                statuses.any { it.status == AggregateStatus.connecting } -> AggregateStatus.connecting
-                else -> AggregateStatus.partial
-            }
-        }
+        ): AggregateStatus = GatewayStatusResolver.aggregateStatusForChain(selectedGateway, appRelayStatus)
 
-        fun gatewayIsFullyOnline(gateway: GatewaySummary?): Boolean {
-            if (gateway == null) return false
-            if (gateway.aggregateStatus != AggregateStatus.online) return false
-
-            val relayHostStatus = gateway.statuses.find { it.phase == ConnectionPhase.relayHost }
-            if (relayHostStatus?.status != AggregateStatus.online) return false
-
-            val hostGatewayStatus = gateway.statuses.find { it.phase == ConnectionPhase.hostGateway }
-            if (hostGatewayStatus?.status != AggregateStatus.online) return false
-
-            val detail = hostGatewayStatus.detail.trim().lowercase()
-            val stillWaiting = detail.contains("等待 openclaw") ||
-                    detail.contains("waiting openclaw") ||
-                    detail.contains("relay_connected") ||
-                    detail.contains("connecting openclaw") ||
-                    detail.contains("正在连接 openclaw") ||
-                    detail.contains("openclaw 未连接") ||
-                    detail.contains("openclaw 连接异常") ||
-                    detail.contains("openclaw 重试中")
-
-            return !stillWaiting
-        }
+        fun gatewayIsFullyOnline(gateway: GatewaySummary?): Boolean = GatewayStatusResolver.gatewayIsFullyOnline(gateway)
 
         fun selectedGatewayStatuses(
             selectedGateway: GatewaySummary?,
@@ -558,29 +472,6 @@ class GatewayStore(
             } else {
                 choose("Session not established", "会话未建立")
             }
-        ): List<GatewayStatus> {
-            val relayHost = selectedGateway?.statuses?.find { it.phase == com.rethinkingstudio.clawlink.core.models.gateway.ConnectionPhase.relayHost }
-                ?: GatewayStatus(
-                    phase = com.rethinkingstudio.clawlink.core.models.gateway.ConnectionPhase.relayHost,
-                    status = AggregateStatus.offline,
-                    detail = choose("Relay is not connected to the host", "Relay 未连接到主机")
-                )
-            val hostGateway = selectedGateway?.statuses?.find { it.phase == com.rethinkingstudio.clawlink.core.models.gateway.ConnectionPhase.hostGateway }
-                ?: GatewayStatus(
-                    phase = com.rethinkingstudio.clawlink.core.models.gateway.ConnectionPhase.hostGateway,
-                    status = AggregateStatus.offline,
-                    detail = choose("OpenClaw is not connected", "OpenClaw 未连接")
-                )
-
-            return listOf(
-                GatewayStatus(
-                    phase = com.rethinkingstudio.clawlink.core.models.gateway.ConnectionPhase.appRelay,
-                    status = appRelayStatus,
-                    detail = appRelayDetail
-                ),
-                relayHost,
-                hostGateway
-            )
-        }
+        ): List<GatewayStatus> = GatewayStatusResolver.selectedGatewayStatuses(selectedGateway, appRelayStatus, appRelayDetail)
     }
 }

@@ -86,16 +86,6 @@ import java.time.format.DateTimeFormatter
 import java.time.format.DateTimeParseException
 import kotlin.math.abs
 
-private val CardShape = RoundedCornerShape(24.dp)
-private val RowShape = RoundedCornerShape(20.dp)
-private val TileShape = RoundedCornerShape(16.dp)
-private val PillShape = RoundedCornerShape(999.dp)
-private val AccentBlue = Color(0xFF0A84FF)
-private val SuccessGreen = Color(0xFF20C873)
-private val WarningOrange = Color(0xFFFFB13D)
-private val DangerRed = Color(0xFFFF453A)
-private val AccentBlueSoft = Color(0xFF5AC8FA)
-
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SessionsScreen(
@@ -212,7 +202,7 @@ fun SessionsScreen(
                             title = choose("Session list", "会话列表"),
                             message = message,
                             icon = Icons.Default.Warning,
-                            tint = WarningOrange
+                            tint = SessionWarningOrange
                         )
                     }
                 }
@@ -256,7 +246,7 @@ fun SessionsScreen(
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .clip(RowShape)
+                                .clip(SessionRowShape)
                         ) {
                             // Background Delete Button
                             if (canDelete && offset < 0.dp) {
@@ -280,7 +270,7 @@ fun SessionsScreen(
                                             modifier = Modifier
                                                 .size(48.dp)
                                                 .shadow(4.dp, CircleShape)
-                                                .background(AccentBlue, CircleShape),
+                                                .background(SessionAccentBlue, CircleShape),
                                             contentAlignment = Alignment.Center
                                         ) {
                                             Icon(
@@ -294,7 +284,7 @@ fun SessionsScreen(
                                             choose("Delete", "删除"),
                                             style = MaterialTheme.typography.labelSmall,
                                             fontWeight = FontWeight.Bold,
-                                            color = AccentBlue
+                                            color = SessionAccentBlue
                                         )
                                     }
                                 }
@@ -395,7 +385,7 @@ fun SessionsScreen(
                             }
                         }
                     },
-                    colors = ButtonDefaults.textButtonColors(contentColor = DangerRed)
+                    colors = ButtonDefaults.textButtonColors(contentColor = SessionDangerRed)
                 ) {
                     Text(stringResource(R.string.session_delete_action))
                 }
@@ -406,466 +396,5 @@ fun SessionsScreen(
                 }
             }
         )
-    }
-}
-
-@Composable
-private fun SessionScreenBackdrop() {
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(
-                Brush.linearGradient(
-                    colors = listOf(Color(0xFFF2F5FA), Color.White),
-                    start = androidx.compose.ui.geometry.Offset(0f, 0f),
-                    end = androidx.compose.ui.geometry.Offset(1000f, 1000f)
-                )
-            )
-    ) {
-        Box(
-            modifier = Modifier
-                .align(Alignment.TopEnd)
-                .size(320.dp)
-                .offset(x = 60.dp, y = (-60).dp)
-                .graphicsLayer(alpha = 0.45f)
-                .background(
-                    Brush.radialGradient(
-                        colors = listOf(AccentBlue.copy(alpha = 0.25f), Color.Transparent),
-                        radius = Float.POSITIVE_INFINITY
-                    ),
-                    CircleShape
-                )
-                .blur(80.dp)
-        )
-        Box(
-            modifier = Modifier
-                .align(Alignment.BottomStart)
-                .size(340.dp)
-                .offset(x = (-80).dp, y = 80.dp)
-                .graphicsLayer(alpha = 0.4f)
-                .background(
-                    Brush.radialGradient(
-                        colors = listOf(AccentBlueSoft.copy(alpha = 0.22f), Color.Transparent),
-                        radius = Float.POSITIVE_INFINITY
-                    ),
-                    CircleShape
-                )
-                .blur(90.dp)
-        )
-        Box(
-            modifier = Modifier
-                .align(Alignment.Center)
-                .size(500.dp)
-                .offset(x = 100.dp, y = 150.dp)
-                .graphicsLayer(alpha = 0.25f)
-                .background(Brush.radialGradient(listOf(AccentBlue.copy(alpha = 0.1f), Color.Transparent)), CircleShape)
-                .blur(120.dp)
-        )
-    }
-}
-
-@Composable
-private fun SessionManagerSummaryCard(
-    gatewayName: String,
-    sessionCount: Int,
-    canCreateSession: Boolean,
-    onSwitchGateway: () -> Unit,
-    onCreateSession: () -> Unit
-) {
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(CardShape)
-            .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.82f))
-            .border(0.8.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.08f), CardShape)
-            .padding(18.dp),
-        verticalArrangement = Arrangement.spacedBy(14.dp)
-    ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Row(
-                modifier = Modifier.weight(1f),
-                horizontalArrangement = Arrangement.spacedBy(4.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(choose("Current gateway", "当前网关"), style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                Text(gatewayName, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Black, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            }
-            Row(
-                modifier = Modifier
-                    .clip(PillShape)
-                    .background(AccentBlue.copy(alpha = 0.08f))
-                    .padding(horizontal = 12.dp, vertical = 8.dp),
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(choose("Sessions", "会话"), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, fontWeight = FontWeight.Bold)
-                Text(sessionCount.toString(), style = MaterialTheme.typography.titleMedium, color = AccentBlue, fontWeight = FontWeight.Black)
-            }
-        }
-
-        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            SessionManagerActionTile(
-                title = stringResource(R.string.session_action_switch_gateway),
-                detail = choose("Choose another host", "选择另一台主机"),
-                icon = Icons.Default.Memory,
-                tint = AccentBlue,
-                modifier = Modifier.weight(1f),
-                onClick = onSwitchGateway
-            )
-            SessionManagerActionTile(
-                title = stringResource(R.string.session_action_create_session),
-                detail = choose("Start an independent context", "开启独立上下文"),
-                icon = Icons.Default.Add,
-                tint = SuccessGreen,
-                enabled = canCreateSession,
-                modifier = Modifier.weight(1f),
-                onClick = onCreateSession
-            )
-        }
-    }
-}
-
-@Composable
-private fun SessionManagerActionTile(
-    title: String,
-    detail: String,
-    icon: ImageVector,
-    tint: Color,
-    modifier: Modifier = Modifier,
-    enabled: Boolean = true,
-    onClick: () -> Unit
-) {
-    Row(
-        modifier = modifier
-            .clip(TileShape)
-            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.36f))
-            .border(0.7.dp, tint.copy(alpha = 0.18f), TileShape)
-            .clickable(enabled = enabled, interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onClick)
-            .padding(horizontal = 12.dp, vertical = 10.dp),
-        horizontalArrangement = Arrangement.spacedBy(10.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Box(Modifier.size(34.dp).background(tint.copy(alpha = 0.14f), RoundedCornerShape(12.dp)), contentAlignment = Alignment.Center) {
-            Icon(icon, contentDescription = null, tint = tint, modifier = Modifier.size(16.dp))
-        }
-        Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            Text(title, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Black, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            Text(detail, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
-        }
-    }
-}
-
-@Composable
-private fun SectionHeader(title: String, subtitle: String) {
-    Column(verticalArrangement = Arrangement.spacedBy(4.dp), modifier = Modifier.padding(top = 8.dp)) {
-        Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Black)
-        Text(subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-    }
-}
-
-@Composable
-private fun SessionManagerEmptyStateCard() {
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RowShape)
-            .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.82f))
-            .border(0.8.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.08f), RowShape)
-            .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(6.dp)
-    ) {
-        Text(stringResource(R.string.session_empty_title), style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
-        Text(stringResource(R.string.session_empty_hint), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-    }
-}
-
-@Composable
-private fun SessionManagerSessionRow(
-    session: ChatSessionItem,
-    isSelected: Boolean,
-    isMainSession: Boolean,
-    canTap: Boolean,
-    modifier: Modifier = Modifier,
-    onTap: () -> Unit
-) {
-    val dedicated = isDedicatedSession(session.normalizedSessionKey)
-    Row(
-        modifier = modifier
-            .fillMaxWidth()
-            .clip(RowShape)
-            .background(if (isSelected) Color(0xFFF0F7FF) else MaterialTheme.colorScheme.surface)
-            .border(0.8.dp, if (isSelected) AccentBlue.copy(alpha = 0.24f) else MaterialTheme.colorScheme.outline.copy(alpha = 0.08f), RowShape)
-            .clickable(enabled = canTap, interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onTap)
-            .padding(horizontal = 16.dp, vertical = 14.dp),
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
-        verticalAlignment = Alignment.Top
-    ) {
-        Box(
-            Modifier
-                .size(38.dp)
-                .background(if (isSelected) AccentBlue.copy(alpha = 0.12f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f), RoundedCornerShape(12.dp)),
-            contentAlignment = Alignment.Center
-        ) {
-            Icon(
-                if (isSelected) Icons.Default.CheckCircle else if (isMainSession) Icons.Default.Home else Icons.Default.ChatBubbleOutline,
-                contentDescription = null,
-                tint = if (isSelected) AccentBlue else MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.size(18.dp)
-            )
-        }
-        Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Row(verticalAlignment = Alignment.Top, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text(session.displayTitle, modifier = Modifier.weight(1f), style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                when {
-                    isSelected -> SessionStatusPill(stringResource(R.string.session_status_current), AccentBlue.copy(alpha = 0.12f), AccentBlue)
-                    dedicated -> SessionStatusPill(stringResource(R.string.session_status_debug), SuccessGreen.copy(alpha = 0.14f), SuccessGreen)
-                    isMainSession -> SessionStatusPill(stringResource(R.string.session_status_main), WarningOrange.copy(alpha = 0.14f), WarningOrange)
-                }
-            }
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                Text(session.displaySubtitle, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                Text(session.activityText, style = MaterialTheme.typography.labelMedium, color = if (isSelected) AccentBlue else MaterialTheme.colorScheme.onSurfaceVariant, fontWeight = FontWeight.Bold)
-            }
-            Text(session.sessionKey, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.62f), maxLines = 1, overflow = TextOverflow.Ellipsis)
-        }
-    }
-}
-
-@Composable
-private fun SessionStatusPill(title: String, tint: Color, foreground: Color) {
-    Text(
-        title,
-        style = MaterialTheme.typography.labelSmall,
-        fontWeight = FontWeight.Bold,
-        color = foreground,
-        modifier = Modifier
-            .clip(PillShape)
-            .background(tint)
-            .padding(horizontal = 9.dp, vertical = 5.dp)
-    )
-}
-
-@Composable
-private fun MaintenanceBanner(title: String, message: String, icon: ImageVector, tint: Color) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(24.dp),
-        colors = CardDefaults.cardColors(containerColor = tint.copy(alpha = 0.08f)),
-        border = androidx.compose.foundation.BorderStroke(0.6.dp, tint.copy(alpha = 0.12f))
-    ) {
-        Row(
-            modifier = Modifier.padding(16.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(16.dp)
-        ) {
-            Box(Modifier.size(42.dp).background(tint.copy(alpha = 0.12f), CircleShape), contentAlignment = Alignment.Center) {
-                Icon(icon, null, tint = tint, modifier = Modifier.size(20.dp))
-            }
-            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                Text(title, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleSmall, color = tint)
-                Text(message, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-        }
-    }
-}
-
-private object SessionPresentation {
-    fun visibleSessions(sessions: List<ChatSessionItem>, currentSessionKey: String): List<ChatSessionItem> {
-        val current = currentSessionKey.trim().ifBlank { "main" }
-        val merged = sessions + ChatSessionItem(sessionKey = current, lastActivityAt = null)
-        return merged
-            .distinctBy { it.normalizedSessionKey }
-            .sortedWith(
-                compareByDescending<ChatSessionItem> { it.normalizedSessionKey == current.lowercase() }
-                    .thenByDescending { parseInstant(it.lastActivityAt)?.toEpochMilli() ?: 0L }
-                    .thenBy { it.displayTitle.lowercase() }
-            )
-    }
-}
-
-private val ChatSessionItem.normalizedSessionKey: String
-    get() = sessionKey.trim().lowercase().ifBlank { "main" }
-
-private val ChatSessionItem.displayTitle: String
-    get() = firstPresentationText(displayName, derivedTitle, label) ?: displayTitleForKey(sessionKey)
-
-private val ChatSessionItem.displaySubtitle: String
-    get() {
-        val kindValue = kind?.trim()?.lowercase()
-        if (kindValue != null) {
-            when (kindValue) {
-                "direct" -> return choose("Direct session", "直连会话")
-                "group" -> return choose("Group session", "群组会话")
-                "global" -> return choose("Global scope", "全局作用域")
-                "unknown" -> return choose("Uncategorized session", "未分类会话")
-            }
-        }
-        return displaySubtitleForKey(sessionKey)
-    }
-
-private val ChatSessionItem.activityText: String
-    get() = activityText(lastActivityAt)
-
-private fun firstPresentationText(vararg values: String?): String? {
-    return values.firstNotNullOfOrNull { value -> value?.trim()?.takeIf { it.isNotEmpty() } }
-}
-
-private fun displayTitleForKey(rawSessionKey: String): String {
-    val normalized = rawSessionKey.trim().lowercase()
-    if (normalized.isEmpty()) return choose("Untitled session", "未命名会话")
-    if (normalized == "main" || normalized.endsWith(":main")) return choose("Main session", "主会话")
-    if (normalized == "global") return choose("Global session", "全局会话")
-    if (isDedicatedSession(normalized)) return choose("File transfer lab", "文件联调")
-
-    val localComponent = normalized.split(":").lastOrNull().orEmpty().ifBlank { normalized }
-    if (listOf("ios-", "mobile-", "tui-", "session_").any { localComponent.startsWith(it) }) {
-        val suffix = localComponent
-            .removePrefix("ios-")
-            .removePrefix("mobile-")
-            .removePrefix("tui-")
-            .removePrefix("session_")
-            .takeLast(4)
-            .uppercase()
-        return if (suffix.isBlank()) choose("New session", "新会话") else choose("New session · $suffix", "新会话 · $suffix")
-    }
-
-    return normalized.split(":").lastOrNull()?.takeIf { it.isNotBlank() } ?: normalized
-}
-
-private fun displaySubtitleForKey(rawSessionKey: String): String {
-    val normalized = rawSessionKey.trim().lowercase()
-    if (normalized.isEmpty()) return choose("No identifier", "暂无标识")
-    if (normalized == "main" || normalized.endsWith(":main")) return choose("Default session", "默认会话")
-    if (normalized == "global") return choose("Global scope", "全局作用域")
-    if (isDedicatedSession(normalized)) return choose("Dedicated test session", "专用测试会话")
-
-    val localComponent = normalized.split(":").lastOrNull().orEmpty().ifBlank { normalized }
-    if (listOf("ios-", "mobile-", "tui-", "session_").any { localComponent.startsWith(it) }) {
-        return choose("Created locally", "本地创建")
-    }
-
-    val parts = normalized.split(":")
-    return if (parts.size > 1) parts.dropLast(1).joinToString(" · ").ifBlank { normalized } else normalized
-}
-
-private fun activityText(rawValue: String?): String {
-    val instant = parseInstant(rawValue) ?: return choose("No activity yet", "暂无活动")
-    val now = Instant.now()
-    val deltaSeconds = abs(now.epochSecond - instant.epochSecond)
-    return when {
-        deltaSeconds < 45 -> choose("Just now", "刚刚")
-        deltaSeconds < 3600 -> choose("${maxOf(1, deltaSeconds / 60)} min ago", "${maxOf(1, deltaSeconds / 60)} 分钟前")
-        isToday(instant) -> DateTimeFormatter.ofPattern("HH:mm").withZone(ZoneId.systemDefault()).format(instant)
-        isSameYear(instant) -> DateTimeFormatter.ofPattern(if (com.rethinkingstudio.clawlink.core.state.LocalizedText.isChinese()) "M月d日 HH:mm" else "MMM d HH:mm").withZone(ZoneId.systemDefault()).format(instant)
-        else -> DateTimeFormatter.ofPattern(if (com.rethinkingstudio.clawlink.core.state.LocalizedText.isChinese()) "yyyy年M月d日 HH:mm" else "MMM d, yyyy HH:mm").withZone(ZoneId.systemDefault()).format(instant)
-    }
-}
-
-private fun parseInstant(rawValue: String?): Instant? {
-    val value = rawValue?.trim().orEmpty()
-    if (value.isEmpty()) return null
-    return try {
-        Instant.parse(value)
-    } catch (_: DateTimeParseException) {
-        null
-    }
-}
-
-private fun isToday(instant: Instant): Boolean {
-    val zone = ZoneId.systemDefault()
-    return instant.atZone(zone).toLocalDate() == Instant.now().atZone(zone).toLocalDate()
-}
-
-private fun isSameYear(instant: Instant): Boolean {
-    val zone = ZoneId.systemDefault()
-    return instant.atZone(zone).year == Instant.now().atZone(zone).year
-}
-
-private fun isDedicatedSession(normalizedSessionKey: String): Boolean {
-    return normalizedSessionKey == "agent:main:file-transfer-lab"
-}
-
-private fun isProtectedSession(session: ChatSessionItem): Boolean {
-    val normalized = session.normalizedSessionKey
-    return normalized == "main" || normalized.endsWith(":main") || isDedicatedSession(normalized)
-}
-
-private fun canDeleteSession(
-    session: ChatSessionItem,
-    gatewayId: String?,
-    operationsLocked: Boolean,
-    isStreaming: Boolean,
-    isStoppingRun: Boolean,
-    isRefreshing: Boolean,
-    deletingKey: String?,
-    role: String?
-): Boolean {
-    if (isProtectedSession(session)) return false
-    if (gatewayId == null) return false
-    if (operationsLocked || isStreaming || isStoppingRun || isRefreshing) return false
-    if (deletingKey != null && deletingKey != session.normalizedSessionKey) return false
-    if (role?.trim()?.lowercase() == "viewer") return false
-    return true
-}
-
-private fun lockMessage(gatewayId: String?, operationsLocked: Boolean, isStreaming: Boolean, isStoppingRun: Boolean): String {
-    return when {
-        gatewayId == null -> choose("Pair a gateway before switching sessions.", "请先完成配对后再切换会话。")
-        operationsLocked -> choose("The current gateway is recovering from restart. Session switching is temporarily unavailable.", "当前网关正在重启恢复中，暂不能切换会话。")
-        isStreaming -> choose("The current session still has an unfinished reply. Wait or stop it before switching.", "当前会话还有未完成回复，请先等待或停止后再切换。")
-        isStoppingRun -> choose("The message is still stopping. Switch sessions later.", "消息正在停止中，请稍后再切换会话。")
-        else -> choose("Session switching is currently unavailable.", "当前不可切换会话。")
-    }
-}
-
-@Composable
-private fun ProcessingOverlay(message: String, detail: String) {
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(Color.Black.copy(alpha = 0.15f)),
-        contentAlignment = Alignment.Center
-    ) {
-        Column(
-            modifier = Modifier
-                .padding(horizontal = 40.dp)
-                .shadow(20.dp, RoundedCornerShape(32.dp), clip = false, spotColor = Color.Black.copy(alpha = 0.15f))
-                .clip(RoundedCornerShape(32.dp))
-                .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.85f))
-                .border(0.6.dp, Color.White.copy(alpha = 0.4f), RoundedCornerShape(32.dp))
-                .padding(horizontal = 24.dp, vertical = 32.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(24.dp)
-        ) {
-            Box(contentAlignment = Alignment.Center) {
-                CircularProgressIndicator(
-                    modifier = Modifier.size(64.dp),
-                    strokeWidth = 3.dp,
-                    color = AccentBlue.copy(alpha = 0.12f),
-                    trackColor = Color.Transparent
-                )
-                CircularProgressIndicator(
-                    modifier = Modifier.size(42.dp),
-                    strokeWidth = 3.5.dp,
-                    color = AccentBlue,
-                    strokeCap = androidx.compose.ui.graphics.StrokeCap.Round
-                )
-            }
-            
-            Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text(
-                    message,
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-                Text(
-                    detail,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    textAlign = TextAlign.Center
-                )
-            }
-        }
     }
 }

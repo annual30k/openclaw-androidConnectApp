@@ -24,21 +24,6 @@ import kotlinx.coroutines.delay
 import java.io.File
 import java.util.UUID
 
-internal data class ChatImagePreviewState(
-    val url: String,
-    val accessToken: String,
-    val fileName: String?,
-    val cacheKey: String? = null
-)
-
-internal data class ChatDocumentPreviewState(
-    val url: String,
-    val accessToken: String,
-    val fileName: String?,
-    val mimeType: String?,
-    val cacheKey: String? = null
-)
-
 /**
  * ViewModel for the Chat screen, managing local UI state and coordinating business logic.
  */

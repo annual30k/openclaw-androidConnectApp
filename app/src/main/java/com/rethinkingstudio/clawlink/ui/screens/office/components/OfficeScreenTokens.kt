@@ -1,0 +1,55 @@
+package com.rethinkingstudio.clawlink.ui.screens.office
+
+import android.app.Activity
+import android.content.pm.ActivityInfo
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.painter.BitmapPainter
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.imageResource
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.IntSize
+import androidx.compose.ui.unit.sp
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
+import com.rethinkingstudio.clawlink.R
+import com.rethinkingstudio.clawlink.core.models.OfficeActivityKind
+import com.rethinkingstudio.clawlink.core.models.OfficeAgentSnapshot
+import com.rethinkingstudio.clawlink.core.models.OfficeSceneSnapshot
+import com.rethinkingstudio.clawlink.core.models.chat.MessageRole
+import com.rethinkingstudio.clawlink.core.models.chat.MessageState
+import com.rethinkingstudio.clawlink.core.models.gateway.AggregateStatus
+import com.rethinkingstudio.clawlink.core.models.gateway.GatewaySummary
+import com.rethinkingstudio.clawlink.core.models.office.OfficeScenePlanner
+import com.rethinkingstudio.clawlink.core.state.LocalizedText.choose
+import com.rethinkingstudio.clawlink.core.state.auth.AuthStore
+import com.rethinkingstudio.clawlink.core.state.chat.ChatStore
+import com.rethinkingstudio.clawlink.core.state.gateway.GatewayStore
+import com.rethinkingstudio.clawlink.ui.screens.chat.formatChatTimestamp
+import com.rethinkingstudio.clawlink.ui.screens.office.components.OfficePanelCard
+import com.rethinkingstudio.clawlink.ui.screens.office.components.PixelOfficeScene
+
+internal val OfficeSceneLetterboxColor = Color(0xFFEDE3CC)
+
