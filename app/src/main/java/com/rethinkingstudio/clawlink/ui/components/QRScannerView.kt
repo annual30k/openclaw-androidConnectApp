@@ -32,6 +32,7 @@ import com.google.mlkit.vision.barcode.common.Barcode
 import com.google.mlkit.vision.common.InputImage
 import java.util.concurrent.Executors
 
+@ExperimentalGetImage
 @Composable
 fun QRScannerView(
     onCodeScanned: (String) -> Unit,

@@ -1,5 +1,6 @@
 package com.rethinkingstudio.clawlink.ui.screens.auth
 
+import androidx.camera.core.ExperimentalGetImage
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -29,6 +30,7 @@ import com.rethinkingstudio.clawlink.core.utils.PairingInputResolver
 import com.rethinkingstudio.clawlink.ui.components.*
 import kotlinx.coroutines.launch
 
+@ExperimentalGetImage
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalPermissionsApi::class)
 @Composable
 fun PairingScreen(

@@ -317,9 +317,9 @@ private fun WelcomeSlideView(
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(top = 42.dp),
+                .padding(horizontal = 0.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Top
+            verticalArrangement = Arrangement.Center
         ) {
             when (slide.kind) {
                 WelcomeSlideKind.Connect -> ConnectHero(Modifier.height(heroHeight))
@@ -586,7 +586,7 @@ private fun OfficeHero(modifier: Modifier) {
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(146.dp)
+                    .height(164.dp)
                     .clip(RoundedCornerShape(24.dp))
                     .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.86f))
             ) {
@@ -610,21 +610,21 @@ private fun OfficeHero(modifier: Modifier) {
                         )
                 )
                 Image(
-                    painter = painterResource(R.drawable.office_desk),
+                    painter = painterResource(R.drawable.star_working_hero),
                     contentDescription = null,
                     modifier = Modifier
-                        .width(150.dp)
+                        .size(108.dp)
                         .align(Alignment.Center)
-                        .offset(x = 18.dp, y = 14.dp),
+                        .offset(x = 16.dp, y = (-28).dp),
                     contentScale = ContentScale.Fit
                 )
                 Image(
-                    painter = painterResource(R.drawable.office_npc_robot),
+                    painter = painterResource(R.drawable.office_desk),
                     contentDescription = null,
                     modifier = Modifier
-                        .size(66.dp)
+                        .width(196.dp)
                         .align(Alignment.Center)
-                        .offset(x = (-52).dp, y = (-2).dp),
+                        .offset(x = 20.dp, y = 24.dp),
                     contentScale = ContentScale.Fit
                 )
                 CapsuleLabel(

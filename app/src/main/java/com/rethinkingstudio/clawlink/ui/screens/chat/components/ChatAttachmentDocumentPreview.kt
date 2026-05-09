@@ -618,8 +618,9 @@ private fun PdfPagePreview(
     val density = LocalDensity.current
     BoxWithConstraints(modifier = modifier.fillMaxWidth()) {
         val widthPx = remember(maxWidth) { with(density) { maxWidth.toPx().roundToInt().coerceAtLeast(1) } }
-        val bitmapState = produceState<Bitmap?>(initialValue = null, renderer, pageIndex, widthPx) {
-            value = withContext(Dispatchers.IO) {
+        var bitmap by remember(renderer, pageIndex, widthPx) { mutableStateOf<Bitmap?>(null) }
+        LaunchedEffect(renderer, pageIndex, widthPx) {
+            bitmap = withContext(Dispatchers.IO) {
                 runCatching {
                     renderer.openPage(pageIndex).use { page ->
                         val scale = widthPx.toFloat() / max(1, page.width).toFloat()
@@ -632,15 +633,15 @@ private fun PdfPagePreview(
                 }.getOrNull()
             }
         }
-        val bitmap = bitmapState.value
-        if (bitmap != null) {
+        val currentBitmap = bitmap
+        if (currentBitmap != null) {
             Image(
-                bitmap = bitmap.asImageBitmap(),
+                bitmap = currentBitmap.asImageBitmap(),
                 contentDescription = choose("PDF page $pageIndex", "PDF 第 $pageIndex 页"),
                 contentScale = ContentScale.Fit,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(with(density) { bitmap.height.toDp() })
+                    .height(with(density) { currentBitmap.height.toDp() })
                     .clip(RoundedCornerShape(16.dp))
                     .border(BorderStroke(1.dp, Color(0xFFE5E7EB)), RoundedCornerShape(16.dp))
             )
