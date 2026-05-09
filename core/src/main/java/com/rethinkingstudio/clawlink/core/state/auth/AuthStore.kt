@@ -148,6 +148,51 @@ class AuthStore(
         }
     }
 
+    suspend fun requestPasswordReset(baseUrl: String, email: String, deviceId: String): Boolean {
+        if (!isValidEmail(email)) {
+            _state.value = _state.value.copy(errorMessage = choose("Enter a valid email address.", "请输入有效邮箱地址。"))
+            return false
+        }
+
+        _state.value = _state.value.copy(isLoading = true, errorMessage = null)
+        return try {
+            apiClient.configure(SessionCredentials("", baseUrl))
+            apiClient.requestPasswordReset(email.trim(), deviceId)
+            _state.value = _state.value.copy(isLoading = false, errorMessage = null)
+            true
+        } catch (e: Exception) {
+            _state.value = _state.value.copy(isLoading = false, errorMessage = e.message ?: choose("Failed to send verification code.", "验证码发送失败。"))
+            false
+        }
+    }
+
+    suspend fun confirmPasswordReset(baseUrl: String, email: String, code: String, newPassword: String): Boolean {
+        val normalizedCode = code.trim()
+        if (!isValidEmail(email)) {
+            _state.value = _state.value.copy(errorMessage = choose("Enter a valid email address.", "请输入有效邮箱地址。"))
+            return false
+        }
+        if (!Regex("^\\d{6}$").matches(normalizedCode)) {
+            _state.value = _state.value.copy(errorMessage = choose("Enter the 6-digit verification code.", "请输入 6 位验证码。"))
+            return false
+        }
+        if (newPassword.length < 8) {
+            _state.value = _state.value.copy(errorMessage = choose("Password must be at least 8 characters.", "密码至少需要 8 位。"))
+            return false
+        }
+
+        _state.value = _state.value.copy(isLoading = true, errorMessage = null)
+        return try {
+            apiClient.configure(SessionCredentials("", baseUrl))
+            apiClient.confirmPasswordReset(email.trim(), normalizedCode, newPassword)
+            _state.value = _state.value.copy(isLoading = false, errorMessage = null)
+            true
+        } catch (e: Exception) {
+            _state.value = _state.value.copy(isLoading = false, errorMessage = e.message ?: choose("Password reset failed.", "重置密码失败。"))
+            false
+        }
+    }
+
     suspend fun pairGateway(baseUrl: String, gatewayId: String?, accessCode: String, deviceId: String): Boolean {
         _state.value = _state.value.copy(isLoading = true, errorMessage = null)
         return try {
@@ -192,6 +237,32 @@ class AuthStore(
             _state.value = _state.value.copy(
                 isLoading = false,
                 errorMessage = e.message ?: choose("Delete account failed", "注销账号失败")
+            )
+            false
+        }
+    }
+
+    suspend fun changePassword(currentPassword: String, newPassword: String): Boolean {
+        if (currentPassword.isEmpty()) {
+            _state.value = _state.value.copy(errorMessage = choose("Enter your current password.", "请输入当前密码。"))
+            return false
+        }
+        if (newPassword.length < 8) {
+            _state.value = _state.value.copy(errorMessage = choose("Password must be at least 8 characters.", "密码至少需要 8 位。"))
+            return false
+        }
+
+        _state.value = _state.value.copy(isLoading = true, errorMessage = null)
+        return try {
+            apiClient.changePassword(currentPassword, newPassword)
+            credentialStore.clearCredentials()
+            apiClient.clearSession()
+            _state.value = AuthState()
+            true
+        } catch (e: Exception) {
+            _state.value = _state.value.copy(
+                isLoading = false,
+                errorMessage = e.message ?: choose("Change password failed", "修改密码失败")
             )
             false
         }

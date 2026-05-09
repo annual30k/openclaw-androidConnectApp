@@ -39,6 +39,10 @@ sealed class RelayAPIError : Exception() {
                 } ?: LocalizedText.choose("Verification code is incorrect.", "验证码错误。")
                 "email_already_verified" -> LocalizedText.choose("This email is already verified. Sign in instead.", "该邮箱已验证，请直接登录。")
                 "verification_email_failed" -> LocalizedText.choose("Failed to send verification email. Try again later.", "验证码邮件发送失败，请稍后重试。")
+                "not_found", "unknown_error" -> LocalizedText.choose(
+                    "This Relay does not support password reset yet. Use the local relay or deploy the latest relay server.",
+                    "当前 Relay 尚未支持重置密码，请切换到本地 Relay 或部署最新中继服务。"
+                )
                 else -> errorCode
             }
         override val message: String get() = userMessage

@@ -15,6 +15,9 @@ object APIEndpoints {
         val register = APIEndpoint(HTTPMethod.POST, "/api/auth/register")
         val verifyEmail = APIEndpoint(HTTPMethod.POST, "/api/auth/verify-email")
         val login = APIEndpoint(HTTPMethod.POST, "/api/auth/login")
+        val requestPasswordReset = APIEndpoint(HTTPMethod.POST, "/api/auth/password-reset/request")
+        val confirmPasswordReset = APIEndpoint(HTTPMethod.POST, "/api/auth/password-reset/confirm")
+        val changePassword = APIEndpoint(HTTPMethod.POST, "/api/auth/change-password")
         val deleteAccount = APIEndpoint(HTTPMethod.DELETE, "/api/auth/account")
         val pairGateway = APIEndpoint(HTTPMethod.POST, "/api/mobile/pair")
     }

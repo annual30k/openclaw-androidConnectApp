@@ -160,6 +160,21 @@ class RelayAPIClient(
         return SessionCredentials(accessToken = response.accessToken, relayBaseURL = baseUrl)
     }
 
+    suspend fun requestPasswordReset(email: String, deviceId: String): PasswordResetResponse {
+        val req = PasswordResetRequest(email = email, deviceId = deviceId)
+        return request(APIEndpoints.Auth.requestPasswordReset, req)
+    }
+
+    suspend fun confirmPasswordReset(email: String, code: String, newPassword: String) {
+        val req = PasswordResetConfirmRequest(email = email, code = code, newPassword = newPassword)
+        request<EmptyResponse>(APIEndpoints.Auth.confirmPasswordReset, req)
+    }
+
+    suspend fun changePassword(currentPassword: String, newPassword: String) {
+        val req = ChangePasswordRequest(currentPassword = currentPassword, newPassword = newPassword)
+        request<EmptyResponse>(APIEndpoints.Auth.changePassword, req)
+    }
+
     suspend fun deleteAccount() {
         request<EmptyResponse>(APIEndpoints.Auth.deleteAccount)
     }

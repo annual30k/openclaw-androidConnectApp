@@ -61,8 +61,36 @@ data class VerifyEmailRequest(
 )
 
 @Serializable
+data class PasswordResetRequest(
+    val email: String,
+    val deviceId: String,
+    val platform: String = "android",
+    val appVersion: String = "1.0.0"
+)
+
+@Serializable
+data class PasswordResetConfirmRequest(
+    val email: String,
+    val code: String,
+    val newPassword: String
+)
+
+@Serializable
+data class ChangePasswordRequest(
+    val currentPassword: String,
+    val newPassword: String
+)
+
+@Serializable
 data class LoginResponse(
     val accessToken: String
+)
+
+@Serializable
+data class PasswordResetResponse(
+    val ok: Boolean,
+    val email: String? = null,
+    val expiresAt: String? = null
 )
 
 @Serializable
