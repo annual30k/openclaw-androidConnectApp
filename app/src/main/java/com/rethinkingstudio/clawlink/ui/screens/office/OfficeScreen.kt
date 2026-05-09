@@ -139,10 +139,10 @@ fun OfficeScreen(
     val sceneTint = sceneMode.tint
     val toolAgent = focusAgent?.takeIf { it.shouldShowToolDetail() }
     val shouldShowOfficeOccupants = gatewayState.isAppRelayOnline &&
-        focusAgent?.aggregateStatus != AggregateStatus.offline
+        focusAgent?.aggregateStatus == AggregateStatus.online
     val renderScene = remember(scene, shouldShowOfficeOccupants) {
         if (!shouldShowOfficeOccupants) {
-            scene.copy(agents = emptyList())
+            scene.copy(agents = listOfNotNull(scene.focusAgent))
         } else {
             val focusAgentId = scene.focusAgent?.id
             scene.copy(
@@ -160,7 +160,7 @@ fun OfficeScreen(
         PixelOfficeScene(
             scene = renderScene,
             showsOccupants = shouldShowOfficeOccupants,
-            showsRestingCat = sceneMode == OfficePresenceMode.SLEEPING,
+            showsRestingCat = !shouldShowOfficeOccupants && focusAgent != null,
             modifier = Modifier
                 .fillMaxSize()
                 .clickable(

@@ -83,7 +83,7 @@ internal fun officePresenceMode(agent: OfficeAgentSnapshot?): OfficePresenceMode
     return if (
         agent.activityKind == OfficeActivityKind.SLEEPING ||
         agent.activityKind == OfficeActivityKind.OFFLINE ||
-        agent.aggregateStatus == AggregateStatus.offline
+        agent.aggregateStatus != AggregateStatus.online
     ) {
         OfficePresenceMode.SLEEPING
     } else {

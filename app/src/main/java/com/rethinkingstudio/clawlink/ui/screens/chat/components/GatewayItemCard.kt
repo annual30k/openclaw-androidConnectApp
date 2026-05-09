@@ -77,6 +77,12 @@ internal fun GatewayItemCard(
     onSelectSession: (ChatSessionItem) -> Unit,
     onClick: () -> Unit
 ) {
+    val effectiveStatus = if (selected) {
+        GatewayStore.aggregateStatusForChain(gateway, appRelayStatus)
+    } else {
+        gateway.aggregateStatus
+    }
+
     Surface(
         onClick = onClick,
         shape = RoundedCornerShape(22.dp),
@@ -136,7 +142,7 @@ internal fun GatewayItemCard(
                     }
                 }
                 StatusPill(
-                    status = if (appRelayStatus == AggregateStatus.online) gateway.aggregateStatus else appRelayStatus
+                    status = effectiveStatus
                 )
             }
             GatewaySessionSelector(
@@ -157,4 +163,3 @@ internal fun GatewayItemCard(
         }
     }
 }
-

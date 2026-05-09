@@ -57,9 +57,11 @@ internal fun DrawScope.drawStage(
         drawContext.canvas.nativeCanvas.drawBitmap(it, null, Rect(0, 0, 1280, 720), null)
     }
 
-    drawFurniture(bitmaps, scene, timeMillis, reduceMotion, showsOccupants, showsRestingCat)
+    drawFurniture(bitmaps, scene, timeMillis, reduceMotion, showsOccupants)
     if (showsOccupants) {
         drawNPCs(officeNpcs, timeMillis)
+        drawAgents(bitmaps, scene, motionState, timeMillis, reduceMotion)
+    } else if (showsRestingCat) {
         drawAgents(bitmaps, scene, motionState, timeMillis, reduceMotion)
     }
     drawDeskOverlay(bitmaps)
@@ -71,8 +73,7 @@ internal fun DrawScope.drawFurniture(
     scene: OfficeSceneSnapshot,
     timeMillis: Long,
     reduceMotion: Boolean,
-    showsOccupants: Boolean,
-    showsRestingCat: Boolean
+    showsOccupants: Boolean
 ) {
     drawSpriteFrame(bitmaps[R.drawable.office_posters_sheet], 160, 160, 14, timeMillis, 1.0, centerRect(252f, 66f, 160f, 160f, 0.95f), reduceMotion)
     drawSpriteFrame(bitmaps[R.drawable.office_plants_sheet], 160, 160, 3, timeMillis, 1.0, centerRect(230f, 185f, 160f, 160f, 0.92f), reduceMotion)
@@ -100,7 +101,7 @@ internal fun DrawScope.drawFurniture(
     }
 
     drawSpriteFrame(bitmaps[R.drawable.office_serverroom_sheet], 180, 251, null, timeMillis, 5.5, centerRect(1021f, 142f, 180f, 251f, 1.0f), reduceMotion)
-    if (showsOccupants || showsRestingCat) {
+    if (showsOccupants) {
         drawSpriteFrame(bitmaps[R.drawable.office_cats_sheet], 160, 160, 6, timeMillis, 1.0, centerRect(94f, 557f, 160f, 160f, 0.94f), reduceMotion)
     }
 }

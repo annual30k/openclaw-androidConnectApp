@@ -56,6 +56,10 @@ internal fun spriteSpec(agent: OfficeAgentSnapshot, isMoving: Boolean): SpriteSp
         return SpriteSpec(R.drawable.star_walking_sheet, 256, 256, 0, 16, 16.0, Size(170f, 170f))
     }
 
+    if (agent.aggregateStatus != AggregateStatus.online) {
+        return SpriteSpec(R.drawable.star_sync_sheet, 256, 256, 1, 48, 6.0, Size(256f, 256f))
+    }
+
     return when (agent.activityKind) {
         OfficeActivityKind.SLEEPING, OfficeActivityKind.OFFLINE ->
             SpriteSpec(R.drawable.star_sync_sheet, 256, 256, 1, 48, 6.0, Size(256f, 256f))
@@ -221,7 +225,7 @@ internal fun resolveTargetPosition(agent: OfficeAgentSnapshot): PointF {
         OfficeStation.DESK_CENTER -> listOf(PointF(659f, 397f), PointF(704f, 358f), PointF(620f, 360f))
         OfficeStation.COFFEE_DESK -> listOf(PointF(659f, 397f), PointF(704f, 432f), PointF(616f, 428f))
         OfficeStation.SOFA -> listOf(PointF(798f, 272f))
-        OfficeStation.BED -> listOf(PointF(1157f, 592f), PointF(1120f, 570f), PointF(1190f, 620f))
+        OfficeStation.BED -> listOf(PointF(1157f, 592f))
         OfficeStation.SERVER_RACK -> listOf(PointF(1007f, 221f), PointF(1060f, 190f), PointF(952f, 188f))
         OfficeStation.CORNER -> listOf(PointF(94f, 557f), PointF(146f, 520f), PointF(60f, 560f))
     }
@@ -230,7 +234,7 @@ internal fun resolveTargetPosition(agent: OfficeAgentSnapshot): PointF {
 }
 
 internal fun resolveStation(agent: OfficeAgentSnapshot): OfficeStation {
-    if (agent.aggregateStatus == AggregateStatus.offline) {
+    if (agent.aggregateStatus != AggregateStatus.online) {
         return OfficeStation.BED
     }
 

@@ -52,12 +52,13 @@ internal fun ChatTopBar(
     val hasGateway = gateway != null
     val statusColor = when {
         !hasGateway -> ChatColors.pending
-        effectiveStatus == AggregateStatus.online -> ChatColors.online
-        else -> ChatColors.offline
+        else -> gatewayStatusTint(effectiveStatus)
     }
     val statusText = when {
         !hasGateway -> stringResource(R.string.gateway_status_unpaired)
         effectiveStatus == AggregateStatus.online -> stringResource(R.string.gateway_status_online)
+        effectiveStatus == AggregateStatus.connecting -> stringResource(R.string.gateway_aggregate_connecting)
+        effectiveStatus == AggregateStatus.partial -> stringResource(R.string.gateway_aggregate_partial)
         else -> stringResource(R.string.gateway_status_disconnected)
     }
 

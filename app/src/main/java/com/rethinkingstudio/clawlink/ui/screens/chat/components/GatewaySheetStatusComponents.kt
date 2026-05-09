@@ -66,11 +66,11 @@ import com.rethinkingstudio.clawlink.ui.screens.settings.components.GatewayFlowP
 
 @Composable
 internal fun StatusPill(status: AggregateStatus) {
-    val online = status == AggregateStatus.online
+    val tint = gatewayStatusTint(status)
     Surface(
         shape = RoundedCornerShape(999.dp),
-        color = if (online) ChatColors.online.copy(alpha = 0.14f) else ChatColors.offline.copy(alpha = 0.12f),
-        border = BorderStroke(1.dp, if (online) ChatColors.online.copy(alpha = 0.36f) else ChatColors.offline.copy(alpha = 0.32f))
+        color = tint.copy(alpha = 0.14f),
+        border = BorderStroke(1.dp, tint.copy(alpha = 0.36f))
     ) {
         Row(
             modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
@@ -81,15 +81,34 @@ internal fun StatusPill(status: AggregateStatus) {
                 modifier = Modifier
                     .size(9.dp)
                     .clip(CircleShape)
-                    .background(if (online) ChatColors.online else ChatColors.offline)
+                    .background(tint)
             )
             Text(
-                if (online) stringResource(R.string.gateway_status_online) else stringResource(R.string.gateway_status_offline),
+                gatewayStatusPillText(status),
                 style = MaterialTheme.typography.labelMedium.copy(fontSize = 13.sp),
-                color = if (online) ChatColors.online else ChatColors.offline,
+                color = tint,
                 fontWeight = FontWeight.Bold
             )
         }
+    }
+}
+
+internal fun gatewayStatusTint(status: AggregateStatus): Color {
+    return when (status) {
+        AggregateStatus.online -> ChatColors.online
+        AggregateStatus.connecting -> ChatColors.pending
+        AggregateStatus.partial -> ChatColors.pending
+        AggregateStatus.offline -> ChatColors.offline
+    }
+}
+
+@Composable
+private fun gatewayStatusPillText(status: AggregateStatus): String {
+    return when (status) {
+        AggregateStatus.online -> stringResource(R.string.gateway_status_online)
+        AggregateStatus.connecting -> stringResource(R.string.gateway_aggregate_connecting)
+        AggregateStatus.partial -> stringResource(R.string.gateway_aggregate_partial)
+        AggregateStatus.offline -> stringResource(R.string.gateway_status_offline)
     }
 }
 
