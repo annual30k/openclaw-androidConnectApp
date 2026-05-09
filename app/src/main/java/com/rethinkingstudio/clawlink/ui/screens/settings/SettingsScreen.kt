@@ -1,24 +1,22 @@
 package com.rethinkingstudio.clawlink.ui.screens.settings
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material.icons.automirrored.filled.Help
+import androidx.compose.material.icons.automirrored.filled.Logout
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
@@ -35,12 +33,14 @@ import com.rethinkingstudio.clawlink.core.state.LanguageManager
 import com.rethinkingstudio.clawlink.core.state.LocalizedText.choose
 import com.rethinkingstudio.clawlink.core.state.auth.AuthStore
 import com.rethinkingstudio.clawlink.core.state.gateway.GatewayStore
-import com.rethinkingstudio.clawlink.ui.components.ClawLinkCard
 import com.rethinkingstudio.clawlink.ui.components.ClawLinkScaffold
 import com.rethinkingstudio.clawlink.ui.components.ClawLinkSectionHeader
 import com.rethinkingstudio.clawlink.ui.screens.settings.components.EmptyGatewayStatusCard
 import com.rethinkingstudio.clawlink.ui.screens.settings.components.GatewayStatusCard
 import kotlinx.coroutines.launch
+
+private val SettingsGroupShape = RoundedCornerShape(24.dp)
+private val SettingsDividerColor = Color(0xFFE5E7EB)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -91,8 +91,8 @@ fun SettingsScreen(
                 .background(Color(0xFFF8F9FB))
                 .padding(padding)
                 .verticalScroll(rememberScrollState())
-                .padding(horizontal = 20.dp, vertical = 8.dp),
-            verticalArrangement = Arrangement.spacedBy(20.dp)
+                .padding(horizontal = 20.dp, vertical = 20.dp),
+            verticalArrangement = Arrangement.spacedBy(18.dp)
         ) {
             // Section: Gateway
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -161,21 +161,21 @@ fun SettingsScreen(
                     title = stringResource(R.string.settings_section_features),
                     subtitle = stringResource(R.string.settings_section_features_subtitle)
                 )
-                ClawLinkCard(modifier = Modifier.fillMaxWidth()) {
+                SettingsGroup(modifier = Modifier.fillMaxWidth()) {
                     Column {
                         SettingsNavigationRow(
                             icon = Icons.Default.Dashboard,
                             title = stringResource(R.string.settings_row_office),
                             onClick = onNavigateToOffice
                         )
-                        HorizontalDivider(modifier = Modifier.padding(start = 64.dp), color = Color(0xFFF3F4F6))
+                        SettingsDivider()
                         SettingsNavigationRow(
                             icon = Icons.Default.Task,
                             title = stringResource(R.string.settings_row_tasks),
                             enabled = isChatChainReady,
                             onClick = onNavigateToTasks
                         )
-                        HorizontalDivider(modifier = Modifier.padding(start = 64.dp), color = Color(0xFFF3F4F6))
+                        SettingsDivider()
                         SettingsNavigationRow(
                             icon = Icons.Default.Extension,
                             title = stringResource(R.string.settings_row_skills),
@@ -192,7 +192,7 @@ fun SettingsScreen(
                     title = stringResource(R.string.settings_section_ai),
                     subtitle = stringResource(R.string.settings_section_ai_subtitle)
                 )
-                ClawLinkCard(modifier = Modifier.fillMaxWidth()) {
+                SettingsGroup(modifier = Modifier.fillMaxWidth()) {
                     Column {
                         SettingsNavigationRow(
                             icon = Icons.Default.Tune,
@@ -200,14 +200,14 @@ fun SettingsScreen(
                             enabled = isChatChainReady,
                             onClick = onNavigateToModels
                         )
-                        HorizontalDivider(modifier = Modifier.padding(start = 64.dp), color = Color(0xFFF3F4F6))
+                        SettingsDivider()
                         SettingsNavigationRow(
                             icon = Icons.Default.ChatBubble,
                             title = stringResource(R.string.settings_row_sessions),
                             enabled = isChatChainReady,
                             onClick = onNavigateToSessions
                         )
-                        HorizontalDivider(modifier = Modifier.padding(start = 64.dp), color = Color(0xFFF3F4F6))
+                        SettingsDivider()
                         SettingsNavigationRow(
                             icon = Icons.Default.Mic,
                             title = stringResource(R.string.settings_row_voice_setup),
@@ -224,25 +224,25 @@ fun SettingsScreen(
                     title = stringResource(R.string.settings_section_management),
                     subtitle = stringResource(R.string.settings_section_management_subtitle)
                 )
-                ClawLinkCard(modifier = Modifier.fillMaxWidth()) {
+                SettingsGroup(modifier = Modifier.fillMaxWidth()) {
                     Column {
-                        SettingsNavigationRow(
-                            icon = Icons.Default.Settings,
-                            title = stringResource(R.string.settings_row_advanced),
-                            onClick = onNavigateToAdvanced
-                        )
-                        HorizontalDivider(modifier = Modifier.padding(start = 64.dp), color = Color(0xFFF3F4F6))
-                        SettingsNavigationRow(
-                            icon = Icons.Default.Help,
-                            title = stringResource(R.string.settings_row_usage_guide),
-                            onClick = onNavigateToHelp
-                        )
-                        HorizontalDivider(modifier = Modifier.padding(start = 64.dp), color = Color(0xFFF3F4F6))
                         SettingsNavigationRow(
                             icon = Icons.Default.Language,
                             title = stringResource(R.string.settings_row_language),
                             value = LanguageManager.getCurrentPreference().displayName,
                             onClick = onNavigateToLanguage
+                        )
+                        SettingsDivider()
+                        SettingsNavigationRow(
+                            icon = Icons.Default.Settings,
+                            title = stringResource(R.string.settings_row_advanced),
+                            onClick = onNavigateToAdvanced
+                        )
+                        SettingsDivider()
+                        SettingsNavigationRow(
+                            icon = Icons.AutoMirrored.Filled.Help,
+                            title = stringResource(R.string.settings_row_usage_guide),
+                            onClick = onNavigateToHelp
                         )
                     }
                 }
@@ -254,65 +254,27 @@ fun SettingsScreen(
                     title = stringResource(R.string.settings_section_account),
                     subtitle = stringResource(R.string.settings_section_account_subtitle)
                 )
-                ClawLinkCard(modifier = Modifier.fillMaxWidth()) {
+                SettingsGroup(modifier = Modifier.fillMaxWidth()) {
                     Column {
                         SettingsNavigationRow(
                             icon = Icons.Default.Key,
                             title = choose("Change password", "修改密码"),
                             onClick = { showChangePassword = true }
                         )
-                        HorizontalDivider(modifier = Modifier.padding(start = 64.dp), color = Color(0xFFF3F4F6))
-                        Surface(
-                            onClick = { showLogoutConfirm = true },
+                        SettingsDivider()
+                        SettingsAccountActionRow(
+                            icon = Icons.AutoMirrored.Filled.Logout,
+                            title = stringResource(R.string.settings_account_sign_out),
                             enabled = !authState.isLoading,
-                            modifier = Modifier.fillMaxWidth(),
-                            color = Color.Transparent
-                        ) {
-                            Row(
-                                modifier = Modifier.padding(horizontal = 16.dp, vertical = 20.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(14.dp)
-                            ) {
-                                Surface(
-                                    shape = RoundedCornerShape(10.dp),
-                                    color = Color(0xFFF3F4F6),
-                                    modifier = Modifier.size(36.dp)
-                                ) {
-                                    Box(contentAlignment = Alignment.Center) {
-                                        Icon(Icons.Default.Logout, null, tint = Color(0xFFEF4444), modifier = Modifier.size(18.dp))
-                                    }
-                                }
-                                Text(stringResource(R.string.settings_account_sign_out), fontWeight = FontWeight.SemiBold, color = Color(0xFFEF4444))
-                            }
-                        }
-                        HorizontalDivider(modifier = Modifier.padding(start = 64.dp), color = Color(0xFFF3F4F6))
-                        Surface(
-                            onClick = { showDeleteConfirm = true },
+                            onClick = { showLogoutConfirm = true }
+                        )
+                        SettingsDivider()
+                        SettingsAccountActionRow(
+                            icon = Icons.Default.Delete,
+                            title = stringResource(R.string.settings_account_delete),
                             enabled = !authState.isLoading,
-                            modifier = Modifier.fillMaxWidth(),
-                            color = Color.Transparent
-                        ) {
-                            Row(
-                                modifier = Modifier.padding(horizontal = 16.dp, vertical = 20.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(14.dp)
-                            ) {
-                                Surface(
-                                    shape = RoundedCornerShape(10.dp),
-                                    color = Color(0xFFF3F4F6),
-                                    modifier = Modifier.size(36.dp)
-                                ) {
-                                    Box(contentAlignment = Alignment.Center) {
-                                        Icon(Icons.Default.Delete, null, tint = Color(0xFFEF4444), modifier = Modifier.size(18.dp))
-                                    }
-                                }
-                                Text(
-                                    stringResource(R.string.settings_account_delete),
-                                    fontWeight = FontWeight.SemiBold,
-                                    color = Color(0xFFEF4444)
-                                )
-                            }
-                        }
+                            onClick = { showDeleteConfirm = true }
+                        )
                     }
                 }
             }
@@ -323,7 +285,7 @@ fun SettingsScreen(
                     title = stringResource(R.string.settings_section_about),
                     subtitle = stringResource(R.string.settings_section_about_subtitle)
                 )
-                ClawLinkCard(modifier = Modifier.fillMaxWidth()) {
+                SettingsGroup(modifier = Modifier.fillMaxWidth()) {
                     SettingsNavigationRow(
                         icon = Icons.Default.Info,
                         title = stringResource(R.string.settings_row_check_update),
@@ -333,17 +295,24 @@ fun SettingsScreen(
                 }
             }
 
-            Spacer(modifier = Modifier.height(20.dp))
-
-            Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 12.dp, bottom = 20.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
                 Text(
-                    "ClawLink v${com.rethinkingstudio.clawlink.BuildConfig.VERSION_NAME}",
-                    style = MaterialTheme.typography.bodySmall,
+                    "ClawLink V${com.rethinkingstudio.clawlink.BuildConfig.VERSION_NAME}",
+                    style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp),
+                    color = Color(0xFF9CA3AF)
+                )
+                Text(
+                    stringResource(R.string.settings_about_console),
+                    style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp),
                     color = Color(0xFF9CA3AF)
                 )
             }
-
-            Spacer(modifier = Modifier.height(20.dp))
         }
     }
 
@@ -438,5 +407,67 @@ fun SettingsScreen(
                 }
             }
         )
+    }
+}
+
+@Composable
+private fun SettingsGroup(
+    modifier: Modifier = Modifier,
+    content: @Composable ColumnScope.() -> Unit
+) {
+    Surface(
+        modifier = modifier,
+        shape = SettingsGroupShape,
+        color = Color.White,
+        border = BorderStroke(1.dp, Color(0xFFE1E4EA))
+    ) {
+        Column(verticalArrangement = Arrangement.spacedBy(0.dp), content = content)
+    }
+}
+
+@Composable
+private fun SettingsDivider() {
+    HorizontalDivider(
+        modifier = Modifier.padding(start = 64.dp),
+        color = SettingsDividerColor
+    )
+}
+
+@Composable
+private fun SettingsAccountActionRow(
+    icon: ImageVector,
+    title: String,
+    enabled: Boolean,
+    onClick: () -> Unit
+) {
+    Surface(
+        onClick = onClick,
+        enabled = enabled,
+        modifier = Modifier.fillMaxWidth(),
+        color = Color.Transparent
+    ) {
+        Row(
+            modifier = Modifier
+                .alpha(if (enabled) 1f else 0.55f)
+                .padding(horizontal = 16.dp, vertical = 18.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(14.dp)
+        ) {
+            Surface(
+                shape = RoundedCornerShape(10.dp),
+                color = Color(0xFFF1F5F9),
+                modifier = Modifier.size(34.dp)
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(icon, null, tint = Color(0xFFEF4444), modifier = Modifier.size(17.dp))
+                }
+            }
+            Text(
+                title,
+                style = MaterialTheme.typography.bodyLarge.copy(fontSize = 17.sp),
+                fontWeight = FontWeight.Normal,
+                color = Color(0xFFEF4444)
+            )
+        }
     }
 }
