@@ -93,7 +93,10 @@ internal fun ToolMessageCard(
     val statusIcon = when (message.state) { MessageState.completed -> Icons.Default.CheckCircle; MessageState.failed -> Icons.Default.Close; MessageState.streaming -> Icons.Default.Refresh }
 
     Surface(modifier = modifier.widthIn(max = 326.dp), shape = RoundedCornerShape(22.dp), color = Color.White.copy(alpha = 0.97f), border = BorderStroke(1.dp, Color(0xFFE1E4EA))) {
-        Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Column(
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 9.dp),
+            verticalArrangement = Arrangement.spacedBy(7.dp)
+        ) {
             Surface(onClick = { expanded = !expanded }, color = Color.Transparent) {
                 Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     Icon(if (expanded) Icons.Default.ExpandMore else Icons.AutoMirrored.Filled.KeyboardArrowRight, null, modifier = Modifier.size(14.dp), tint = Color(0xFF8B8F98))
@@ -109,7 +112,7 @@ internal fun ToolMessageCard(
                 }
             }
             AnimatedVisibility(visible = expanded, enter = fadeIn() + expandVertically(), exit = fadeOut() + shrinkVertically()) {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     if (visibleToolBlocks.isEmpty()) {
                         ToolTextBlock(text = message.plainTextContent.ifBlank { preview }, toolName = message.toolDisplayName, isError = message.state == MessageState.failed)
                     } else {
