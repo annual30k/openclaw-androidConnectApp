@@ -27,6 +27,7 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -225,7 +226,9 @@ fun GatewayStatusCard(
                         text = stringResource(R.string.gateway_card_last_seen, gateway.lastSeenAt),
                         style = MaterialTheme.typography.labelSmall.copy(fontSize = 12.sp),
                         fontWeight = FontWeight.Normal,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                     )
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
@@ -241,14 +244,17 @@ fun GatewayStatusCard(
                             text = gateway.currentModel,
                             style = MaterialTheme.typography.labelSmall.copy(fontSize = 12.sp),
                             fontWeight = FontWeight.SemiBold,
-                            color = MaterialTheme.colorScheme.onSurface
+                            color = MaterialTheme.colorScheme.onSurface,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f)
                         )
                     }
                 }
 
                 Surface(
                     shape = CircleShape,
-                    color = statusColor.copy(alpha = 0.14f),
+                    color = statusColor.copy(alpha = 0.16f),
                     border = androidx.compose.foundation.BorderStroke(1.dp, statusColor.copy(alpha = 0.22f)),
                     modifier = Modifier.padding(start = 8.dp)
                 ) {
@@ -366,7 +372,9 @@ fun EmptyGatewayStatusCard(
                         text = stringResource(R.string.settings_gateway_empty_last_seen),
                         style = MaterialTheme.typography.labelSmall.copy(fontSize = 12.sp),
                         fontWeight = FontWeight.Normal,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                     )
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
@@ -382,14 +390,17 @@ fun EmptyGatewayStatusCard(
                             text = stringResource(R.string.settings_gateway_empty_recent_model),
                             style = MaterialTheme.typography.labelSmall.copy(fontSize = 12.sp),
                             fontWeight = FontWeight.SemiBold,
-                            color = MaterialTheme.colorScheme.onSurface
+                            color = MaterialTheme.colorScheme.onSurface,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f)
                         )
                     }
                 }
 
                 Surface(
                     shape = CircleShape,
-                    color = statusColor.copy(alpha = 0.14f),
+                    color = statusColor.copy(alpha = 0.16f),
                     border = androidx.compose.foundation.BorderStroke(1.dp, statusColor.copy(alpha = 0.22f)),
                     modifier = Modifier.padding(start = 8.dp)
                 ) {

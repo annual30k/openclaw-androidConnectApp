@@ -8,13 +8,9 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Computer
 import androidx.compose.material.icons.filled.PhoneAndroid
-import androidx.compose.material.icons.filled.Router
 import androidx.compose.material.icons.filled.DesktopWindows
 import androidx.compose.material3.Icon
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -91,11 +87,11 @@ fun GatewayFlowPanel(
     BoxWithConstraints(
         modifier = modifier
             .fillMaxWidth()
-            .height(136.dp)
-            .clip(RoundedCornerShape(28.dp))
+            .height(120.dp)
+            .clip(RoundedCornerShape(24.dp))
             .background(
                 Brush.linearGradient(
-                    colors = listOf(Color(0xFF18253A), Color(0xFF101828), Color(0xFF0D1626)),
+                    colors = listOf(Color(0xFF111724), Color(0xFF070D17)),
                     start = Offset.Zero,
                     end = Offset.Infinite
                 )
@@ -105,22 +101,20 @@ fun GatewayFlowPanel(
                 drawRoundRect(
                     color = Color.White.copy(alpha = 0.08f),
                     style = Stroke(width = 1.dp.toPx()),
-                    cornerRadius = androidx.compose.ui.geometry.CornerRadius(28.dp.toPx())
+                    cornerRadius = androidx.compose.ui.geometry.CornerRadius(24.dp.toPx())
                 )
             }
     ) {
         val width = constraints.maxWidth.toFloat()
         val height = constraints.maxHeight.toFloat()
         val density = LocalDensity.current
-        val dp28 = with(density) { 28.dp.toPx() }
-        val dp38 = with(density) { 38.dp.toPx() }
+        val dp34 = with(density) { 34.dp.toPx() }
         val dp44 = with(density) { 44.dp.toPx() }
-        val dp50 = with(density) { 50.dp.toPx() }
-        val dp18 = with(density) { 18.dp.toPx() }
-        val dp16 = with(density) { 16.dp.toPx() }
+        val dp52 = with(density) { 52.dp.toPx() }
+        val dp60 = with(density) { 60.dp.toPx() }
         
-        val horizontalInset = (width * 0.13f).coerceIn(dp28, dp38)
-        val nodeY = (height * 0.36f).coerceIn(dp44, dp50)
+        val horizontalInset = (width * 0.12f).coerceIn(dp34, dp44)
+        val nodeY = (height * 0.40f).coerceIn(dp52, dp60)
         val spacing = if (visibleStatuses.size > 1) (width - horizontalInset * 2) / (visibleStatuses.size - 1) else 0f
         
         val nodeCenters = visibleStatuses.indices.map { index ->
@@ -131,18 +125,18 @@ fun GatewayFlowPanel(
             modifier = Modifier
                 .align(Alignment.TopEnd)
                 .offset(x = 24.dp, y = (-38).dp)
-                .size(122.dp)
+                .size(132.dp)
                 .clip(CircleShape)
-                .background(Color(0xFF0F73ED).copy(alpha = 0.11f))
+                .background(Color(0xFF0F73ED).copy(alpha = 0.12f))
         )
 
         Box(
             modifier = Modifier
                 .align(Alignment.BottomStart)
                 .offset(x = (-18).dp, y = 28.dp)
-                .size(96.dp)
+                .size(104.dp)
                 .clip(CircleShape)
-                .background(Color(0xFF2BBD66).copy(alpha = 0.1f))
+                .background(Color(0xFF4ADE80).copy(alpha = 0.09f))
         )
 
         Canvas(modifier = Modifier.fillMaxSize()) {
@@ -163,7 +157,8 @@ fun GatewayFlowPanel(
             segmentStates.forEachIndexed { index, state ->
                 val start = nodeCenters[index]
                 val end = nodeCenters[index + 1]
-                val control = Offset((start.x + end.x) / 2, nodeY - (if (index == 0) dp18 else dp16))
+                val controlLift = if (index == 0) 26.dp.toPx() else 20.dp.toPx()
+                val control = Offset((start.x + end.x) / 2, nodeY - controlLift)
                 
                 val path = Path().apply {
                     moveTo(start.x, start.y)
@@ -173,8 +168,8 @@ fun GatewayFlowPanel(
                 // Base path
                 drawPath(
                     path = path,
-                    color = Color.White.copy(alpha = 0.12f),
-                    style = Stroke(width = 2.4.dp.toPx(), cap = StrokeCap.Round)
+                    color = Color.White.copy(alpha = 0.10f),
+                    style = Stroke(width = 2.2.dp.toPx(), cap = StrokeCap.Round)
                 )
 
                 val tint = when (state) {
@@ -189,11 +184,11 @@ fun GatewayFlowPanel(
                         drawPath(
                             path = path,
                             brush = Brush.linearGradient(
-                                colors = listOf(tint.copy(alpha = 0.1f), tint.copy(alpha = 0.7f), tint.copy(alpha = 0.1f)),
+                                colors = listOf(tint.copy(alpha = 0.20f), tint.copy(alpha = 0.78f), tint.copy(alpha = 0.20f)),
                                 start = start,
                                 end = end
                             ),
-                            style = Stroke(width = 3.dp.toPx(), cap = StrokeCap.Round)
+                            style = Stroke(width = 2.8.dp.toPx(), cap = StrokeCap.Round)
                         )
                         
                         // Particles
@@ -210,9 +205,9 @@ fun GatewayFlowPanel(
                             path = path,
                             color = tint.copy(alpha = 0.7f),
                             style = Stroke(
-                                width = 2.5f.dp.toPx(),
+                                width = 2.4.dp.toPx(),
                                 cap = StrokeCap.Round,
-                                pathEffect = PathEffect.dashPathEffect(floatArrayOf(12f, 24f), -time * 50f)
+                                pathEffect = PathEffect.dashPathEffect(floatArrayOf(4f, 8f), -time * 28f)
                             )
                         )
                         val progress = (time * 0.18f) % 1f
@@ -221,8 +216,8 @@ fun GatewayFlowPanel(
                     GatewayFlowVisualState.Degraded -> {
                         drawPath(
                             path = path,
-                            color = tint.copy(alpha = 0.3f),
-                            style = Stroke(width = 2.5f.dp.toPx(), cap = StrokeCap.Round)
+                            color = tint.copy(alpha = 0.34f),
+                            style = Stroke(width = 2.5.dp.toPx(), cap = StrokeCap.Round)
                         )
                         val progress = 0.26f
                         drawParticle(getQuadPoint(start, control, end, progress), tint)
@@ -242,10 +237,10 @@ fun GatewayFlowPanel(
                 val relayCenter = nodeCenters[1]
                 Box(
                     modifier = Modifier
-                        .size(68.dp)
+                        .size(72.dp)
                         .offset(
-                            x = with(LocalDensity.current) { relayCenter.x.toDp() - 34.dp },
-                            y = with(LocalDensity.current) { relayCenter.y.toDp() - 34.dp }
+                            x = with(LocalDensity.current) { relayCenter.x.toDp() - 36.dp },
+                            y = with(LocalDensity.current) { relayCenter.y.toDp() - 36.dp }
                         )
                 ) {
                     GatewayRelayPulse(
@@ -261,7 +256,7 @@ fun GatewayFlowPanel(
             val center = nodeCenters[index]
             val icon = when (index) {
                 0 -> Icons.Default.PhoneAndroid
-                1 -> Icons.Default.Router
+                1 -> null
                 else -> Icons.Default.DesktopWindows
             }
             val label = when (index) {
@@ -275,11 +270,11 @@ fun GatewayFlowPanel(
                 icon = icon,
                 label = label,
                 modifier = Modifier
-                    .align(Alignment.TopStart)
-                    .offset(
-                        x = with(LocalDensity.current) { center.x.toDp() - 37.dp },
-                        y = with(LocalDensity.current) { center.y.toDp() - 21.dp }
-                    )
+                        .align(Alignment.TopStart)
+                        .offset(
+                            x = with(LocalDensity.current) { center.x.toDp() - 44.dp },
+                            y = with(LocalDensity.current) { center.y.toDp() - 23.dp }
+                        )
             )
         }
         
@@ -288,7 +283,8 @@ fun GatewayFlowPanel(
             if (state == GatewayFlowVisualState.Broken) {
                 val start = nodeCenters[index]
                 val end = nodeCenters[index + 1]
-                val control = Offset((start.x + end.x) / 2, nodeY - (if (index == 0) dp18 else dp16))
+                val controlLift = with(LocalDensity.current) { if (index == 0) 26.dp.toPx() else 20.dp.toPx() }
+                val control = Offset((start.x + end.x) / 2, nodeY - controlLift)
                 val mid = getQuadPoint(start, control, end, 0.5f)
                 
                 GatewayBrokenMarker(
@@ -308,52 +304,64 @@ fun GatewayFlowPanel(
 @Composable
 fun GatewayFloatingNode(
     status: GatewayStatus,
-    icon: ImageVector,
+    icon: ImageVector?,
     label: String,
     modifier: Modifier = Modifier
 ) {
     val tint = getStatusTint(status.status)
     
     Column(
-        modifier = modifier.width(74.dp),
+        modifier = modifier.width(88.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(6.dp)
+        verticalArrangement = Arrangement.spacedBy(7.dp)
     ) {
         Box(contentAlignment = Alignment.Center) {
             Box(
                 modifier = Modifier
-                    .size(52.dp)
+                    .size(56.dp)
                     .clip(CircleShape)
-                    .background(Color(0xFF101927).copy(alpha = 0.92f))
+                    .background(Color.Black.copy(alpha = 0.22f))
                     .drawWithContent {
-                        drawCircle(Color(0xFF101927))
+                        drawCircle(Color.Black.copy(alpha = 0.22f))
                         drawContent()
                         drawCircle(
-                            color = tint.copy(alpha = if (status.status == AggregateStatus.offline) 0.55f else 0.92f),
-                            style = Stroke(width = 1.2.dp.toPx())
+                            color = tint.copy(alpha = if (status.status == AggregateStatus.offline) 0.44f else 0.78f),
+                            style = Stroke(width = 1.4.dp.toPx())
+                        )
+                        drawCircle(
+                            color = Color.White.copy(alpha = 0.06f),
+                            radius = size.minDimension / 2f - 4.dp.toPx(),
+                            style = Stroke(width = 1.dp.toPx())
                         )
                     },
                 contentAlignment = Alignment.Center
             ) {
-                Icon(
-                    imageVector = icon,
-                    contentDescription = null,
-                    tint = tint,
-                    modifier = Modifier.size(18.dp)
-                )
+                if (icon != null) {
+                    Icon(
+                        imageVector = icon,
+                        contentDescription = null,
+                        tint = tint,
+                        modifier = Modifier.size(19.dp)
+                    )
+                } else {
+                    RelayBroadcastIcon(
+                        tint = tint,
+                        modifier = Modifier.size(28.dp)
+                    )
+                }
             }
             
             Box(
                 modifier = Modifier
                     .align(Alignment.BottomEnd)
-                    .offset(x = 4.dp, y = 5.dp)
-                    .size(11.dp)
+                    .offset(x = 2.dp, y = 2.dp)
+                    .size(10.dp)
                     .background(tint, CircleShape)
                     .drawWithContent {
                         drawContent()
                         drawCircle(
-                            color = Color(0xFF111926),
-                            style = Stroke(width = 2.dp.toPx())
+                            color = Color(0xFF071221),
+                            style = Stroke(width = 2.3.dp.toPx())
                         )
                     }
             )
@@ -361,7 +369,7 @@ fun GatewayFloatingNode(
         
         Text(
             text = label,
-            fontSize = 10.sp,
+            fontSize = 13.sp,
             fontWeight = FontWeight.SemiBold,
             color = Color.White.copy(alpha = 0.94f)
         )
@@ -379,17 +387,54 @@ fun GatewayRelayPulse(
         // Outer ring
         drawCircle(
             color = tint.copy(alpha = baseOpacity * (1 - progress)),
-            radius = (size.minDimension / 2) * (1.0f + progress * 0.4f),
+            radius = (size.minDimension / 2) * (1.02f + progress * 0.34f),
             style = Stroke(width = 1.2.dp.toPx())
         )
         
         // Inner ring
-        val innerProgress = (progress + 0.4f) % 1f
+        val innerProgress = (progress + 0.42f) % 1f
         drawCircle(
             color = tint.copy(alpha = (baseOpacity * 0.7f) * (1 - innerProgress)),
-            radius = (size.minDimension / 2) * (0.9f + innerProgress * 0.3f),
+            radius = (size.minDimension / 2) * (0.92f + innerProgress * 0.28f),
             style = Stroke(width = 1.dp.toPx())
         )
+    }
+}
+
+@Composable
+private fun RelayBroadcastIcon(
+    tint: Color,
+    modifier: Modifier = Modifier
+) {
+    Canvas(modifier = modifier) {
+        val center = Offset(size.width / 2f, size.height / 2f)
+        drawCircle(
+            color = tint,
+            radius = 2.3.dp.toPx(),
+            center = center
+        )
+
+        val stroke = Stroke(width = 2.2.dp.toPx(), cap = StrokeCap.Round)
+        listOf(7.dp.toPx(), 12.dp.toPx()).forEach { radius ->
+            drawArc(
+                color = tint,
+                startAngle = 135f,
+                sweepAngle = 90f,
+                useCenter = false,
+                topLeft = Offset(center.x - radius, center.y - radius),
+                size = Size(radius * 2, radius * 2),
+                style = stroke
+            )
+            drawArc(
+                color = tint,
+                startAngle = -45f,
+                sweepAngle = 90f,
+                useCenter = false,
+                topLeft = Offset(center.x - radius, center.y - radius),
+                size = Size(radius * 2, radius * 2),
+                style = stroke
+            )
+        }
     }
 }
 
@@ -420,13 +465,13 @@ fun GatewayBrokenMarker(
 
 private fun DrawScope.drawParticle(pos: Offset, tint: Color) {
     drawCircle(
-        color = tint.copy(alpha = 0.2f),
+        color = tint.copy(alpha = 0.16f),
         radius = 8.dp.toPx(),
         center = pos
     )
     drawCircle(
-        color = tint.copy(alpha = 0.95f),
-        radius = 2.5.dp.toPx(),
+        color = tint.copy(alpha = 0.96f),
+        radius = 2.2.dp.toPx(),
         center = pos
     )
 }

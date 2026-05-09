@@ -65,9 +65,10 @@ internal fun ChatTopBar(
         modifier = Modifier
             .fillMaxWidth()
             .statusBarsPadding()
-            .height(84.dp)
+            .height(72.dp)
             .background(ChatColors.canvas)
-            .padding(horizontal = 24.dp),
+            .padding(horizontal = 20.dp)
+            .padding(bottom = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween
     ) {
@@ -152,10 +153,10 @@ internal fun CircleHeaderButton(icon: ImageVector, label: String, onClick: () ->
         color = Color.White,
         shadowElevation = 0.dp,
         border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.92f)),
-        modifier = Modifier.size(54.dp)
+        modifier = Modifier.size(48.dp)
     ) {
         Box(contentAlignment = Alignment.Center) {
-            Icon(icon, label, tint = Color.Black, modifier = Modifier.size(28.dp))
+            Icon(icon, label, tint = Color.Black, modifier = Modifier.size(24.dp))
         }
     }
 }
