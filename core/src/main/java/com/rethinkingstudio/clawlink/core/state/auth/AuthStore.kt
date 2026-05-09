@@ -148,13 +148,25 @@ class AuthStore(
         }
     }
 
-    suspend fun pairGateway(gatewayId: String?, accessCode: String, deviceId: String): Boolean {
+    suspend fun pairGateway(baseUrl: String, gatewayId: String?, accessCode: String, deviceId: String): Boolean {
         _state.value = _state.value.copy(isLoading = true, errorMessage = null)
         return try {
+            apiClient.configure(
+                SessionCredentials(
+                    accessToken = _state.value.accessToken,
+                    relayBaseURL = baseUrl.ifBlank { _state.value.relayBaseUrl.ifBlank { DEFAULT_RELAY_SERVER_URL } }
+                )
+            )
             val creds = apiClient.pairGateway(gatewayId, accessCode, deviceId)
             credentialStore.saveCredentials(creds)
             apiClient.configure(creds)
-            _state.value = _state.value.copy(isLoading = false, isLoggedIn = true, isPaired = true, accessToken = creds.accessToken)
+            _state.value = _state.value.copy(
+                isLoading = false,
+                isLoggedIn = true,
+                isPaired = true,
+                accessToken = creds.accessToken,
+                relayBaseUrl = creds.relayBaseURL
+            )
             true
         } catch (e: Exception) {
             _state.value = _state.value.copy(isLoading = false, errorMessage = e.message ?: choose("Pairing failed", "配对失败"))

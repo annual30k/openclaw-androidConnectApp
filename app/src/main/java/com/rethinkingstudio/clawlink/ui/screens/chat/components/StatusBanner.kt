@@ -1,6 +1,7 @@
 package com.rethinkingstudio.clawlink.ui.screens.chat.components
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -10,10 +11,10 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Description
+import androidx.compose.material.icons.filled.Dns
+import androidx.compose.material.icons.filled.MenuBook
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
@@ -29,6 +30,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.rethinkingstudio.clawlink.R
 import com.rethinkingstudio.clawlink.core.state.LocalizedText.choose
 import com.rethinkingstudio.clawlink.ui.components.ClawLinkCard
@@ -58,25 +60,34 @@ internal fun StatusBanner(text: String, isError: Boolean, onDismiss: () -> Unit)
 @Composable
 internal fun UsageGuidePromptCard(onOpenUsageGuide: (() -> Unit)?) {
     Surface(
-        shape = RoundedCornerShape(28.dp),
+        shape = RoundedCornerShape(30.dp),
         color = Color.White.copy(alpha = 0.94f),
         border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFE1E4EA)),
         modifier = Modifier.fillMaxWidth()
     ) {
         Column(
-            modifier = Modifier.padding(22.dp),
-            verticalArrangement = Arrangement.spacedBy(14.dp)
+            modifier = Modifier.padding(horizontal = 20.dp, vertical = 18.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.Top) {
-                IconBadge(Icons.Default.Description)
-                Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
-                    Text(stringResource(R.string.gateway_usage_guide_title), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Black, color = Color.Black)
-                    Text(stringResource(R.string.gateway_usage_guide_prompt), style = MaterialTheme.typography.bodyMedium, color = ChatColors.secondaryText)
+                IconBadge(Icons.Default.MenuBook)
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text(
+                        stringResource(R.string.gateway_usage_guide_title),
+                        style = MaterialTheme.typography.titleMedium.copy(fontSize = 19.sp, lineHeight = 24.sp),
+                        fontWeight = FontWeight.Bold,
+                        color = Color.Black
+                    )
+                    Text(
+                        stringResource(R.string.gateway_usage_guide_prompt),
+                        style = MaterialTheme.typography.bodyMedium.copy(fontSize = 13.sp, lineHeight = 19.sp),
+                        color = ChatColors.secondaryText
+                    )
                 }
             }
             FullWidthCardButton(
                 text = stringResource(R.string.gateway_usage_guide_button),
-                icon = Icons.Default.Description,
+                icon = Icons.Default.MenuBook,
                 onClick = onOpenUsageGuide ?: {}
             )
         }
@@ -86,23 +97,37 @@ internal fun UsageGuidePromptCard(onOpenUsageGuide: (() -> Unit)?) {
 @Composable
 internal fun EmptyGatewayCard(onOpenSettings: (() -> Unit)?) {
     Surface(
-        shape = RoundedCornerShape(28.dp),
+        shape = RoundedCornerShape(30.dp),
         color = Color.White.copy(alpha = 0.94f),
         border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFE1E4EA)),
         modifier = Modifier.fillMaxWidth()
     ) {
         Column(
-            modifier = Modifier.padding(22.dp),
-            verticalArrangement = Arrangement.spacedBy(14.dp)
+            modifier = Modifier.padding(horizontal = 20.dp, vertical = 18.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.Top) {
-                IconBadge(Icons.Default.Settings)
-                Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
-                    Text(stringResource(R.string.gateway_no_host_title), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Black, color = Color.Black)
-                    Text(stringResource(R.string.gateway_no_host_detail), style = MaterialTheme.typography.bodyMedium, color = ChatColors.secondaryText)
+                IconBadge(Icons.Default.Dns)
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text(
+                        stringResource(R.string.gateway_no_host_title),
+                        style = MaterialTheme.typography.titleMedium.copy(fontSize = 19.sp, lineHeight = 24.sp),
+                        fontWeight = FontWeight.Bold,
+                        color = Color.Black
+                    )
+                    Text(
+                        stringResource(R.string.gateway_no_host_detail),
+                        style = MaterialTheme.typography.bodyMedium.copy(fontSize = 13.sp, lineHeight = 19.sp),
+                        color = ChatColors.secondaryText
+                    )
                 }
             }
-            Text(stringResource(R.string.gateway_no_host_hint), style = MaterialTheme.typography.bodyMedium, color = ChatColors.secondaryText, fontWeight = FontWeight.Bold)
+            Text(
+                stringResource(R.string.gateway_no_host_hint),
+                style = MaterialTheme.typography.bodyMedium.copy(fontSize = 13.sp, lineHeight = 18.sp),
+                color = ChatColors.secondaryText,
+                fontWeight = FontWeight.Medium
+            )
             FullWidthCardButton(
                 text = stringResource(R.string.gateway_open_settings),
                 icon = Icons.Default.Settings,
@@ -117,17 +142,22 @@ private fun FullWidthCardButton(text: String, icon: ImageVector, onClick: () -> 
     Surface(
         onClick = onClick,
         shape = RoundedCornerShape(999.dp),
-        color = ChatColors.pending.copy(alpha = 0.24f),
+        color = ChatColors.pending.copy(alpha = 0.16f),
         modifier = Modifier.fillMaxWidth()
     ) {
         Row(
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 13.dp),
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.Center
         ) {
-            Icon(icon, null, tint = Color.Black, modifier = Modifier.size(20.dp))
+            Icon(icon, null, tint = Color.Black, modifier = Modifier.size(18.dp))
             Spacer(Modifier.width(8.dp))
-            Text(text, fontWeight = FontWeight.Black, color = Color.Black)
+            Text(
+                text,
+                style = MaterialTheme.typography.titleSmall.copy(fontSize = 15.sp, lineHeight = 18.sp),
+                fontWeight = FontWeight.SemiBold,
+                color = Color.Black
+            )
         }
     }
 }
@@ -211,10 +241,13 @@ internal fun ThinkingRow() {
 
 @Composable
 internal fun IconBadge(icon: ImageVector) {
-    Surface(
-        shape = RoundedCornerShape(18.dp),
-        color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.66f)
+    Box(
+        modifier = Modifier
+            .size(52.dp)
+            .background(MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.58f), RoundedCornerShape(18.dp))
+            .border(1.dp, Color.White.copy(alpha = 0.48f), RoundedCornerShape(18.dp)),
+        contentAlignment = Alignment.Center
     ) {
-        Icon(icon, null, modifier = Modifier.padding(12.dp), tint = MaterialTheme.colorScheme.primary)
+        Icon(icon, null, modifier = Modifier.size(20.dp), tint = MaterialTheme.colorScheme.primary)
     }
 }

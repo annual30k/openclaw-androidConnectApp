@@ -96,7 +96,7 @@ internal fun ChatTopBar(
                         gateway?.displayName ?: stringResource(R.string.gateway_unpaired_host),
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
-                        style = MaterialTheme.typography.titleMedium.copy(fontSize = 17.sp),
+                        style = MaterialTheme.typography.titleMedium.copy(fontSize = 15.sp),
                         fontWeight = FontWeight.Black,
                         color = Color.Black
                     )
@@ -131,7 +131,7 @@ internal fun ChatTopBar(
                     )
                     Text(
                         statusText,
-                        style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp),
+                        style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
                         color = Color(0xFF8B8F98),
                         fontWeight = FontWeight.Medium,
                         modifier = Modifier.padding(start = 4.dp)

@@ -427,6 +427,10 @@
 
     <string name="auth_pairing_scan_no_camera_hint">If camera access is unavailable, you can still use manual input below.</string>
 
+    <string name="auth_pairing_relay_default_hint">This account uses the default hosted Relay, so pairing stays on this address.</string>
+
+    <string name="auth_pairing_relay_private_hint">This account uses a private Relay, so you can edit the pairing address if needed.</string>
+
     <string name="auth_pairing_scan_title">Scan to Fill</string>
 
     <string name="auth_pairing_scanner_close">Close Scanner</string>
@@ -1034,6 +1038,8 @@ Tap the button below to refresh manually.</string>
 
     <string name="settings_gateway_fallback_last_seen">N/A</string>
     <string name="settings_gateway_fallback_name">Unknown Gateway</string>
+    <string name="settings_gateway_empty_last_seen">Last seen none</string>
+    <string name="settings_gateway_empty_recent_model">--</string>
 
 
     <string name="settings_gateway_fallback_platform">Awaiting Re-pair</string>

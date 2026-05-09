@@ -207,8 +207,7 @@ fun AppNavigation(
             MainScreen(
                 container = container,
                 onNavigateToSettings = { navController.navigate(Routes.SETTINGS) },
-                onNavigateToHelp = { navController.navigate(Routes.HELP) },
-                hasSeenUsageGuide = hasSeenWelcome
+                onNavigateToHelp = { navController.navigate(Routes.HELP) }
             )
         }
 

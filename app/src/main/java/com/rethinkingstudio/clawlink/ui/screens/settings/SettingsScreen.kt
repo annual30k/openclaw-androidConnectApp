@@ -32,6 +32,7 @@ import com.rethinkingstudio.clawlink.core.state.gateway.GatewayStore
 import com.rethinkingstudio.clawlink.ui.components.ClawLinkCard
 import com.rethinkingstudio.clawlink.ui.components.ClawLinkScaffold
 import com.rethinkingstudio.clawlink.ui.components.ClawLinkSectionHeader
+import com.rethinkingstudio.clawlink.ui.screens.settings.components.EmptyGatewayStatusCard
 import com.rethinkingstudio.clawlink.ui.screens.settings.components.GatewayStatusCard
 import kotlinx.coroutines.launch
 
@@ -143,33 +144,7 @@ fun SettingsScreen(
                         onClick = onNavigateToGateways
                     )
                 } ?: run {
-                    ClawLinkCard(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable { onNavigateToGateways() }
-                    ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(12.dp),
-                            modifier = Modifier.padding(16.dp)
-                        ) {
-                            Surface(
-                                shape = CircleShape,
-                                color = Color(0xFFF3F4F6),
-                                modifier = Modifier.size(44.dp)
-                            ) {
-                                Box(contentAlignment = Alignment.Center) {
-                                    Icon(Icons.Default.Computer, null, tint = Color(0xFF6B7280))
-                                }
-                            }
-                            Column {
-                                Text(stringResource(R.string.settings_gateway_fallback_name), fontWeight = FontWeight.Bold, fontSize = 17.sp)
-                                Text(stringResource(R.string.settings_gateway_action_bind), style = MaterialTheme.typography.bodySmall, color = Color(0xFF3B82F6), fontWeight = FontWeight.SemiBold)
-                            }
-                            Spacer(modifier = Modifier.weight(1f))
-                            Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null, tint = Color(0xFF9CA3AF))
-                        }
-                    }
+                    EmptyGatewayStatusCard(onClick = onNavigateToGateways)
                 }
             }
 

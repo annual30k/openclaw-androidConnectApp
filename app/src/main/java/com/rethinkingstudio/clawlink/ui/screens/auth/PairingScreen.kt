@@ -2,6 +2,7 @@ package com.rethinkingstudio.clawlink.ui.screens.auth
 
 import androidx.camera.core.ExperimentalGetImage
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -10,6 +11,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.QrCodeScanner
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -49,10 +51,16 @@ fun PairingScreen(
     var showingScanner by remember { mutableStateOf(false) }
 
     val cameraPermissionState = rememberPermissionState(android.Manifest.permission.CAMERA)
+    val preferredRelayServer = remember(authState.relayBaseUrl) {
+        authState.relayBaseUrl.ifBlank { AuthStore.DEFAULT_RELAY_SERVER_URL }
+    }
+    val usesPrivateRelay = remember(preferredRelayServer) {
+        !sameRelayServer(preferredRelayServer, AuthStore.DEFAULT_RELAY_SERVER_URL)
+    }
 
-    LaunchedEffect(Unit) {
+    LaunchedEffect(preferredRelayServer) {
         if (relayServer.isEmpty()) {
-            relayServer = authStore.state.value.relayBaseUrl ?: ""
+            relayServer = preferredRelayServer
         }
     }
 
@@ -161,16 +169,30 @@ fun PairingScreen(
                     Text(stringResource(R.string.auth_pairing_manual_title), fontWeight = FontWeight.Bold, fontSize = 17.sp)
 
                     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                        OutlinedTextField(
-                            value = relayServer,
-                            onValueChange = { relayServer = it },
-                            label = { Text(stringResource(R.string.auth_relay_address)) },
-                            modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(16.dp),
-                            colors = OutlinedTextFieldDefaults.colors(
-                                focusedBorderColor = Color(0xFF3B82F6),
-                                unfocusedBorderColor = Color(0xFFE5E7EB)
+                        if (usesPrivateRelay) {
+                            OutlinedTextField(
+                                value = relayServer,
+                                onValueChange = { relayServer = it },
+                                label = { Text(stringResource(R.string.auth_relay_address)) },
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(16.dp),
+                                colors = OutlinedTextFieldDefaults.colors(
+                                    focusedBorderColor = Color(0xFF3B82F6),
+                                    unfocusedBorderColor = Color(0xFFE5E7EB)
+                                )
                             )
+                        } else {
+                            ReadOnlyRelayAddressField(value = relayServer)
+                        }
+
+                        Text(
+                            text = if (usesPrivateRelay) {
+                                stringResource(R.string.auth_pairing_relay_private_hint)
+                            } else {
+                                stringResource(R.string.auth_pairing_relay_default_hint)
+                            },
+                            style = MaterialTheme.typography.labelSmall,
+                            color = Color(0xFF9CA3AF)
                         )
 
                         OutlinedTextField(
@@ -189,10 +211,17 @@ fun PairingScreen(
                     Button(
                         onClick = {
                             scope.launch {
+                                val resolved = PairingInputResolver.resolvePairingInput(
+                                    qrPayload = "",
+                                    currentServerURL = relayServer,
+                                    manualGatewayID = gatewayId,
+                                    manualAccessCode = pairingCode
+                                )
                                 val success = authStore.pairGateway(
-                                    gatewayId.ifBlank { null },
-                                    pairingCode.trim(),
-                                    "android_${System.currentTimeMillis()}"
+                                    baseUrl = resolved.serverURL,
+                                    gatewayId = resolved.gatewayID,
+                                    accessCode = resolved.accessCode,
+                                    deviceId = "android_${System.currentTimeMillis()}"
                                 )
                                 if (success) {
                                     onPairSuccess()
@@ -241,12 +270,15 @@ fun PairingScreen(
                     
                     // Auto-bind after scan
                     scope.launch {
-                        authStore.pairGateway(
+                        val success = authStore.pairGateway(
+                            baseUrl = resolved.serverURL,
                             gatewayId = gatewayId.ifBlank { null },
                             accessCode = pairingCode.trim(),
                             deviceId = "android_${System.currentTimeMillis()}"
                         )
-                        onBack()
+                        if (success) {
+                            onPairSuccess()
+                        }
                     }
                 } catch (e: Exception) {
                     // Handle error
@@ -254,6 +286,53 @@ fun PairingScreen(
             },
             onClose = { showingScanner = false }
         )
+    }
+}
+
+private fun sameRelayServer(lhs: String, rhs: String): Boolean {
+    return lhs.trim().trimEnd('/').equals(rhs.trim().trimEnd('/'), ignoreCase = true)
+}
+
+@Composable
+private fun ReadOnlyRelayAddressField(value: String) {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text(
+            text = stringResource(R.string.auth_relay_address),
+            style = MaterialTheme.typography.labelMedium,
+            color = Color(0xFF6B7280),
+            fontWeight = FontWeight.Medium
+        )
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(Color(0xFFF3F4F6), RoundedCornerShape(16.dp))
+                .border(1.dp, Color(0xFFE5E7EB), RoundedCornerShape(16.dp))
+                .padding(horizontal = 16.dp, vertical = 16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            Surface(
+                shape = CircleShape,
+                color = Color.White
+            ) {
+                Box(
+                    modifier = Modifier.size(28.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        Icons.Default.Lock,
+                        contentDescription = null,
+                        tint = Color(0xFF9CA3AF),
+                        modifier = Modifier.size(16.dp)
+                    )
+                }
+            }
+            Text(
+                text = value,
+                style = MaterialTheme.typography.bodyLarge,
+                color = Color(0xFF111827)
+            )
+        }
     }
 }
 

@@ -32,6 +32,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.rethinkingstudio.clawlink.R
 import com.rethinkingstudio.clawlink.core.models.gateway.AggregateStatus
+import com.rethinkingstudio.clawlink.core.models.gateway.ConnectionPhase
+import com.rethinkingstudio.clawlink.core.models.gateway.GatewayStatus
 import com.rethinkingstudio.clawlink.core.models.gateway.GatewaySummary
 import com.rethinkingstudio.clawlink.core.state.gateway.GatewayStore
 import kotlinx.coroutines.launch
@@ -279,6 +281,140 @@ fun GatewayStatusCard(
             
             GatewayFlowPanel(
                 statuses = synthesizedStatuses,
+                modifier = Modifier.fillMaxWidth()
+            )
+        }
+    }
+}
+
+@Composable
+fun EmptyGatewayStatusCard(
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val statusColor = Color(0xFF70ADFA)
+    val emptyStatuses = remember {
+        listOf(
+            GatewayStatus(
+                phase = ConnectionPhase.appRelay,
+                status = AggregateStatus.partial,
+                detail = "App connected"
+            ),
+            GatewayStatus(
+                phase = ConnectionPhase.relayHost,
+                status = AggregateStatus.offline,
+                detail = "Relay unavailable"
+            ),
+            GatewayStatus(
+                phase = ConnectionPhase.hostGateway,
+                status = AggregateStatus.offline,
+                detail = "Host unavailable"
+            )
+        )
+    }
+
+    Box(
+        modifier = modifier
+            .fillMaxWidth()
+            .shadow(22.dp, RoundedCornerShape(28.dp), clip = false)
+            .clip(RoundedCornerShape(28.dp))
+            .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.9f))
+            .clickable { onClick() }
+    ) {
+        Box(
+            modifier = Modifier
+                .matchParentSize()
+                .background(
+                    Brush.linearGradient(
+                        colors = listOf(
+                            Color.White.copy(alpha = 0.36f),
+                            Color(0xFF70ADFA).copy(alpha = 0.08f),
+                            Color.White.copy(alpha = 0.10f)
+                        )
+                    )
+                )
+                .drawWithContent {
+                    drawContent()
+                    drawRoundRect(
+                        color = Color.White.copy(alpha = 0.30f),
+                        style = Stroke(width = 0.8.dp.toPx()),
+                        cornerRadius = androidx.compose.ui.geometry.CornerRadius(28.dp.toPx())
+                    )
+                }
+        )
+
+        Column(
+            verticalArrangement = Arrangement.spacedBy(16.dp),
+            modifier = Modifier.padding(18.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.Top
+            ) {
+                Column(
+                    modifier = Modifier.weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Text(
+                        text = stringResource(R.string.gateway_unpaired_host),
+                        style = MaterialTheme.typography.titleMedium.copy(fontSize = 17.sp),
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Text(
+                        text = stringResource(R.string.settings_gateway_empty_last_seen),
+                        style = MaterialTheme.typography.labelSmall.copy(fontSize = 12.sp),
+                        fontWeight = FontWeight.Normal,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Text(
+                            text = stringResource(R.string.gateway_card_recent_model),
+                            style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp),
+                            fontWeight = FontWeight.Medium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Text(
+                            text = stringResource(R.string.settings_gateway_empty_recent_model),
+                            style = MaterialTheme.typography.labelSmall.copy(fontSize = 12.sp),
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                    }
+                }
+
+                Surface(
+                    shape = CircleShape,
+                    color = statusColor.copy(alpha = 0.14f),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, statusColor.copy(alpha = 0.22f)),
+                    modifier = Modifier.padding(start = 8.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(9.dp)
+                                .background(statusColor, CircleShape)
+                        )
+                        Text(
+                            text = stringResource(R.string.gateway_aggregate_partial),
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = FontWeight.SemiBold,
+                            color = statusColor
+                        )
+                    }
+                }
+            }
+
+            GatewayFlowPanel(
+                statuses = emptyStatuses,
                 modifier = Modifier.fillMaxWidth()
             )
         }

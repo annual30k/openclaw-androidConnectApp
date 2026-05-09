@@ -427,6 +427,10 @@
 
     <string name="auth_pairing_scan_no_camera_hint">如果当前环境没有摄像头权限，也可以继续使用下面的手动输入。</string>
 
+    <string name="auth_pairing_relay_default_hint">当前账号使用默认托管 Relay，配对时固定使用这个地址。</string>
+
+    <string name="auth_pairing_relay_private_hint">当前账号使用私有化 Relay，如有需要可以手动修改配对地址。</string>
+
     <string name="auth_pairing_scan_title">扫码填写</string>
 
     <string name="auth_pairing_scanner_close">关闭扫码器</string>
@@ -1034,6 +1038,8 @@
 
     <string name="settings_gateway_fallback_last_seen">暂无</string>
     <string name="settings_gateway_fallback_name">未知网关</string>
+    <string name="settings_gateway_empty_last_seen">最近登录 暂无</string>
+    <string name="settings_gateway_empty_recent_model">--</string>
 
 
     <string name="settings_gateway_fallback_platform">等待重新配对</string>

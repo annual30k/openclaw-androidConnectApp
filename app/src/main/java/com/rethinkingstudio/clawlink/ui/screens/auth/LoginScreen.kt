@@ -1,5 +1,7 @@
 package com.rethinkingstudio.clawlink.ui.screens.auth
 
+import android.net.Uri
+import android.os.Build
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
@@ -635,12 +637,37 @@ private fun submitAuth(
 
 private fun normalizeRelayURL(raw: String): String {
     val trimmed = raw.trim().ifBlank { AuthStore.DEFAULT_RELAY_SERVER_URL }
-    return if (trimmed.startsWith("http://") || trimmed.startsWith("https://")) trimmed else "https://$trimmed"
+    val normalized = if (trimmed.startsWith("http://") || trimmed.startsWith("https://")) trimmed else "https://$trimmed"
+    val uri = Uri.parse(normalized)
+    val host = uri.host?.lowercase() ?: return normalized
+
+    if (!isAndroidEmulator() || (host != "127.0.0.1" && host != "localhost" && host != "0.0.0.0")) {
+        return normalized
+    }
+
+    return uri.buildUpon()
+        .encodedAuthority(buildString {
+            append("10.0.2.2")
+            if (uri.port != -1) {
+                append(":")
+                append(uri.port)
+            }
+        })
+        .build()
+        .toString()
 }
 
 private fun isValidEmail(email: String): Boolean {
     return Regex("^[A-Z0-9._%+-]+@[A-Z0-9.-]+\\.[A-Z]{2,}$", RegexOption.IGNORE_CASE)
         .matches(email.trim())
+}
+
+private fun isAndroidEmulator(): Boolean {
+    return Build.FINGERPRINT.startsWith("generic") ||
+        Build.MODEL.contains("Emulator", ignoreCase = true) ||
+        Build.MODEL.contains("sdk_gphone", ignoreCase = true) ||
+        Build.HARDWARE.contains("ranchu", ignoreCase = true) ||
+        Build.PRODUCT.contains("sdk", ignoreCase = true)
 }
 
 @Composable

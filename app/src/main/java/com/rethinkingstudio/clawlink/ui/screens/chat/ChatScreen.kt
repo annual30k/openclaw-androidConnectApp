@@ -86,8 +86,7 @@ fun ChatScreen(
     modelStore: ModelStore,
     onBack: (() -> Unit)? = null,
     onOpenSettings: (() -> Unit)? = null,
-    onOpenUsageGuide: (() -> Unit)? = null,
-    hasSeenUsageGuide: Boolean = true
+    onOpenUsageGuide: (() -> Unit)? = null
 ) {
     val scope = rememberCoroutineScope()
     val viewModel = remember(chatStore, gatewayStore, modelStore) {
@@ -316,10 +315,8 @@ fun ChatScreen(
                         if (!hasSelectedGateway && gatewayState.isLoading) {
                             item { ChatSessionLoadingCard() }
                         } else if (!hasSelectedGateway) {
-                            if (!hasSeenUsageGuide) {
-                                item {
-                                    UsageGuidePromptCard(onOpenUsageGuide = onOpenUsageGuide ?: onOpenSettings)
-                                }
+                            item {
+                                UsageGuidePromptCard(onOpenUsageGuide = onOpenUsageGuide ?: onOpenSettings)
                             }
                             item {
                                 EmptyGatewayCard(onOpenSettings = onOpenSettings)

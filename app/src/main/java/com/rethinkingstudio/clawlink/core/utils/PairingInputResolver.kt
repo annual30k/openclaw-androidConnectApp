@@ -1,5 +1,6 @@
 package com.rethinkingstudio.clawlink.core.utils
 
+import android.os.Build
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
@@ -61,7 +62,7 @@ object PairingInputResolver {
             val scheme = preferredScheme(candidate)
             candidate = "$scheme://$candidate"
         }
-        return candidate
+        return rewriteEmulatorLoopback(candidate)
     }
 
     private fun preferredScheme(host: String): String {
@@ -79,5 +80,22 @@ object PairingInputResolver {
              return true
         }
         return false
+    }
+
+    private fun rewriteEmulatorLoopback(candidate: String): String {
+        if (!isAndroidEmulator()) return candidate
+
+        return candidate
+            .replace("://127.0.0.1", "://10.0.2.2")
+            .replace("://localhost", "://10.0.2.2")
+            .replace("://0.0.0.0", "://10.0.2.2")
+    }
+
+    private fun isAndroidEmulator(): Boolean {
+        return Build.FINGERPRINT.startsWith("generic") ||
+            Build.MODEL.contains("Emulator", ignoreCase = true) ||
+            Build.MODEL.contains("sdk_gphone", ignoreCase = true) ||
+            Build.HARDWARE.contains("ranchu", ignoreCase = true) ||
+            Build.PRODUCT.contains("sdk", ignoreCase = true)
     }
 }
