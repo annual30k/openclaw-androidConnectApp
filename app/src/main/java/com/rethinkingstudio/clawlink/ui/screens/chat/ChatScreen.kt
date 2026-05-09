@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -37,6 +38,8 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.unit.dp
 import androidx.core.view.WindowCompat
@@ -48,6 +51,7 @@ import com.rethinkingstudio.clawlink.core.models.chat.ChatMessage
 import com.rethinkingstudio.clawlink.core.models.chat.MessageRole
 import com.rethinkingstudio.clawlink.core.models.chat.MessageState
 import com.rethinkingstudio.clawlink.core.models.gateway.AggregateStatus
+import com.rethinkingstudio.clawlink.core.state.LocalizedText.choose
 import com.rethinkingstudio.clawlink.core.state.chat.ChatStore
 import com.rethinkingstudio.clawlink.core.state.chat.RemoteAttachmentCache
 import com.rethinkingstudio.clawlink.core.state.chat.RemoteImageCache
@@ -100,6 +104,13 @@ fun ChatScreen(
     val context = LocalContext.current
     val density = LocalDensity.current
     val view = LocalView.current
+    val focusManager = LocalFocusManager.current
+    val keyboardController = LocalSoftwareKeyboardController.current
+    val dismissKeyboard = {
+        focusManager.clearFocus(force = true)
+        keyboardController?.hide()
+        Unit
+    }
     val cameraPermissionState = rememberPermissionState(android.Manifest.permission.CAMERA)
     val recordAudioPermissionState = rememberPermissionState(android.Manifest.permission.RECORD_AUDIO)
 
@@ -136,7 +147,9 @@ fun ChatScreen(
 
     SideEffect {
         val window = (view.context as? android.app.Activity)?.window ?: return@SideEffect
+        @Suppress("DEPRECATION")
         window.statusBarColor = ChatColors.canvas.toArgb()
+        @Suppress("DEPRECATION")
         window.navigationBarColor = ChatColors.canvas.toArgb()
         val controller = WindowCompat.getInsetsController(window, view)
         controller.isAppearanceLightStatusBars = true
@@ -155,7 +168,7 @@ fun ChatScreen(
                     viewModel.composerNotice = context.getString(R.string.chat_attachment_import_failed)
                 }
             } catch (e: Exception) {
-                viewModel.composerNotice = context.getString(R.string.chat_attachment_import_failed_with_reason, e.message ?: "Unknown error")
+                viewModel.composerNotice = context.getString(R.string.chat_attachment_import_failed_with_reason, e.message ?: choose("Unknown error", "未知错误"))
             } finally {
                 viewModel.isUploadingAttachment = false
                 viewModel.showAttachmentMenu = false
@@ -174,7 +187,7 @@ fun ChatScreen(
                     viewModel.composerNotice = context.getString(R.string.chat_attachment_import_failed)
                 }
             } catch (e: Exception) {
-                viewModel.composerNotice = context.getString(R.string.chat_attachment_import_failed_with_reason, e.message ?: "Unknown error")
+                viewModel.composerNotice = context.getString(R.string.chat_attachment_import_failed_with_reason, e.message ?: choose("Unknown error", "未知错误"))
             } finally {
                 viewModel.isUploadingAttachment = false
                 viewModel.showAttachmentMenu = false
@@ -193,7 +206,7 @@ fun ChatScreen(
                 val imported = ChatFileUtils.importCapturedImage(context, bitmap)
                 viewModel.composerAttachments = viewModel.composerAttachments + imported
             } catch (e: Exception) {
-                viewModel.composerNotice = context.getString(R.string.chat_attachment_import_failed_with_reason, e.message ?: "Unknown error")
+                viewModel.composerNotice = context.getString(R.string.chat_attachment_import_failed_with_reason, e.message ?: choose("Unknown error", "未知错误"))
             } finally {
                 viewModel.isUploadingAttachment = false
                 viewModel.showAttachmentMenu = false
@@ -285,6 +298,7 @@ fun ChatScreen(
                         hasSelectedGateway = hasSelectedGateway,
                         onOpenUsageGuide = onOpenUsageGuide,
                         onOpenSettings = onOpenSettings,
+                        onDismissKeyboard = dismissKeyboard,
                         modifier = Modifier
                             .fillMaxWidth()
                             .weight(1f)
@@ -294,6 +308,7 @@ fun ChatScreen(
                     modifier = Modifier
                         .align(Alignment.BottomCenter)
                         .fillMaxWidth()
+                        .imePadding()
                         .onGloballyPositioned { coordinates ->
                             val height = coordinates.size.height
                             viewModel.composerHeight = with(density) { height.toDp() }
@@ -333,14 +348,17 @@ fun ChatScreen(
                         onAttachmentButtonPositionChanged = { viewModel.attachmentButtonPosition = it },
                         onAttachmentButtonSizeChanged = { viewModel.attachmentButtonSize = it },
                         onPickFiles = {
+                            dismissKeyboard()
                             viewModel.showAttachmentMenu = false
                             filePickerLauncher.launch(attachmentPickerMimeTypes(ComposerAttachmentPickTarget.FILES))
                         },
                         onPickAlbum = {
+                            dismissKeyboard()
                             viewModel.showAttachmentMenu = false
                             imagePickerLauncher.launch(attachmentPickerMimeTypes(ComposerAttachmentPickTarget.IMAGES))
                         },
                         onPickCamera = {
+                            dismissKeyboard()
                             viewModel.showAttachmentMenu = false
                             if (cameraPermissionState.status.isGranted) {
                                 runCatching {
@@ -360,10 +378,15 @@ fun ChatScreen(
                         },
                         onShowSkillSheet = { viewModel.showSkillExpansionSheet = true },
                         onOpenAttachment = {
+                            dismissKeyboard()
                             viewModel.showAttachmentMenu = !viewModel.showAttachmentMenu
                         },
-                        onToggleVoiceMode = { viewModel.toggleVoiceMode() },
+                        onToggleVoiceMode = {
+                            dismissKeyboard()
+                            viewModel.toggleVoiceMode()
+                        },
                         onBeginVoiceInputHold = {
+                            dismissKeyboard()
                             if (recordAudioPermissionState.status.isGranted) {
                                 viewModel.beginVoiceInputHold(
                                     context = context,

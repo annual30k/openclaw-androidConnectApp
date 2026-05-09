@@ -46,7 +46,8 @@ fun PixelOfficeScene(
     scene: OfficeSceneSnapshot,
     modifier: Modifier = Modifier,
     reduceMotion: Boolean = false,
-    showsOccupants: Boolean = true
+    showsOccupants: Boolean = true,
+    showsRestingCat: Boolean = false
 ) {
     val context = LocalContext.current
     val routePlanner = remember { OfficeRoutePlanner.getInstance(context) }
@@ -109,7 +110,7 @@ fun PixelOfficeScene(
             translate(offsetX, offsetY)
             scale(scale, scale, Offset.Zero)
         }) {
-            drawStage(bitmaps, scene, motionState, officeNpcs, timeMillis, reduceMotion, showsOccupants)
+            drawStage(bitmaps, scene, motionState, officeNpcs, timeMillis, reduceMotion, showsOccupants, showsRestingCat)
         }
     }
 }

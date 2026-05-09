@@ -8,6 +8,7 @@ import android.content.Intent
 import android.os.Build
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
+import com.rethinkingstudio.clawlink.core.state.LocalizedText.choose
 import com.rethinkingstudio.clawlink.core.domain.NotificationPort
 
 class AndroidNotificationPort(
@@ -61,10 +62,10 @@ class AndroidNotificationPort(
 
         val channel = NotificationChannel(
             CHANNEL_ID,
-            CHANNEL_NAME,
+            choose(CHANNEL_NAME, CHANNEL_NAME_ZH),
             NotificationManager.IMPORTANCE_HIGH
         ).apply {
-            description = CHANNEL_DESCRIPTION
+            description = choose(CHANNEL_DESCRIPTION, CHANNEL_DESCRIPTION_ZH)
         }
         notificationManager.createNotificationChannel(channel)
     }
@@ -73,5 +74,7 @@ class AndroidNotificationPort(
         const val CHANNEL_ID = "clawlink_replies"
         const val CHANNEL_NAME = "Reply notifications"
         const val CHANNEL_DESCRIPTION = "Notifications for new assistant replies"
+        const val CHANNEL_NAME_ZH = "回复通知"
+        const val CHANNEL_DESCRIPTION_ZH = "新助手回复通知"
     }
 }

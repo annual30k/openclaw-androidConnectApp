@@ -93,7 +93,7 @@ internal fun fileIcon(block: RelayChatContentBlock): ImageVector {
 
 internal fun fileSubtitle(block: RelayChatContentBlock): String {
     val parts = listOfNotNull(block.mimeType?.trim()?.takeIf { it.isNotEmpty() }, block.fileStatusText?.trim()?.takeIf { it.isNotEmpty() }).distinct()
-    return parts.joinToString(" · ").ifBlank { block.status ?: "File" }
+    return parts.joinToString(" · ").ifBlank { block.status ?: choose("File", "文件") }
 }
 
 internal fun resolveFileUrl(raw: String, relayBaseUrl: String): String {

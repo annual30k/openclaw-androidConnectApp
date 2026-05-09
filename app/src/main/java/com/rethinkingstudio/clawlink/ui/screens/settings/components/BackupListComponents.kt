@@ -117,10 +117,10 @@ internal fun BackupRowCard(backup: BackupItem, canManage: Boolean, onEdit: () ->
             }
 
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                BackupInfoTag("FILE", backup.filename.ifBlank { backup.id.takeLast(12) }, Icons.Default.Description)
+                BackupInfoTag(stringResource(R.string.backup_info_file), backup.filename.ifBlank { backup.id.takeLast(12) }, Icons.Default.Description)
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    BackupInfoTag("CREATED", backup.createdAt.take(16).replace("T", " "), Icons.Default.CalendarToday, Modifier.weight(1f))
-                    BackupInfoTag("VERSION", "2.0", Icons.Default.Tag, Modifier.weight(1f))
+                    BackupInfoTag(stringResource(R.string.backup_info_created), backup.createdAt.take(16).replace("T", " "), Icons.Default.CalendarToday, Modifier.weight(1f))
+                    BackupInfoTag(stringResource(R.string.backup_info_version), "2.0", Icons.Default.Tag, Modifier.weight(1f))
                 }
             }
 
@@ -170,4 +170,3 @@ internal fun BackupInfoTag(title: String, value: String, icon: ImageVector, modi
         Text(value, fontSize = 11.sp, fontFamily = FontFamily.Monospace, color = Color(0xFF1F2937), maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
 }
-

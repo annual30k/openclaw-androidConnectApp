@@ -179,6 +179,12 @@ fun GatewayMaintenanceScreen(
     val isWaitingForRecovery = gatewayState.isWaitingForRecovery
     val isRemote = mode == MaintenanceMode.REMOTE_RESTART
     val logEntries = if (isRemote) gatewayState.remoteRestartLogs else gatewayState.restartLogs
+    val maintenanceKind = if (isRemote) "gateway.remoteRestart" else "gateway.restart"
+    val hasRecoveredLog = logEntries.any { entry ->
+        val text = entry.text
+        text.contains("[OK]") &&
+            (text.contains("fully recovered", ignoreCase = true) || text.contains("完全恢复"))
+    }
 
     var isSendingRequest by remember { mutableStateOf(false) }
     var elapsedSeconds by remember { mutableLongStateOf(0) }
@@ -211,6 +217,14 @@ fun GatewayMaintenanceScreen(
                 if (elapsedSeconds >= 120) {
                     isTimedOut = true
                 }
+            }
+        }
+    }
+
+    DisposableEffect(hasRecoveredLog, isExecuting, isWaitingForRecovery, maintenanceKind) {
+        onDispose {
+            if (hasRecoveredLog && !isExecuting && !isWaitingForRecovery) {
+                gatewayStore.clearMaintenanceLogs(maintenanceKind)
             }
         }
     }
@@ -359,7 +373,7 @@ fun GatewayMaintenanceScreen(
                                         if (isExecuting) {
                                             CircularProgressIndicator(Modifier.size(14.dp), color = Color(0xFF9CA3AF), strokeWidth = 2.dp)
                                         } else if (logEntries.isNotEmpty()) {
-                                            IconButton(onClick = { gatewayStore.clearMaintenanceLogs(if (isRemote) "gateway.remoteRestart" else "gateway.restart") }, Modifier.size(20.dp)) {
+                                            IconButton(onClick = { gatewayStore.clearMaintenanceLogs(maintenanceKind) }, Modifier.size(20.dp)) {
                                                 Icon(Icons.Default.Delete, null, tint = Color(0xFF9CA3AF), modifier = Modifier.size(14.dp))
                                             }
                                         }

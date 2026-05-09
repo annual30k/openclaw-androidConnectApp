@@ -75,18 +75,18 @@ internal fun ToolMessageCard(
     modifier: Modifier = Modifier
 ) {
     var expanded by remember(message.id, visibleToolBlocks.size) { mutableStateOf(false) }
-    val cardTitle = if (showInvocationProcess && visibleToolBlocks.any { it.isToolCallBlock }) choose("Tool output", "工具输出") else choose("Tool result", "工具结果")
+    val cardTitle = if (showInvocationProcess && visibleToolBlocks.any { it.isToolCallBlock }) "Tool output" else "Tool result"
     val toolTitle = visibleToolBlocks.mapNotNull { it.resolvedName?.trim()?.takeIf { name -> name.isNotEmpty() } }.distinct().takeIf { it.isNotEmpty() }?.joinToString(", ")
         ?: message.toolDisplaySummary.trim().takeIf { it.isNotEmpty() }
         ?: message.toolDisplayName?.trim()?.takeIf { it.isNotEmpty() }
-        ?: choose("tool", "工具")
+        ?: "tool"
     val preview = visibleToolBlocks.firstNotNullOfOrNull { block ->
         block.toolDisplayContent(message.associatedToolCallBlock(block)).previewText().trim().ifEmpty { null }
     } ?: message.plainTextContent.trim().ifEmpty {
         when (message.state) {
-            MessageState.completed -> choose("Completed", "已完成")
-            MessageState.failed -> choose("Failed", "失败")
-            MessageState.streaming -> choose("Running", "运行中")
+            MessageState.completed -> "Completed"
+            MessageState.failed -> "Failed"
+            MessageState.streaming -> "Running"
         }
     }
     val statusColor = when (message.state) { MessageState.completed -> Color(0xFF5DCF7A); MessageState.failed -> Color(0xFFF24E3E); MessageState.streaming -> Color(0xFFF4A100) }
@@ -120,7 +120,7 @@ internal fun ToolMessageCard(
                 }
             }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                Text(choose("Tool", "工具"), style = MaterialTheme.typography.labelSmall, color = Color(0xFF8B8F98), fontWeight = FontWeight.Medium)
+                Text("Tool", style = MaterialTheme.typography.labelSmall, color = Color(0xFF8B8F98), fontWeight = FontWeight.Medium)
                 Spacer(Modifier.weight(1f))
                 if (message.createdAt.isNotBlank()) { Text(formatChatTimestamp(message.createdAt), style = MaterialTheme.typography.labelSmall, color = Color(0xFF8B8F98), fontWeight = FontWeight.Medium) }
             }
@@ -137,18 +137,18 @@ private fun ToolBlockView(block: RelayChatContentBlock, associatedToolCallBlock:
         else -> Color(0xFF8B8F98)
     }
     val title = when {
-        block.isToolCallBlock -> choose("Tool call", "工具调用")
-        block.isError == true -> choose("Tool error", "工具错误")
-        block.isToolResultBlock -> choose("Tool result", "工具结果")
-        else -> choose("Tool output", "工具输出")
+        block.isToolCallBlock -> "Tool call"
+        block.isError == true -> "Tool error"
+        block.isToolResultBlock -> "Tool result"
+        else -> "Tool output"
     }
     val status = when {
-        block.isError == true -> choose("Error", "错误")
-        block.isToolCallBlock -> choose("Call", "调用")
-        block.isToolResultBlock -> choose("Result", "结果")
-        else -> choose("Output", "输出")
+        block.isError == true -> "Error"
+        block.isToolCallBlock -> "Call"
+        block.isToolResultBlock -> "Result"
+        else -> "Output"
     }
-    val name = block.resolvedName ?: choose("tool", "工具")
+    val name = block.resolvedName ?: "tool"
     val detail = block.toolCallId?.trim()?.takeIf { it.isNotEmpty() } ?: block.toolUseId?.trim()?.takeIf { it.isNotEmpty() }
     Surface(shape = RoundedCornerShape(16.dp), color = Color(0xFFF9FAFB), border = BorderStroke(1.dp, Color(0xFFE5E7EB))) {
         Column(modifier = Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -191,7 +191,7 @@ private fun ToolDisplayBody(content: ToolDisplayContent, toolName: String?, isEr
             )
         }
         is ToolDisplayContent.TerminalCommand -> TerminalBlock(
-            title = choose("Shell command", "Shell 命令"),
+            title = "Shell command",
             subtitle = content.workdir?.let { "in $it" },
             text = content.command,
             mode = TerminalMode.Command,
@@ -396,7 +396,7 @@ private fun ToolTextBlock(text: String, toolName: String?, isError: Boolean) {
     }
     if (trimmed.looksLikeToolCardCommandLine()) {
         TerminalBlock(
-            title = choose("Shell command", "Shell 命令"),
+            title = "Shell command",
             subtitle = null,
             text = trimmed,
             mode = TerminalMode.Command,

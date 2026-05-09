@@ -107,7 +107,7 @@ fun ModelCatalogScreen(
     }
 
     val groupedModels = remember(modelState.models) {
-        modelState.models.groupBy { it.provider.ifBlank { it.providerId.ifBlank { "Unknown" } } }
+        modelState.models.groupBy { it.provider.ifBlank { it.providerId.ifBlank { choose("Unknown", "未知") } } }
     }
     val filteredProviders = remember(groupedModels, modelState.models, searchText) {
         ModelCatalogPresentation.filteredProviders(groupedModels, modelState.models, searchText)
@@ -155,13 +155,13 @@ fun ModelCatalogScreen(
                     MetricsSection(
                         providerCount = groupedModels.size,
                         modelCount = modelState.models.size,
-                        modifier = Modifier.animateItemPlacement()
+                        modifier = Modifier.animateItem()
                     )
                 }
 
                 if (defaultModel != null && searchText.isBlank()) {
                     item {
-                        DefaultModelHero(defaultModel, modifier = Modifier.animateItemPlacement())
+                        DefaultModelHero(defaultModel, modifier = Modifier.animateItem())
                     }
                 }
 
@@ -176,7 +176,7 @@ fun ModelCatalogScreen(
                             onModelClick = { model ->
                                 if (!model.isDefault) modelToConfirm = model
                             },
-                            modifier = Modifier.animateItemPlacement()
+                            modifier = Modifier.animateItem()
                         )
                     }
                 }
@@ -188,7 +188,7 @@ fun ModelCatalogScreen(
                             hasQuery = searchText.isNotBlank(),
                             errorMessage = modelState.errorMessage,
                             onRefresh = { if (gatewayId != null && gatewayState.isSelectedGatewayChatChainReady) scope.launch { modelStore.loadModels(gatewayId) } },
-                            modifier = Modifier.animateItemPlacement()
+                            modifier = Modifier.animateItem()
                         )
                     }
                 }

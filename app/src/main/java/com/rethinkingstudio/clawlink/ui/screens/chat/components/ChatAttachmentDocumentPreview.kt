@@ -197,39 +197,39 @@ internal fun DocumentFullscreenOverlay(
             }
             previewKind == AndroidDocumentPreviewKind.Text && textPreview != null -> {
                 TextDocumentPreview(
-                    title = fileName ?: "Document",
+                    title = fileName ?: choose("Document", "文档"),
                     text = textPreview.orEmpty()
                 )
             }
             (previewKind == AndroidDocumentPreviewKind.Docx || previewKind == AndroidDocumentPreviewKind.Doc) && docxPreview != null -> {
                 TextDocumentPreview(
-                    title = fileName ?: "Document",
+                    title = fileName ?: choose("Document", "文档"),
                     text = docxPreview.orEmpty()
                 )
             }
             (previewKind == AndroidDocumentPreviewKind.Spreadsheet || previewKind == AndroidDocumentPreviewKind.LegacySpreadsheet || previewKind == AndroidDocumentPreviewKind.Presentation || previewKind == AndroidDocumentPreviewKind.LegacyPresentation) && officePreview != null -> {
                 TextDocumentPreview(
-                    title = fileName ?: "Document",
+                    title = fileName ?: choose("Document", "文档"),
                     text = officePreview.orEmpty()
                 )
             }
             previewKind == AndroidDocumentPreviewKind.Pdf && localFile != null -> {
                 PdfDocumentPreview(
-                    title = fileName ?: "Document",
+                    title = fileName ?: choose("Document", "文档"),
                     file = localFile!!,
                     isLoading = isLoading
                 )
             }
             else -> {
                 DocumentLoadingPreview(
-                    title = fileName ?: "Document",
+                    title = fileName ?: choose("Document", "文档"),
                     isLoading = isLoading
                 )
             }
         }
 
         DocumentTopBar(
-            title = fileName ?: "Document",
+            title = fileName ?: choose("Document", "文档"),
             onDismiss = onDismiss,
             onShare = {
                 scope.launch {
@@ -414,7 +414,7 @@ internal fun UnsupportedDocumentPreview(
                 modifier = Modifier.size(44.dp)
             )
             Text(
-                text = fileName ?: "Document",
+                text = fileName ?: choose("Document", "文档"),
                 style = MaterialTheme.typography.bodyLarge,
                 color = Color(0xFF1B1F24),
                 maxLines = 2,

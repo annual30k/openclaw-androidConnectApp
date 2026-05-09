@@ -14,8 +14,8 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Dns
-import androidx.compose.material.icons.filled.MenuBook
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.automirrored.filled.MenuBook
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -70,7 +70,7 @@ internal fun UsageGuidePromptCard(onOpenUsageGuide: (() -> Unit)?) {
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.Top) {
-                IconBadge(Icons.Default.MenuBook)
+                IconBadge(Icons.AutoMirrored.Filled.MenuBook)
                 Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     Text(
                         stringResource(R.string.gateway_usage_guide_title),
@@ -87,7 +87,7 @@ internal fun UsageGuidePromptCard(onOpenUsageGuide: (() -> Unit)?) {
             }
             FullWidthCardButton(
                 text = stringResource(R.string.gateway_usage_guide_button),
-                icon = Icons.Default.MenuBook,
+                icon = Icons.AutoMirrored.Filled.MenuBook,
                 onClick = onOpenUsageGuide ?: {}
             )
         }

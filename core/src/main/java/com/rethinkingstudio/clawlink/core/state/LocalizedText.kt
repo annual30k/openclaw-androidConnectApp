@@ -8,7 +8,9 @@ object LocalizedText {
     }
 
     fun isChinese(): Boolean {
-        val appLocales = androidx.appcompat.app.AppCompatDelegate.getApplicationLocales()
+        val appLocales = runCatching {
+            androidx.appcompat.app.AppCompatDelegate.getApplicationLocales()
+        }.getOrNull() ?: return Locale.getDefault().language.equals(Locale.CHINESE.language, ignoreCase = true)
         val language = if (appLocales.isEmpty) {
             Locale.getDefault().language
         } else {

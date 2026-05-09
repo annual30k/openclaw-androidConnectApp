@@ -12,6 +12,7 @@ import com.rethinkingstudio.clawlink.core.models.chat.ComposerAttachmentUploadIt
 import com.rethinkingstudio.clawlink.core.models.chat.AttachmentUploadPhase
 import com.rethinkingstudio.clawlink.core.network.dto.RelayFileTransferItem
 import com.rethinkingstudio.clawlink.core.models.gateway.AggregateStatus
+import com.rethinkingstudio.clawlink.core.state.LocalizedText.choose
 import com.rethinkingstudio.clawlink.core.state.chat.ChatStore
 import com.rethinkingstudio.clawlink.core.state.gateway.GatewayStore
 import com.rethinkingstudio.clawlink.core.state.model.ModelStore
@@ -219,7 +220,7 @@ internal class ChatViewModel(
             composerNotice = error.message
         } catch (error: Exception) {
             resetVoiceInputState(restoreComposer = true)
-            composerNotice = context.getString(R.string.voice_input_start_failed, error.message ?: "Unknown error")
+            composerNotice = context.getString(R.string.voice_input_start_failed, error.message ?: choose("Unknown error", "未知错误"))
         }
     }
 
@@ -444,7 +445,7 @@ internal class ChatViewModel(
                 setUploadItemPhase(
                     attachmentId = failedAttachmentId,
                     phase = AttachmentUploadPhase.failed,
-                    failureMessage = e.message ?: "Unknown error"
+                    failureMessage = e.message ?: choose("Unknown error", "未知错误")
                 )
                 if (failedAttachment != null) {
                     chatStore.updateComposerAttachmentUploadMessage(
@@ -453,14 +454,14 @@ internal class ChatViewModel(
                         sessionKey = sessionKey,
                         progress = composerAttachmentUploadItems.firstOrNull { it.attachment.id == failedAttachmentId }?.progress ?: 0.0,
                         phase = AttachmentUploadPhase.failed,
-                        failureMessage = e.message ?: "Unknown error",
+                        failureMessage = e.message ?: choose("Unknown error", "未知错误"),
                         senderDisplayName = gatewayStore.state.value.selectedGateway?.displayName
                     )
                 }
             }
             composerNotice = context.getString(
                 R.string.chat_attachment_send_failed_with_reason,
-                e.message ?: "Unknown error"
+                e.message ?: choose("Unknown error", "未知错误")
             )
         } finally {
             isUploadingAttachment = false

@@ -199,7 +199,7 @@ internal fun VoiceBlock(
                                     } catch (error: Exception) {
                                         Toast.makeText(
                                             context,
-                                            context.getString(R.string.chat_voice_play_failed, error.message ?: "Unknown error"),
+                                            context.getString(R.string.chat_voice_play_failed, error.message ?: choose("Unknown error", "未知错误")),
                                             Toast.LENGTH_SHORT
                                         ).show()
                                     } finally {
@@ -330,7 +330,7 @@ private suspend fun resolveVoicePlayableFile(block: RelayChatContentBlock, relay
             if (local.exists()) return@withContext local
         }
         val resolvedUrl = raw.takeIf { it.isNotBlank() }?.let { resolveFileUrl(it, relayBaseUrl) }
-            ?: throw IllegalStateException("Missing voice download URL")
+            ?: throw IllegalStateException(choose("Missing voice download URL", "缺少语音下载地址"))
         val cacheKey = block.chatAttachmentCacheKey() ?: block.voicePlaybackIdentifier
         RemoteAttachmentCache.cachedFile(cacheKey)?.let { return@withContext it }
         val connection = (URL(resolvedUrl).openConnection() as HttpURLConnection).apply {
@@ -340,7 +340,7 @@ private suspend fun resolveVoicePlayableFile(block: RelayChatContentBlock, relay
         }
         val bytes = connection.inputStream.use { it.readBytes() }
         RemoteAttachmentCache.put(cacheKey, block.fileDisplayName ?: block.text ?: "voice.m4a", bytes)
-            ?: throw IllegalStateException("Unable to cache voice file")
+            ?: throw IllegalStateException(choose("Unable to cache voice file", "无法缓存语音文件"))
     }
 }
 

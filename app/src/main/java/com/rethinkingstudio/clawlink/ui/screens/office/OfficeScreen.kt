@@ -90,9 +90,15 @@ fun OfficeScreen(
     val activeOfficeReply = remember(chatState.currentGatewayId, chatState.isStreaming, chatState.messages) {
         latestStreamingReplyText(chatState.messages)
     }
-    val officeGateways = remember(gatewayState.gateways, chatState.currentGatewayId, chatState.isStreaming, activeOfficeReply) {
+    val officeGateways = remember(
+        gatewayState.gateways,
+        gatewayState.appRelayStatus,
+        chatState.currentGatewayId,
+        chatState.isStreaming,
+        activeOfficeReply
+    ) {
         val activeGatewayId = chatState.currentGatewayId?.takeIf { it.isNotBlank() }
-        if (activeGatewayId == null || !chatState.isStreaming || activeOfficeReply.isBlank()) {
+        val activityGateways = if (activeGatewayId == null || !chatState.isStreaming || activeOfficeReply.isBlank()) {
             gatewayState.gateways
         } else {
             gatewayState.gateways.map { gateway ->
@@ -109,6 +115,15 @@ fun OfficeScreen(
                 }
             }
         }
+
+        activityGateways.map { gateway ->
+            gateway.copy(
+                aggregateStatus = GatewayStore.aggregateStatusForChain(
+                    gateway,
+                    gatewayState.appRelayStatus
+                )
+            )
+        }
     }
 
     val scene = remember(officeGateways, gatewayState.selectedGatewayId, pendingRunsByGateway) {
@@ -123,11 +138,29 @@ fun OfficeScreen(
     val sceneMode = officePresenceMode(focusAgent)
     val sceneTint = sceneMode.tint
     val toolAgent = focusAgent?.takeIf { it.shouldShowToolDetail() }
+    val shouldShowOfficeOccupants = gatewayState.isAppRelayOnline &&
+        focusAgent?.aggregateStatus != AggregateStatus.offline
+    val renderScene = remember(scene, shouldShowOfficeOccupants) {
+        if (!shouldShowOfficeOccupants) {
+            scene.copy(agents = emptyList())
+        } else {
+            val focusAgentId = scene.focusAgent?.id
+            scene.copy(
+                agents = scene.agents.filter { agent ->
+                    agent.id == focusAgentId ||
+                        (agent.aggregateStatus != AggregateStatus.offline &&
+                            agent.activityKind != OfficeActivityKind.SLEEPING &&
+                            agent.activityKind != OfficeActivityKind.OFFLINE)
+                }
+            )
+        }
+    }
 
     Box(modifier = Modifier.fillMaxSize().background(OfficeSceneLetterboxColor)) {
         PixelOfficeScene(
-            scene = scene,
-            showsOccupants = gatewayState.isAppRelayOnline,
+            scene = renderScene,
+            showsOccupants = shouldShowOfficeOccupants,
+            showsRestingCat = sceneMode == OfficePresenceMode.SLEEPING,
             modifier = Modifier
                 .fillMaxSize()
                 .clickable(

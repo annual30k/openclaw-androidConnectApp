@@ -36,6 +36,7 @@ import com.rethinkingstudio.clawlink.core.models.gateway.AggregateStatus
 import com.rethinkingstudio.clawlink.core.models.gateway.ConnectionPhase
 import com.rethinkingstudio.clawlink.core.models.gateway.GatewayStatus
 import com.rethinkingstudio.clawlink.core.models.gateway.GatewaySummary
+import com.rethinkingstudio.clawlink.core.state.LocalizedText.choose
 import com.rethinkingstudio.clawlink.core.state.gateway.GatewayStore
 import kotlinx.coroutines.launch
 
@@ -304,17 +305,17 @@ fun EmptyGatewayStatusCard(
             GatewayStatus(
                 phase = ConnectionPhase.appRelay,
                 status = AggregateStatus.partial,
-                detail = "App connected"
+                detail = choose("App connected", "App 已连接")
             ),
             GatewayStatus(
                 phase = ConnectionPhase.relayHost,
                 status = AggregateStatus.offline,
-                detail = "Relay unavailable"
+                detail = choose("Relay unavailable", "Relay 不可用")
             ),
             GatewayStatus(
                 phase = ConnectionPhase.hostGateway,
                 status = AggregateStatus.offline,
-                detail = "Host unavailable"
+                detail = choose("Host unavailable", "主机不可用")
             )
         )
     }

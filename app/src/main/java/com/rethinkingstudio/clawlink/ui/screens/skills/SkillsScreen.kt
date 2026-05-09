@@ -200,7 +200,7 @@ fun SkillsScreen(
                                 selectedFilter == SkillListFilter.All -> choose("Sorted by availability", "按可用状态排序展示")
                                 else -> choose("Showing ${selectedFilter.title.lowercase()} skills", "显示${selectedFilter.title}技能")
                             },
-                            modifier = Modifier.animateItemPlacement()
+                            modifier = Modifier.animateItem()
                         )
                     }
 
@@ -214,7 +214,7 @@ fun SkillsScreen(
                                     searchText = ""
                                 },
                                 onReload = { if (canManageSkills) scope.launch { skillStore.loadSkills(gatewayId) } },
-                                modifier = Modifier.animateItemPlacement()
+                                modifier = Modifier.animateItem()
                             )
                         }
                     } else {
@@ -231,7 +231,7 @@ fun SkillsScreen(
                                         }
                                     }
                                 },
-                                modifier = Modifier.animateItemPlacement()
+                                modifier = Modifier.animateItem()
                             )
                         }
                     }

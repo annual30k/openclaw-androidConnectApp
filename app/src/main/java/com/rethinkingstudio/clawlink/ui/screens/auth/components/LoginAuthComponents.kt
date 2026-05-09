@@ -21,7 +21,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowForward
+import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Email
 import androidx.compose.material.icons.filled.Key
@@ -101,7 +101,7 @@ internal fun AuthHero(
         }
 
         Text(
-            text = if (isRegisterMode) "Create your account" else "Sign in to ClawLink",
+            text = if (isRegisterMode) choose("Create your account", "创建账号") else choose("Sign in to ClawLink", "登录 ClawLink"),
             style = MaterialTheme.typography.headlineSmall,
             fontWeight = FontWeight.Bold,
             color = MaterialTheme.colorScheme.onBackground,
@@ -109,10 +109,10 @@ internal fun AuthHero(
         )
 
         val subtitle = when {
-            waitingForVerification -> "Enter the code sent to ${pendingEmail.orEmpty()}."
-            usesEmailVerification -> "We will send a verification code before creating your account."
-            isRegisterMode -> "Create an account and connect it to your relay workspace."
-            else -> "Use your relay account to continue."
+            waitingForVerification -> choose("Enter the code sent to ${pendingEmail.orEmpty()}.", "请输入发送到 ${pendingEmail.orEmpty()} 的验证码。")
+            usesEmailVerification -> choose("We will send a verification code before creating your account.", "创建账号前会先发送验证码。")
+            isRegisterMode -> choose("Create an account and connect it to your relay workspace.", "创建账号并连接到你的 Relay 工作区。")
+            else -> choose("Use your relay account to continue.", "使用你的 Relay 账号继续。")
         }
         Text(
             text = subtitle,
@@ -139,15 +139,15 @@ internal fun ModeSelector(
         horizontalArrangement = Arrangement.spacedBy(4.dp)
     ) {
         ModeTab(
-            title = "Sign in",
-            icon = Icons.Default.ArrowForward,
+            title = choose("Sign in", "登录"),
+            icon = Icons.AutoMirrored.Filled.ArrowForward,
             isSelected = !isRegisterMode,
             tint = modeTint,
             modifier = Modifier.weight(1f),
             onClick = onLogin
         )
         ModeTab(
-            title = "Register",
+            title = choose("Register", "注册"),
             icon = Icons.Default.PersonAdd,
             isSelected = isRegisterMode,
             tint = modeTint,
@@ -248,7 +248,7 @@ internal fun AuthSubmitButton(
                         waitingForVerification -> Icons.Default.CheckCircle
                         usesEmailVerification -> Icons.Default.Email
                         isRegisterMode -> Icons.Default.PersonAdd
-                        else -> Icons.Default.ArrowForward
+                        else -> Icons.AutoMirrored.Filled.ArrowForward
                     },
                     contentDescription = null,
                     tint = Color.White
@@ -257,11 +257,11 @@ internal fun AuthSubmitButton(
             Spacer(Modifier.size(10.dp))
             Text(
                 text = when {
-                    isLoading -> "Processing..."
-                    waitingForVerification -> "Verify and register"
-                    usesEmailVerification -> "Send verification"
-                    isRegisterMode -> "Register"
-                    else -> "Sign in"
+                    isLoading -> choose("Processing...", "处理中...")
+                    waitingForVerification -> choose("Verify and register", "验证并注册")
+                    usesEmailVerification -> choose("Send verification", "发送验证码")
+                    isRegisterMode -> choose("Register", "注册")
+                    else -> choose("Sign in", "登录")
                 },
                 fontWeight = FontWeight.SemiBold
             )

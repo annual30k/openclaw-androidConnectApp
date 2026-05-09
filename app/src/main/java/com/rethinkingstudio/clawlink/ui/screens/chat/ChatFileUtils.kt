@@ -5,6 +5,7 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.net.Uri
 import android.provider.OpenableColumns
+import com.rethinkingstudio.clawlink.core.state.LocalizedText.choose
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.ByteArrayOutputStream
@@ -42,7 +43,7 @@ internal object ChatFileUtils {
         )
         val mimeType = resolver.getType(uri) ?: "application/octet-stream"
         val bytes = resolver.openInputStream(uri)?.use { it.readBytes() }
-            ?: throw IllegalStateException("Unable to read selected file")
+            ?: throw IllegalStateException(choose("Unable to read selected file", "无法读取所选文件"))
         
         val directory = File(context.cacheDir, "clawlink-compose-attachments").apply { mkdirs() }
         val targetFile = File(directory, "${UUID.randomUUID()}-$fileName")

@@ -123,7 +123,7 @@ internal object ModelCatalogPresentation {
 }
 
 internal val ModelItem.providerLabel: String
-    get() = provider.ifBlank { providerId.ifBlank { "Unknown" } }
+    get() = provider.ifBlank { providerId.ifBlank { choose("Unknown", "未知") } }
 
 internal val ModelItem.displayContextWindow: String
     get() = formatContextWindow(contextWindow)

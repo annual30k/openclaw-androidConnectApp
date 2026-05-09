@@ -32,9 +32,9 @@ internal sealed class ToolDisplayContent {
                 }
             }
         }
-        is TerminalCommand -> listOf(command.condensedToolPreview().ifBlank { choose("Shell command", "Shell 命令") }, workdir).filter { !it.isNullOrBlank() }.joinToString(" - ")
+        is TerminalCommand -> listOf(command.condensedToolPreview().ifBlank { "Shell command" }, workdir).filter { !it.isNullOrBlank() }.joinToString(" - ")
         is TerminalOutput -> {
-            val prefix = if (isError) choose("Shell error", "Shell 错误") else choose("Shell output", "Shell 输出")
+            val prefix = if (isError) "Shell error" else "Shell output"
             listOf(text.condensedToolPreview().ifBlank { prefix }.let { if (it == prefix) it else "$prefix: $it" }, workdir).filter { !it.isNullOrBlank() }.joinToString(" - ")
         }
         is Text -> jsonPreviewSummary(text)?.let { "JSON: $it" } ?: text.condensedToolPreview().ifBlank { text.trim() }

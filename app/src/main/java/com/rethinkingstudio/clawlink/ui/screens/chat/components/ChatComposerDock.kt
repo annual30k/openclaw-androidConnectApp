@@ -119,7 +119,7 @@ internal fun ComposerDock(
         Column(
             modifier = Modifier
                 .navigationBarsPadding()
-                .padding(horizontal = 14.dp, vertical = 4.dp),
+                .padding(start = 14.dp, top = 4.dp, end = 14.dp, bottom = 14.dp),
             verticalArrangement = Arrangement.spacedBy(4.dp)
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {

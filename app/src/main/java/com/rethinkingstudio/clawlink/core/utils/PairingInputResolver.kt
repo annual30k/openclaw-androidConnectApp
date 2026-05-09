@@ -1,6 +1,7 @@
 package com.rethinkingstudio.clawlink.core.utils
 
 import android.os.Build
+import com.rethinkingstudio.clawlink.core.state.LocalizedText.choose
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
@@ -39,12 +40,12 @@ object PairingInputResolver {
             } catch (e: Exception) {
                 // If it's not a JSON QR, maybe it's just the access code?
                 // For now, let's assume it must be JSON as per iOS.
-                throw Exception("Invalid QR code payload")
+                throw Exception(choose("Invalid QR code payload", "二维码内容无效"))
             }
         }
 
         if (manualAccessCode.isBlank()) {
-            throw Exception("Missing access code")
+            throw Exception(choose("Missing access code", "缺少配对码"))
         }
 
         return ResolvedPairingInput(

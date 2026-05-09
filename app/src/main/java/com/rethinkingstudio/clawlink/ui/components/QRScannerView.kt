@@ -19,13 +19,14 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.*
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.rethinkingstudio.clawlink.R
+import com.rethinkingstudio.clawlink.core.state.LocalizedText.choose
 import com.google.mlkit.vision.barcode.BarcodeScannerOptions
 import com.google.mlkit.vision.barcode.BarcodeScanning
 import com.google.mlkit.vision.barcode.common.Barcode
@@ -126,7 +127,7 @@ fun QRScannerView(
                     shape = RoundedCornerShape(12.dp)
                 ) {
                     Text(
-                        "Camera Error",
+                        choose("Camera Error", "相机错误"),
                         color = Color.White,
                         modifier = Modifier.padding(16.dp)
                     )

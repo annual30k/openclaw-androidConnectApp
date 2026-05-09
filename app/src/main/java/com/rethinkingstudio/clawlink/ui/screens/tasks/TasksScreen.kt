@@ -210,7 +210,7 @@ fun TasksScreen(
                     }
 
                     item(key = "section_list_title") {
-                        Box(Modifier.animateItemPlacement()) {
+                        Box(Modifier.animateItem()) {
                             SectionTitle(
                                 title = choose("Task list", "任务列表"),
                                 subtitle = TaskListPresentationLogic.listSectionSubtitle(selectedFilter, searchText)
@@ -222,14 +222,14 @@ fun TasksScreen(
                         val sections = TaskListPresentationLogic.groupedSections(sortedTasks)
                         if (sections.isEmpty()) {
                             item(key = "empty_state") {
-                                Box(Modifier.animateItemPlacement()) {
+                                Box(Modifier.animateItem()) {
                                     TasksEmptyStateCard(taskState.tasks, searchText, onReset = { selectedFilter = TaskListFilter.All; searchText = "" })
                                 }
                             }
                         } else {
                             sections.forEach { section ->
                                 item(key = "section_${section.filter.title}") {
-                                    Box(Modifier.animateItemPlacement()) {
+                                    Box(Modifier.animateItem()) {
                                         SectionTitle(title = section.filter.title, subtitle = choose("${section.tasks.size} tasks", "${section.tasks.size} 个任务"))
                                     }
                                 }
@@ -246,14 +246,14 @@ fun TasksScreen(
                                                 scope.launch { taskStore.toggleTask(gatewayId, item.id, !item.enabled) }
                                             }
                                         },
-                                        modifier = Modifier.animateItemPlacement()
+                                        modifier = Modifier.animateItem()
                                     )
                                 }
                             }
                         }
                     } else if (visibleTasks.isEmpty()) {
                         item(key = "empty_state") {
-                            Box(Modifier.animateItemPlacement()) {
+                            Box(Modifier.animateItem()) {
                                 TasksEmptyStateCard(taskState.tasks, searchText, onReset = { selectedFilter = TaskListFilter.All; searchText = "" })
                             }
                         }
@@ -271,7 +271,7 @@ fun TasksScreen(
                                         scope.launch { taskStore.toggleTask(gatewayId, item.id, !item.enabled) }
                                     }
                                 },
-                                modifier = Modifier.animateItemPlacement()
+                                modifier = Modifier.animateItem()
                             )
                         }
                     }

@@ -220,7 +220,7 @@ fun BackupScreen(
                             backups = response.backups
                             maxBackups = response.maxBackups
                             storagePath = response.storagePath
-                            actionMessage = "Backup created successfully"
+                            actionMessage = choose("Backup created successfully", "备份创建成功")
                         } catch (e: Exception) { }
                     }
                 }
@@ -259,7 +259,7 @@ fun BackupScreen(
                                 backups = response.backups
                                 maxBackups = response.maxBackups
                                 storagePath = response.storagePath
-                                actionMessage = "Backup deleted"
+                                actionMessage = choose("Backup deleted", "备份已删除")
                             } catch (_: Exception) { }
                         }
                     }
@@ -288,7 +288,7 @@ fun BackupScreen(
                                 backups = response.backups
                                 maxBackups = response.maxBackups
                                 storagePath = response.storagePath
-                                actionMessage = "Backup restored successfully"
+                                actionMessage = choose("Backup restored successfully", "备份恢复成功")
                             } catch (_: Exception) { }
                         }
                     }

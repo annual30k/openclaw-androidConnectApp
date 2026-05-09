@@ -23,6 +23,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.rethinkingstudio.clawlink.R
 import com.rethinkingstudio.clawlink.core.models.catalog.ModelItem
+import com.rethinkingstudio.clawlink.core.state.LocalizedText.choose
 import com.rethinkingstudio.clawlink.ui.screens.chat.ChatColors
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -65,7 +66,7 @@ fun ModelPickerSheetOverlay(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                SheetHeaderButton(Icons.Default.Close, "Close", onDismiss)
+                SheetHeaderButton(Icons.Default.Close, choose("Close", "关闭"), onDismiss)
                 Text(
                     text = stringResource(R.string.nav_models),
                     style = MaterialTheme.typography.titleLarge,
@@ -77,7 +78,7 @@ fun ModelPickerSheetOverlay(
                         CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
                     }
                 } else {
-                    SheetHeaderButton(Icons.Default.Refresh, "Refresh", onRefresh)
+                    SheetHeaderButton(Icons.Default.Refresh, choose("Refresh", "刷新"), onRefresh)
                 }
             }
 
@@ -115,7 +116,7 @@ fun ModelPickerSheetOverlay(
                                             onClick = { onSelect(model) }
                                         )
                                         if (index < providerModels.size - 1) {
-                                            Divider(
+                                            HorizontalDivider(
                                                 color = Color.Black.copy(alpha = 0.06f),
                                                 modifier = Modifier.padding(vertical = 8.dp)
                                             )
@@ -164,13 +165,13 @@ private fun ModelPickerEmptyState(isLoading: Boolean, errorMessage: String?, onR
 
             Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(
-                    text = if (errorMessage != null) "Load Failed" else stringResource(R.string.gateway_no_models),
+                    text = if (errorMessage != null) choose("Load Failed", "加载失败") else stringResource(R.string.gateway_no_models),
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
                     color = if (errorMessage != null) ChatColors.offline else Color.Black
                 )
                 Text(
-                    text = errorMessage ?: "Ensure your gateway is online and the model provider is correctly configured.",
+                    text = errorMessage ?: choose("Ensure your gateway is online and the model provider is correctly configured.", "请确认网关在线，并且模型提供商已正确配置。"),
                     style = MaterialTheme.typography.bodyMedium,
                     color = Color.Gray,
                     textAlign = TextAlign.Center
@@ -192,7 +193,7 @@ private fun ModelPickerEmptyState(isLoading: Boolean, errorMessage: String?, onR
                 ) {
                     Icon(Icons.Default.Refresh, null, modifier = Modifier.size(16.dp), tint = Color.Black)
                     Text(
-                        "Refresh Models",
+                        choose("Refresh Models", "刷新模型"),
                         style = MaterialTheme.typography.bodyMedium,
                         fontWeight = FontWeight.SemiBold,
                         color = Color.Black
@@ -233,12 +234,12 @@ private fun ModelPickerRow(model: ModelItem, isSelected: Boolean, onClick: () ->
                         color = Color.Black
                     )
                     if (model.isDefault) {
-                        Icon(Icons.Default.Star, "Default", tint = Color(0xFFFF9500), modifier = Modifier.size(10.dp))
+                        Icon(Icons.Default.Star, choose("Default", "默认"), tint = Color(0xFFFF9500), modifier = Modifier.size(10.dp))
                     }
                 }
                 
-                val contextText = model.contextWindow ?: "Unknown"
-                val tags = model.capabilities?.joinToString(" · ") ?: "Standard"
+                val contextText = model.contextWindow ?: choose("Unknown", "未知")
+                val tags = model.capabilities?.joinToString(" · ") ?: choose("Standard", "标准")
                 Text(
                     text = "$contextText · $tags",
                     style = MaterialTheme.typography.labelSmall,

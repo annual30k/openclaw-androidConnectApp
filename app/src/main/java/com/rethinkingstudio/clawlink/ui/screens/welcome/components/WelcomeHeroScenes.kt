@@ -25,8 +25,8 @@ import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.Chat
 import androidx.compose.material.icons.filled.AttachFile
-import androidx.compose.material.icons.filled.Chat
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.CloudDone
 import androidx.compose.material.icons.filled.Computer
@@ -155,7 +155,7 @@ internal fun SessionHero(modifier: Modifier) {
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 HeroHeaderRow(
-                    icon = Icons.Default.Chat,
+                    icon = Icons.AutoMirrored.Filled.Chat,
                     title = stringResource(R.string.welcome_session_switch),
                     trailing = stringResource(R.string.welcome_session_recent_sort),
                     tint = primary

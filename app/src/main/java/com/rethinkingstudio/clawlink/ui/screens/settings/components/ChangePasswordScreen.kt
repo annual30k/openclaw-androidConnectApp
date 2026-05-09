@@ -82,15 +82,17 @@ internal fun ChangePasswordScreen(
                 onClick = onDismiss,
                 shape = RoundedCornerShape(999.dp),
                 color = MaterialTheme.colorScheme.surface.copy(alpha = 0.92f),
+                modifier = Modifier.size(44.dp),
                 shadowElevation = 0.dp
             ) {
-                Text(
-                    choose("Close", "关闭"),
-                    modifier = Modifier.padding(horizontal = 18.dp, vertical = 12.dp),
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.SemiBold,
-                    color = MaterialTheme.colorScheme.primary
-                )
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(
+                        Icons.Default.Close,
+                        contentDescription = choose("Close", "关闭"),
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(22.dp)
+                    )
+                }
             }
 
             Text(
@@ -250,4 +252,3 @@ internal fun PasswordPageField(
         }
     }
 }
-

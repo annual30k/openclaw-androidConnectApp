@@ -50,13 +50,14 @@ internal fun DrawScope.drawStage(
     officeNpcs: List<com.rethinkingstudio.clawlink.ui.screens.office.logic.OfficeNPC>,
     timeMillis: Long,
     reduceMotion: Boolean,
-    showsOccupants: Boolean
+    showsOccupants: Boolean,
+    showsRestingCat: Boolean
 ) {
     bitmaps[R.drawable.office_background]?.let {
         drawContext.canvas.nativeCanvas.drawBitmap(it, null, Rect(0, 0, 1280, 720), null)
     }
 
-    drawFurniture(bitmaps, scene, timeMillis, reduceMotion, showsOccupants)
+    drawFurniture(bitmaps, scene, timeMillis, reduceMotion, showsOccupants, showsRestingCat)
     if (showsOccupants) {
         drawNPCs(officeNpcs, timeMillis)
         drawAgents(bitmaps, scene, motionState, timeMillis, reduceMotion)
@@ -70,7 +71,8 @@ internal fun DrawScope.drawFurniture(
     scene: OfficeSceneSnapshot,
     timeMillis: Long,
     reduceMotion: Boolean,
-    showsOccupants: Boolean
+    showsOccupants: Boolean,
+    showsRestingCat: Boolean
 ) {
     drawSpriteFrame(bitmaps[R.drawable.office_posters_sheet], 160, 160, 14, timeMillis, 1.0, centerRect(252f, 66f, 160f, 160f, 0.95f), reduceMotion)
     drawSpriteFrame(bitmaps[R.drawable.office_plants_sheet], 160, 160, 3, timeMillis, 1.0, centerRect(230f, 185f, 160f, 160f, 0.92f), reduceMotion)
@@ -98,7 +100,7 @@ internal fun DrawScope.drawFurniture(
     }
 
     drawSpriteFrame(bitmaps[R.drawable.office_serverroom_sheet], 180, 251, null, timeMillis, 5.5, centerRect(1021f, 142f, 180f, 251f, 1.0f), reduceMotion)
-    if (showsOccupants) {
+    if (showsOccupants || showsRestingCat) {
         drawSpriteFrame(bitmaps[R.drawable.office_cats_sheet], 160, 160, 6, timeMillis, 1.0, centerRect(94f, 557f, 160f, 160f, 0.94f), reduceMotion)
     }
 }
@@ -293,4 +295,3 @@ internal fun DrawScope.drawAgents(
         }
     }
 }
-

@@ -34,38 +34,61 @@ class SecureCredentialStore(private val context: Context) : CredentialStore {
         val RELAY_BASE_URL = stringPreferencesKey("relay_base_url")
         val LAST_GATEWAY_ID = stringPreferencesKey("last_gateway_id")
         private const val SECURE_PREFS_NAME = "clawlink_secure_prefs"
+        private const val FALLBACK_PREFS_NAME = "clawlink_fallback_prefs"
         private const val TOKEN_KEY = "access_token"
         private const val RELAY_URL_KEY = "relay_base_url"
     }
 
-    private val securePrefs: SharedPreferences by lazy {
-        val masterKey = MasterKey.Builder(context)
-            .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
-            .build()
-        EncryptedSharedPreferences.create(
-            context,
-            SECURE_PREFS_NAME,
-            masterKey,
-            EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
-            EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
-        )
+    private val fallbackPrefs: SharedPreferences by lazy {
+        context.getSharedPreferences(FALLBACK_PREFS_NAME, Context.MODE_PRIVATE)
+    }
+
+    private val credentialPrefs: SharedPreferences by lazy {
+        runCatching {
+            val masterKey = MasterKey.Builder(context)
+                .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
+                .build()
+            EncryptedSharedPreferences.create(
+                context,
+                SECURE_PREFS_NAME,
+                masterKey,
+                EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
+                EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
+            )
+        }.getOrElse {
+            context.deleteSharedPreferences(SECURE_PREFS_NAME)
+            fallbackPrefs
+        }
     }
 
     override suspend fun saveCredentials(credentials: SessionCredentials) {
-        securePrefs.edit()
-            .putString(TOKEN_KEY, credentials.accessToken)
-            .putString(RELAY_URL_KEY, credentials.relayBaseURL)
-            .apply()
+        runCatching {
+            credentialPrefs.edit()
+                .putString(TOKEN_KEY, credentials.accessToken)
+                .putString(RELAY_URL_KEY, credentials.relayBaseURL)
+                .apply()
+        }.getOrElse {
+            fallbackPrefs.edit()
+                .putString(TOKEN_KEY, credentials.accessToken)
+                .putString(RELAY_URL_KEY, credentials.relayBaseURL)
+                .apply()
+        }
     }
 
     override suspend fun loadCredentials(): SessionCredentials? {
-        val token = securePrefs.getString(TOKEN_KEY, null)?.takeIf { it.isNotBlank() } ?: return null
-        val url = securePrefs.getString(RELAY_URL_KEY, null)?.takeIf { it.isNotBlank() } ?: return null
+        val token = readCredentialValue(TOKEN_KEY)?.takeIf { it.isNotBlank() } ?: return null
+        val url = readCredentialValue(RELAY_URL_KEY)?.takeIf { it.isNotBlank() } ?: return null
         return SessionCredentials(accessToken = token, relayBaseURL = url)
     }
 
+    private fun readCredentialValue(key: String): String? {
+        return runCatching { credentialPrefs.getString(key, null) }.getOrNull()
+            ?: runCatching { fallbackPrefs.getString(key, null) }.getOrNull()
+    }
+
     override suspend fun clearCredentials() {
-        securePrefs.edit()
+        runCatching { credentialPrefs.edit().clear().apply() }
+        fallbackPrefs.edit()
             .remove(TOKEN_KEY)
             .remove(RELAY_URL_KEY)
             .apply()

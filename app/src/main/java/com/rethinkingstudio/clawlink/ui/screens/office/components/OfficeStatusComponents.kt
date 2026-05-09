@@ -7,6 +7,9 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.gestures.Orientation
+import androidx.compose.foundation.gestures.draggable
+import androidx.compose.foundation.gestures.rememberDraggableState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -22,6 +25,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.painter.BitmapPainter
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.imageResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
@@ -50,6 +54,7 @@ import com.rethinkingstudio.clawlink.core.state.gateway.GatewayStore
 import com.rethinkingstudio.clawlink.ui.screens.chat.formatChatTimestamp
 import com.rethinkingstudio.clawlink.ui.screens.office.components.OfficePanelCard
 import com.rethinkingstudio.clawlink.ui.screens.office.components.PixelOfficeScene
+import kotlin.math.roundToInt
 
 @Composable
 internal fun OfficeStatusOverlay(
@@ -62,14 +67,25 @@ internal fun OfficeStatusOverlay(
     onDismiss: () -> Unit
 ) {
     val prefersExpandedTaskLayout = toolAgent?.prefersExpandedTaskLayout() == true
+    val dismissDragThreshold = with(LocalDensity.current) { 72.dp.toPx() }
+    var dragDistanceY by remember { mutableStateOf(0f) }
+    val dragState = rememberDraggableState { delta ->
+        dragDistanceY = (dragDistanceY + delta).coerceAtLeast(0f)
+    }
     Box(
         modifier = Modifier
             .fillMaxSize()
+            .offset { IntOffset(0, dragDistanceY.roundToInt()) }
             .background(Color(0xFF1A1E29))
-            .clickable(
-                indication = null,
-                interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() },
-                onClick = onDismiss
+            .draggable(
+                state = dragState,
+                orientation = Orientation.Vertical,
+                onDragStopped = {
+                    if (dragDistanceY > dismissDragThreshold) {
+                        onDismiss()
+                    }
+                    dragDistanceY = 0f
+                }
             )
             .padding(start = 48.dp, top = 5.dp, end = 48.dp, bottom = 5.dp)
     ) {
@@ -146,8 +162,9 @@ internal fun OfficeDynamicsCard(
     expanded: Boolean = false,
     modifier: Modifier = Modifier
 ) {
-    val subtitle = toolAgent?.activityToolName?.trim()?.takeIf { it.isNotEmpty() }
-        ?: toolAgent?.activityKind?.localizedDisplayName()
+    val detailAgent = toolAgent ?: focusAgent
+    val subtitle = detailAgent?.activityToolName?.trim()?.takeIf { it.isNotEmpty() }
+        ?: detailAgent?.activityKind?.localizedDisplayName()
         ?: stringResource(R.string.office_dynamics_subtitle)
     OfficePanelCard(
         modifier = modifier,
@@ -160,13 +177,12 @@ internal fun OfficeDynamicsCard(
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
                 verticalAlignment = Alignment.Top
             ) {
-                toolAgent?.let {
+                detailAgent?.let {
                     StatusGlyph(sceneTint)
                 }
                 Column(verticalArrangement = Arrangement.spacedBy(4.dp), modifier = Modifier.weight(1f)) {
                     Text(
-                        text = toolAgent?.activityTitle?.takeIf { it.isNotBlank() }
-                            ?: focusAgent?.activityTitle?.takeIf { it.isNotBlank() }
+                        text = detailAgent?.activityTitle?.takeIf { it.isNotBlank() }
                             ?: sceneMode.title(),
                         style = MaterialTheme.typography.titleMedium.copy(fontSize = 24.sp),
                         color = Color.White,
@@ -176,8 +192,7 @@ internal fun OfficeDynamicsCard(
                         overflow = TextOverflow.Ellipsis
                     )
                     Text(
-                        text = toolAgent?.activityDetail?.takeIf { it.isNotBlank() }
-                            ?: focusAgent?.activityDetail?.takeIf { it.isNotBlank() }
+                        text = detailAgent?.activityDetail?.takeIf { it.isNotBlank() }
                             ?: sceneMode.subtitle(),
                         style = MaterialTheme.typography.bodySmall.copy(fontSize = 13.sp),
                         color = Color.White.copy(alpha = 0.78f),
@@ -189,11 +204,15 @@ internal fun OfficeDynamicsCard(
                 }
             }
 
-            if (toolAgent != null) {
+            if (detailAgent != null) {
                 DividerLine()
-                DetailRow(title = stringResource(R.string.office_detail_agent), value = toolAgent.displayName)
-                DetailRow(title = stringResource(R.string.office_detail_progress), value = progressText(toolAgent))
-                ToolDetailBlock(agent = toolAgent, expanded = expanded)
+                DetailRow(title = stringResource(R.string.office_detail_agent), value = detailAgent.displayName)
+                DetailRow(title = stringResource(R.string.office_detail_progress), value = progressText(detailAgent))
+                if (detailAgent.shouldShowToolDetail()) {
+                    ToolDetailBlock(agent = detailAgent, expanded = expanded)
+                } else {
+                    ActivityDetailBlock(agent = detailAgent, expanded = expanded)
+                }
             } else {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     StatChip(title = stringResource(R.string.office_stat_working), value = scene.activeCount.toString(), modifier = Modifier.weight(1f))
@@ -270,6 +289,22 @@ internal fun GatewayIndicatorCard(
             DetailRow(title = stringResource(R.string.office_detail_online), value = lastActiveText)
         }
     }
+}
+
+@Composable
+internal fun ActivityDetailBlock(agent: OfficeAgentSnapshot, expanded: Boolean = false) {
+    Text(
+        text = agent.activityDetail,
+        modifier = Modifier
+            .fillMaxWidth()
+            .then(if (expanded) Modifier.heightIn(min = 64.dp) else Modifier)
+            .background(Color.Black.copy(alpha = 0.24f), RoundedCornerShape(4.dp))
+            .padding(8.dp),
+        style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp),
+        color = Color.White.copy(alpha = 0.80f),
+        fontWeight = FontWeight.Medium,
+        fontFamily = FontFamily.Monospace
+    )
 }
 
 @Composable
@@ -433,4 +468,3 @@ internal fun DividerLine() {
             .background(Color.White.copy(alpha = 0.12f))
     )
 }
-

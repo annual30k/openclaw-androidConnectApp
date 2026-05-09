@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">ClawLink</string>
+    <string name="app_name">clawlink</string>
 
 
     
@@ -1629,4 +1629,7 @@
     <string name="language_system">跟随系统</string>
     <string name="language_chinese">简体中文</string>
     <string name="language_english">English</string>
+    <string name="backup_info_file">文件</string>
+    <string name="backup_info_created">创建时间</string>
+    <string name="backup_info_version">版本</string>
 </resources>

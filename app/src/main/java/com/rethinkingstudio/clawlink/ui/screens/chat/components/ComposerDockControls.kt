@@ -68,6 +68,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Popup
 import androidx.compose.ui.window.PopupProperties
 import com.rethinkingstudio.clawlink.R
+import com.rethinkingstudio.clawlink.core.state.LocalizedText.choose
 import com.rethinkingstudio.clawlink.ui.screens.chat.ChatColors
 import com.rethinkingstudio.clawlink.ui.screens.chat.ComposerAttachmentDraft
 import com.rethinkingstudio.clawlink.ui.screens.chat.VoiceInputPhase
@@ -122,8 +123,8 @@ internal fun SendButton(enabled: Boolean, isStreaming: Boolean = false, isStoppi
     Surface(onClick = onClick, enabled = enabled, shape = CircleShape, color = backgroundColor, contentColor = if (enabled) Color.White else Color.White.copy(alpha = 0.9f), modifier = Modifier.size(42.dp)) {
         Box(contentAlignment = Alignment.Center) {
             if (isStoppingRun) { CircularProgressIndicator(modifier = Modifier.size(20.dp), color = Color.White, strokeWidth = 2.dp) }
-            else if (isStreaming) { Icon(Icons.Default.Stop, "Stop", modifier = Modifier.size(20.dp)) }
-            else { Icon(Icons.AutoMirrored.Filled.Send, "Send", modifier = Modifier.size(20.dp)) }
+            else if (isStreaming) { Icon(Icons.Default.Stop, choose("Stop", "停止"), modifier = Modifier.size(20.dp)) }
+            else { Icon(Icons.AutoMirrored.Filled.Send, choose("Send", "发送"), modifier = Modifier.size(20.dp)) }
         }
     }
 }

@@ -9,6 +9,7 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -255,7 +256,7 @@ private fun SkillExpansionMenu(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            SheetHeaderButton(Icons.Default.Close, "Close", onDismiss)
+            SheetHeaderButton(Icons.Default.Close, choose("Close", "关闭"), onDismiss)
             Text(stringResource(R.string.chat_skill_extension_title), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Black, color = Color.Black)
             Box(modifier = Modifier.size(32.dp))
         }
@@ -307,7 +308,7 @@ private fun SkillExpansionMenu(
                     tint = Color(0xFF5ECF7A),
                     onClick = onNavigateToFileTransfer
                 )
-                Divider(color = Color.Black.copy(alpha = 0.06f), modifier = Modifier.padding(horizontal = 18.dp))
+                HorizontalDivider(color = Color.Black.copy(alpha = 0.06f), modifier = Modifier.padding(horizontal = 18.dp))
                 AdvancedFeatureRow(
                     title = SkillExpansionGuideVoice.title,
                     detail = stringResource(R.string.chat_skill_extension_voice_reply),
@@ -380,7 +381,7 @@ private fun SkillSetupDetailView(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            SheetHeaderButton(Icons.Default.ArrowBack, "Back", onBack)
+            SheetHeaderButton(Icons.AutoMirrored.Filled.ArrowBack, choose("Back", "返回"), onBack)
             Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Black, color = Color.Black)
             Box(modifier = Modifier.size(32.dp))
         }

@@ -6,6 +6,7 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -165,8 +166,8 @@ fun LoginScreen(
                             AuthField(
                                 value = name,
                                 onValueChange = { name = it },
-                                label = "Name",
-                                placeholder = "Your name",
+                                label = choose("Name", "姓名"),
+                                placeholder = choose("Your name", "你的姓名"),
                                 icon = Icons.Default.Person,
                                 keyboardType = KeyboardType.Text,
                                 tint = modeTint
@@ -176,7 +177,7 @@ fun LoginScreen(
                         AuthField(
                             value = email,
                             onValueChange = { email = it },
-                            label = "Email",
+                            label = choose("Email", "邮箱"),
                             placeholder = "name@example.com",
                             icon = Icons.Default.Email,
                             keyboardType = KeyboardType.Email,
@@ -186,8 +187,8 @@ fun LoginScreen(
                         AuthField(
                             value = password,
                             onValueChange = { password = it },
-                            label = "Password",
-                            placeholder = if (isRegisterMode) "At least 8 characters" else "Your password",
+                            label = choose("Password", "密码"),
+                            placeholder = if (isRegisterMode) choose("At least 8 characters", "至少 8 位字符") else choose("Your password", "你的密码"),
                             icon = Icons.Default.Key,
                             keyboardType = KeyboardType.Password,
                             visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
@@ -201,9 +202,14 @@ fun LoginScreen(
 
                         AnimatedVisibility(!isRegisterMode) {
                             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-                                TextButton(onClick = { showingForgotPassword = true }) {
-                                    Text(choose("Forgot password?", "忘记密码？"), color = MaterialTheme.colorScheme.primary)
-                                }
+                                Text(
+                                    text = choose("Forgot password?", "忘记密码？"),
+                                    color = MaterialTheme.colorScheme.primary,
+                                    fontWeight = FontWeight.SemiBold,
+                                    modifier = Modifier
+                                        .clickable { showingForgotPassword = true }
+                                        .padding(horizontal = 8.dp, vertical = 4.dp)
+                                )
                             }
                         }
 
@@ -212,8 +218,8 @@ fun LoginScreen(
                                 AuthField(
                                     value = verificationCode,
                                     onValueChange = { if (it.length <= 6) verificationCode = it.filter(Char::isDigit) },
-                                    label = "Verification code",
-                                    placeholder = "6-digit code",
+                                    label = choose("Verification code", "验证码"),
+                                    placeholder = choose("6-digit code", "6 位数字验证码"),
                                     icon = Icons.Default.Numbers,
                                     keyboardType = KeyboardType.Number,
                                     enabled = waitingForVerification,
@@ -242,7 +248,7 @@ fun LoginScreen(
                                         },
                                         enabled = resendCountdown == 0
                                     ) {
-                                        Text(if (resendCountdown > 0) "Resend in ${resendCountdown}s" else "Resend verification email")
+                                        Text(if (resendCountdown > 0) choose("Resend in ${resendCountdown}s", "${resendCountdown} 秒后重发") else choose("Resend verification email", "重新发送验证邮件"))
                                     }
                                 }
                             }
@@ -250,7 +256,7 @@ fun LoginScreen(
 
                         if (isRegisterMode && !waitingForVerification && password.isNotEmpty() && !passwordIsValid) {
                             Text(
-                                "Password must be at least 8 characters.",
+                                choose("Password must be at least 8 characters.", "密码至少需要 8 位字符。"),
                                 style = MaterialTheme.typography.bodySmall,
                                 fontWeight = FontWeight.SemiBold,
                                 color = MaterialTheme.colorScheme.tertiary

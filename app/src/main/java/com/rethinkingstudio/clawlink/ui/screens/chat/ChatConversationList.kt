@@ -11,6 +11,7 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -34,6 +35,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
@@ -89,6 +91,7 @@ internal fun ChatConversationList(
     hasSelectedGateway: Boolean,
     onOpenUsageGuide: (() -> Unit)?,
     onOpenSettings: (() -> Unit)?,
+    onDismissKeyboard: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val displayMessages = remember(
@@ -122,7 +125,9 @@ val hasStreamingAssistantMessage = displayMessages.any {
 val conversationAnimationKey = "${gatewayId.orEmpty()}::${chatState.currentSessionKey}"
 
 LazyColumn(
-    modifier = modifier,
+    modifier = modifier.pointerInput(onDismissKeyboard) {
+        detectTapGestures(onTap = { onDismissKeyboard() })
+    },
     state = listState,
     contentPadding = PaddingValues(top = 14.dp, bottom = viewModel.composerHeight + 18.dp),
     verticalArrangement = Arrangement.spacedBy(16.dp)
@@ -170,6 +175,7 @@ LazyColumn(
                 gatewayId = gatewayId,
                 sessionKey = chatState.currentSessionKey,
                 onImageClick = { block, url, fileName ->
+                    onDismissKeyboard()
                     viewModel.imagePreview = ChatImagePreviewState(
                         url = url,
                         accessToken = chatStore.accessToken,
@@ -178,6 +184,7 @@ LazyColumn(
                     )
                 },
                 onFileClick = { block, url, fileName ->
+                    onDismissKeyboard()
                     viewModel.documentPreview = ChatDocumentPreviewState(
                         url = url,
                         accessToken = chatStore.accessToken,
