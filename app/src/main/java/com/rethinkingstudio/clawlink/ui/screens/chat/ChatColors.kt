@@ -26,7 +26,7 @@ internal object ChatColors {
     val selectionBlue: Color
         @Composable get() = MaterialTheme.colorScheme.primary.copy(alpha = 0.62f)
     val userBubble: Color
-        @Composable get() = if (isSystemInDarkTheme()) MaterialTheme.colorScheme.primary else Color(0xFF171923)
+        @Composable get() = if (isSystemInDarkTheme()) Color(0xFF298547) else Color(0xFF171923)
     val disabledAction: Color
         @Composable get() = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.10f)
 }
