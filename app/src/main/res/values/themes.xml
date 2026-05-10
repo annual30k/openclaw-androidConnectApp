@@ -1,4 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <style name="Theme.ClawLink" parent="Theme.AppCompat.DayNight.NoActionBar" />
+    <style name="Theme.ClawLink" parent="Theme.AppCompat.DayNight.NoActionBar">
+        <item name="android:windowBackground">@color/clawlink_window_background</item>
+        <item name="android:statusBarColor">@color/clawlink_status_bar</item>
+        <item name="android:navigationBarColor">@color/clawlink_navigation_bar</item>
+        <item name="android:windowLightStatusBar">true</item>
+        <item name="android:windowLightNavigationBar">true</item>
+    </style>
 </resources>

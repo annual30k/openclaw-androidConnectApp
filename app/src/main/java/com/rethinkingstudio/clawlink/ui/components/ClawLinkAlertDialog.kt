@@ -67,7 +67,7 @@ fun ClawLinkAlertDialog(
         BoxWithConstraints(
             modifier = Modifier
                 .fillMaxSize()
-                .background(Color(0x8A8E969F))
+                .background(MaterialTheme.colorScheme.scrim.copy(alpha = 0.42f))
         ) {
             val density = LocalDensity.current
             var dialogHeightPx by remember { mutableIntStateOf(0) }
@@ -83,8 +83,8 @@ fun ClawLinkAlertDialog(
                     .widthIn(max = 360.dp)
                     .onSizeChanged { dialogHeightPx = it.height },
                 shape = RoundedCornerShape(34.dp),
-                color = Color(0xFFF2F7FC),
-                contentColor = Color(0xFF111111),
+                color = MaterialTheme.colorScheme.surface,
+                contentColor = MaterialTheme.colorScheme.onSurface,
                 tonalElevation = 0.dp,
                 shadowElevation = 0.dp
             ) {
@@ -101,7 +101,7 @@ fun ClawLinkAlertDialog(
                             style = MaterialTheme.typography.titleMedium.copy(fontSize = 17.sp, lineHeight = 21.sp),
                             fontWeight = FontWeight.Bold,
                             textAlign = TextAlign.Start,
-                            color = Color(0xFF050505),
+                            color = MaterialTheme.colorScheme.onSurface,
                             modifier = Modifier.fillMaxWidth()
                         )
 
@@ -116,7 +116,7 @@ fun ClawLinkAlertDialog(
                                 text = message,
                                 style = MaterialTheme.typography.bodyMedium.copy(fontSize = 15.sp, lineHeight = 21.sp),
                                 textAlign = TextAlign.Start,
-                                color = Color(0xFF6B6F75),
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 modifier = Modifier.fillMaxWidth()
                             )
                         }
@@ -170,17 +170,17 @@ private fun AlertActionButton(
     modifier: Modifier = Modifier
 ) {
     val textColor = when (role) {
-        ClawLinkAlertActionRole.Default -> Color(0xFF050505)
-        ClawLinkAlertActionRole.Cancel -> Color(0xFF050505)
-        ClawLinkAlertActionRole.Destructive -> Color(0xFFFF3B30)
+        ClawLinkAlertActionRole.Default -> MaterialTheme.colorScheme.onSurface
+        ClawLinkAlertActionRole.Cancel -> MaterialTheme.colorScheme.onSurface
+        ClawLinkAlertActionRole.Destructive -> MaterialTheme.colorScheme.error
     }
-    val contentColor = if (enabled) textColor else Color(0x66050505)
+    val contentColor = if (enabled) textColor else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
 
     Box(
         modifier = modifier
             .height(46.dp)
             .background(
-                color = Color(0xFFD1D7DE),
+                color = MaterialTheme.colorScheme.surfaceVariant,
                 shape = RoundedCornerShape(999.dp)
             )
             .clickable(enabled = enabled && !loading, onClick = onClick),

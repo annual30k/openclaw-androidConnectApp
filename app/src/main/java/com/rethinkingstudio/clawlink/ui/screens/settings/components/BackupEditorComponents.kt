@@ -61,7 +61,7 @@ internal fun BackupEditorSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
         shape = BackupSheetShape,
-        containerColor = BackupScreenWhite,
+        containerColor = MaterialTheme.colorScheme.surface,
         dragHandle = {
             Box(
                 modifier = Modifier
@@ -80,7 +80,7 @@ internal fun BackupEditorSheet(
             item {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                        Text(if (isCreate) choose("New backup", "新建备份") else choose("Edit backup", "编辑备份"), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                        Text(if (isCreate) choose("New backup", "新建备份") else choose("Edit backup", "编辑备份"), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
                         Text(if (isCreate) choose("Fill in name, details, and filename. The backup is saved locally on the host.", "填写名称、详情和文件名，备份会保存在宿主机本地。") else choose("Adjust the backup display name, notes, and filename.", "可以调整备份的展示名、备注和文件名。"), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                     TextButton(onClick = onDismiss) { Text(choose("Cancel", "取消")) }
@@ -183,7 +183,8 @@ internal fun IosTextField(
         onValueChange = onValueChange,
         modifier = modifier
             .clip(BackupFieldShape)
-            .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.96f))
+            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.62f))
+            .border(0.6.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.12f), BackupFieldShape)
             .padding(horizontal = 18.dp, vertical = 17.dp),
         singleLine = singleLine,
         minLines = minLines,

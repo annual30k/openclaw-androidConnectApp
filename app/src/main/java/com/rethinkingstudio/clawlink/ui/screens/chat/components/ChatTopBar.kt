@@ -70,7 +70,7 @@ internal fun ChatTopBar(
             .fillMaxWidth()
             .statusBarsPadding()
             .height(72.dp)
-            .background(ChatColors.canvas)
+            .background(MaterialTheme.colorScheme.background)
             .padding(horizontal = 20.dp)
             .padding(bottom = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -108,12 +108,12 @@ internal fun ChatTopBar(
                         overflow = TextOverflow.Ellipsis,
                         style = MaterialTheme.typography.titleMedium.copy(fontSize = 15.sp),
                         fontWeight = FontWeight.Black,
-                        color = Color.Black
+                        color = MaterialTheme.colorScheme.onBackground
                     )
                     Icon(
                         Icons.Default.ExpandMore,
                         null,
-                        tint = Color(0xFF8B8F98),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.size(18.dp).padding(start = 2.dp)
                     )
                 }
@@ -122,7 +122,7 @@ internal fun ChatTopBar(
                     Text(
                         text = (stringResource(R.string.gateway_context_usage_label) + " " + (gateway?.contextUsage?.takeIf { it.isNotBlank() } ?: stringResource(R.string.gateway_context_usage_empty))),
                         style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp),
-                        color = Color(0xFF8B8F98),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                         fontWeight = FontWeight.Medium,
                         modifier = Modifier.padding(top = 1.dp)
                     )
@@ -142,7 +142,7 @@ internal fun ChatTopBar(
                     Text(
                         statusText,
                         style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
-                        color = Color(0xFF8B8F98),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                         fontWeight = FontWeight.Medium,
                         modifier = Modifier.padding(start = 4.dp)
                     )
@@ -159,13 +159,13 @@ internal fun CircleHeaderButton(icon: ImageVector, label: String, onClick: () ->
     Surface(
         onClick = onClick,
         shape = CircleShape,
-        color = Color.White,
+        color = MaterialTheme.colorScheme.surface,
         shadowElevation = 0.dp,
-        border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.92f)),
+        border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.14f)),
         modifier = Modifier.size(48.dp)
     ) {
         Box(contentAlignment = Alignment.Center) {
-            Icon(icon, label, tint = Color.Black, modifier = Modifier.size(24.dp))
+            Icon(icon, label, tint = MaterialTheme.colorScheme.onSurface, modifier = Modifier.size(24.dp))
         }
     }
 }

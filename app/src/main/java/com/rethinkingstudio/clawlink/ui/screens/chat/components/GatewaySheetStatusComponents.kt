@@ -93,6 +93,7 @@ internal fun StatusPill(status: AggregateStatus) {
     }
 }
 
+@Composable
 internal fun gatewayStatusTint(status: AggregateStatus): Color {
     return when (status) {
         AggregateStatus.online -> ChatColors.online
@@ -116,8 +117,8 @@ private fun gatewayStatusPillText(status: AggregateStatus): String {
 internal fun EmptyGatewaySheetState() {
     Surface(
         shape = RoundedCornerShape(24.dp),
-        color = Color.White.copy(alpha = 0.78f),
-        border = BorderStroke(1.dp, Color.White.copy(alpha = 0.6f)),
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.46f),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.12f)),
         modifier = Modifier.fillMaxWidth()
     ) {
         Column(
@@ -126,7 +127,7 @@ internal fun EmptyGatewaySheetState() {
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             Icon(Icons.Default.Settings, null, tint = ChatColors.secondaryText, modifier = Modifier.size(36.dp))
-            Text(choose("No gateways", "暂无网关"), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Black, color = Color.Black)
+            Text(choose("No gateways", "暂无网关"), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Black, color = MaterialTheme.colorScheme.onSurface)
             Text(stringResource(R.string.gateway_connectivity_prompt), style = MaterialTheme.typography.bodySmall, color = ChatColors.secondaryText)
         }
     }

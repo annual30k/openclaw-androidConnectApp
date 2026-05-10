@@ -124,7 +124,7 @@ internal fun TaskEditorSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
         shape = SheetShape,
-        containerColor = ScreenWhite,
+        containerColor = MaterialTheme.colorScheme.surface,
         dragHandle = {
             Box(
                 modifier = Modifier
@@ -143,7 +143,12 @@ internal fun TaskEditorSheet(
             item {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                        Text(mode.title, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                        Text(
+                            mode.title,
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
                         Text(mode.subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                     TextButton(onClick = onDismiss) { Text(choose("Cancel", "取消")) }
@@ -229,7 +234,8 @@ internal fun IosTextField(
         onValueChange = onValueChange,
         modifier = modifier
             .clip(FieldShape)
-            .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.96f))
+            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.62f))
+            .border(0.6.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.12f), FieldShape)
             .padding(horizontal = 18.dp, vertical = 17.dp),
         singleLine = singleLine,
         minLines = minLines,
@@ -263,7 +269,8 @@ internal fun ExecutionSettingsCard(draft: TaskDraft, onDraftChange: (TaskDraft) 
         modifier = Modifier
             .fillMaxWidth()
             .clip(CardShape)
-            .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.96f))
+            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.48f))
+            .border(0.6.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.12f), CardShape)
             .animateContentSize()
     ) {
         Column(modifier = Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(18.dp)) {
@@ -384,7 +391,7 @@ internal fun SchedulePickerRow(label: String, value: String, onChange: (String) 
             Icon(Icons.Default.AccessTime, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
             Spacer(Modifier.width(8.dp))
             Column {
-                Text(label, fontWeight = FontWeight.Bold)
+                Text(label, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
                 Text(display, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
@@ -460,7 +467,7 @@ internal fun PresetButton(title: String, icon: ImageVector, onClick: () -> Unit)
     ) {
         Icon(icon, contentDescription = null, modifier = Modifier.size(16.dp), tint = MaterialTheme.colorScheme.primary)
         Spacer(Modifier.width(8.dp))
-        Text(title, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelMedium)
+        Text(title, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurface)
     }
 }
 

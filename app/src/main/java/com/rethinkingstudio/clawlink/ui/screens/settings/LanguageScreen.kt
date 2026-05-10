@@ -10,6 +10,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -31,12 +32,18 @@ fun LanguageScreen(
     ClawLinkScaffold(
         topBar = {
             TopAppBar(
-                title = { Text(stringResource(R.string.settings_row_language)) },
+                title = { Text(stringResource(R.string.settings_row_language), color = MaterialTheme.colorScheme.onSurface) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.common_action_back))
                     }
-                }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = Color.Transparent,
+                    titleContentColor = MaterialTheme.colorScheme.onBackground,
+                    navigationIconContentColor = MaterialTheme.colorScheme.onBackground,
+                    actionIconContentColor = MaterialTheme.colorScheme.onBackground
+                )
             )
         }
     ) { padding ->
@@ -58,7 +65,7 @@ fun LanguageScreen(
                             LanguageManager.setLanguage(LanguagePreference.SYSTEM) 
                         }
                     )
-                    HorizontalDivider(modifier = Modifier.padding(start = 16.dp))
+                    HorizontalDivider(modifier = Modifier.padding(start = 16.dp), color = MaterialTheme.colorScheme.outline.copy(alpha = 0.16f))
                     LanguageRow(
                         preference = LanguagePreference.ZH_HANS,
                         isSelected = selectedPreference == LanguagePreference.ZH_HANS,
@@ -67,7 +74,7 @@ fun LanguageScreen(
                             LanguageManager.setLanguage(LanguagePreference.ZH_HANS) 
                         }
                     )
-                    HorizontalDivider(modifier = Modifier.padding(start = 16.dp))
+                    HorizontalDivider(modifier = Modifier.padding(start = 16.dp), color = MaterialTheme.colorScheme.outline.copy(alpha = 0.16f))
                     LanguageRow(
                         preference = LanguagePreference.EN,
                         isSelected = selectedPreference == LanguagePreference.EN,
@@ -97,14 +104,18 @@ private fun LanguageRow(
     Surface(
         onClick = onClick,
         modifier = Modifier.fillMaxWidth(),
-        color = androidx.compose.ui.graphics.Color.Transparent
+        color = Color.Transparent
     ) {
         Row(
             modifier = Modifier.padding(16.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            Text(title, fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal)
+            Text(
+                title,
+                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                color = MaterialTheme.colorScheme.onSurface
+            )
             if (isSelected) {
                 Icon(Icons.Default.Check, null, tint = MaterialTheme.colorScheme.primary)
             }

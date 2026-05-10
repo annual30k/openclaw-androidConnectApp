@@ -282,7 +282,7 @@ private fun DocumentTopBar(
             onClick = onDismiss,
             shape = CircleShape,
             color = Color(0xFF2A2D36).copy(alpha = 0.92f),
-            border = BorderStroke(1.dp, Color.Black.copy(alpha = 0.06f)),
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.08f)),
             modifier = Modifier.size(40.dp)
         ) {
             Box(contentAlignment = Alignment.Center) {
@@ -299,7 +299,7 @@ private fun DocumentTopBar(
             Surface(
                 shape = RoundedCornerShape(999.dp),
                 color = Color(0xFF2A2D36).copy(alpha = 0.20f),
-                border = BorderStroke(1.dp, Color.White.copy(alpha = 0.08f))
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.08f))
             ) {
                 Text(
                     text = title,
@@ -317,7 +317,7 @@ private fun DocumentTopBar(
                 onClick = { showMenu = true },
                 shape = CircleShape,
                 color = Color(0xFF2A2D36).copy(alpha = 0.92f),
-                border = BorderStroke(1.dp, Color.Black.copy(alpha = 0.06f)),
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.08f)),
                 modifier = Modifier.size(40.dp)
             ) {
                 Box(contentAlignment = Alignment.Center) {

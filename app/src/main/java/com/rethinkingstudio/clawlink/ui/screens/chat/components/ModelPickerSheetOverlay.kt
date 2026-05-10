@@ -51,7 +51,7 @@ fun ModelPickerSheetOverlay(
                     .padding(top = 12.dp, bottom = 12.dp)
                     .size(width = 48.dp, height = 5.dp)
                     .clip(RoundedCornerShape(999.dp))
-                    .background(Color(0xFFB8BCC4))
+                    .background(MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.32f))
             )
         }
     ) {
@@ -71,7 +71,7 @@ fun ModelPickerSheetOverlay(
                     text = stringResource(R.string.nav_models),
                     style = MaterialTheme.typography.titleLarge,
                     fontWeight = FontWeight.Black,
-                    color = Color.Black
+                    color = MaterialTheme.colorScheme.onSurface
                 )
                 if (isLoading) {
                     Box(modifier = Modifier.size(44.dp), contentAlignment = Alignment.Center) {
@@ -100,13 +100,13 @@ fun ModelPickerSheetOverlay(
                                 text = provider.lowercase(),
                                 style = MaterialTheme.typography.labelMedium,
                                 fontWeight = FontWeight.SemiBold,
-                                color = Color.Gray,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 modifier = Modifier.padding(start = 12.dp, bottom = 4.dp)
                             )
                             Surface(
                                 shape = RoundedCornerShape(22.dp),
-                                color = Color.White.copy(alpha = 0.86f),
-                                border = BorderStroke(1.dp, Color.White.copy(alpha = 0.55f))
+                                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.46f),
+                                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.14f))
                             ) {
                                 Column(modifier = Modifier.padding(20.dp)) {
                                     providerModels.forEachIndexed { index, model ->
@@ -117,7 +117,7 @@ fun ModelPickerSheetOverlay(
                                         )
                                         if (index < providerModels.size - 1) {
                                             HorizontalDivider(
-                                                color = Color.Black.copy(alpha = 0.06f),
+                                                color = MaterialTheme.colorScheme.outline.copy(alpha = 0.12f),
                                                 modifier = Modifier.padding(vertical = 8.dp)
                                             )
                                         }
@@ -145,21 +145,21 @@ private fun ModelPickerEmptyState(isLoading: Boolean, errorMessage: String?, onR
                 text = stringResource(R.string.gateway_sync_models),
                 style = MaterialTheme.typography.bodyLarge,
                 fontWeight = FontWeight.Medium,
-                color = Color.Gray
+                color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         } else {
             Box(
                 modifier = Modifier
                     .size(80.dp)
                     .clip(CircleShape)
-                    .background(if (errorMessage != null) ChatColors.offline.copy(alpha = 0.1f) else Color.Black.copy(alpha = 0.04f)),
+                    .background(if (errorMessage != null) ChatColors.offline.copy(alpha = 0.1f) else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.06f)),
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
                     imageVector = if (errorMessage != null) Icons.Default.ErrorOutline else Icons.Default.SmartToy,
                     contentDescription = null,
                     modifier = Modifier.size(32.dp),
-                    tint = if (errorMessage != null) ChatColors.offline else Color.Gray.copy(alpha = 0.6f)
+                    tint = if (errorMessage != null) ChatColors.offline else MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
 
@@ -168,12 +168,12 @@ private fun ModelPickerEmptyState(isLoading: Boolean, errorMessage: String?, onR
                     text = if (errorMessage != null) choose("Load Failed", "加载失败") else stringResource(R.string.gateway_no_models),
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
-                    color = if (errorMessage != null) ChatColors.offline else Color.Black
+                    color = if (errorMessage != null) ChatColors.offline else MaterialTheme.colorScheme.onSurface
                 )
                 Text(
                     text = errorMessage ?: choose("Ensure your gateway is online and the model provider is correctly configured.", "请确认网关在线，并且模型提供商已正确配置。"),
                     style = MaterialTheme.typography.bodyMedium,
-                    color = Color.Gray,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                     textAlign = TextAlign.Center
                 )
             }
@@ -181,8 +181,8 @@ private fun ModelPickerEmptyState(isLoading: Boolean, errorMessage: String?, onR
             Surface(
                 onClick = onRefresh,
                 shape = CircleShape,
-                color = Color.White,
-                border = BorderStroke(1.dp, Color.Black.copy(alpha = 0.1f)),
+                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.58f),
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.16f)),
                 shadowElevation = 0.dp,
                 tonalElevation = 0.dp
             ) {
@@ -191,12 +191,12 @@ private fun ModelPickerEmptyState(isLoading: Boolean, errorMessage: String?, onR
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    Icon(Icons.Default.Refresh, null, modifier = Modifier.size(16.dp), tint = Color.Black)
+                    Icon(Icons.Default.Refresh, null, modifier = Modifier.size(16.dp), tint = MaterialTheme.colorScheme.onSurface)
                     Text(
                         choose("Refresh Models", "刷新模型"),
                         style = MaterialTheme.typography.bodyMedium,
                         fontWeight = FontWeight.SemiBold,
-                        color = Color.Black
+                        color = MaterialTheme.colorScheme.onSurface
                     )
                 }
             }
@@ -223,7 +223,7 @@ private fun ModelPickerRow(model: ModelItem, isSelected: Boolean, onClick: () ->
                 }
             }
 
-            Icon(Icons.Default.SmartToy, null, tint = if (isSelected) ChatColors.linkBlue else Color.Gray, modifier = Modifier.size(24.dp))
+            Icon(Icons.Default.SmartToy, null, tint = if (isSelected) ChatColors.linkBlue else MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(24.dp))
 
             Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -231,7 +231,7 @@ private fun ModelPickerRow(model: ModelItem, isSelected: Boolean, onClick: () ->
                         text = model.displayName,
                         style = MaterialTheme.typography.bodyLarge,
                         fontWeight = FontWeight.SemiBold,
-                        color = Color.Black
+                        color = MaterialTheme.colorScheme.onSurface
                     )
                     if (model.isDefault) {
                         Icon(Icons.Default.Star, choose("Default", "默认"), tint = Color(0xFFFF9500), modifier = Modifier.size(10.dp))
@@ -243,7 +243,7 @@ private fun ModelPickerRow(model: ModelItem, isSelected: Boolean, onClick: () ->
                 Text(
                     text = "$contextText · $tags",
                     style = MaterialTheme.typography.labelSmall,
-                    color = Color.Gray
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
         }
@@ -255,12 +255,12 @@ private fun SheetHeaderButton(icon: ImageVector, label: String, onClick: () -> U
     Surface(
         onClick = onClick,
         shape = CircleShape,
-        color = Color.White,
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.58f),
         shadowElevation = 0.dp,
         modifier = Modifier.size(44.dp)
     ) {
         Box(contentAlignment = Alignment.Center) {
-            Icon(icon, label, tint = Color.Black, modifier = Modifier.size(24.dp))
+            Icon(icon, label, tint = MaterialTheme.colorScheme.onSurface, modifier = Modifier.size(24.dp))
         }
     }
 }

@@ -164,9 +164,9 @@ internal fun MessageBubble(
             return@Column
         }
         Surface(
-            color = if (isUser) ChatColors.userBubble else Color.White.copy(alpha = 0.96f),
+            color = if (isUser) ChatColors.userBubble else MaterialTheme.colorScheme.surface.copy(alpha = 0.96f),
             shape = RoundedCornerShape(28.dp),
-            border = androidx.compose.foundation.BorderStroke(1.dp, if (isUser) Color.White.copy(alpha = 0.08f) else Color(0xFFE1E4EA)),
+            border = androidx.compose.foundation.BorderStroke(1.dp, if (isUser) Color.White.copy(alpha = 0.08f) else MaterialTheme.colorScheme.outline.copy(alpha = 0.12f)),
             tonalElevation = 0.dp, shadowElevation = 0.dp,
             modifier = Modifier.widthIn(max = 326.dp)
         ) {
@@ -212,8 +212,8 @@ private fun LoadingVoiceMessage(createdAt: String) {
     ) {
         Surface(
             shape = RoundedCornerShape(16.dp),
-            color = Color.White.copy(alpha = 0.96f),
-            border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFE1E4EA)),
+            color = MaterialTheme.colorScheme.surface.copy(alpha = 0.96f),
+            border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.12f)),
             modifier = Modifier.width(216.dp)
         ) {
             Row(

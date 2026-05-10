@@ -47,7 +47,7 @@ fun HelpScreen(
                     Surface(
                         onClick = onBack,
                         shape = CircleShape,
-                        color = Color.White,
+                        color = MaterialTheme.colorScheme.surface,
                         modifier = Modifier.padding(start = 12.dp).size(40.dp),
                         shadowElevation = 2.dp
                     ) {
@@ -57,7 +57,10 @@ fun HelpScreen(
                     }
                 },
                 colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
-                    containerColor = Color(0xFFF7F9FC)
+                    containerColor = Color.Transparent,
+                    titleContentColor = MaterialTheme.colorScheme.onBackground,
+                    navigationIconContentColor = MaterialTheme.colorScheme.onBackground,
+                    actionIconContentColor = MaterialTheme.colorScheme.onBackground
                 )
             )
         }
@@ -65,7 +68,7 @@ fun HelpScreen(
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .background(Color(0xFFF7F9FC))
+                .background(Color.Transparent)
                 .padding(padding)
                 .verticalScroll(rememberScrollState())
                 .padding(20.dp),
@@ -80,7 +83,7 @@ fun HelpScreen(
                 Text(
                     stringResource(R.string.usage_guide_subtitle),
                     style = MaterialTheme.typography.bodyMedium,
-                    color = Color(0xFF8B8F98)
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
 
@@ -146,9 +149,9 @@ fun HelpScreen(
             // What's Next section
             Surface(
                 shape = RoundedCornerShape(24.dp),
-                color = Color.White,
+                color = MaterialTheme.colorScheme.surface,
                 modifier = Modifier.fillMaxWidth(),
-                border = BorderStroke(1.dp, Color(0xFFE1E4EA))
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.32f))
             ) {
                 Column(
                     modifier = Modifier.padding(20.dp),
@@ -168,13 +171,13 @@ fun HelpScreen(
                             stringResource(R.string.usage_guide_after_title),
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Bold,
-                            color = Color.Black
+                            color = MaterialTheme.colorScheme.onSurface
                         )
                     }
                     Text(
                         stringResource(R.string.usage_guide_after_desc),
                         style = MaterialTheme.typography.bodySmall,
-                        color = Color(0xFF8B8F98),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                         lineHeight = 18.sp
                     )
                 }
@@ -196,10 +199,10 @@ private fun StepCard(
 ) {
     Surface(
         shape = RoundedCornerShape(24.dp),
-        color = Color.White,
+        color = MaterialTheme.colorScheme.surface,
         modifier = Modifier.fillMaxWidth(),
         shadowElevation = 0.dp,
-        border = BorderStroke(1.dp, Color(0xFFE1E4EA))
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.32f))
     ) {
         Row(modifier = Modifier.fillMaxWidth()) {
             // Accent side bar
@@ -244,13 +247,13 @@ private fun StepCard(
                     title,
                     style = MaterialTheme.typography.titleLarge,
                     fontWeight = FontWeight.Black,
-                    color = Color.Black
+                    color = MaterialTheme.colorScheme.onSurface
                 )
 
                 Text(
                     description,
                     style = MaterialTheme.typography.bodyMedium,
-                    color = Color(0xFF8B8F98),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                     lineHeight = 20.sp
                 )
 
@@ -274,7 +277,7 @@ private fun CodeBlock(
         ) {
             Surface(
                 shape = RoundedCornerShape(8.dp),
-                color = Color(0xFFEDF2F9),
+                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.72f),
                 modifier = Modifier.padding(vertical = 2.dp)
             ) {
                 Text(
@@ -282,14 +285,14 @@ private fun CodeBlock(
                     modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
                     style = MaterialTheme.typography.labelSmall,
                     fontWeight = FontWeight.Bold,
-                    color = Color(0xFF5B6B7D)
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
 
             Surface(
                 onClick = { onCopy(code) },
                 shape = RoundedCornerShape(8.dp),
-                color = Color(0xFFEDF2F9),
+                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.72f),
                 modifier = Modifier.height(28.dp)
             ) {
                 Row(
@@ -310,8 +313,8 @@ private fun CodeBlock(
 
         Surface(
             shape = RoundedCornerShape(16.dp),
-            color = Color(0xFFF8FAFD),
-            border = BorderStroke(1.dp, Color(0xFFE2E6EE)),
+            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.46f),
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.26f)),
             modifier = Modifier.fillMaxWidth()
         ) {
             Text(
@@ -321,7 +324,7 @@ private fun CodeBlock(
                     fontFamily = FontFamily.Monospace,
                     fontWeight = FontWeight.Bold
                 ),
-                color = Color.Black
+                color = MaterialTheme.colorScheme.onSurface
             )
         }
     }

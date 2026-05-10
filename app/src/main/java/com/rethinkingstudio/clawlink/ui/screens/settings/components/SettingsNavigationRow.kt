@@ -48,11 +48,11 @@ internal fun SettingsNavigationRow(
         ) {
             Surface(
                 shape = RoundedCornerShape(10.dp),
-                color = Color(0xFFF1F5F9),
+                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.62f),
                 modifier = Modifier.size(34.dp)
             ) {
                 Box(contentAlignment = Alignment.Center) {
-                    Icon(icon, null, tint = Color(0xFF1F2937), modifier = Modifier.size(17.dp))
+                    Icon(icon, null, tint = MaterialTheme.colorScheme.onSurface, modifier = Modifier.size(17.dp))
                 }
             }
 
@@ -64,13 +64,13 @@ internal fun SettingsNavigationRow(
                     title,
                     style = MaterialTheme.typography.bodyLarge.copy(fontSize = 17.sp),
                     fontWeight = FontWeight.Normal,
-                    color = Color(0xFF111827)
+                    color = MaterialTheme.colorScheme.onSurface
                 )
                 if (subtitle != null) {
                     Text(
                         subtitle,
                         style = MaterialTheme.typography.bodySmall.copy(fontSize = 13.sp),
-                        color = Color(0xFF6B7280)
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
             }
@@ -78,14 +78,14 @@ internal fun SettingsNavigationRow(
                 Text(
                     value,
                     style = MaterialTheme.typography.bodySmall.copy(fontSize = 13.sp),
-                    color = Color(0xFF6B7280),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(end = 4.dp)
                 )
             }
             Icon(
                 Icons.AutoMirrored.Filled.KeyboardArrowRight,
                 null,
-                tint = Color(0xFFCBD5E1),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.62f),
                 modifier = Modifier.size(18.dp)
             )
         }

@@ -105,7 +105,7 @@ internal fun SkillDetailSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
         shape = RoundedCornerShape(topStart = 34.dp, topEnd = 34.dp),
-        containerColor = ScreenWhite,
+        containerColor = MaterialTheme.colorScheme.surface,
         dragHandle = {
             Box(
                 modifier = Modifier
@@ -156,7 +156,7 @@ internal fun SkillDetailSheet(
                                     modifier = Modifier.size(16.dp)
                                 )
                                 Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                                    Text(check.path, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
+                                    Text(check.path, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface)
                                     Text(if (check.satisfied) choose("Satisfied", "已满足") else choose("Not satisfied", "未满足"), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                 }
                             }
@@ -198,7 +198,7 @@ internal fun SkillDetailHero(skill: SkillItem, canEdit: Boolean, isBusy: Boolean
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(18.dp)) {
             SkillAvatar(skill = skill, diameter = 72)
             Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text(skill.effectiveName, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                Text(skill.effectiveName, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface, maxLines = 2, overflow = TextOverflow.Ellipsis)
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                     SkillStatusBadge(skill.availability)
                     if (skill.always) {
@@ -245,8 +245,8 @@ internal fun SkillDetailSection(title: String, content: @Composable ColumnScope.
         modifier = Modifier
             .fillMaxWidth()
             .clip(CardShape)
-            .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.78f))
-            .border(0.6.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.08f), CardShape)
+            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.48f))
+            .border(0.6.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.12f), CardShape)
             .padding(20.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
@@ -278,7 +278,7 @@ internal fun RequirementBlock(title: String, required: List<String>, missing: Li
                     tint = if (isMissing) WarningOrange else SuccessGreen,
                     modifier = Modifier.size(16.dp)
                 )
-                Text(item, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
+                Text(item, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium, color = MaterialTheme.colorScheme.onSurface)
             }
         }
     }

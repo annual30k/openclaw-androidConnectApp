@@ -115,8 +115,7 @@ internal fun ComposerDock(
     Surface(
         modifier = Modifier.fillMaxWidth(),
         color = ChatColors.dockSurface,
-        shadowElevation = 0.dp,
-        border = BorderStroke(1.dp, ChatColors.dockBorder)
+        shadowElevation = 0.dp
     ) {
         Column(
             modifier = Modifier
@@ -176,12 +175,12 @@ internal fun ComposerDock(
                         enabled = canEditComposer,
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Text, imeAction = ImeAction.Send),
                         keyboardActions = KeyboardActions(onSend = { onSend() }),
-                        textStyle = MaterialTheme.typography.bodyMedium.copy(color = Color.Black),
+                        textStyle = MaterialTheme.typography.bodyMedium.copy(color = MaterialTheme.colorScheme.onSurface),
                         decorationBox = { innerTextField ->
                             Surface(
                                 shape = RoundedCornerShape(21.dp),
-                                color = Color.White,
-                                border = BorderStroke(1.dp, Color(0xFFE2E4E9))
+                                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.62f),
+                                border = BorderStroke(1.dp, ChatColors.dockBorder)
                             ) {
                                 Box(
                                     modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp),
@@ -195,7 +194,7 @@ internal fun ComposerDock(
                                                 else -> stringResource(R.string.chat_placeholder)
                                             },
                                             style = MaterialTheme.typography.bodyMedium,
-                                            color = Color(0xFFA0A4AF)
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.72f)
                                         )
                                     }
                                     innerTextField()

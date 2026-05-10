@@ -1,4 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <color name="ic_launcher_background">#FFFFFF</color>
+    <color name="clawlink_window_background">#F7F7FA</color>
+    <color name="clawlink_status_bar">#F7F7FA</color>
+    <color name="clawlink_navigation_bar">#F7F7FA</color>
 </resources>

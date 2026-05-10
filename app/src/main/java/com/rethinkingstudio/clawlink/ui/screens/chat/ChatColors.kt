@@ -1,19 +1,32 @@
 package com.rethinkingstudio.clawlink.ui.screens.chat
 
+import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 
 internal object ChatColors {
-    val canvas = Color(0xFFF2F6FC)
-    val sheet = Color(0xFFF6FAFF)
-    val dockSurface = Color(0xFFFFFFFF)
-    val dockControl = Color(0xFFF7F9FD)
-    val dockBorder = Color(0xFFE6E9EF)
-    val secondaryText = Color(0xFF8A8D96)
+    val canvas: Color
+        @Composable get() = MaterialTheme.colorScheme.background
+    val sheet: Color
+        @Composable get() = MaterialTheme.colorScheme.surface
+    val dockSurface: Color
+        @Composable get() = MaterialTheme.colorScheme.surface
+    val dockControl: Color
+        @Composable get() = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = if (isSystemInDarkTheme()) 0.62f else 0.48f)
+    val dockBorder: Color
+        @Composable get() = MaterialTheme.colorScheme.outline.copy(alpha = if (isSystemInDarkTheme()) 0.14f else 0.08f)
+    val secondaryText: Color
+        @Composable get() = MaterialTheme.colorScheme.onSurfaceVariant
     val online = Color(0xFF5ECF7A)
     val offline = Color(0xFFE75F58)
     val pending = Color(0xFF7EADF4)
-    val linkBlue = Color(0xFF2E83EE)
-    val selectionBlue = Color(0xFF8AB8FF)
-    val userBubble = Color(0xFF171923)
-    val disabledAction = Color(0xFFE9EBF0)
+    val linkBlue: Color
+        @Composable get() = MaterialTheme.colorScheme.primary
+    val selectionBlue: Color
+        @Composable get() = MaterialTheme.colorScheme.primary.copy(alpha = 0.62f)
+    val userBubble: Color
+        @Composable get() = if (isSystemInDarkTheme()) MaterialTheme.colorScheme.primary else Color(0xFF171923)
+    val disabledAction: Color
+        @Composable get() = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.10f)
 }

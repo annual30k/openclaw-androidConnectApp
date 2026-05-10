@@ -51,14 +51,19 @@ fun AdvancedScreen(
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.common_action_back))
                     }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = Color(0xFFF8F9FB))
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = Color.Transparent,
+                    titleContentColor = MaterialTheme.colorScheme.onBackground,
+                    navigationIconContentColor = MaterialTheme.colorScheme.onBackground,
+                    actionIconContentColor = MaterialTheme.colorScheme.onBackground
+                )
             )
         }
     ) { padding ->
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .background(Color(0xFFF8F9FB))
+                .background(Color.Transparent)
                 .padding(padding)
                 .verticalScroll(rememberScrollState())
                 .padding(horizontal = 20.dp, vertical = 8.dp),
@@ -74,7 +79,7 @@ fun AdvancedScreen(
                         enabled = isNormalActionEnabled,
                         onClick = onNavigateToRestartGateway
                     )
-                    HorizontalDivider(modifier = Modifier.padding(start = 64.dp), color = Color(0xFFF3F4F6))
+                    HorizontalDivider(modifier = Modifier.padding(start = 64.dp), color = MaterialTheme.colorScheme.outline.copy(alpha = 0.16f))
                     AdvancedFeatureRow(
                         icon = Icons.Default.SettingsRemote,
                         title = stringResource(R.string.advanced_remote_restart),
@@ -83,7 +88,7 @@ fun AdvancedScreen(
                         enabled = isRecoveryActionEnabled,
                         onClick = onNavigateToRemoteRestart
                     )
-                    HorizontalDivider(modifier = Modifier.padding(start = 64.dp), color = Color(0xFFF3F4F6))
+                    HorizontalDivider(modifier = Modifier.padding(start = 64.dp), color = MaterialTheme.colorScheme.outline.copy(alpha = 0.16f))
                     AdvancedFeatureRow(
                         icon = Icons.Default.Build,
                         title = stringResource(R.string.advanced_doctor_fix),
@@ -92,7 +97,7 @@ fun AdvancedScreen(
                         enabled = isRecoveryActionEnabled,
                         onClick = onNavigateToDoctorFix
                     )
-                    HorizontalDivider(modifier = Modifier.padding(start = 64.dp), color = Color(0xFFF3F4F6))
+                    HorizontalDivider(modifier = Modifier.padding(start = 64.dp), color = MaterialTheme.colorScheme.outline.copy(alpha = 0.16f))
                     AdvancedFeatureRow(
                         icon = Icons.Default.Terminal,
                         title = stringResource(R.string.advanced_logs),
@@ -100,7 +105,7 @@ fun AdvancedScreen(
                         tint = Color(0xFF14B8A6),
                         onClick = onNavigateToLogs
                     )
-                    HorizontalDivider(modifier = Modifier.padding(start = 64.dp), color = Color(0xFFF3F4F6))
+                    HorizontalDivider(modifier = Modifier.padding(start = 64.dp), color = MaterialTheme.colorScheme.outline.copy(alpha = 0.16f))
                     AdvancedFeatureRow(
                         icon = Icons.Default.Archive,
                         title = stringResource(R.string.advanced_backups),
@@ -109,7 +114,7 @@ fun AdvancedScreen(
                         enabled = isNormalActionEnabled,
                         onClick = onNavigateToBackups
                     )
-                    HorizontalDivider(modifier = Modifier.padding(start = 64.dp), color = Color(0xFFF3F4F6))
+                    HorizontalDivider(modifier = Modifier.padding(start = 64.dp), color = MaterialTheme.colorScheme.outline.copy(alpha = 0.16f))
                     AdvancedToggleRow(
                         icon = Icons.Default.Handyman,
                         title = stringResource(R.string.advanced_prefs_show_tools),
@@ -163,12 +168,12 @@ private fun AdvancedFeatureRow(
                     title,
                     style = MaterialTheme.typography.bodyLarge.copy(fontSize = 16.sp),
                     fontWeight = FontWeight.SemiBold,
-                    color = Color(0xFF1F2937)
+                    color = MaterialTheme.colorScheme.onSurface
                 )
                 Text(
                     detail,
                     style = MaterialTheme.typography.bodySmall,
-                    color = Color(0xFF6B7280),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                     lineHeight = 16.sp
                 )
             }
@@ -176,7 +181,7 @@ private fun AdvancedFeatureRow(
             Icon(
                 Icons.Default.ChevronRight,
                 null,
-                tint = Color(0xFFD1D5DB),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.42f),
                 modifier = Modifier.size(18.dp)
             )
         }
@@ -214,12 +219,12 @@ private fun AdvancedToggleRow(
                 title,
                 style = MaterialTheme.typography.bodyLarge.copy(fontSize = 16.sp),
                 fontWeight = FontWeight.SemiBold,
-                color = Color(0xFF1F2937)
+                color = MaterialTheme.colorScheme.onSurface
             )
             Text(
                 detail,
                 style = MaterialTheme.typography.bodySmall,
-                color = Color(0xFF6B7280),
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
                 lineHeight = 16.sp
             )
         }
@@ -229,7 +234,7 @@ private fun AdvancedToggleRow(
             onCheckedChange = onToggle,
             colors = SwitchDefaults.colors(
                 checkedThumbColor = Color.White,
-                checkedTrackColor = Color(0xFF3B82F6)
+                checkedTrackColor = MaterialTheme.colorScheme.primary
             )
         )
     }

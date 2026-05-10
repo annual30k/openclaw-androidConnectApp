@@ -68,7 +68,8 @@ fun ClawLinkCard(
     content: @Composable ColumnScope.() -> Unit
 ) {
     val colors = CardDefaults.cardColors(
-        containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.94f)
+        containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.94f),
+        contentColor = MaterialTheme.colorScheme.onSurface
     )
 
     if (onClick != null) {
@@ -78,7 +79,7 @@ fun ClawLinkCard(
             shape = ClawLinkCardShape,
             colors = colors,
             elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
-            border = BorderStroke(1.dp, Color(0xFFE1E4EA))
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.12f))
         ) {
             Column(modifier = Modifier.padding(contentPadding), verticalArrangement = Arrangement.spacedBy(0.dp), content = content)
         }
@@ -88,7 +89,7 @@ fun ClawLinkCard(
             shape = ClawLinkCardShape,
             colors = colors,
             elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
-            border = BorderStroke(1.dp, Color(0xFFE1E4EA))
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.12f))
         ) {
             Column(modifier = Modifier.padding(contentPadding), verticalArrangement = Arrangement.spacedBy(0.dp), content = content)
         }

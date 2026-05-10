@@ -54,15 +54,15 @@ internal fun BackupHeroCard(gatewayName: String, backupCount: Int, maxBackups: I
                     Icon(Icons.Default.Archive, null, tint = Color(0xFF22C55E), modifier = Modifier.size(22.dp))
                 }
                 Column(modifier = Modifier.weight(1f)) {
-                    Text(gatewayName, fontWeight = FontWeight.Bold, fontSize = 17.sp, color = Color(0xFF1F2937))
-                    Text(stringResource(R.string.backup_hero_subtitle), fontSize = 12.sp, color = Color(0xFF6B7280))
+                    Text(gatewayName, fontWeight = FontWeight.Bold, fontSize = 17.sp, color = MaterialTheme.colorScheme.onSurface)
+                    Text(stringResource(R.string.backup_hero_subtitle), fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
                 Column(horizontalAlignment = Alignment.End) {
-                    Text("$backupCount/$maxBackups", fontWeight = FontWeight.Black, fontSize = 17.sp, fontFamily = FontFamily.Monospace, color = Color(0xFF1F2937))
-                    Text(stringResource(R.string.backup_hero_count_label), fontSize = 10.sp, fontWeight = FontWeight.Bold, color = Color(0xFF6B7280))
+                    Text("$backupCount/$maxBackups", fontWeight = FontWeight.Black, fontSize = 17.sp, fontFamily = FontFamily.Monospace, color = MaterialTheme.colorScheme.onSurface)
+                    Text(stringResource(R.string.backup_hero_count_label), fontSize = 10.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
-            HorizontalDivider(modifier = Modifier.alpha(0.4f), color = Color(0xFFE5E7EB))
+            HorizontalDivider(modifier = Modifier.alpha(0.4f), color = MaterialTheme.colorScheme.outline.copy(alpha = 0.16f))
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 BackupStatBlock(stringResource(R.string.backup_hero_latest), latestUpdate, Modifier.weight(1f))
                 BackupStatBlock(stringResource(R.string.backup_hero_storage_node), "LOCAL HOST", Modifier.weight(1f))
@@ -80,7 +80,7 @@ internal fun BackupHeroCard(gatewayName: String, backupCount: Int, maxBackups: I
                 Icon(Icons.Default.Folder, null, tint = Color(0xFF22C55E).copy(alpha = 0.8f), modifier = Modifier.size(12.dp))
                 Text(stringResource(R.string.backup_hero_storage_path).uppercase(), fontSize = 10.sp, fontWeight = FontWeight.Bold, color = Color(0xFF22C55E).copy(alpha = 0.8f))
                 Spacer(Modifier.weight(1f))
-                Text(storagePath ?: "~/.clawconnect/backups/openclaw", fontSize = 11.sp, fontFamily = FontFamily.Monospace, color = Color(0xFF1F2937).copy(alpha = 0.8f), maxLines = 1)
+                Text(storagePath ?: "~/.clawconnect/backups/openclaw", fontSize = 11.sp, fontFamily = FontFamily.Monospace, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f), maxLines = 1)
             }
         }
     }
@@ -88,9 +88,9 @@ internal fun BackupHeroCard(gatewayName: String, backupCount: Int, maxBackups: I
 
 @Composable
 internal fun BackupStatBlock(title: String, value: String, modifier: Modifier = Modifier) {
-    Column(modifier = modifier.background(Color.Black.copy(alpha = 0.04f), RoundedCornerShape(12.dp)).padding(12.dp)) {
-        Text(title.uppercase(), fontSize = 10.sp, fontWeight = FontWeight.Bold, color = Color(0xFF6B7280))
-        Text(value, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = Color(0xFF1F2937))
+    Column(modifier = modifier.background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.48f), RoundedCornerShape(12.dp)).padding(12.dp)) {
+        Text(title.uppercase(), fontSize = 10.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(value, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface)
     }
 }
 
@@ -100,8 +100,8 @@ internal fun BackupRowCard(backup: BackupItem, canManage: Boolean, onEdit: () ->
         Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
             Row(verticalAlignment = Alignment.Top) {
                 Column(modifier = Modifier.weight(1f)) {
-                    Text(backup.displayLabel, fontWeight = FontWeight.SemiBold, fontSize = 16.sp, color = Color(0xFF1F2937))
-                    Text(if (backup.detail.isBlank()) stringResource(R.string.backup_editor_no_detail) else backup.detail, fontSize = 13.sp, color = Color(0xFF6B7280), maxLines = 2)
+                    Text(backup.displayLabel, fontWeight = FontWeight.SemiBold, fontSize = 16.sp, color = MaterialTheme.colorScheme.onSurface)
+                    Text(if (backup.detail.isBlank()) stringResource(R.string.backup_editor_no_detail) else backup.detail, fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 2)
                 }
                 val sizeBytes = backup.sizeBytes
                 if (sizeBytes != null) {
@@ -110,8 +110,9 @@ internal fun BackupRowCard(backup: BackupItem, canManage: Boolean, onEdit: () ->
                             else if (sizeBytes < 1024 * 1024) "${sizeBytes / 1024}KB"
                             else "${sizeBytes / (1024 * 1024)}MB"
                         Text(sizeStr, fontWeight = FontWeight.Bold, fontSize = 12.sp, fontFamily = FontFamily.Monospace,
-                            modifier = Modifier.background(Color.Black.copy(alpha = 0.06f), RoundedCornerShape(6.dp)).padding(horizontal = 8.dp, vertical = 4.dp))
-                        Text(stringResource(R.string.backup_size_label), fontSize = 10.sp, color = Color(0xFF6B7280), fontWeight = FontWeight.Bold)
+                            modifier = Modifier.background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.56f), RoundedCornerShape(6.dp)).padding(horizontal = 8.dp, vertical = 4.dp),
+                            color = MaterialTheme.colorScheme.onSurface)
+                        Text(stringResource(R.string.backup_size_label), fontSize = 10.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, fontWeight = FontWeight.Bold)
                     }
                 }
             }
@@ -124,7 +125,7 @@ internal fun BackupRowCard(backup: BackupItem, canManage: Boolean, onEdit: () ->
                 }
             }
 
-            HorizontalDivider(modifier = Modifier.alpha(0.4f), color = Color(0xFFE5E7EB))
+            HorizontalDivider(modifier = Modifier.alpha(0.4f), color = MaterialTheme.colorScheme.outline.copy(alpha = 0.16f))
 
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 Button(
@@ -141,9 +142,9 @@ internal fun BackupRowCard(backup: BackupItem, canManage: Boolean, onEdit: () ->
                 IconButton(
                     onClick = onEdit, 
                     enabled = canManage, 
-                    modifier = Modifier.size(44.dp).background(Color.Black.copy(alpha = 0.05f), RoundedCornerShape(12.dp))
+                    modifier = Modifier.size(44.dp).background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.56f), RoundedCornerShape(12.dp))
                 ) {
-                    Icon(Icons.Default.Edit, null, modifier = Modifier.size(20.dp), tint = Color(0xFF1F2937))
+                    Icon(Icons.Default.Edit, null, modifier = Modifier.size(20.dp), tint = MaterialTheme.colorScheme.onSurface)
                 }
                 
                 IconButton(
@@ -161,12 +162,12 @@ internal fun BackupRowCard(backup: BackupItem, canManage: Boolean, onEdit: () ->
 @Composable
 internal fun BackupInfoTag(title: String, value: String, icon: ImageVector, modifier: Modifier = Modifier) {
     Row(
-        modifier = modifier.background(Color.Black.copy(alpha = 0.04f), RoundedCornerShape(8.dp)).padding(horizontal = 10.dp, vertical = 6.dp),
+        modifier = modifier.background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.48f), RoundedCornerShape(8.dp)).padding(horizontal = 10.dp, vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(6.dp)
     ) {
-        Icon(icon, null, tint = Color(0xFF6B7280), modifier = Modifier.size(10.dp))
-        Text(title, fontSize = 9.sp, fontWeight = FontWeight.Black, color = Color(0xFF6B7280))
-        Text(value, fontSize = 11.sp, fontFamily = FontFamily.Monospace, color = Color(0xFF1F2937), maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Icon(icon, null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(10.dp))
+        Text(title, fontSize = 9.sp, fontWeight = FontWeight.Black, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(value, fontSize = 11.sp, fontFamily = FontFamily.Monospace, color = MaterialTheme.colorScheme.onSurface, maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
 }

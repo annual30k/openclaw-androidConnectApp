@@ -167,12 +167,12 @@ internal fun TaskSearchBar(searchText: String, onSearchTextChange: (String) -> U
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .shadow(25.dp, PillShape, clip = false, ambientColor = Color.Black.copy(alpha = 0.15f), spotColor = Color.Black.copy(alpha = 0.18f))
+            .shadow(25.dp, PillShape, clip = false, ambientColor = Color.Black.copy(alpha = 0.20f), spotColor = Color.Black.copy(alpha = 0.22f))
             .background(
                 Brush.linearGradient(
                     colors = listOf(
-                        MaterialTheme.colorScheme.surface,
-                        MaterialTheme.colorScheme.surface.copy(alpha = 0.98f)
+                        MaterialTheme.colorScheme.surface.copy(alpha = 0.96f),
+                        MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.82f)
                     )
                 ),
                 PillShape
@@ -181,8 +181,8 @@ internal fun TaskSearchBar(searchText: String, onSearchTextChange: (String) -> U
                 width = 0.8.dp,
                 brush = Brush.linearGradient(
                     colors = listOf(
-                        MaterialTheme.colorScheme.outline.copy(alpha = 0.12f),
-                        MaterialTheme.colorScheme.outline.copy(alpha = 0.05f)
+                        MaterialTheme.colorScheme.outline.copy(alpha = 0.18f),
+                        MaterialTheme.colorScheme.outline.copy(alpha = 0.10f)
                     )
                 ),
                 shape = PillShape

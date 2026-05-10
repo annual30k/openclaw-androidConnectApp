@@ -93,12 +93,17 @@ import kotlinx.coroutines.launch
 
 @Composable
 internal fun SkillScreenBackdrop() {
+    val colorScheme = MaterialTheme.colorScheme
     Box(
         modifier = Modifier
             .fillMaxSize()
             .background(
                 Brush.linearGradient(
-                    colors = listOf(Color(0xFFF2F5FA), Color.White),
+                    colors = listOf(
+                        colorScheme.background,
+                        colorScheme.surface,
+                        colorScheme.surfaceVariant.copy(alpha = 0.68f)
+                    ),
                     start = androidx.compose.ui.geometry.Offset(0f, 0f),
                     end = androidx.compose.ui.geometry.Offset(1000f, 1000f)
                 )
@@ -112,7 +117,7 @@ internal fun SkillScreenBackdrop() {
                 .graphicsLayer(alpha = 0.45f)
                 .background(
                     Brush.radialGradient(
-                        colors = listOf(AccentBlue.copy(alpha = 0.25f), Color.Transparent),
+                        colors = listOf(colorScheme.primary.copy(alpha = 0.14f), Color.Transparent),
                         radius = Float.POSITIVE_INFINITY
                     ),
                     CircleShape
@@ -127,7 +132,7 @@ internal fun SkillScreenBackdrop() {
                 .graphicsLayer(alpha = 0.4f)
                 .background(
                     Brush.radialGradient(
-                        colors = listOf(AccentBlueSoft.copy(alpha = 0.22f), Color.Transparent),
+                        colors = listOf(colorScheme.secondary.copy(alpha = 0.12f), Color.Transparent),
                         radius = Float.POSITIVE_INFINITY
                     ),
                     CircleShape
@@ -140,7 +145,7 @@ internal fun SkillScreenBackdrop() {
                 .size(500.dp)
                 .offset(x = 100.dp, y = 150.dp)
                 .graphicsLayer(alpha = 0.25f)
-                .background(Brush.radialGradient(listOf(AccentBlue.copy(alpha = 0.1f), Color.Transparent)), CircleShape)
+                .background(Brush.radialGradient(listOf(colorScheme.primary.copy(alpha = 0.08f), Color.Transparent)), CircleShape)
                 .blur(120.dp)
         )
     }
@@ -251,7 +256,7 @@ internal fun IosFilterPill(
     tint: Color,
     onClick: () -> Unit
 ) {
-    val background = if (selected) tint else MaterialTheme.colorScheme.surface
+    val background = if (selected) tint else MaterialTheme.colorScheme.surface.copy(alpha = 0.88f)
     val foreground = if (selected) Color.White else MaterialTheme.colorScheme.onSurface
     Row(
         modifier = Modifier

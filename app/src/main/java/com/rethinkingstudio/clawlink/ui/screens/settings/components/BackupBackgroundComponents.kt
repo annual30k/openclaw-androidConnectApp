@@ -55,7 +55,7 @@ internal fun BackupAppBackground() {
             .fillMaxSize()
             .background(
                 Brush.linearGradient(
-                    colors = listOf(Color(0xFFF2F5FA), Color.White),
+                    colors = listOf(MaterialTheme.colorScheme.background, MaterialTheme.colorScheme.surface),
                     start = Offset(0f, 0f),
                     end = Offset(1000f, 1000f)
                 )
@@ -108,8 +108,8 @@ internal fun BackupGlassCard(
                 spotColor = Color.Black.copy(alpha = 0.12f)
             )
             .clip(RoundedCornerShape(24.dp))
-            .background(Color.White.copy(alpha = 0.85f))
-            .border(BorderStroke(0.8.dp, Color.White.copy(alpha = 0.4f)), RoundedCornerShape(24.dp))
+            .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.94f))
+            .border(BorderStroke(0.8.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.14f)), RoundedCornerShape(24.dp))
     ) {
         Column(
             modifier = Modifier.padding(16.dp),
@@ -117,4 +117,3 @@ internal fun BackupGlassCard(
         )
     }
 }
-

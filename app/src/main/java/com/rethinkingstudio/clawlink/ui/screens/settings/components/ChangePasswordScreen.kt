@@ -63,9 +63,8 @@ internal fun ChangePasswordScreen(
             .background(
                 Brush.linearGradient(
                     colors = listOf(
-                        Color(0xFFF8FAFF),
-                        Color(0xFFEAF4FF),
-                        Color(0xFFFFFFFF)
+                        MaterialTheme.colorScheme.background,
+                        MaterialTheme.colorScheme.surface
                     )
                 )
             )
@@ -99,14 +98,14 @@ internal fun ChangePasswordScreen(
                 choose("Change password", "修改密码"),
                 style = MaterialTheme.typography.displaySmall,
                 fontWeight = FontWeight.Black,
-                color = Color.Black
+                color = MaterialTheme.colorScheme.onBackground
             )
 
             Surface(
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(28.dp),
-                color = MaterialTheme.colorScheme.surface.copy(alpha = 0.54f),
-                border = BorderStroke(1.dp, Color.White.copy(alpha = 0.58f)),
+                color = MaterialTheme.colorScheme.surface.copy(alpha = 0.94f),
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.16f)),
                 shadowElevation = 0.dp
             ) {
                 Column(
@@ -117,7 +116,7 @@ internal fun ChangePasswordScreen(
                         choose("Update password", "更新密码"),
                         style = MaterialTheme.typography.headlineSmall,
                         fontWeight = FontWeight.Black,
-                        color = Color.Black
+                        color = MaterialTheme.colorScheme.onSurface
                     )
                     Text(
                         choose("You will be signed out after the password is changed.", "密码修改成功后需要重新登录。"),
@@ -220,7 +219,7 @@ internal fun PasswordPageField(
         Surface(
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(18.dp),
-            color = Color.White,
+            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.72f),
             shadowElevation = 0.dp
         ) {
             OutlinedTextField(
@@ -240,10 +239,10 @@ internal fun PasswordPageField(
                 colors = OutlinedTextFieldDefaults.colors(
                     focusedBorderColor = Color.Transparent,
                     unfocusedBorderColor = Color.Transparent,
-                    focusedContainerColor = Color.White,
-                    unfocusedContainerColor = Color.White,
-                    focusedTextColor = Color.Black,
-                    unfocusedTextColor = Color.Black,
+                    focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.72f),
+                    unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.72f),
+                    focusedTextColor = MaterialTheme.colorScheme.onSurface,
+                    unfocusedTextColor = MaterialTheme.colorScheme.onSurface,
                     focusedPlaceholderColor = Color(0xFFB8BBC2),
                     unfocusedPlaceholderColor = Color(0xFFB8BBC2)
                 ),

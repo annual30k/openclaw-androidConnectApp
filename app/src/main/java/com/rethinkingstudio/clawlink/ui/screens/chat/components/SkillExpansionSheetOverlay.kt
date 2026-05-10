@@ -257,7 +257,7 @@ private fun SkillExpansionMenu(
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
             SheetHeaderButton(Icons.Default.Close, choose("Close", "关闭"), onDismiss)
-            Text(stringResource(R.string.chat_skill_extension_title), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Black, color = Color.Black)
+            Text(stringResource(R.string.chat_skill_extension_title), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Black, color = MaterialTheme.colorScheme.onSurface)
             Box(modifier = Modifier.size(32.dp))
         }
 
@@ -266,8 +266,8 @@ private fun SkillExpansionMenu(
         // Hero Card
         Surface(
             shape = RoundedCornerShape(22.dp),
-            color = Color.White.copy(alpha = 0.86f),
-            border = BorderStroke(1.dp, Color.White.copy(alpha = 0.55f))
+            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.46f),
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.10f))
         ) {
             Row(
                 modifier = Modifier
@@ -286,8 +286,8 @@ private fun SkillExpansionMenu(
                     Icon(Icons.Default.AutoAwesome, null, tint = ChatColors.linkBlue, modifier = Modifier.size(22.dp))
                 }
                 Column(modifier = Modifier.weight(1f)) {
-                    Text(stringResource(R.string.chat_skill_installable), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = Color.Black)
-                    Text(stringResource(R.string.chat_skill_installable_desc), style = MaterialTheme.typography.bodySmall, color = Color.Gray, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                    Text(stringResource(R.string.chat_skill_installable), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
+                    Text(stringResource(R.string.chat_skill_installable_desc), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 2, overflow = TextOverflow.Ellipsis)
                 }
             }
         }
@@ -297,8 +297,8 @@ private fun SkillExpansionMenu(
         // Actions Card
         Surface(
             shape = RoundedCornerShape(22.dp),
-            color = Color.White.copy(alpha = 0.86f),
-            border = BorderStroke(1.dp, Color.White.copy(alpha = 0.55f))
+            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.46f),
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.10f))
         ) {
             Column {
                 AdvancedFeatureRow(
@@ -308,7 +308,7 @@ private fun SkillExpansionMenu(
                     tint = Color(0xFF5ECF7A),
                     onClick = onNavigateToFileTransfer
                 )
-                HorizontalDivider(color = Color.Black.copy(alpha = 0.06f), modifier = Modifier.padding(horizontal = 18.dp))
+                HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.08f), modifier = Modifier.padding(horizontal = 18.dp))
                 AdvancedFeatureRow(
                     title = SkillExpansionGuideVoice.title,
                     detail = stringResource(R.string.chat_skill_extension_voice_reply),
@@ -350,10 +350,10 @@ private fun AdvancedFeatureRow(
                 Icon(icon, null, tint = tint, modifier = Modifier.size(20.dp))
             }
             Column(modifier = Modifier.weight(1f)) {
-                Text(title, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.SemiBold, color = Color.Black)
-                Text(detail, style = MaterialTheme.typography.bodySmall, color = Color.Gray)
+                Text(title, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface)
+                Text(detail, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
-            Icon(Icons.Default.ChevronRight, null, tint = Color.Gray.copy(alpha = 0.5f), modifier = Modifier.size(20.dp))
+            Icon(Icons.Default.ChevronRight, null, tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f), modifier = Modifier.size(20.dp))
         }
     }
 }
@@ -382,7 +382,7 @@ private fun SkillSetupDetailView(
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
             SheetHeaderButton(Icons.AutoMirrored.Filled.ArrowBack, choose("Back", "返回"), onBack)
-            Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Black, color = Color.Black)
+            Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Black, color = MaterialTheme.colorScheme.onSurface)
             Box(modifier = Modifier.size(32.dp))
         }
 
@@ -396,8 +396,8 @@ private fun SkillSetupDetailView(
             item {
                 Surface(
                     shape = RoundedCornerShape(22.dp),
-                    color = Color.White.copy(alpha = 0.86f),
-                    border = BorderStroke(1.dp, Color.White.copy(alpha = 0.55f))
+                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.46f),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.10f))
                 ) {
                     Row(
                         modifier = Modifier
@@ -416,8 +416,8 @@ private fun SkillSetupDetailView(
                             Icon(symbol, null, tint = tint, modifier = Modifier.size(22.dp))
                         }
                         Column(modifier = Modifier.weight(1f)) {
-                            Text(heroTitle, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = Color.Black)
-                            Text(heroSubtitle, style = MaterialTheme.typography.bodySmall, color = Color.Gray)
+                            Text(heroTitle, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
+                            Text(heroSubtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                     }
                 }
@@ -426,8 +426,8 @@ private fun SkillSetupDetailView(
             item {
                 Surface(
                     shape = RoundedCornerShape(22.dp),
-                    color = Color.White.copy(alpha = 0.86f),
-                    border = BorderStroke(1.dp, Color.White.copy(alpha = 0.55f))
+                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.46f),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.10f))
                 ) {
                     Column(modifier = Modifier.padding(18.dp)) {
                         steps.forEachIndexed { index, step ->
@@ -445,14 +445,14 @@ private fun SkillSetupDetailView(
                                     Text(step.number.toString(), style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, color = tint)
                                 }
                                 Column(modifier = Modifier.weight(1f)) {
-                                    Text(step.title, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold, color = Color.Black)
-                                    Text(step.detail, style = MaterialTheme.typography.bodySmall, color = Color.Gray)
+                                    Text(step.title, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface)
+                                    Text(step.detail, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                 }
                             }
                         }
 
                         Spacer(modifier = Modifier.height(24.dp))
-                        Text(stringResource(R.string.chat_skill_auto_install_hint), style = MaterialTheme.typography.labelSmall, color = Color.Gray)
+                        Text(stringResource(R.string.chat_skill_auto_install_hint), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         Spacer(modifier = Modifier.height(10.dp))
                         
                         Button(

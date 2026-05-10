@@ -142,8 +142,8 @@ internal fun VoiceBlock(
         }
     }
 
-    val background = if (isUser) ChatColors.userBubble else Color.White.copy(alpha = 0.96f)
-    val border = if (isUser) Color.White.copy(alpha = 0.10f) else Color(0xFFE1E4EA)
+    val background = if (isUser) ChatColors.userBubble else MaterialTheme.colorScheme.surface.copy(alpha = 0.96f)
+    val border = if (isUser) Color.White.copy(alpha = 0.10f) else MaterialTheme.colorScheme.outline.copy(alpha = 0.12f)
     val primary = if (isUser) Color.White else MaterialTheme.colorScheme.onSurface
     val width = voiceBubbleWidth(block.durationMs)
     val transcript = block.voiceTranscriptText

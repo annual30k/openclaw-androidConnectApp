@@ -87,12 +87,17 @@ import kotlin.math.abs
 
 @Composable
 internal fun SessionScreenBackdrop() {
+    val colorScheme = MaterialTheme.colorScheme
     Box(
         modifier = Modifier
             .fillMaxSize()
             .background(
                 Brush.linearGradient(
-                    colors = listOf(Color(0xFFF2F5FA), Color.White),
+                    colors = listOf(
+                        colorScheme.background,
+                        colorScheme.surface,
+                        colorScheme.surfaceVariant.copy(alpha = 0.68f)
+                    ),
                     start = androidx.compose.ui.geometry.Offset(0f, 0f),
                     end = androidx.compose.ui.geometry.Offset(1000f, 1000f)
                 )
@@ -106,7 +111,7 @@ internal fun SessionScreenBackdrop() {
                 .graphicsLayer(alpha = 0.45f)
                 .background(
                     Brush.radialGradient(
-                        colors = listOf(SessionAccentBlue.copy(alpha = 0.25f), Color.Transparent),
+                        colors = listOf(colorScheme.primary.copy(alpha = 0.14f), Color.Transparent),
                         radius = Float.POSITIVE_INFINITY
                     ),
                     CircleShape
@@ -121,7 +126,7 @@ internal fun SessionScreenBackdrop() {
                 .graphicsLayer(alpha = 0.4f)
                 .background(
                     Brush.radialGradient(
-                        colors = listOf(SessionAccentBlueSoft.copy(alpha = 0.22f), Color.Transparent),
+                        colors = listOf(colorScheme.secondary.copy(alpha = 0.12f), Color.Transparent),
                         radius = Float.POSITIVE_INFINITY
                     ),
                     CircleShape
@@ -134,7 +139,7 @@ internal fun SessionScreenBackdrop() {
                 .size(500.dp)
                 .offset(x = 100.dp, y = 150.dp)
                 .graphicsLayer(alpha = 0.25f)
-                .background(Brush.radialGradient(listOf(SessionAccentBlue.copy(alpha = 0.1f), Color.Transparent)), CircleShape)
+                .background(Brush.radialGradient(listOf(colorScheme.primary.copy(alpha = 0.08f), Color.Transparent)), CircleShape)
                 .blur(120.dp)
         )
     }
@@ -152,8 +157,8 @@ internal fun SessionManagerSummaryCard(
         modifier = Modifier
             .fillMaxWidth()
             .clip(SessionCardShape)
-            .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.82f))
-            .border(0.8.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.08f), SessionCardShape)
+            .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.94f))
+            .border(0.8.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.14f), SessionCardShape)
             .padding(18.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
@@ -164,7 +169,7 @@ internal fun SessionManagerSummaryCard(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(choose("Current gateway", "当前网关"), style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                Text(gatewayName, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Black, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(gatewayName, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Black, color = MaterialTheme.colorScheme.onSurface, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
             Row(
                 modifier = Modifier
@@ -225,7 +230,7 @@ internal fun SessionManagerActionTile(
             Icon(icon, contentDescription = null, tint = tint, modifier = Modifier.size(16.dp))
         }
         Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            Text(title, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Black, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(title, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Black, color = MaterialTheme.colorScheme.onSurface, maxLines = 1, overflow = TextOverflow.Ellipsis)
             Text(detail, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
     }
@@ -234,7 +239,7 @@ internal fun SessionManagerActionTile(
 @Composable
 internal fun SectionHeader(title: String, subtitle: String) {
     Column(verticalArrangement = Arrangement.spacedBy(4.dp), modifier = Modifier.padding(top = 8.dp)) {
-        Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Black)
+        Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Black, color = MaterialTheme.colorScheme.onBackground)
         Text(subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
@@ -245,12 +250,12 @@ internal fun SessionManagerEmptyStateCard() {
         modifier = Modifier
             .fillMaxWidth()
             .clip(SessionRowShape)
-            .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.82f))
-            .border(0.8.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.08f), SessionRowShape)
+            .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.94f))
+            .border(0.8.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.14f), SessionRowShape)
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(6.dp)
     ) {
-        Text(stringResource(R.string.session_empty_title), style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+        Text(stringResource(R.string.session_empty_title), style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
         Text(stringResource(R.string.session_empty_hint), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
@@ -269,8 +274,8 @@ internal fun SessionManagerSessionRow(
         modifier = modifier
             .fillMaxWidth()
             .clip(SessionRowShape)
-            .background(if (isSelected) Color(0xFFF0F7FF) else MaterialTheme.colorScheme.surface)
-            .border(0.8.dp, if (isSelected) SessionAccentBlue.copy(alpha = 0.24f) else MaterialTheme.colorScheme.outline.copy(alpha = 0.08f), SessionRowShape)
+            .background(if (isSelected) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.34f) else MaterialTheme.colorScheme.surface.copy(alpha = 0.94f))
+            .border(0.8.dp, if (isSelected) SessionAccentBlue.copy(alpha = 0.30f) else MaterialTheme.colorScheme.outline.copy(alpha = 0.14f), SessionRowShape)
             .clickable(enabled = canTap, interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onTap)
             .padding(horizontal = 16.dp, vertical = 14.dp),
         horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -291,7 +296,7 @@ internal fun SessionManagerSessionRow(
         }
         Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Row(verticalAlignment = Alignment.Top, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text(session.displayTitle, modifier = Modifier.weight(1f), style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                Text(session.displayTitle, modifier = Modifier.weight(1f), style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface, maxLines = 2, overflow = TextOverflow.Ellipsis)
                 when {
                     isSelected -> SessionStatusPill(stringResource(R.string.session_status_current), SessionAccentBlue.copy(alpha = 0.12f), SessionAccentBlue)
                     dedicated -> SessionStatusPill(stringResource(R.string.session_status_debug), SessionSuccessGreen.copy(alpha = 0.14f), SessionSuccessGreen)
@@ -358,8 +363,8 @@ internal fun ProcessingOverlay(message: String, detail: String) {
                 .padding(horizontal = 40.dp)
                 .shadow(20.dp, RoundedCornerShape(32.dp), clip = false, spotColor = Color.Black.copy(alpha = 0.15f))
                 .clip(RoundedCornerShape(32.dp))
-                .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.85f))
-                .border(0.6.dp, Color.White.copy(alpha = 0.4f), RoundedCornerShape(32.dp))
+                .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.92f))
+                .border(0.6.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.16f), RoundedCornerShape(32.dp))
                 .padding(horizontal = 24.dp, vertical = 32.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(24.dp)

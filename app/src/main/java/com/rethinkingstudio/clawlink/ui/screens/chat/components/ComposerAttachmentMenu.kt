@@ -91,8 +91,8 @@ internal fun AttachmentMenuPopup(
     val popupOffset = IntOffset(x.coerceAtLeast(with(density) { 12.dp.roundToPx() }), y.coerceAtLeast(with(density) { 12.dp.roundToPx() }))
     Popup(alignment = Alignment.TopStart, offset = popupOffset, onDismissRequest = onDismiss, properties = PopupProperties(focusable = true)) {
         Surface(
-            shape = RoundedCornerShape(34.dp), color = Color.White,
-            border = BorderStroke(1.dp, Color(0xFFE8EBF1)),
+            shape = RoundedCornerShape(34.dp), color = MaterialTheme.colorScheme.surface,
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.12f)),
             shadowElevation = 0.dp, tonalElevation = 0.dp,
             modifier = Modifier.width(with(density) { menuWidth.toDp() })
         ) {
@@ -113,7 +113,6 @@ internal fun AttachmentMenuItem(icon: ImageVector, label: String, onClick: () ->
         horizontalArrangement = Arrangement.spacedBy(14.dp)
     ) {
         Icon(icon, contentDescription = null, tint = ChatColors.linkBlue, modifier = Modifier.size(26.dp))
-        Text(label, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold, color = Color(0xFF111827))
+        Text(label, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface)
     }
 }
-

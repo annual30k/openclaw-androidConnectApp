@@ -30,6 +30,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowDownward
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -48,6 +49,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
@@ -242,15 +244,18 @@ fun ChatScreen(
         }
     }
 
+    val systemBarColor = MaterialTheme.colorScheme.background
+    val useDarkSystemBarIcons = systemBarColor.luminance() > 0.5f
+
     SideEffect {
         val window = (view.context as? android.app.Activity)?.window ?: return@SideEffect
         @Suppress("DEPRECATION")
-        window.statusBarColor = ChatColors.canvas.toArgb()
+        window.statusBarColor = systemBarColor.toArgb()
         @Suppress("DEPRECATION")
-        window.navigationBarColor = ChatColors.canvas.toArgb()
+        window.navigationBarColor = systemBarColor.toArgb()
         val controller = WindowCompat.getInsetsController(window, view)
-        controller.isAppearanceLightStatusBars = true
-        controller.isAppearanceLightNavigationBars = true
+        controller.isAppearanceLightStatusBars = useDarkSystemBarIcons
+        controller.isAppearanceLightNavigationBars = useDarkSystemBarIcons
     }
 
     val filePickerLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
@@ -404,7 +409,7 @@ fun ChatScreen(
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .background(ChatColors.canvas)
+                    .background(MaterialTheme.colorScheme.background)
                     .padding(top = padding.calculateTopPadding())
             ) {
                 Column(
@@ -555,8 +560,8 @@ fun ChatScreen(
                             }
                         },
                         shape = androidx.compose.foundation.shape.CircleShape,
-                        color = Color.White.copy(alpha = 0.98f),
-                        border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFE1E4EA)),
+                        color = androidx.compose.material3.MaterialTheme.colorScheme.surface.copy(alpha = 0.98f),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, androidx.compose.material3.MaterialTheme.colorScheme.outline.copy(alpha = 0.14f)),
                         shadowElevation = 10.dp,
                         modifier = Modifier
                             .align(Alignment.BottomCenter)
@@ -569,14 +574,14 @@ fun ChatScreen(
                         ) {
                             Text(
                                 text = context.getString(R.string.chat_new_messages),
-                                color = Color(0xFF111827),
+                                color = androidx.compose.material3.MaterialTheme.colorScheme.onSurface,
                                 fontWeight = FontWeight.SemiBold,
                                 style = androidx.compose.material3.MaterialTheme.typography.labelMedium
                             )
                             Icon(
                                 Icons.Default.ArrowDownward,
                                 contentDescription = null,
-                                tint = Color(0xFF111827),
+                                tint = androidx.compose.material3.MaterialTheme.colorScheme.onSurface,
                                 modifier = Modifier.size(15.dp)
                             )
                         }

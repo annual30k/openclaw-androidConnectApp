@@ -27,6 +27,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
@@ -62,8 +63,6 @@ private val CardShape = RoundedCornerShape(24.dp)
 private val OuterCardShape = RoundedCornerShape(28.dp)
 private val AccentBlue = Color(0xFF0A84FF)
 private val AccentBlueSoft = Color(0xFF5AC8FA)
-private val TextPrimary = Color(0xFF111827)
-private val TextSecondary = Color(0xFF6B7280)
 
 enum class VoicePreset(val voiceIdentifier: String?, val primaryLabel: String, val secondaryLabelRes: Int) {
     AUTO(null, "Auto Select", R.string.chat_voice_settings_auto_select),
@@ -129,7 +128,7 @@ fun VoiceSetupScreen(
                         Text(
                             stringResource(R.string.settings_row_voice_setup),
                             fontWeight = FontWeight.Bold,
-                            color = TextPrimary
+                            color = MaterialTheme.colorScheme.onBackground
                         )
                     },
                     navigationIcon = {
@@ -137,7 +136,12 @@ fun VoiceSetupScreen(
                             Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.common_action_back))
                         }
                     },
-                    colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent)
+                    colors = TopAppBarDefaults.topAppBarColors(
+                        containerColor = Color.Transparent,
+                        titleContentColor = MaterialTheme.colorScheme.onBackground,
+                        navigationIconContentColor = MaterialTheme.colorScheme.onBackground,
+                        actionIconContentColor = MaterialTheme.colorScheme.onBackground
+                    )
                 )
             }
         ) { padding ->
@@ -152,7 +156,7 @@ fun VoiceSetupScreen(
                 Card(
                     modifier = Modifier.fillMaxWidth(),
                     shape = OuterCardShape,
-                    colors = CardDefaults.cardColors(containerColor = Color.White.copy(alpha = 0.94f)),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.94f)),
                     border = CardDefaults.outlinedCardBorder()
                 ) {
                     Column(
@@ -170,7 +174,7 @@ fun VoiceSetupScreen(
                             }
                         )
 
-                        HorizontalDivider(color = Color(0xFFE5E7EB))
+                        HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.18f))
 
                         VoiceSettingsContent(
                             selectedPreset = selectedPreset,
@@ -204,10 +208,10 @@ private fun VoiceReplyToggleBlock(
         Box(
             modifier = Modifier
                 .size(34.dp)
-                .background(Color(0xFFF2F4F8), RoundedCornerShape(10.dp)),
+                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.72f), RoundedCornerShape(10.dp)),
             contentAlignment = Alignment.Center
         ) {
-            Icon(icon, null, tint = TextPrimary, modifier = Modifier.size(18.dp))
+            Icon(icon, null, tint = MaterialTheme.colorScheme.onSurface, modifier = Modifier.size(18.dp))
         }
 
         Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -215,7 +219,7 @@ private fun VoiceReplyToggleBlock(
                 stringResource(R.string.chat_voice_reply_title),
                 fontSize = 16.sp,
                 fontWeight = FontWeight.SemiBold,
-                color = TextPrimary
+                color = MaterialTheme.colorScheme.onSurface
             )
             Text(
                 if (hasGenerationSetup) {
@@ -224,7 +228,7 @@ private fun VoiceReplyToggleBlock(
                     stringResource(R.string.chat_voice_reply_disabled_hint)
                 },
                 fontSize = 13.sp,
-                color = TextSecondary,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
                 lineHeight = 18.sp
             )
         }
@@ -237,9 +241,9 @@ private fun VoiceReplyToggleBlock(
                 checkedThumbColor = Color.White,
                 checkedTrackColor = AccentBlue,
                 uncheckedThumbColor = Color.White,
-                uncheckedTrackColor = Color(0xFFD1D5DB),
+                uncheckedTrackColor = MaterialTheme.colorScheme.surfaceVariant,
                 disabledUncheckedThumbColor = Color.White,
-                disabledUncheckedTrackColor = Color(0xFFE5E7EB)
+                disabledUncheckedTrackColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.58f)
             )
         )
     }
@@ -261,12 +265,12 @@ private fun VoiceSettingsContent(
                 stringResource(R.string.chat_voice_settings_title),
                 fontSize = 18.sp,
                 fontWeight = FontWeight.SemiBold,
-                color = TextPrimary
+                color = MaterialTheme.colorScheme.onSurface
             )
             Text(
                 stringResource(R.string.chat_voice_settings_subtitle),
                 fontSize = 13.sp,
-                color = TextSecondary,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
                 lineHeight = 18.sp
             )
         }
@@ -280,7 +284,7 @@ private fun VoiceSettingsContent(
                     onClick = { onSelectPreset(preset) }
                 )
                 if (preset != VoicePreset.entries.last()) {
-                    HorizontalDivider(modifier = Modifier.padding(start = 16.dp), color = Color(0xFFECEFF3))
+                    HorizontalDivider(modifier = Modifier.padding(start = 16.dp), color = MaterialTheme.colorScheme.outline.copy(alpha = 0.16f))
                 }
             }
         }
@@ -295,22 +299,22 @@ private fun VoiceSettingsContent(
                 colors = SliderDefaults.colors(
                     thumbColor = AccentBlue,
                     activeTrackColor = AccentBlue,
-                    inactiveTrackColor = Color(0xFFD7DEE8)
+                    inactiveTrackColor = MaterialTheme.colorScheme.surfaceVariant
                 )
             )
             Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                Text(stringResource(R.string.chat_voice_settings_slow), fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = TextSecondary)
+                Text(stringResource(R.string.chat_voice_settings_slow), fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 Spacer(Modifier.weight(1f))
-                Text(formatRatePercent(ratePercent), fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = TextSecondary)
+                Text(formatRatePercent(ratePercent), fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 Spacer(Modifier.weight(1f))
-                Text(stringResource(R.string.chat_voice_settings_fast), fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = TextSecondary)
+                Text(stringResource(R.string.chat_voice_settings_fast), fontSize = 11.sp, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
 
         Text(
             stringResource(R.string.chat_voice_settings_edge_tts_hint),
             fontSize = 12.sp,
-            color = TextSecondary,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
             lineHeight = 18.sp,
             modifier = Modifier.padding(horizontal = 2.dp)
         )
@@ -322,7 +326,7 @@ private fun SettingsGroup(content: @Composable ColumnScope.() -> Unit) {
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = CardShape,
-        colors = CardDefaults.cardColors(containerColor = Color.White),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         border = CardDefaults.outlinedCardBorder()
     ) {
         Column(
@@ -339,7 +343,7 @@ private fun SectionLabel(title: String) {
         title,
         fontSize = 13.sp,
         fontWeight = FontWeight.SemiBold,
-        color = TextSecondary,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
         modifier = Modifier.padding(bottom = 10.dp)
     )
 }
@@ -361,12 +365,12 @@ private fun VoicePresetRow(
                     if (preset == VoicePreset.AUTO) stringResource(R.string.chat_voice_settings_auto_select) else preset.primaryLabel,
                     fontSize = 15.sp,
                     fontWeight = FontWeight.SemiBold,
-                    color = TextPrimary
+                    color = MaterialTheme.colorScheme.onSurface
                 )
                 Text(
                     stringResource(preset.secondaryLabelRes),
                     fontSize = 13.sp,
-                    color = TextSecondary
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
             if (isSelected) {
@@ -383,7 +387,7 @@ private fun VoiceSetupBackdrop() {
             .fillMaxSize()
             .background(
                 Brush.linearGradient(
-                    colors = listOf(Color(0xFFF2F5FA), Color.White),
+                    colors = listOf(MaterialTheme.colorScheme.background, MaterialTheme.colorScheme.surface),
                     start = androidx.compose.ui.geometry.Offset(0f, 0f),
                     end = androidx.compose.ui.geometry.Offset(1000f, 1000f)
                 )

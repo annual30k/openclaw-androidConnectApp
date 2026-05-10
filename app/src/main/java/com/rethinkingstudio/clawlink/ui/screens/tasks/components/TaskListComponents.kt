@@ -207,7 +207,7 @@ internal fun IosFilterPill(
     tint: Color,
     onClick: () -> Unit
 ) {
-    val background = if (selected) tint else MaterialTheme.colorScheme.surface
+    val background = if (selected) tint else MaterialTheme.colorScheme.surface.copy(alpha = 0.88f)
     val foreground = if (selected) Color.White else MaterialTheme.colorScheme.onSurface
     Row(
         modifier = Modifier
@@ -257,7 +257,12 @@ internal fun TaskListFilter.tint(): Color = when (this) {
 @Composable
 internal fun SectionTitle(title: String, subtitle: String) {
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+        Text(
+            title,
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.onBackground
+        )
         Text(subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }

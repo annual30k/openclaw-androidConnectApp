@@ -87,12 +87,17 @@ import kotlinx.coroutines.launch
 
 @Composable
 internal fun ModelScreenBackdrop() {
+    val colorScheme = MaterialTheme.colorScheme
     Box(
         modifier = Modifier
             .fillMaxSize()
             .background(
                 Brush.linearGradient(
-                    colors = listOf(Color(0xFFF2F5FA), Color.White),
+                    colors = listOf(
+                        colorScheme.background,
+                        colorScheme.surface,
+                        colorScheme.surfaceVariant.copy(alpha = 0.68f)
+                    ),
                     start = androidx.compose.ui.geometry.Offset(0f, 0f),
                     end = androidx.compose.ui.geometry.Offset(1000f, 1000f)
                 )
@@ -106,7 +111,7 @@ internal fun ModelScreenBackdrop() {
                 .graphicsLayer(alpha = 0.45f)
                 .background(
                     Brush.radialGradient(
-                        colors = listOf(AccentBlue.copy(alpha = 0.25f), Color.Transparent),
+                        colors = listOf(colorScheme.primary.copy(alpha = 0.14f), Color.Transparent),
                         radius = Float.POSITIVE_INFINITY
                     ),
                     CircleShape
@@ -121,7 +126,7 @@ internal fun ModelScreenBackdrop() {
                 .graphicsLayer(alpha = 0.4f)
                 .background(
                     Brush.radialGradient(
-                        colors = listOf(AccentBlueSoft.copy(alpha = 0.22f), Color.Transparent),
+                        colors = listOf(colorScheme.secondary.copy(alpha = 0.12f), Color.Transparent),
                         radius = Float.POSITIVE_INFINITY
                     ),
                     CircleShape
@@ -134,7 +139,7 @@ internal fun ModelScreenBackdrop() {
                 .size(500.dp)
                 .offset(x = 100.dp, y = 150.dp)
                 .graphicsLayer(alpha = 0.25f)
-                .background(Brush.radialGradient(listOf(AccentBlue.copy(alpha = 0.1f), Color.Transparent)), CircleShape)
+                .background(Brush.radialGradient(listOf(colorScheme.primary.copy(alpha = 0.08f), Color.Transparent)), CircleShape)
                 .blur(120.dp)
         )
     }
@@ -153,8 +158,8 @@ internal fun MetricsChip(title: String, value: String, icon: ImageVector, tint: 
     Row(
         modifier = modifier
             .clip(RoundedCornerShape(18.dp))
-            .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.82f))
-            .border(0.6.dp, tint.copy(alpha = 0.1f), RoundedCornerShape(18.dp))
+            .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.94f))
+            .border(0.6.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.12f), RoundedCornerShape(18.dp))
             .padding(horizontal = 12.dp, vertical = 12.dp),
         horizontalArrangement = Arrangement.spacedBy(10.dp),
         verticalAlignment = Alignment.CenterVertically
@@ -164,7 +169,7 @@ internal fun MetricsChip(title: String, value: String, icon: ImageVector, tint: 
         }
         Column(verticalArrangement = Arrangement.spacedBy(1.dp)) {
             Text(title, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            Text(value, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Black)
+            Text(value, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Black, color = MaterialTheme.colorScheme.onSurface)
         }
     }
 }
@@ -174,13 +179,13 @@ internal fun DefaultModelHero(model: ModelItem, modifier: Modifier = Modifier) {
     Column(
         modifier = modifier
             .fillMaxWidth()
-            .shadow(10.dp, CardShape, clip = false, ambientColor = Color.Black.copy(alpha = 0.03f), spotColor = Color.Black.copy(alpha = 0.05f))
+            .shadow(10.dp, CardShape, clip = false, ambientColor = Color.Black.copy(alpha = 0.10f), spotColor = Color.Black.copy(alpha = 0.12f))
             .clip(CardShape)
             .background(
                 Brush.linearGradient(
                     listOf(
-                        MaterialTheme.colorScheme.surface.copy(alpha = 0.88f),
-                        MaterialTheme.colorScheme.surface.copy(alpha = 0.82f),
+                        MaterialTheme.colorScheme.surface.copy(alpha = 0.94f),
+                        MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.82f),
                         WarningOrange.copy(alpha = 0.08f)
                     )
                 )
@@ -201,7 +206,7 @@ internal fun DefaultModelHero(model: ModelItem, modifier: Modifier = Modifier) {
         Row(horizontalArrangement = Arrangement.spacedBy(20.dp), verticalAlignment = Alignment.CenterVertically) {
             ProviderIcon(model = model, size = 48)
             Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Text(model.displayName, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Black, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                Text(model.displayName, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Black, color = MaterialTheme.colorScheme.onSurface, maxLines = 2, overflow = TextOverflow.Ellipsis)
                 Text("${model.providerLabel} · ${model.displayContextWindow}", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
@@ -229,8 +234,8 @@ internal fun ProviderSection(
             modifier = Modifier
                 .fillMaxWidth()
                 .clip(ProviderCardShape)
-                .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.82f))
-                .border(0.8.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.08f), ProviderCardShape)
+                .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.94f))
+                .border(0.8.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.14f), ProviderCardShape)
         ) {
             models.forEachIndexed { index, model ->
                 ModelRow(
@@ -271,7 +276,7 @@ internal fun ModelRow(model: ModelItem, isUpdating: Boolean, enabled: Boolean, o
         ProviderIcon(model = model, size = 32)
         Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
-                Text(model.displayName, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(model.displayName, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 if (model.isSelected) {
                     Box(Modifier.size(6.dp).background(AccentBlue, CircleShape))
                 }
@@ -310,12 +315,12 @@ internal fun ModelSearchBar(searchText: String, onSearchTextChange: (String) -> 
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .shadow(25.dp, PillShape, clip = false, ambientColor = Color.Black.copy(alpha = 0.15f), spotColor = Color.Black.copy(alpha = 0.18f))
+            .shadow(25.dp, PillShape, clip = false, ambientColor = Color.Black.copy(alpha = 0.20f), spotColor = Color.Black.copy(alpha = 0.22f))
             .background(
                 Brush.linearGradient(
                     colors = listOf(
-                        MaterialTheme.colorScheme.surface,
-                        MaterialTheme.colorScheme.surface.copy(alpha = 0.98f)
+                        MaterialTheme.colorScheme.surface.copy(alpha = 0.96f),
+                        MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.82f)
                     )
                 ),
                 PillShape
@@ -324,8 +329,8 @@ internal fun ModelSearchBar(searchText: String, onSearchTextChange: (String) -> 
                 width = 0.8.dp,
                 brush = Brush.linearGradient(
                     colors = listOf(
-                        MaterialTheme.colorScheme.outline.copy(alpha = 0.12f),
-                        MaterialTheme.colorScheme.outline.copy(alpha = 0.05f)
+                        MaterialTheme.colorScheme.outline.copy(alpha = 0.18f),
+                        MaterialTheme.colorScheme.outline.copy(alpha = 0.10f)
                     )
                 ),
                 shape = PillShape
@@ -437,7 +442,7 @@ internal fun ProcessingOverlay(operationsLocked: Boolean) {
                 .shadow(20.dp, RoundedCornerShape(32.dp), clip = false, spotColor = Color.Black.copy(alpha = 0.15f))
                 .clip(RoundedCornerShape(32.dp))
                 .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.85f))
-                .border(0.6.dp, Color.White.copy(alpha = 0.4f), RoundedCornerShape(32.dp))
+                .border(0.6.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.16f), RoundedCornerShape(32.dp))
                 .padding(horizontal = 24.dp, vertical = 32.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(24.dp)
@@ -474,4 +479,3 @@ internal fun ProcessingOverlay(operationsLocked: Boolean) {
         }
     }
 }
-

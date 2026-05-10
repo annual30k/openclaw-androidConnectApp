@@ -39,8 +39,8 @@ import com.rethinkingstudio.clawlink.ui.screens.chat.ChatColors
 internal fun UsageGuidePromptCard(onOpenUsageGuide: (() -> Unit)?) {
     Surface(
         shape = RoundedCornerShape(30.dp),
-        color = Color.White.copy(alpha = 0.94f),
-        border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFE1E4EA)),
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.46f),
+        border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.12f)),
         modifier = Modifier.fillMaxWidth()
     ) {
         Column(
@@ -54,7 +54,7 @@ internal fun UsageGuidePromptCard(onOpenUsageGuide: (() -> Unit)?) {
                         stringResource(R.string.gateway_usage_guide_title),
                         style = MaterialTheme.typography.titleMedium.copy(fontSize = 19.sp, lineHeight = 24.sp),
                         fontWeight = FontWeight.Bold,
-                        color = Color.Black
+                        color = MaterialTheme.colorScheme.onSurface
                     )
                     Text(
                         stringResource(R.string.gateway_usage_guide_prompt),
@@ -76,8 +76,8 @@ internal fun UsageGuidePromptCard(onOpenUsageGuide: (() -> Unit)?) {
 internal fun EmptyGatewayCard(onOpenSettings: (() -> Unit)?) {
     Surface(
         shape = RoundedCornerShape(30.dp),
-        color = Color.White.copy(alpha = 0.94f),
-        border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFE1E4EA)),
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.46f),
+        border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.12f)),
         modifier = Modifier.fillMaxWidth()
     ) {
         Column(
@@ -91,7 +91,7 @@ internal fun EmptyGatewayCard(onOpenSettings: (() -> Unit)?) {
                         stringResource(R.string.gateway_no_host_title),
                         style = MaterialTheme.typography.titleMedium.copy(fontSize = 19.sp, lineHeight = 24.sp),
                         fontWeight = FontWeight.Bold,
-                        color = Color.Black
+                        color = MaterialTheme.colorScheme.onSurface
                     )
                     Text(
                         stringResource(R.string.gateway_no_host_detail),
@@ -120,7 +120,7 @@ private fun FullWidthCardButton(text: String, icon: ImageVector, onClick: () -> 
     Surface(
         onClick = onClick,
         shape = RoundedCornerShape(999.dp),
-        color = ChatColors.pending.copy(alpha = 0.16f),
+        color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.46f),
         modifier = Modifier.fillMaxWidth()
     ) {
         Row(
@@ -128,13 +128,13 @@ private fun FullWidthCardButton(text: String, icon: ImageVector, onClick: () -> 
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.Center
         ) {
-            Icon(icon, null, tint = Color.Black, modifier = Modifier.size(18.dp))
+            Icon(icon, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
             Spacer(Modifier.width(8.dp))
             Text(
                 text,
                 style = MaterialTheme.typography.titleSmall.copy(fontSize = 15.sp, lineHeight = 18.sp),
                 fontWeight = FontWeight.SemiBold,
-                color = Color.Black
+                color = MaterialTheme.colorScheme.onSurface
             )
         }
     }
@@ -163,8 +163,8 @@ internal fun ChatSessionSwitchLoadingOverlay(modifier: Modifier = Modifier) {
     ) {
         Surface(
             shape = RoundedCornerShape(32.dp),
-            color = Color.White.copy(alpha = 0.92f),
-            border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.72f)),
+            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.82f),
+            border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.12f)),
             shadowElevation = 0.dp,
             tonalElevation = 0.dp
         ) {
@@ -184,7 +184,7 @@ internal fun ChatSessionSwitchLoadingOverlay(modifier: Modifier = Modifier) {
                     stringResource(R.string.chat_switching_session),
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
-                    color = Color.Black
+                    color = MaterialTheme.colorScheme.onSurface
                 )
                 Text(
                     stringResource(R.string.chat_syncing_history),
@@ -223,7 +223,7 @@ internal fun IconBadge(icon: ImageVector) {
         modifier = Modifier
             .size(52.dp)
             .background(MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.58f), RoundedCornerShape(18.dp))
-            .border(1.dp, Color.White.copy(alpha = 0.48f), RoundedCornerShape(18.dp)),
+            .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.12f), RoundedCornerShape(18.dp)),
         contentAlignment = Alignment.Center
     ) {
         Icon(icon, null, modifier = Modifier.size(20.dp), tint = MaterialTheme.colorScheme.primary)

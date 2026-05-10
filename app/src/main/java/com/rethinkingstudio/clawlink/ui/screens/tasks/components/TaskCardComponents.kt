@@ -127,15 +127,15 @@ internal fun TasksTaskCard(
         color = Color.Transparent,
         modifier = modifier
             .fillMaxWidth()
-            .shadow(12.dp, CardShape, clip = false, ambientColor = Color.Black.copy(alpha = 0.04f), spotColor = Color.Black.copy(alpha = 0.06f))
-            .border(0.6.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.08f), CardShape)
+            .shadow(12.dp, CardShape, clip = false, ambientColor = Color.Black.copy(alpha = 0.10f), spotColor = Color.Black.copy(alpha = 0.12f))
+            .border(0.6.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.14f), CardShape)
             .clip(CardShape)
             .background(
                 Brush.linearGradient(
                     listOf(
-                        MaterialTheme.colorScheme.surface.copy(alpha = 0.78f),
-                        MaterialTheme.colorScheme.surface.copy(alpha = 0.72f),
-                        tint.copy(alpha = 0.05f)
+                        MaterialTheme.colorScheme.surface.copy(alpha = 0.94f),
+                        MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.82f),
+                        tint.copy(alpha = 0.08f)
                     )
                 )
             )
@@ -167,6 +167,7 @@ internal fun TasksTaskCard(
                         task.title,
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
@@ -286,4 +287,3 @@ internal fun TaskCircleButton(
         }
     }
 }
-

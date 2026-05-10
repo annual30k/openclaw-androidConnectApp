@@ -114,7 +114,7 @@ internal fun GatewaySheetOverlay(
                     stringResource(R.string.gateways_list_title),
                     style = MaterialTheme.typography.titleMedium.copy(fontSize = 20.sp),
                     fontWeight = FontWeight.Bold,
-                    color = Color.Black
+                    color = MaterialTheme.colorScheme.onSurface
                 )
                 CircleHeaderButton(Icons.Default.Refresh, stringResource(R.string.gateways_refresh), onRefresh)
             }

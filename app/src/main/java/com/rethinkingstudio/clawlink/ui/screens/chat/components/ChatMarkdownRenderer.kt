@@ -187,9 +187,9 @@ private fun MarkdownThematicBreak(textColor: Color) {
 
 @Composable
 private fun MarkdownCodeBlock(code: String, language: String?, textColor: Color, onDarkBackground: Boolean) {
-    val borderColor = if (onDarkBackground) Color.White.copy(alpha = 0.22f) else Color(0xFFE1E4EA)
-    val headerColor = if (onDarkBackground) Color.White.copy(alpha = 0.12f) else Color(0xFFF2F4F8)
-    val bodyColor = if (onDarkBackground) Color.White.copy(alpha = 0.08f) else Color(0xFFF8FAFC)
+    val borderColor = if (onDarkBackground) Color.White.copy(alpha = 0.10f) else MaterialTheme.colorScheme.outline.copy(alpha = 0.14f)
+    val headerColor = if (onDarkBackground) Color.White.copy(alpha = 0.08f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.40f)
+    val bodyColor = if (onDarkBackground) Color.White.copy(alpha = 0.05f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.20f)
     Surface(
         shape = RoundedCornerShape(16.dp),
         color = bodyColor,
@@ -227,10 +227,10 @@ private fun MarkdownCodeBlock(code: String, language: String?, textColor: Color,
 
 @Composable
 private fun MarkdownTable(table: AndroidMarkdownTable, textColor: Color, onDarkBackground: Boolean) {
-    val borderColor = if (onDarkBackground) Color.White.copy(alpha = 0.22f) else Color(0xFFE1E4EA)
-    val headerBackground = if (onDarkBackground) Color.White.copy(alpha = 0.14f) else Color(0xFFF4F6FA)
-    val bodyBackground = if (onDarkBackground) Color.White.copy(alpha = 0.06f) else Color.White
-    val headerTextColor = if (onDarkBackground) textColor.copy(alpha = 0.9f) else Color(0xFF7A7E87)
+    val borderColor = if (onDarkBackground) Color.White.copy(alpha = 0.10f) else MaterialTheme.colorScheme.outline.copy(alpha = 0.14f)
+    val headerBackground = if (onDarkBackground) Color.White.copy(alpha = 0.08f) else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.40f)
+    val bodyBackground = if (onDarkBackground) Color.White.copy(alpha = 0.04f) else MaterialTheme.colorScheme.surface.copy(alpha = 0.45f)
+    val headerTextColor = if (onDarkBackground) textColor.copy(alpha = 0.9f) else MaterialTheme.colorScheme.onSurfaceVariant
     val columnWidths = remember(table) { table.columnWidths() }
     Row(modifier = Modifier.horizontalScroll(rememberScrollState())) {
         Surface(

@@ -95,12 +95,12 @@ fun BackupScreen(
             containerColor = Color.Transparent,
             topBar = {
                 CenterAlignedTopAppBar(
-                    title = { Text(stringResource(R.string.backup_title), fontWeight = FontWeight.Bold, fontSize = 17.sp, color = Color(0xFF1F2937)) },
+                    title = { Text(stringResource(R.string.backup_title), fontWeight = FontWeight.Bold, fontSize = 17.sp, color = MaterialTheme.colorScheme.onBackground) },
                     navigationIcon = {
                         Surface(
                             modifier = Modifier.padding(start = 16.dp).size(40.dp),
                             shape = CircleShape,
-                            color = Color.White,
+                            color = MaterialTheme.colorScheme.surface,
                             shadowElevation = 2.dp,
                             onClick = onBack
                         ) {
@@ -111,11 +111,16 @@ fun BackupScreen(
                     },
                     actions = {
                         IconButton(onClick = { scope.launch { refreshBackups() } }, enabled = canManage && !isLoading) {
-                            if (isLoading) CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp, color = Color(0xFF3B82F6))
-                            else Icon(Icons.Default.Refresh, null, modifier = Modifier.size(20.dp), tint = Color(0xFF3B82F6))
+                            if (isLoading) CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp, color = MaterialTheme.colorScheme.primary)
+                            else Icon(Icons.Default.Refresh, null, modifier = Modifier.size(20.dp), tint = MaterialTheme.colorScheme.primary)
                         }
                     },
-                    colors = TopAppBarDefaults.centerAlignedTopAppBarColors(containerColor = Color.Transparent)
+                    colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
+                        containerColor = Color.Transparent,
+                        titleContentColor = MaterialTheme.colorScheme.onBackground,
+                        navigationIconContentColor = MaterialTheme.colorScheme.onBackground,
+                        actionIconContentColor = MaterialTheme.colorScheme.onBackground
+                    )
                 )
             }
         ) { padding ->
@@ -143,7 +148,7 @@ fun BackupScreen(
                                 Box(Modifier.size(40.dp).background(Color(0xFF22C55E).copy(alpha = 0.1f), CircleShape), contentAlignment = Alignment.Center) {
                                     Icon(Icons.Default.CheckCircle, null, tint = Color(0xFF22C55E), modifier = Modifier.size(20.dp))
                                 }
-                                Text(actionMessage!!, color = Color(0xFF1F2937), fontSize = 13.sp, fontWeight = FontWeight.Medium)
+                                Text(actionMessage!!, color = MaterialTheme.colorScheme.onSurface, fontSize = 13.sp, fontWeight = FontWeight.Medium)
                             }
                         }
                     }
@@ -154,15 +159,15 @@ fun BackupScreen(
                     BackupGlassCard {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Column(modifier = Modifier.weight(1f)) {
-                                Text(stringResource(R.string.backup_create_prompt), fontWeight = FontWeight.Bold, fontSize = 15.sp, color = Color(0xFF1F2937))
-                                Text(stringResource(R.string.backup_create_detail), fontSize = 11.sp, color = Color(0xFF6B7280))
+                                Text(stringResource(R.string.backup_create_prompt), fontWeight = FontWeight.Bold, fontSize = 15.sp, color = MaterialTheme.colorScheme.onSurface)
+                                Text(stringResource(R.string.backup_create_detail), fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                             }
                             Spacer(Modifier.width(12.dp))
                             Surface(
                                 onClick = { showCreateDialog = true },
                                 enabled = canManage && backups.size < maxBackups,
                                 shape = CircleShape,
-                                color = if (canManage && backups.size < maxBackups) Color(0xFF3B82F6) else Color(0xFFE5E7EB),
+                                color = if (canManage && backups.size < maxBackups) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
                                 modifier = Modifier.size(40.dp)
                             ) {
                                 Box(contentAlignment = Alignment.Center) {
@@ -176,8 +181,8 @@ fun BackupScreen(
                 // Backup list header
                 item {
                     Column(modifier = Modifier.padding(horizontal = 4.dp)) {
-                        Text(stringResource(R.string.backup_list_title), fontWeight = FontWeight.Bold, fontSize = 16.sp, color = Color(0xFF1F2937))
-                        Text(stringResource(R.string.backup_list_subtitle), fontSize = 12.sp, color = Color(0xFF6B7280))
+                        Text(stringResource(R.string.backup_list_title), fontWeight = FontWeight.Bold, fontSize = 16.sp, color = MaterialTheme.colorScheme.onSurface)
+                        Text(stringResource(R.string.backup_list_subtitle), fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
 
@@ -185,10 +190,10 @@ fun BackupScreen(
                     item {
                         BackupGlassCard {
                             Column(modifier = Modifier.padding(vertical = 30.dp).fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
-                                Icon(Icons.Default.Inventory2, null, modifier = Modifier.size(48.dp), tint = Color(0xFF9CA3AF))
+                                Icon(Icons.Default.Inventory2, null, modifier = Modifier.size(48.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
                                 Spacer(Modifier.height(16.dp))
-                                Text(stringResource(R.string.backup_empty_title), fontWeight = FontWeight.Bold, color = Color(0xFF1F2937), fontSize = 16.sp)
-                                Text(stringResource(R.string.backup_empty_subtitle), fontSize = 13.sp, color = Color(0xFF6B7280), textAlign = TextAlign.Center)
+                                Text(stringResource(R.string.backup_empty_title), fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface, fontSize = 16.sp)
+                                Text(stringResource(R.string.backup_empty_subtitle), fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = TextAlign.Center)
                             }
                         }
                     }

@@ -109,10 +109,10 @@ internal fun SkillListRow(
         color = Color.Transparent,
         modifier = modifier
             .fillMaxWidth()
-            .shadow(10.dp, RowShape, clip = false, ambientColor = Color.Black.copy(alpha = 0.03f), spotColor = Color.Black.copy(alpha = 0.06f))
-            .border(0.6.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.08f), RowShape)
+            .shadow(10.dp, RowShape, clip = false, ambientColor = Color.Black.copy(alpha = 0.10f), spotColor = Color.Black.copy(alpha = 0.12f))
+            .border(0.6.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.14f), RowShape)
             .clip(RowShape)
-            .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.8f))
+            .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.94f))
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null,
@@ -130,6 +130,7 @@ internal fun SkillListRow(
                     skill.effectiveName,
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurface,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
@@ -203,8 +204,7 @@ internal fun SkillStatusBadge(availability: SkillAvailability) {
 @Composable
 internal fun SectionTitle(title: String, subtitle: String, modifier: Modifier = Modifier) {
     Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+        Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onBackground)
         Text(subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
-

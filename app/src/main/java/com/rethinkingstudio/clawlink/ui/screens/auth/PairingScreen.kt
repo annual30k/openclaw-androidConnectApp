@@ -73,14 +73,14 @@ fun PairingScreen(
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.common_action_back))
                     }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = Color(0xFFF8F9FB))
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent)
             )
         }
     ) { padding ->
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .background(Color(0xFFF8F9FB))
+                .background(Color.Transparent)
                 .padding(padding)
                 .verticalScroll(scrollState)
                 .padding(20.dp),
@@ -100,7 +100,7 @@ fun PairingScreen(
                 ) {
                     Column(modifier = Modifier.weight(1f)) {
                         Text(stringResource(R.string.auth_pairing_current_account), fontWeight = FontWeight.Bold, fontSize = 17.sp)
-                        Text(stringResource(R.string.auth_pairing_wrong_account_hint), style = MaterialTheme.typography.bodySmall, color = Color(0xFF6B7280))
+                        Text(stringResource(R.string.auth_pairing_wrong_account_hint), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                     Button(
                         onClick = {
@@ -110,8 +110,8 @@ fun PairingScreen(
                             }
                         },
                         colors = ButtonDefaults.buttonColors(
-                            containerColor = Color(0xFFEF4444).copy(alpha = 0.1f),
-                            contentColor = Color(0xFFEF4444)
+                            containerColor = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.9f),
+                            contentColor = MaterialTheme.colorScheme.error
                         ),
                         shape = RoundedCornerShape(12.dp),
                         contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp)
@@ -134,7 +134,7 @@ fun PairingScreen(
                     ) {
                         Column(modifier = Modifier.weight(1f)) {
                             Text(stringResource(R.string.auth_pairing_scan_title), fontWeight = FontWeight.Bold, fontSize = 17.sp)
-                            Text(stringResource(R.string.auth_pairing_scan_description), style = MaterialTheme.typography.bodySmall, color = Color(0xFF6B7280))
+                            Text(stringResource(R.string.auth_pairing_scan_description), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                         Button(
                             onClick = {
@@ -145,7 +145,7 @@ fun PairingScreen(
                                 }
                             },
                             shape = RoundedCornerShape(12.dp),
-                            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF3B82F6))
+                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
                         ) {
                             Icon(Icons.Default.QrCodeScanner, null, modifier = Modifier.size(18.dp))
                             Spacer(Modifier.width(8.dp))
@@ -155,7 +155,7 @@ fun PairingScreen(
                     Text(
                         stringResource(R.string.auth_pairing_scan_no_camera_hint),
                         style = MaterialTheme.typography.labelSmall,
-                        color = Color(0xFF9CA3AF)
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.78f)
                     )
                 }
             }
@@ -177,8 +177,8 @@ fun PairingScreen(
                                 modifier = Modifier.fillMaxWidth(),
                                 shape = RoundedCornerShape(16.dp),
                                 colors = OutlinedTextFieldDefaults.colors(
-                                    focusedBorderColor = Color(0xFF3B82F6),
-                                    unfocusedBorderColor = Color(0xFFE5E7EB)
+                                    focusedBorderColor = MaterialTheme.colorScheme.primary,
+                                    unfocusedBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.38f)
                                 )
                             )
                         } else {
@@ -192,7 +192,7 @@ fun PairingScreen(
                                 stringResource(R.string.auth_pairing_relay_default_hint)
                             },
                             style = MaterialTheme.typography.labelSmall,
-                            color = Color(0xFF9CA3AF)
+                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.78f)
                         )
 
                         OutlinedTextField(
@@ -202,8 +202,8 @@ fun PairingScreen(
                             modifier = Modifier.fillMaxWidth(),
                             shape = RoundedCornerShape(16.dp),
                             colors = OutlinedTextFieldDefaults.colors(
-                                focusedBorderColor = Color(0xFF3B82F6),
-                                unfocusedBorderColor = Color(0xFFE5E7EB)
+                                focusedBorderColor = MaterialTheme.colorScheme.primary,
+                                unfocusedBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.38f)
                             )
                         )
                     }
@@ -230,7 +230,7 @@ fun PairingScreen(
                         },
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(16.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF3B82F6)),
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
                         enabled = !authState.isLoading
                     ) {
                         if (authState.isLoading) {
@@ -245,7 +245,7 @@ fun PairingScreen(
                     Text(
                         stringResource(R.string.auth_pairing_hint_verifying),
                         style = MaterialTheme.typography.labelSmall,
-                        color = Color(0xFF9CA3AF)
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.78f)
                     )
                 }
             }
@@ -299,21 +299,21 @@ private fun ReadOnlyRelayAddressField(value: String) {
         Text(
             text = stringResource(R.string.auth_relay_address),
             style = MaterialTheme.typography.labelMedium,
-            color = Color(0xFF6B7280),
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
             fontWeight = FontWeight.Medium
         )
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .background(Color(0xFFF3F4F6), RoundedCornerShape(16.dp))
-                .border(1.dp, Color(0xFFE5E7EB), RoundedCornerShape(16.dp))
+                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.72f), RoundedCornerShape(16.dp))
+                .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.38f), RoundedCornerShape(16.dp))
                 .padding(horizontal = 16.dp, vertical = 16.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             Surface(
                 shape = CircleShape,
-                color = Color.White
+                color = MaterialTheme.colorScheme.surface
             ) {
                 Box(
                     modifier = Modifier.size(28.dp),
@@ -322,7 +322,7 @@ private fun ReadOnlyRelayAddressField(value: String) {
                     Icon(
                         Icons.Default.Lock,
                         contentDescription = null,
-                        tint = Color(0xFF9CA3AF),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.size(16.dp)
                     )
                 }
@@ -330,7 +330,7 @@ private fun ReadOnlyRelayAddressField(value: String) {
             Text(
                 text = value,
                 style = MaterialTheme.typography.bodyLarge,
-                color = Color(0xFF111827)
+                color = MaterialTheme.colorScheme.onSurface
             )
         }
     }
@@ -339,7 +339,7 @@ private fun ReadOnlyRelayAddressField(value: String) {
 @Composable
 private fun SectionHeader(title: String, subtitle: String) {
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        Text(title, style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.ExtraBold, color = Color(0xFF111827))
-        Text(subtitle, style = MaterialTheme.typography.bodyMedium, color = Color(0xFF6B7280))
+        Text(title, style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.ExtraBold, color = MaterialTheme.colorScheme.onBackground)
+        Text(subtitle, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }

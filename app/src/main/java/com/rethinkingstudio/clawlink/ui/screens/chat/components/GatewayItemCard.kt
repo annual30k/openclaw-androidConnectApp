@@ -87,9 +87,12 @@ internal fun GatewayItemCard(
         onClick = onClick,
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(22.dp),
-        color = Color(0xFFF8F9FB),
-        shadowElevation = if (selected) 14.dp else 10.dp,
-        border = BorderStroke(if (selected) 2.dp else 1.dp, if (selected) ChatColors.selectionBlue else Color(0xFFF8F9FB))
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = if (selected) 0.62f else 0.46f),
+        shadowElevation = 0.dp,
+        border = BorderStroke(
+            if (selected) 1.4.dp else 1.dp,
+            if (selected) ChatColors.selectionBlue else MaterialTheme.colorScheme.outline.copy(alpha = 0.12f)
+        )
     ) {
         Column(
             modifier = Modifier
@@ -111,7 +114,7 @@ internal fun GatewayItemCard(
                         overflow = TextOverflow.Ellipsis,
                         style = MaterialTheme.typography.titleMedium.copy(fontSize = 16.sp),
                         fontWeight = FontWeight.Bold,
-                        color = Color.Black
+                        color = MaterialTheme.colorScheme.onSurface
                     )
                     Text(
                         stringResource(R.string.gateway_last_seen, formatChatTimestamp(gateway.lastSeenAt)),

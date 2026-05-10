@@ -147,7 +147,7 @@ internal fun GatewaySessionDropdownPanel(
     Surface(
         shape = RoundedCornerShape(18.dp),
         color = Color(0xFF101827),
-        border = BorderStroke(1.dp, Color.White.copy(alpha = 0.16f)),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.10f)),
         shadowElevation = 0.dp,
         tonalElevation = 0.dp,
         modifier = modifier.fillMaxWidth()
@@ -263,4 +263,3 @@ internal fun GatewaySessionRow(
         }
     }
 }
-

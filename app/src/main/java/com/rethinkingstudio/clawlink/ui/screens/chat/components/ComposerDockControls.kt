@@ -84,15 +84,15 @@ internal fun DockPillButton(text: String, icon: ImageVector, enabled: Boolean, t
     ) {
         Row(modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             Icon(icon, null, modifier = Modifier.size(18.dp), tint = MaterialTheme.colorScheme.primary)
-            Text(text, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold, color = Color.Black)
-            if (trailingIcon != null) { Icon(trailingIcon, null, modifier = Modifier.size(16.dp), tint = Color.Black.copy(alpha = 0.35f)) }
+            Text(text, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface)
+            if (trailingIcon != null) { Icon(trailingIcon, null, modifier = Modifier.size(16.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.72f)) }
         }
     }
 }
 
 @Composable
 internal fun DockSmallButton(icon: ImageVector, label: String, selected: Boolean = false, enabled: Boolean, onClick: () -> Unit) {
-    Surface(onClick = onClick, enabled = enabled, shape = RoundedCornerShape(999.dp), color = if (selected) Color(0xFFE4F2FF) else Color(0xFFF7F9FD), contentColor = if (selected) ChatColors.linkBlue else Color.Black) {
+    Surface(onClick = onClick, enabled = enabled, shape = RoundedCornerShape(999.dp), color = if (selected) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.72f) else ChatColors.dockControl, contentColor = if (selected) ChatColors.linkBlue else MaterialTheme.colorScheme.onSurface) {
         Row(modifier = Modifier.padding(horizontal = 10.dp, vertical = 7.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             Icon(icon, null, modifier = Modifier.size(15.dp))
             Text(label, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.SemiBold)
@@ -104,7 +104,7 @@ internal fun DockSmallButton(icon: ImageVector, label: String, selected: Boolean
 internal fun RoundIconButton(icon: ImageVector, label: String, enabled: Boolean, onClick: () -> Unit) {
     Surface(
         onClick = onClick, enabled = enabled, shape = CircleShape,
-        color = ChatColors.dockControl, contentColor = Color.Black,
+        color = ChatColors.dockControl, contentColor = MaterialTheme.colorScheme.onSurface,
         border = BorderStroke(1.dp, ChatColors.dockBorder),
         modifier = Modifier.size(42.dp).alpha(if (enabled) 1f else 0.55f)
     ) {

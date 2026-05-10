@@ -92,21 +92,26 @@ internal fun ToolMessageCard(
     val statusColor = when (message.state) { MessageState.completed -> Color(0xFF5DCF7A); MessageState.failed -> Color(0xFFF24E3E); MessageState.streaming -> Color(0xFFF4A100) }
     val statusIcon = when (message.state) { MessageState.completed -> Icons.Default.CheckCircle; MessageState.failed -> Icons.Default.Close; MessageState.streaming -> Icons.Default.Refresh }
 
-    Surface(modifier = modifier.widthIn(max = 326.dp), shape = RoundedCornerShape(22.dp), color = Color.White.copy(alpha = 0.97f), border = BorderStroke(1.dp, Color(0xFFE1E4EA))) {
+    Surface(
+        modifier = modifier.widthIn(max = 326.dp),
+        shape = RoundedCornerShape(22.dp),
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.46f),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.12f))
+    ) {
         Column(
             modifier = Modifier.padding(horizontal = 12.dp, vertical = 9.dp),
             verticalArrangement = Arrangement.spacedBy(7.dp)
         ) {
             Surface(onClick = { expanded = !expanded }, color = Color.Transparent) {
                 Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Icon(if (expanded) Icons.Default.ExpandMore else Icons.AutoMirrored.Filled.KeyboardArrowRight, null, modifier = Modifier.size(14.dp), tint = Color(0xFF8B8F98))
+                    Icon(if (expanded) Icons.Default.ExpandMore else Icons.AutoMirrored.Filled.KeyboardArrowRight, null, modifier = Modifier.size(14.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
                     Icon(Icons.Default.Bolt, null, modifier = Modifier.size(16.dp), tint = Color(0xFFF24E3E))
                     Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                            Text(cardTitle, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold, color = Color(0xFF111827))
-                            Text(toolTitle, style = MaterialTheme.typography.labelSmall.copy(fontFamily = FontFamily.Monospace), color = Color(0xFF8B8F98), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            Text(cardTitle, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface)
+                            Text(toolTitle, style = MaterialTheme.typography.labelSmall.copy(fontFamily = FontFamily.Monospace), color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
                         }
-                        Text(preview, style = MaterialTheme.typography.labelSmall.copy(fontFamily = FontFamily.Monospace), color = Color(0xFF8B8F98), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Text(preview, style = MaterialTheme.typography.labelSmall.copy(fontFamily = FontFamily.Monospace), color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     }
                     Icon(statusIcon, null, modifier = Modifier.size(16.dp), tint = statusColor)
                 }
@@ -123,9 +128,9 @@ internal fun ToolMessageCard(
                 }
             }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                Text("Tool", style = MaterialTheme.typography.labelSmall, color = Color(0xFF8B8F98), fontWeight = FontWeight.Medium)
+                Text("Tool", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, fontWeight = FontWeight.Medium)
                 Spacer(Modifier.weight(1f))
-                if (message.createdAt.isNotBlank()) { Text(formatChatTimestamp(message.createdAt), style = MaterialTheme.typography.labelSmall, color = Color(0xFF8B8F98), fontWeight = FontWeight.Medium) }
+                if (message.createdAt.isNotBlank()) { Text(formatChatTimestamp(message.createdAt), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, fontWeight = FontWeight.Medium) }
             }
         }
     }
@@ -153,16 +158,20 @@ private fun ToolBlockView(block: RelayChatContentBlock, associatedToolCallBlock:
     }
     val name = block.resolvedName ?: "tool"
     val detail = block.toolCallId?.trim()?.takeIf { it.isNotEmpty() } ?: block.toolUseId?.trim()?.takeIf { it.isNotEmpty() }
-    Surface(shape = RoundedCornerShape(16.dp), color = Color(0xFFF9FAFB), border = BorderStroke(1.dp, Color(0xFFE5E7EB))) {
+    Surface(
+        shape = RoundedCornerShape(16.dp),
+        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.62f),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.12f))
+    ) {
         Column(modifier = Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Surface(shape = RoundedCornerShape(999.dp), color = accent.copy(alpha = 0.15f)) {
                     Text(title.uppercase(), modifier = Modifier.padding(horizontal = 7.dp, vertical = 2.dp), style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp), color = accent, fontWeight = FontWeight.Bold)
                 }
-                Text(name, style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace), color = Color(0xFF111827), fontWeight = FontWeight.SemiBold)
+                Text(name, style = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace), color = MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.SemiBold)
                 Spacer(Modifier.weight(1f))
                 detail?.let {
-                    Text(it, style = MaterialTheme.typography.labelSmall.copy(fontFamily = FontFamily.Monospace), color = Color(0xFF8B8F98), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text(it, style = MaterialTheme.typography.labelSmall.copy(fontFamily = FontFamily.Monospace), color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
                 Text(status, style = MaterialTheme.typography.labelSmall, color = accent, fontWeight = FontWeight.Bold)
             }
@@ -175,11 +184,15 @@ private fun ToolBlockView(block: RelayChatContentBlock, associatedToolCallBlock:
 private fun ToolDisplayBody(content: ToolDisplayContent, toolName: String?, isError: Boolean) {
     when (content) {
         is ToolDisplayContent.Markdown -> {
-            Surface(shape = RoundedCornerShape(12.dp), color = Color.White, border = BorderStroke(1.dp, Color(0xFFE5E7EB))) {
+            Surface(
+                shape = RoundedCornerShape(12.dp),
+                color = MaterialTheme.colorScheme.surface.copy(alpha = 0.62f),
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.12f))
+            ) {
                 MarkdownMessageText(
                     text = content.text,
                     modifier = Modifier.padding(10.dp),
-                    textColor = Color(0xFF111827),
+                    textColor = MaterialTheme.colorScheme.onSurface,
                     linkColor = ChatColors.linkBlue,
                     textSizeSp = 13f,
                     onDarkBackground = false
@@ -220,13 +233,13 @@ private fun ToolCodeBlock(language: String?, code: String, isError: Boolean) {
         modifier = Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(16.dp))
-            .background(Color.White.copy(alpha = 0.92f))
-            .border(BorderStroke(1.dp, Color(0xFFE5E7EB)), RoundedCornerShape(16.dp))
+            .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.62f))
+            .border(BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.12f)), RoundedCornerShape(16.dp))
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .background(Color(0xFFF7F8FA))
+                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.42f))
                 .padding(horizontal = 12.dp, vertical = 9.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -234,13 +247,13 @@ private fun ToolCodeBlock(language: String?, code: String, isError: Boolean) {
             Text(
                 label,
                 style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
-                color = Color(0xFF111827),
+                color = MaterialTheme.colorScheme.onSurface,
                 fontWeight = FontWeight.Bold
             )
             Spacer(Modifier.weight(1f))
             CompactCopyButton(
                 onClick = { clipboardManager.setText(AnnotatedString(code)) },
-                tint = Color(0xFF111827),
+                tint = MaterialTheme.colorScheme.onSurface,
                 iconSize = 14.dp
             )
         }
@@ -267,7 +280,7 @@ private fun ToolCodeBlock(language: String?, code: String, isError: Boolean) {
                         fontSize = 13.sp,
                         lineHeight = 20.sp
                     ),
-                    color = if (isError) Color(0xFFF24E3E) else Color(0xFF111827)
+                    color = if (isError) Color(0xFFF24E3E) else MaterialTheme.colorScheme.onSurface
                 )
             }
         }
@@ -412,8 +425,8 @@ private fun ToolTextBlock(text: String, toolName: String?, isError: Boolean) {
         return
     }
     val accentBarColor = Color(0xFFF4A100).copy(alpha = 0.18f)
-    val backgroundColor = Color(0xFFE1E4EA).copy(alpha = 0.16f)
-    val borderColor = Color(0xFFE1E4EA).copy(alpha = 0.18f)
+    val backgroundColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.54f)
+    val borderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.12f)
     Row(
         modifier = Modifier
             .clip(RoundedCornerShape(12.dp))
@@ -433,7 +446,7 @@ private fun ToolTextBlock(text: String, toolName: String?, isError: Boolean) {
         Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             MarkdownMessageText(
                 text = trimmed,
-                textColor = if (isError) Color(0xFFF24E3E) else Color(0xFF111827),
+                textColor = if (isError) Color(0xFFF24E3E) else MaterialTheme.colorScheme.onSurface,
                 linkColor = ChatColors.linkBlue,
                 textSizeSp = 13f,
                 onDarkBackground = false
@@ -442,7 +455,7 @@ private fun ToolTextBlock(text: String, toolName: String?, isError: Boolean) {
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
                     CompactCopyButton(
                         onClick = { clipboardManager.setText(AnnotatedString(trimmed)) },
-                        tint = Color(0xFF8B8F98),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
                         iconSize = 11.dp
                     )
                 }

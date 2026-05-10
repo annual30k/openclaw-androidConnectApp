@@ -42,7 +42,6 @@ import com.rethinkingstudio.clawlink.ui.screens.settings.components.GatewayStatu
 import kotlinx.coroutines.launch
 
 private val SettingsGroupShape = RoundedCornerShape(24.dp)
-private val SettingsDividerColor = Color(0xFFE5E7EB)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -83,14 +82,19 @@ fun SettingsScreen(
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.common_action_back))
                     }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = Color(0xFFF8F9FB))
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = Color.Transparent,
+                    titleContentColor = MaterialTheme.colorScheme.onBackground,
+                    navigationIconContentColor = MaterialTheme.colorScheme.onBackground,
+                    actionIconContentColor = MaterialTheme.colorScheme.onBackground
+                )
             )
         }
     ) { padding ->
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .background(Color(0xFFF8F9FB))
+                .background(Color.Transparent)
                 .padding(padding)
                 .verticalScroll(rememberScrollState())
                 .padding(horizontal = 20.dp, vertical = 20.dp),
@@ -119,7 +123,7 @@ fun SettingsScreen(
                     Surface(
                         onClick = onNavigateToPairing,
                         shape = CircleShape,
-                        color = Color(0xFF3B82F6).copy(alpha = 0.12f),
+                        color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.72f),
                         modifier = Modifier.padding(top = 4.dp)
                     ) {
                         Row(
@@ -130,14 +134,14 @@ fun SettingsScreen(
                             Icon(
                                 Icons.Default.Add,
                                 contentDescription = null,
-                                tint = Color(0xFF3B82F6),
+                                tint = MaterialTheme.colorScheme.primary,
                                 modifier = Modifier.size(16.dp)
                             )
                             Text(
                                 actionTitle,
                                 style = MaterialTheme.typography.labelLarge,
                                 fontWeight = FontWeight.Bold,
-                                color = Color(0xFF3B82F6)
+                                color = MaterialTheme.colorScheme.primary
                             )
                         }
                     }
@@ -307,12 +311,12 @@ fun SettingsScreen(
                 Text(
                     "ClawLink V${com.rethinkingstudio.clawlink.BuildConfig.VERSION_NAME}",
                     style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp),
-                    color = Color(0xFF9CA3AF)
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.72f)
                 )
                 Text(
                     stringResource(R.string.settings_about_console),
                     style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp),
-                    color = Color(0xFF9CA3AF)
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.72f)
                 )
             }
         }
@@ -400,8 +404,8 @@ private fun SettingsGroup(
     Surface(
         modifier = modifier,
         shape = SettingsGroupShape,
-        color = Color.White,
-        border = BorderStroke(1.dp, Color(0xFFE1E4EA))
+        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.94f),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.18f))
     ) {
         Column(verticalArrangement = Arrangement.spacedBy(0.dp), content = content)
     }
@@ -411,7 +415,7 @@ private fun SettingsGroup(
 private fun SettingsDivider() {
     HorizontalDivider(
         modifier = Modifier.padding(start = 64.dp),
-        color = SettingsDividerColor
+        color = MaterialTheme.colorScheme.outline.copy(alpha = 0.16f)
     )
 }
 
@@ -437,18 +441,18 @@ private fun SettingsAccountActionRow(
         ) {
             Surface(
                 shape = RoundedCornerShape(10.dp),
-                color = Color(0xFFF1F5F9),
+                color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.7f),
                 modifier = Modifier.size(34.dp)
             ) {
                 Box(contentAlignment = Alignment.Center) {
-                    Icon(icon, null, tint = Color(0xFFEF4444), modifier = Modifier.size(17.dp))
+                    Icon(icon, null, tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(17.dp))
                 }
             }
             Text(
                 title,
                 style = MaterialTheme.typography.bodyLarge.copy(fontSize = 17.sp),
                 fontWeight = FontWeight.Normal,
-                color = Color(0xFFEF4444)
+                color = MaterialTheme.colorScheme.error
             )
         }
     }

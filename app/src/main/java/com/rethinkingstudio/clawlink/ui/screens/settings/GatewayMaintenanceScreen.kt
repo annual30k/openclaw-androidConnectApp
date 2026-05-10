@@ -56,7 +56,7 @@ fun AppBackground() {
             .fillMaxSize()
             .background(
                 Brush.linearGradient(
-                    colors = listOf(Color(0xFFF2F5FA), Color.White),
+                    colors = listOf(MaterialTheme.colorScheme.background, MaterialTheme.colorScheme.surface),
                     start = Offset(0f, 0f),
                     end = Offset(1000f, 1000f)
                 )
@@ -111,17 +111,17 @@ fun AppBackground() {
 private fun MetricChip(title: String, value: String) {
     Surface(
         shape = RoundedCornerShape(16.dp),
-        color = Color(0xFFF9FAFB),
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.46f),
         modifier = Modifier.fillMaxWidth(),
-        border = BorderStroke(1.dp, Color(0xFFF3F4F6))
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.14f))
     ) {
         Column(
             modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
             horizontalAlignment = Alignment.Start
         ) {
-            Text(title, fontSize = 11.sp, fontWeight = FontWeight.Medium, color = Color(0xFF9CA3AF))
+            Text(title, fontSize = 11.sp, fontWeight = FontWeight.Medium, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Spacer(Modifier.height(4.dp))
-            Text(value, fontSize = 16.sp, fontWeight = FontWeight.Bold, color = Color(0xFF1F2937))
+            Text(value, fontSize = 16.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
         }
     }
 }
@@ -143,8 +143,8 @@ fun GlassCard(
                 spotColor = Color.Black.copy(alpha = 0.12f)
             )
             .clip(RoundedCornerShape(24.dp))
-            .background(Color.White.copy(alpha = 0.82f))
-            .border(BorderStroke(0.8.dp, Color.White.copy(alpha = 0.35f)), RoundedCornerShape(24.dp))
+            .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.94f))
+            .border(BorderStroke(0.8.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.14f)), RoundedCornerShape(24.dp))
     ) {
         Box(
             modifier = Modifier
@@ -152,9 +152,9 @@ fun GlassCard(
                 .background(
                     Brush.linearGradient(
                         colors = listOf(
-                            Color.White.copy(alpha = 0.4f),
+                            MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.18f),
                             accentSoft.copy(alpha = 0.05f),
-                            Color.White.copy(alpha = 0.1f)
+                            MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.08f)
                         )
                     )
                 )
@@ -232,12 +232,12 @@ fun GatewayMaintenanceScreen(
     ClawLinkScaffold(
         topBar = {
             CenterAlignedTopAppBar(
-                title = { Text(title, fontWeight = FontWeight.Bold, fontSize = 17.sp, color = Color(0xFF1F2937)) },
+                title = { Text(title, fontWeight = FontWeight.Bold, fontSize = 17.sp, color = MaterialTheme.colorScheme.onSurface) },
                 navigationIcon = {
                     Surface(
                         modifier = Modifier.padding(start = 16.dp).size(40.dp),
                         shape = CircleShape,
-                        color = Color.White,
+                        color = MaterialTheme.colorScheme.surface,
                         shadowElevation = 2.dp,
                         onClick = onBack
                     ) {
@@ -246,7 +246,12 @@ fun GatewayMaintenanceScreen(
                         }
                     }
                 },
-                colors = TopAppBarDefaults.centerAlignedTopAppBarColors(containerColor = Color.Transparent)
+                colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
+                    containerColor = Color.Transparent,
+                    titleContentColor = MaterialTheme.colorScheme.onBackground,
+                    navigationIconContentColor = MaterialTheme.colorScheme.onBackground,
+                    actionIconContentColor = MaterialTheme.colorScheme.onBackground
+                )
             )
         },
         content = { padding ->
@@ -270,11 +275,11 @@ fun GatewayMaintenanceScreen(
                                         Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                                             Text(
                                                 selectedGateway?.displayName ?: "--",
-                                                fontWeight = FontWeight.Bold, fontSize = 16.sp, color = Color(0xFF1F2937)
+                                                fontWeight = FontWeight.Bold, fontSize = 16.sp, color = MaterialTheme.colorScheme.onSurface
                                             )
                                             Text(
                                                 selectedGateway?.platform ?: "--",
-                                                fontSize = 12.sp, color = Color(0xFF6B7280)
+                                                fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant
                                             )
                                         }
                                         val effectiveStatus = gatewayState.selectedGatewayAggregateStatus
@@ -308,11 +313,11 @@ fun GatewayMaintenanceScreen(
                                         exit = fadeOut() + shrinkVertically()
                                     ) {
                                         Column {
-                                            HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp), thickness = 0.8.dp, color = Color.Black.copy(alpha = 0.08f))
+                                            HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp), thickness = 0.8.dp, color = MaterialTheme.colorScheme.outline.copy(alpha = 0.16f))
                                             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                                                 Text(
                                                     if (isRemote) stringResource(R.string.maintenance_remote_restart_detail) else stringResource(R.string.maintenance_online_restart_detail),
-                                                    fontSize = 12.sp, color = Color(0xFF6B7280)
+                                                    fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant
                                                 )
                                                 Button(
                                                     onClick = {
@@ -344,8 +349,8 @@ fun GatewayMaintenanceScreen(
                             if (!isExecuting && logEntries.isEmpty() && !isWaitingForRecovery) {
                                 GlassCard {
                                     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                                        Text(stringResource(R.string.maintenance_suggestion_title), fontWeight = FontWeight.Bold, fontSize = 14.sp, color = Color(0xFF1F2937))
-                                        Text(stringResource(R.string.maintenance_suggestion_body), fontSize = 12.sp, color = Color(0xFF6B7280))
+                                        Text(stringResource(R.string.maintenance_suggestion_title), fontWeight = FontWeight.Bold, fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurface)
+                                        Text(stringResource(R.string.maintenance_suggestion_body), fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                     }
                                 }
                             }
@@ -368,13 +373,13 @@ fun GatewayMaintenanceScreen(
                                             Box(Modifier.size(8.dp).background(Color(0xFF27C93F), CircleShape))
                                         }
                                         Spacer(Modifier.width(8.dp))
-                                        Text("TERMINAL", fontSize = 10.sp, fontWeight = FontWeight.Black, fontFamily = FontFamily.Monospace, color = Color(0xFF9CA3AF))
+                                        Text("TERMINAL", fontSize = 10.sp, fontWeight = FontWeight.Black, fontFamily = FontFamily.Monospace, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                         Spacer(Modifier.weight(1f))
                                         if (isExecuting) {
-                                            CircularProgressIndicator(Modifier.size(14.dp), color = Color(0xFF9CA3AF), strokeWidth = 2.dp)
+                                            CircularProgressIndicator(Modifier.size(14.dp), color = MaterialTheme.colorScheme.onSurfaceVariant, strokeWidth = 2.dp)
                                         } else if (logEntries.isNotEmpty()) {
                                             IconButton(onClick = { gatewayStore.clearMaintenanceLogs(maintenanceKind) }, Modifier.size(20.dp)) {
-                                                Icon(Icons.Default.Delete, null, tint = Color(0xFF9CA3AF), modifier = Modifier.size(14.dp))
+                                                Icon(Icons.Default.Delete, null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(14.dp))
                                             }
                                         }
                                     }
@@ -409,7 +414,7 @@ fun GatewayMaintenanceScreen(
                                     .fillMaxWidth(0.88f)
                                     .shadow(24.dp, RoundedCornerShape(28.dp), ambientColor = Color.Black.copy(alpha = 0.1f), spotColor = Color.Black.copy(alpha = 0.2f)),
                                 shape = RoundedCornerShape(28.dp),
-                                colors = CardDefaults.cardColors(containerColor = Color.White),
+                                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
                             ) {
                                 Column(modifier = Modifier.padding(24.dp), verticalArrangement = Arrangement.spacedBy(22.dp)) {
                                     val tint = if (isTimedOut) Color(0xFFF59E0B) else Color(0xFF0A84FF)
@@ -430,13 +435,13 @@ fun GatewayMaintenanceScreen(
                                                 if (isTimedOut) stringResource(R.string.maintenance_restart_waiting_timeout)
                                                 else if (isSendingRequest) stringResource(R.string.maintenance_restart_sending_request)
                                                 else stringResource(R.string.maintenance_restart_waiting),
-                                                fontWeight = FontWeight.Bold, fontSize = 19.sp, color = Color(0xFF1F2937)
+                                                fontWeight = FontWeight.Bold, fontSize = 19.sp, color = MaterialTheme.colorScheme.onSurface
                                             )
                                             val waitDetail = if (isTimedOut) stringResource(R.string.maintenance_restart_timeout_detail)
                                             else if (isSendingRequest) stringResource(R.string.maintenance_restart_sending_detail, selectedGateway?.displayName ?: "")
                                             else stringResource(R.string.maintenance_restart_waiting_detail, selectedGateway?.displayName ?: "")
                                             
-                                            Text(waitDetail, fontSize = 14.sp, color = Color(0xFF6B7280), lineHeight = 20.sp)
+                                            Text(waitDetail, fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, lineHeight = 20.sp)
                                         }
                                     }
 
@@ -457,7 +462,7 @@ fun GatewayMaintenanceScreen(
 
                                     if (isTimedOut || isLongRunning) {
                                         if (isTimedOut) {
-                                            Text(stringResource(R.string.maintenance_cancel_disclaimer), fontSize = 12.sp, color = Color(0xFF6B7280))
+                                            Text(stringResource(R.string.maintenance_cancel_disclaimer), fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                         }
                                         Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                                             if (isTimedOut) {
@@ -481,18 +486,18 @@ fun GatewayMaintenanceScreen(
                                                 onClick = { gatewayStore.stopMaintenance() },
                                                 modifier = Modifier.fillMaxWidth().height(50.dp),
                                                 shape = RoundedCornerShape(14.dp),
-                                                border = BorderStroke(1.dp, Color(0xFFE5E7EB))
+                                                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.16f))
                                             ) {
-                                                Icon(Icons.Default.Close, null, tint = Color(0xFF6B7280), modifier = Modifier.size(16.dp))
+                                                Icon(Icons.Default.Close, null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(16.dp))
                                                 Spacer(Modifier.width(8.dp))
-                                                Text(stringResource(R.string.maintenance_cancel_wait), color = Color(0xFF6B7280), fontWeight = FontWeight.SemiBold)
+                                                Text(stringResource(R.string.maintenance_cancel_wait), color = MaterialTheme.colorScheme.onSurfaceVariant, fontWeight = FontWeight.SemiBold)
                                             }
                                         }
                                     } else {
                                         Text(
                                             if (isSendingRequest) stringResource(R.string.maintenance_waiting_sending_hint)
                                             else stringResource(R.string.maintenance_waiting_checking_hint),
-                                            fontSize = 12.sp, color = Color(0xFF9CA3AF)
+                                            fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant
                                         )
                                     }
                                 }

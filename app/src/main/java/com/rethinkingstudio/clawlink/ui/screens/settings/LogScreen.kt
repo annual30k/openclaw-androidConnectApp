@@ -56,7 +56,7 @@ private fun LogAppBackground() {
             .fillMaxSize()
             .background(
                 Brush.linearGradient(
-                    colors = listOf(Color(0xFFF2F5FA), Color.White),
+                    colors = listOf(MaterialTheme.colorScheme.background, MaterialTheme.colorScheme.surface),
                     start = Offset(0f, 0f),
                     end = Offset(1000f, 1000f)
                 )
@@ -109,8 +109,8 @@ private fun LogGlassCard(
                 spotColor = Color.Black.copy(alpha = 0.12f)
             )
             .clip(RoundedCornerShape(24.dp))
-            .background(Color.White.copy(alpha = 0.82f))
-            .border(BorderStroke(0.8.dp, Color.White.copy(alpha = 0.35f)), RoundedCornerShape(24.dp))
+            .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.94f))
+            .border(BorderStroke(0.8.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.14f)), RoundedCornerShape(24.dp))
     ) {
         Column(
             modifier = Modifier.padding(16.dp),
@@ -182,12 +182,12 @@ fun LogScreen(
             containerColor = Color.Transparent,
             topBar = {
                 CenterAlignedTopAppBar(
-                    title = { Text(stringResource(R.string.log_title), fontWeight = FontWeight.Bold, fontSize = 17.sp, color = Color(0xFF1F2937)) },
+                    title = { Text(stringResource(R.string.log_title), fontWeight = FontWeight.Bold, fontSize = 17.sp, color = MaterialTheme.colorScheme.onSurface) },
                     navigationIcon = {
                         Surface(
                             modifier = Modifier.padding(start = 16.dp).size(40.dp),
                             shape = CircleShape,
-                            color = Color.White,
+                            color = MaterialTheme.colorScheme.surface,
                             shadowElevation = 2.dp,
                             onClick = onBack
                         ) {
@@ -202,7 +202,7 @@ fun LogScreen(
                                 val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
                                 clipboard.setPrimaryClip(ClipData.newPlainText("logs", allLines.joinToString("\n")))
                             }) {
-                                Icon(Icons.Default.ContentCopy, null, modifier = Modifier.size(20.dp), tint = Color(0xFF4B5563))
+                                Icon(Icons.Default.ContentCopy, null, modifier = Modifier.size(20.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
                             }
                         }
                         IconButton(
@@ -216,7 +216,12 @@ fun LogScreen(
                             }
                         }
                     },
-                    colors = TopAppBarDefaults.centerAlignedTopAppBarColors(containerColor = Color.Transparent)
+                    colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
+                        containerColor = Color.Transparent,
+                        titleContentColor = MaterialTheme.colorScheme.onBackground,
+                        navigationIconContentColor = MaterialTheme.colorScheme.onBackground,
+                        actionIconContentColor = MaterialTheme.colorScheme.onBackground
+                    )
                 )
             }
         ) { padding ->
@@ -241,7 +246,7 @@ fun LogScreen(
                                     Box(Modifier.size(40.dp).background(Color(0xFFEF4444).copy(alpha = 0.1f), CircleShape), contentAlignment = Alignment.Center) {
                                         Icon(Icons.Default.Warning, null, tint = Color(0xFFEF4444), modifier = Modifier.size(20.dp))
                                     }
-                                    Text(errorMessage!!, color = Color(0xFF1F2937), fontSize = 13.sp, fontWeight = FontWeight.Medium)
+                                    Text(errorMessage!!, color = MaterialTheme.colorScheme.onSurface, fontSize = 13.sp, fontWeight = FontWeight.Medium)
                                 }
                             }
                         }
@@ -254,7 +259,7 @@ fun LogScreen(
                                     Box(Modifier.size(40.dp).background(Color(0xFFF59E0B).copy(alpha = 0.1f), CircleShape), contentAlignment = Alignment.Center) {
                                         Icon(Icons.Default.Lock, null, tint = Color(0xFFF59E0B), modifier = Modifier.size(20.dp))
                                     }
-                                    Text(accessHint, color = Color(0xFF1F2937), fontSize = 13.sp, fontWeight = FontWeight.Medium)
+                                    Text(accessHint, color = MaterialTheme.colorScheme.onSurface, fontSize = 13.sp, fontWeight = FontWeight.Medium)
                                 }
                             }
                         }
@@ -266,8 +271,8 @@ fun LogScreen(
                                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                                     CircularProgressIndicator(Modifier.size(24.dp), color = Color(0xFF3B82F6), strokeWidth = 3.dp)
                                     Column {
-                                        Text(stringResource(R.string.log_loading_title), fontWeight = FontWeight.Bold, color = Color(0xFF1F2937), fontSize = 15.sp)
-                                        Text(stringResource(R.string.log_loading_subtitle), fontSize = 13.sp, color = Color(0xFF6B7280))
+                                        Text(stringResource(R.string.log_loading_title), fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface, fontSize = 15.sp)
+                                        Text(stringResource(R.string.log_loading_subtitle), fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                     }
                                 }
                             }
@@ -278,10 +283,10 @@ fun LogScreen(
                         item {
                             LogGlassCard {
                                 Column(modifier = Modifier.padding(vertical = 20.dp).fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
-                                    Icon(Icons.Default.FilterList, null, modifier = Modifier.size(40.dp), tint = Color(0xFF9CA3AF))
+                                    Icon(Icons.Default.FilterList, null, modifier = Modifier.size(40.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
                                     Spacer(Modifier.height(12.dp))
-                                    Text(stringResource(R.string.log_no_match_title), fontWeight = FontWeight.Bold, color = Color(0xFF1F2937))
-                                    Text(stringResource(R.string.log_no_match_subtitle), fontSize = 13.sp, color = Color(0xFF6B7280))
+                                    Text(stringResource(R.string.log_no_match_title), fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
+                                    Text(stringResource(R.string.log_no_match_subtitle), fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                 }
                             }
                         }
@@ -291,8 +296,8 @@ fun LogScreen(
                                 Column(modifier = Modifier.padding(vertical = 30.dp).fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
                                     Icon(Icons.Default.Description, null, modifier = Modifier.size(48.dp), tint = Color(0xFF3B82F6).copy(alpha = 0.6f))
                                     Spacer(Modifier.height(16.dp))
-                                    Text(stringResource(R.string.log_empty_title), fontWeight = FontWeight.Bold, color = Color(0xFF1F2937), fontSize = 16.sp)
-                                    Text(stringResource(R.string.log_empty_subtitle), fontSize = 13.sp, color = Color(0xFF6B7280), textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+                                    Text(stringResource(R.string.log_empty_title), fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface, fontSize = 16.sp)
+                                    Text(stringResource(R.string.log_empty_subtitle), fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
                                     Spacer(Modifier.height(20.dp))
                                     Button(
                                         onClick = { scope.launch { loadLogs() } },
@@ -328,8 +333,8 @@ private fun LogSearchBar(searchText: String, onSearchTextChange: (String) -> Uni
         modifier = modifier
             .fillMaxWidth()
             .shadow(25.dp, pillShape, clip = false, ambientColor = Color.Black.copy(alpha = 0.15f), spotColor = Color.Black.copy(alpha = 0.18f))
-            .background(Color.White, pillShape)
-            .border(width = 0.8.dp, color = Color.Black.copy(alpha = 0.05f), shape = pillShape)
+            .background(MaterialTheme.colorScheme.surface, pillShape)
+            .border(width = 0.8.dp, color = MaterialTheme.colorScheme.outline.copy(alpha = 0.14f), shape = pillShape)
             .padding(horizontal = 18.dp, vertical = 14.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -341,18 +346,18 @@ private fun LogSearchBar(searchText: String, onSearchTextChange: (String) -> Uni
             modifier = Modifier.weight(1f),
             singleLine = true,
             textStyle = TextStyle(
-                color = Color(0xFF1F2937),
+                color = MaterialTheme.colorScheme.onSurface,
                 fontSize = 14.sp,
                 fontWeight = FontWeight.SemiBold
             ),
-            cursorBrush = SolidColor(Color(0xFF3B82F6)),
+            cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
             decorationBox = { innerTextField ->
                 Box {
                     if (searchText.isEmpty()) {
                         Text(
                             stringResource(R.string.log_search_placeholder),
                             style = TextStyle(
-                                color = Color(0xFF9CA3AF),
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 fontSize = 14.sp,
                                 fontWeight = FontWeight.SemiBold
                             )
@@ -364,7 +369,7 @@ private fun LogSearchBar(searchText: String, onSearchTextChange: (String) -> Uni
         )
         if (searchText.isNotEmpty()) {
             IconButton(onClick = { onSearchTextChange("") }, modifier = Modifier.size(30.dp)) {
-                Icon(Icons.Default.Close, contentDescription = choose("Clear", "清空"), modifier = Modifier.size(18.dp), tint = Color(0xFF9CA3AF))
+                Icon(Icons.Default.Close, contentDescription = choose("Clear", "清空"), modifier = Modifier.size(18.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
     }
@@ -378,8 +383,8 @@ private fun LogMetricCard(title: String, value: String, icon: ImageVector, modif
                 Icon(icon, null, tint = Color(0xFF3B82F6), modifier = Modifier.size(14.dp))
             }
             Column {
-                Text(title, fontSize = 10.sp, fontWeight = FontWeight.Bold, color = Color(0xFF6B7280))
-                Text(value, fontSize = 14.sp, color = Color(0xFF1F2937), fontWeight = FontWeight.SemiBold, maxLines = 1)
+                Text(title, fontSize = 10.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(value, fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.SemiBold, maxLines = 1)
             }
         }
     }
@@ -393,9 +398,9 @@ private fun LogLineRow(line: String) {
         line.contains("[ws]") -> "ws" to Color(0xFFA855F7)
         line.contains("[http]") -> "http" to Color(0xFF3B82F6)
         line.contains("[sys]") -> "sys" to Color(0xFFF97316)
-        else -> null to Color(0xFF6B7280)
+        else -> null to MaterialTheme.colorScheme.onSurfaceVariant
     }
-    val contentColor = when { isError -> Color(0xFFEF4444); isSuccess -> Color(0xFF22C55E); else -> Color(0xFF1F2937) }
+    val contentColor = when { isError -> Color(0xFFEF4444); isSuccess -> Color(0xFF22C55E); else -> MaterialTheme.colorScheme.onSurface }
     val content = line.split(" ", limit = 2).let { if (it.size > 1 && it[0].matches(Regex("^\\d{4}-\\d{2}-\\d{2}.*"))) it[1] else line }
 
     Column(modifier = Modifier.fillMaxWidth().background(if (isError) Color(0xFFEF4444).copy(0.05f) else Color.Transparent, RoundedCornerShape(10.dp)).padding(vertical = 6.dp, horizontal = 10.dp)) {

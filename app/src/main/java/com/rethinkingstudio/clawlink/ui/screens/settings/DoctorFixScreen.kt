@@ -63,12 +63,12 @@ fun DoctorFixScreen(
     ClawLinkScaffold(
         topBar = {
             CenterAlignedTopAppBar(
-                title = { Text(stringResource(R.string.advanced_doctor_fix), fontWeight = FontWeight.Bold, fontSize = 17.sp, color = Color(0xFF1F2937)) },
+                title = { Text(stringResource(R.string.advanced_doctor_fix), fontWeight = FontWeight.Bold, fontSize = 17.sp, color = MaterialTheme.colorScheme.onSurface) },
                 navigationIcon = {
                     Surface(
                         modifier = Modifier.padding(start = 16.dp).size(40.dp),
                         shape = CircleShape,
-                        color = Color.White,
+                        color = MaterialTheme.colorScheme.surface,
                         shadowElevation = 2.dp,
                         onClick = onBack
                     ) {
@@ -77,7 +77,12 @@ fun DoctorFixScreen(
                         }
                     }
                 },
-                colors = TopAppBarDefaults.centerAlignedTopAppBarColors(containerColor = Color.Transparent)
+                colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
+                    containerColor = Color.Transparent,
+                    titleContentColor = MaterialTheme.colorScheme.onBackground,
+                    navigationIconContentColor = MaterialTheme.colorScheme.onBackground,
+                    actionIconContentColor = MaterialTheme.colorScheme.onBackground
+                )
             )
         },
         content = { padding ->
@@ -101,11 +106,11 @@ fun DoctorFixScreen(
                                         Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                                             Text(
                                                 selectedGateway?.displayName ?: "--",
-                                                fontWeight = FontWeight.Bold, fontSize = 16.sp, color = Color(0xFF1F2937)
+                                                fontWeight = FontWeight.Bold, fontSize = 16.sp, color = MaterialTheme.colorScheme.onSurface
                                             )
                                             Text(
                                                 selectedGateway?.platform ?: "--",
-                                                fontSize = 12.sp, color = Color(0xFF6B7280)
+                                                fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant
                                             )
                                         }
                                         val effectiveStatus = gatewayState.selectedGatewayAggregateStatus
@@ -139,8 +144,8 @@ fun DoctorFixScreen(
                                         exit = fadeOut() + shrinkVertically()
                                     ) {
                                         Column {
-                                            HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp), thickness = 0.8.dp, color = Color.Black.copy(alpha = 0.08f))
-                                            Text(stringResource(R.string.advanced_doctor_fix_description), fontSize = 12.sp, color = Color(0xFF6B7280))
+                                            HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp), thickness = 0.8.dp, color = MaterialTheme.colorScheme.outline.copy(alpha = 0.16f))
+                                            Text(stringResource(R.string.advanced_doctor_fix_description), fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
 
                                             Spacer(Modifier.height(12.dp))
                                             Button(
@@ -182,13 +187,13 @@ fun DoctorFixScreen(
                                             Box(Modifier.size(8.dp).background(Color(0xFF27C93F), CircleShape))
                                         }
                                         Spacer(Modifier.width(8.dp))
-                                        Text("TERMINAL", fontSize = 10.sp, fontWeight = FontWeight.Black, fontFamily = FontFamily.Monospace, color = Color(0xFF9CA3AF))
+                                        Text("TERMINAL", fontSize = 10.sp, fontWeight = FontWeight.Black, fontFamily = FontFamily.Monospace, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                         Spacer(Modifier.weight(1f))
                                         if (isExecuting) {
-                                            CircularProgressIndicator(Modifier.size(14.dp), color = Color(0xFF9CA3AF), strokeWidth = 2.dp)
+                                            CircularProgressIndicator(Modifier.size(14.dp), color = MaterialTheme.colorScheme.onSurfaceVariant, strokeWidth = 2.dp)
                                         } else if (logEntries.isNotEmpty()) {
                                             IconButton(onClick = { gatewayStore.clearMaintenanceLogs("openclaw.doctorFix") }, Modifier.size(20.dp)) {
-                                                Icon(Icons.Default.Delete, null, tint = Color(0xFF9CA3AF), modifier = Modifier.size(14.dp))
+                                                Icon(Icons.Default.Delete, null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(14.dp))
                                             }
                                         }
                                     }
