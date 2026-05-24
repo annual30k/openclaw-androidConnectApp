@@ -1,6 +1,7 @@
 package com.rethinkingstudio.clawlink.ui.screens.auth
 
 import androidx.camera.core.ExperimentalGetImage
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
@@ -27,6 +28,8 @@ import com.google.accompanist.permissions.ExperimentalPermissionsApi
 import com.google.accompanist.permissions.isGranted
 import com.google.accompanist.permissions.rememberPermissionState
 import com.rethinkingstudio.clawlink.R
+import com.rethinkingstudio.clawlink.core.models.gateway.GatewayType
+import com.rethinkingstudio.clawlink.core.state.LocalizedText.choose
 import com.rethinkingstudio.clawlink.core.state.auth.AuthStore
 import com.rethinkingstudio.clawlink.core.utils.PairingInputResolver
 import com.rethinkingstudio.clawlink.ui.components.*
@@ -47,8 +50,11 @@ fun PairingScreen(
     var relayServer by remember { mutableStateOf("") }
     var pairingCode by remember { mutableStateOf("") }
     var gatewayId by remember { mutableStateOf("") }
+    var pairingGatewayType by remember { mutableStateOf<GatewayType?>(null) }
     var qrPayload by remember { mutableStateOf("") }
     var showingScanner by remember { mutableStateOf(false) }
+    var didAutoOpenScanner by remember { mutableStateOf(false) }
+    var pairingErrorMessage by remember { mutableStateOf<String?>(null) }
 
     val cameraPermissionState = rememberPermissionState(android.Manifest.permission.CAMERA)
     val preferredRelayServer = remember(authState.relayBaseUrl) {
@@ -61,6 +67,17 @@ fun PairingScreen(
     LaunchedEffect(preferredRelayServer) {
         if (relayServer.isEmpty()) {
             relayServer = preferredRelayServer
+        }
+    }
+
+    LaunchedEffect(cameraPermissionState.status.isGranted) {
+        if (!didAutoOpenScanner) {
+            didAutoOpenScanner = true
+            if (cameraPermissionState.status.isGranted) {
+                showingScanner = true
+            } else {
+                cameraPermissionState.launchPermissionRequest()
+            }
         }
     }
 
@@ -172,7 +189,10 @@ fun PairingScreen(
                         if (usesPrivateRelay) {
                             OutlinedTextField(
                                 value = relayServer,
-                                onValueChange = { relayServer = it },
+                                onValueChange = {
+                                    relayServer = it
+                                    pairingGatewayType = null
+                                },
                                 label = { Text(stringResource(R.string.auth_relay_address)) },
                                 modifier = Modifier.fillMaxWidth(),
                                 shape = RoundedCornerShape(16.dp),
@@ -197,7 +217,10 @@ fun PairingScreen(
 
                         OutlinedTextField(
                             value = pairingCode,
-                            onValueChange = { pairingCode = it },
+                            onValueChange = {
+                                pairingCode = it
+                                pairingGatewayType = null
+                            },
                             label = { Text(stringResource(R.string.auth_pairing_pairing_code_placeholder)) },
                             modifier = Modifier.fillMaxWidth(),
                             shape = RoundedCornerShape(16.dp),
@@ -206,25 +229,36 @@ fun PairingScreen(
                                 unfocusedBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.38f)
                             )
                         )
+                        pairingGatewayType?.let { type ->
+                            GatewayTypeBadge(type = type)
+                        }
                     }
 
                     Button(
                         onClick = {
                             scope.launch {
-                                val resolved = PairingInputResolver.resolvePairingInput(
-                                    qrPayload = "",
-                                    currentServerURL = relayServer,
-                                    manualGatewayID = gatewayId,
-                                    manualAccessCode = pairingCode
-                                )
-                                val success = authStore.pairGateway(
-                                    baseUrl = resolved.serverURL,
-                                    gatewayId = resolved.gatewayID,
-                                    accessCode = resolved.accessCode,
-                                    deviceId = "android_${System.currentTimeMillis()}"
-                                )
-                                if (success) {
-                                    onPairSuccess()
+                                try {
+                                    pairingErrorMessage = null
+                                    val resolved = PairingInputResolver.resolvePairingInput(
+                                        qrPayload = "",
+                                        currentServerURL = relayServer,
+                                        manualGatewayID = gatewayId,
+                                        manualAccessCode = pairingCode
+                                    )
+                                    val success = authStore.pairGateway(
+                                        baseUrl = resolved.serverURL,
+                                        gatewayId = resolved.gatewayID,
+                                        accessCode = resolved.accessCode,
+                                        gatewayType = (resolved.gatewayType ?: pairingGatewayType)?.name,
+                                        deviceId = "android_${System.currentTimeMillis()}"
+                                    )
+                                    if (success) {
+                                        onPairSuccess()
+                                    } else {
+                                        pairingErrorMessage = authState.errorMessage ?: choose("Pairing failed. Check the code and Relay address.", "绑定失败，请检查配对码和 Relay 地址。")
+                                    }
+                                } catch (e: Exception) {
+                                    pairingErrorMessage = e.message ?: choose("Pairing failed. Check the code and Relay address.", "绑定失败，请检查配对码和 Relay 地址。")
                                 }
                             }
                         },
@@ -266,6 +300,7 @@ fun PairingScreen(
                     gatewayId = resolved.gatewayID ?: ""
                     relayServer = resolved.serverURL
                     pairingCode = resolved.accessCode
+                    pairingGatewayType = resolved.gatewayType
                     showingScanner = false
                     
                     // Auto-bind after scan
@@ -274,17 +309,31 @@ fun PairingScreen(
                             baseUrl = resolved.serverURL,
                             gatewayId = gatewayId.ifBlank { null },
                             accessCode = pairingCode.trim(),
+                            gatewayType = resolved.gatewayType?.name,
                             deviceId = "android_${System.currentTimeMillis()}"
                         )
                         if (success) {
                             onPairSuccess()
+                        } else {
+                            pairingErrorMessage = authState.errorMessage ?: choose("Pairing failed. Check the code and Relay address.", "绑定失败，请检查配对码和 Relay 地址。")
                         }
                     }
                 } catch (e: Exception) {
-                    // Handle error
+                    showingScanner = false
+                    pairingErrorMessage = e.message ?: choose("Invalid QR code payload", "二维码内容无效")
                 }
             },
             onClose = { showingScanner = false }
+        )
+    }
+
+    pairingErrorMessage?.let { message ->
+        ClawLinkAlertDialog(
+            onDismissRequest = { pairingErrorMessage = null },
+            title = stringResource(R.string.auth_pairing_result_fail_title),
+            message = message,
+            confirmText = stringResource(R.string.common_action_ok),
+            onConfirm = { pairingErrorMessage = null }
         )
     }
 }
@@ -331,6 +380,25 @@ private fun ReadOnlyRelayAddressField(value: String) {
                 text = value,
                 style = MaterialTheme.typography.bodyLarge,
                 color = MaterialTheme.colorScheme.onSurface
+            )
+        }
+    }
+}
+
+@Composable
+private fun GatewayTypeBadge(type: GatewayType) {
+    Row(modifier = Modifier.fillMaxWidth()) {
+        Surface(
+            shape = RoundedCornerShape(999.dp),
+            color = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.2f))
+        ) {
+            Text(
+                text = type.displayTitle,
+                modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                style = MaterialTheme.typography.labelSmall,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.primary
             )
         }
     }

@@ -193,7 +193,7 @@ class AuthStore(
         }
     }
 
-    suspend fun pairGateway(baseUrl: String, gatewayId: String?, accessCode: String, deviceId: String): Boolean {
+    suspend fun pairGateway(baseUrl: String, gatewayId: String?, accessCode: String, gatewayType: String? = null, deviceId: String): Boolean {
         _state.value = _state.value.copy(isLoading = true, errorMessage = null)
         return try {
             apiClient.configure(
@@ -202,7 +202,7 @@ class AuthStore(
                     relayBaseURL = baseUrl.ifBlank { _state.value.relayBaseUrl.ifBlank { DEFAULT_RELAY_SERVER_URL } }
                 )
             )
-            val creds = apiClient.pairGateway(gatewayId, accessCode, deviceId)
+            val creds = apiClient.pairGateway(gatewayId, accessCode, gatewayType, deviceId)
             credentialStore.saveCredentials(creds)
             apiClient.configure(creds)
             _state.value = _state.value.copy(

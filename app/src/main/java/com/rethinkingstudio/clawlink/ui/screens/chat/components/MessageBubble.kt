@@ -38,7 +38,6 @@ import androidx.compose.material.icons.filled.GraphicEq
 import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.LinearProgressIndicator
@@ -86,7 +85,6 @@ import kotlinx.coroutines.withContext
 internal fun MessageBubble(
     message: ChatMessage,
     showInvocationProcess: Boolean,
-    isVoiceReplyTextOnly: Boolean = false,
     relayBaseUrl: String,
     accessToken: String,
     readVoicePlaybackIdentifiers: Set<String> = emptySet(),
@@ -145,18 +143,15 @@ internal fun MessageBubble(
             )
             return@Column
         }
-        if (!isUser && isVoiceReplyTextOnly && fileBlocks.isEmpty() && voiceBlocks.isEmpty()) {
-            LoadingVoiceMessage(createdAt = message.createdAt)
-            return@Column
-        }
         if (isStandaloneFileMessage) {
             StandaloneFileMessage(blocks = fileBlocks, isUser = isUser, messageState = message.state, createdAt = message.createdAt, relayBaseUrl = relayBaseUrl, accessToken = accessToken, onImageClick = onImageClick, onFileClick = onFileClick)
             return@Column
         }
-        if (!isUser && message.state == MessageState.streaming && (
-            displayText.isBlank() || displayText.startsWith("正在连接") || displayText.startsWith("连接中断") ||
-            displayText == "正在同步回复..." || displayText == "正在同步最终内容..." || displayText == "已完成，但未返回文本。"
-        ) && fileBlocks.isEmpty() && voiceBlocks.isEmpty()) {
+        if (!isUser && message.state == MessageState.streaming &&
+            isStreamingIndicatorDisplayText(displayText) &&
+            fileBlocks.isEmpty() &&
+            voiceBlocks.isEmpty()
+        ) {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 StreamingIndicatorBubble()
                 Text("ClawLink", modifier = Modifier.padding(horizontal = 4.dp), style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp), color = ChatColors.secondaryText, fontWeight = FontWeight.Medium)
@@ -171,10 +166,6 @@ internal fun MessageBubble(
             modifier = Modifier.widthIn(max = 326.dp)
         ) {
             Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 13.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                if (displayText.isNotEmpty()) {
-                    MarkdownMessageText(text = displayText, textColor = if (isUser) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface, linkColor = if (isUser) Color.White else MaterialTheme.colorScheme.primary, textSizeSp = 13f, onDarkBackground = isUser)
-                }
-                fileBlocks.forEach { FileBlock(it, isUser, message.state, relayBaseUrl = relayBaseUrl, accessToken = accessToken, onImageClick = onImageClick, onFileClick = onFileClick) }
                 voiceBlocks.forEach {
                     VoiceBlock(
                         it,
@@ -187,10 +178,39 @@ internal fun MessageBubble(
                         sessionKey = sessionKey
                     )
                 }
+                fileBlocks.forEach { FileBlock(it, isUser, message.state, relayBaseUrl = relayBaseUrl, accessToken = accessToken, onImageClick = onImageClick, onFileClick = onFileClick) }
+                if (displayText.isNotEmpty()) {
+                    MarkdownMessageText(text = displayText, textColor = if (isUser) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface, linkColor = if (isUser) Color.White else MaterialTheme.colorScheme.primary, textSizeSp = 13f, onDarkBackground = isUser)
+                }
                 MessageFooter(title = if (isUser) "You" else "ClawLink", createdAt = message.createdAt, isUser = isUser)
             }
         }
     }
+}
+
+private val protocolTypingMarkerDisplayRegex = Regex("^(?:\\[\\[clawlink:typing]]\\s*)+$")
+
+private fun isProtocolTypingMarkerDisplayText(text: String): Boolean {
+    val trimmed = text.trim()
+    return trimmed.isNotEmpty() && protocolTypingMarkerDisplayRegex.matches(trimmed)
+}
+
+internal fun isStreamingIndicatorDisplayText(text: String): Boolean {
+    val trimmed = text.trim()
+    return trimmed.isBlank() ||
+        trimmed.startsWith("正在连接") ||
+        trimmed.startsWith("Connecting") ||
+        trimmed.startsWith("连接中断") ||
+        trimmed.startsWith("Connection interrupted") ||
+        trimmed == "正在同步回复..." ||
+        trimmed == "Syncing reply..." ||
+        trimmed == "正在同步最终内容..." ||
+        trimmed == "Syncing final content..." ||
+        trimmed == "已完成，但未返回文本。" ||
+        trimmed == "Completed, but no text was returned." ||
+        trimmed.startsWith("等待宿主机识别语音") ||
+        trimmed.startsWith("Waiting for host transcription") ||
+        isProtocolTypingMarkerDisplayText(trimmed)
 }
 
 @Composable
@@ -200,54 +220,5 @@ internal fun MessageFooter(title: String, createdAt: String, isUser: Boolean, mo
         Text(title, style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp), color = footerColor, fontWeight = FontWeight.Medium)
         Spacer(Modifier.weight(1f))
         Text(formatChatTimestamp(createdAt), style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp), color = footerColor, fontWeight = FontWeight.Medium)
-    }
-}
-
-@Composable
-private fun LoadingVoiceMessage(createdAt: String) {
-    Column(
-        modifier = Modifier.widthIn(max = 336.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
-        horizontalAlignment = Alignment.Start
-    ) {
-        Surface(
-            shape = RoundedCornerShape(16.dp),
-            color = MaterialTheme.colorScheme.surface.copy(alpha = 0.96f),
-            border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.12f)),
-            modifier = Modifier.width(216.dp)
-        ) {
-            Row(
-                modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
-                Box(
-                    modifier = Modifier
-                        .size(34.dp)
-                        .background(ChatColors.linkBlue.copy(alpha = 0.10f), RoundedCornerShape(12.dp)),
-                    contentAlignment = Alignment.Center
-                ) {
-                    CircularProgressIndicator(
-                        modifier = Modifier.size(18.dp),
-                        strokeWidth = 2.dp,
-                        color = ChatColors.linkBlue
-                    )
-                }
-                Text(
-                    "正在生成语音",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    fontWeight = FontWeight.SemiBold
-                )
-                Spacer(Modifier.weight(1f))
-                VoiceWaveformBars(tint = ChatColors.linkBlue.copy(alpha = 0.70f))
-            }
-        }
-        MessageFooter(
-            title = "ClawLink",
-            createdAt = createdAt,
-            isUser = false,
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp)
-        )
     }
 }

@@ -8,6 +8,7 @@ import com.rethinkingstudio.clawlink.core.models.gateway.AggregateStatus
 import com.rethinkingstudio.clawlink.core.models.gateway.ConnectionPhase
 import com.rethinkingstudio.clawlink.core.models.gateway.GatewayStatus
 import com.rethinkingstudio.clawlink.core.models.gateway.GatewaySummary
+import com.rethinkingstudio.clawlink.core.models.gateway.GatewayType
 import com.rethinkingstudio.clawlink.core.models.skills.SkillItem
 import com.rethinkingstudio.clawlink.core.models.tasks.TaskItem
 import kotlinx.serialization.KSerializer
@@ -36,10 +37,20 @@ data class GatewayListResponse(
 )
 
 @Serializable
+data class SlashCommandListResponse(
+    val items: List<ChatSlashCommand> = emptyList(),
+    val hasMore: Boolean = false,
+    val nextOffset: Int? = null,
+    val total: Int = items.size
+)
+
+@Serializable
 data class GatewaySummaryDTO(
     val gatewayId: String,
     val displayName: String,
     val platform: String,
+    val gatewayType: String? = null,
+    val capabilities: List<String> = emptyList(),
     val role: String? = null,
     val aggregateStatus: String,
     val relayStatus: String? = null,
@@ -75,6 +86,8 @@ data class GatewaySummaryDTO(
             gatewayId = gatewayId,
             displayName = displayName,
             platform = platform,
+            gatewayType = GatewayType.fromString(gatewayType),
+            capabilities = capabilities,
             role = role,
             aggregateStatus = AggregateStatus.fromString(aggregateStatus),
             lastSeenAt = lastSeenAt,
@@ -143,4 +156,3 @@ data class GatewayStatusDTO(
         )
     }
 }
-

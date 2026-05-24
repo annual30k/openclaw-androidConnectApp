@@ -74,6 +74,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.rethinkingstudio.clawlink.R
 import com.rethinkingstudio.clawlink.core.models.chat.ChatSessionItem
+import com.rethinkingstudio.clawlink.core.models.gateway.GatewayType
 import com.rethinkingstudio.clawlink.core.network.RelayAPIClient
 import com.rethinkingstudio.clawlink.core.state.LocalizedText.choose
 import com.rethinkingstudio.clawlink.core.state.chat.ChatStore
@@ -101,6 +102,7 @@ fun SessionsScreen(
     val scope = rememberCoroutineScope()
     val selectedGateway = gatewayState.selectedGateway
     val gatewayId = selectedGateway?.id
+    val selectedGatewayType = selectedGateway?.gatewayType ?: GatewayType.openclaw
 
     var isRefreshing by remember { mutableStateOf(false) }
     var deletingKey by remember { mutableStateOf<String?>(null) }
@@ -117,6 +119,7 @@ fun SessionsScreen(
         canDeleteSession(
             session = it,
             gatewayId = gatewayId,
+            gatewayType = selectedGatewayType,
             operationsLocked = operationsLocked,
             isStreaming = chatState.isStreaming,
             isStoppingRun = chatState.isStoppingRun,
@@ -235,6 +238,7 @@ fun SessionsScreen(
                         val canDelete = canDeleteSession(
                             session = session,
                             gatewayId = gatewayId,
+                            gatewayType = selectedGatewayType,
                             operationsLocked = operationsLocked,
                             isStreaming = chatState.isStreaming,
                             isStoppingRun = chatState.isStoppingRun,

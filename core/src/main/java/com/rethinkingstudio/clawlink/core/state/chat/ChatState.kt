@@ -14,12 +14,7 @@ data class ChatState(
     val isStoppingRun: Boolean = false,
     val errorMessage: String? = null,
     val showInvocationProcess: Boolean = true,
-    val assistantVoiceRepliesEnabled: Boolean = false,
-    val assistantVoiceRepliesEffectiveEnabled: Boolean = false,
-    val assistantVoiceRepliesEnabledAt: Double? = null,
-    val voiceReplyVoiceIdentifier: String = "",
-    val voiceReplyRatePercent: Int = 0,
-    val voiceReplyTextOnlyRunIds: Set<String> = emptySet(),
+    val contextUsageLinesByGatewayAndSession: Map<String, Map<String, String>> = emptyMap(),
     val readVoicePlaybackIdentifiers: Set<String> = emptySet()
 )
 

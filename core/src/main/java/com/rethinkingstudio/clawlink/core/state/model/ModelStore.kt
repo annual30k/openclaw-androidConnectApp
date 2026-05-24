@@ -8,6 +8,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
 data class ModelState(
+    val currentGatewayId: String? = null,
     val models: List<ModelItem> = emptyList(),
     val selectedModelId: String? = null,
     val isLoading: Boolean = false,
@@ -16,7 +17,7 @@ data class ModelState(
     val errorMessage: String? = null
 ) {
     val selectedModel: ModelItem? get() = models.find { it.isSelected }
-    val selectedModelDisplay: String get() = selectedModel?.displayName ?: choose("No model", "未选择模型")
+    val selectedModelDisplay: String get() = selectedModel?.displayTitle ?: choose("No model", "未选择模型")
     val defaultModel: ModelItem? get() = models.find { it.isDefault }
     val groupedModels: Map<String, List<ModelItem>> get() = models.groupBy { it.provider.ifBlank { it.providerId } }
 }
@@ -26,27 +27,69 @@ class ModelStore(
 ) {
     private val _state = MutableStateFlow(ModelState())
     val state: StateFlow<ModelState> = _state.asStateFlow()
+    private val modelsByGateway = mutableMapOf<String, List<ModelItem>>()
 
     suspend fun loadModels(gatewayId: String) {
-        _state.value = _state.value.copy(isLoading = true, errorMessage = null)
+        val normalizedGatewayId = gatewayId.trim()
+        val cachedModels = modelsByGateway[normalizedGatewayId].orEmpty()
+        _state.value = _state.value.copy(
+            currentGatewayId = normalizedGatewayId,
+            models = cachedModels,
+            isLoading = true,
+            errorMessage = null
+        )
         try {
-            val previousSelected = _state.value.models.firstOrNull { it.isSelected }
-            val models = mergeFetchedModels(apiClient.fetchModels(gatewayId), previousSelected)
-            _state.value = _state.value.copy(models = models, isLoading = false)
+            val previousSelected = cachedModels.firstOrNull { it.isSelected }
+            val models = mergeFetchedModels(apiClient.fetchModels(normalizedGatewayId), previousSelected)
+            modelsByGateway[normalizedGatewayId] = models
+            if (_state.value.currentGatewayId == normalizedGatewayId) {
+                _state.value = _state.value.copy(models = models, isLoading = false)
+            }
         } catch (e: Exception) {
-            _state.value = _state.value.copy(isLoading = false, errorMessage = e.message)
+            if (_state.value.currentGatewayId == normalizedGatewayId) {
+                _state.value = _state.value.copy(isLoading = false, errorMessage = e.message)
+            }
         }
     }
 
-    suspend fun selectModel(gatewayId: String, model: ModelItem, sessionKey: String? = null) {
-        try {
-            apiClient.selectModel(gatewayId, model.providerId, model.modelId, model.modelAlias, model.modelName, sessionKey)
-            val models = _state.value.models.map {
-                it.copy(isSelected = it.providerId == model.providerId && it.modelId == model.modelId)
+    suspend fun selectModel(gatewayId: String, model: ModelItem, sessionKey: String? = null): Boolean {
+        val normalizedGatewayId = gatewayId.trim()
+        val previousModels = modelsByGateway[normalizedGatewayId]
+            ?: _state.value.models.takeIf { _state.value.currentGatewayId == normalizedGatewayId }
+            ?: emptyList()
+        val sourceModels = previousModels.ifEmpty { listOf(model) }
+        val optimisticModels = sourceModels.map {
+            it.copy(isSelected = it.providerId == model.providerId && it.modelId == model.modelId)
+        }
+        val previousSelectedModelId = previousModels.firstOrNull { it.isSelected }?.modelId
+
+        modelsByGateway[normalizedGatewayId] = optimisticModels
+        if (_state.value.currentGatewayId == normalizedGatewayId) {
+            _state.value = _state.value.copy(
+                models = optimisticModels,
+                selectedModelId = model.modelId,
+                errorMessage = null
+            )
+        }
+
+        return try {
+            apiClient.selectModel(normalizedGatewayId, model.providerId, model.modelId, model.modelAlias, model.modelName, sessionKey)
+            runCatching {
+                loadModels(normalizedGatewayId)
+            }.onFailure { e ->
+                android.util.Log.w("ModelStore", "Failed to refresh models after selecting ${model.modelId}", e)
             }
-            _state.value = _state.value.copy(models = models, selectedModelId = model.modelId)
+            true
         } catch (e: Exception) {
-            _state.value = _state.value.copy(errorMessage = e.message)
+            modelsByGateway[normalizedGatewayId] = previousModels
+            if (_state.value.currentGatewayId == normalizedGatewayId) {
+                _state.value = _state.value.copy(
+                    models = previousModels,
+                    selectedModelId = previousSelectedModelId,
+                    errorMessage = e.message
+                )
+            }
+            false
         }
     }
 

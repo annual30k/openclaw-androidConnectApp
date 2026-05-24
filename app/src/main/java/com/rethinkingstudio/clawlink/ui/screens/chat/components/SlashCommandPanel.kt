@@ -1,8 +1,8 @@
 package com.rethinkingstudio.clawlink.ui.screens.chat.components
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -14,15 +14,14 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.GraphicEq
-import androidx.compose.material.icons.filled.List
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.SmartToy
@@ -32,6 +31,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -66,10 +66,13 @@ private fun defaultSlashActions() = listOf(
 
 internal fun slashCommandSuggestions(
     input: String,
-    remoteCommands: List<ChatSlashCommand>?
+    remoteCommands: List<ChatSlashCommand>?,
+    includeDefaultActions: Boolean = true,
+    limit: Int = 16
 ): List<SlashAction> {
     val query = normalizedLeadingSlashQuery(input) ?: return emptyList()
-    return mergedSlashActions(remoteCommands)
+    if (limit <= 0) return emptyList()
+    return mergedSlashActions(remoteCommands, includeDefaultActions)
         .mapIndexedNotNull { index, action ->
             val rank = slashMatchRank(action.command.normalizedSlashCommand(), query) ?: return@mapIndexedNotNull null
             Triple(rank, index, action)
@@ -80,12 +83,17 @@ internal fun slashCommandSuggestions(
                 .thenBy(String.CASE_INSENSITIVE_ORDER) { it.third.title }
         )
         .map { it.third }
+        .take(limit)
 }
 
-private fun mergedSlashActions(remoteCommands: List<ChatSlashCommand>?): List<SlashAction> {
+private fun mergedSlashActions(
+    remoteCommands: List<ChatSlashCommand>?,
+    includeDefaultActions: Boolean
+): List<SlashAction> {
     val merged = mutableListOf<SlashAction>()
     val seen = mutableSetOf<String>()
-    ((remoteCommands.orEmpty().mapNotNull { it.toSlashAction() }) + defaultSlashActions()).forEach { action ->
+    val defaults = if (includeDefaultActions) defaultSlashActions() else emptyList()
+    ((remoteCommands.orEmpty().mapNotNull { it.toSlashAction() }) + defaults).forEach { action ->
         if (seen.add(action.command.normalizedSlashCommand())) {
             merged += action
         }
@@ -113,23 +121,43 @@ private fun ChatSlashCommand.toSlashAction(): SlashAction? {
 }
 
 private fun normalizedLeadingSlashQuery(input: String): String? {
-    val trimmed = input.trim()
+    val trimmed = input.trim().replace('／', '/')
     if (!trimmed.startsWith("/")) return null
     return trimmed.normalizedSlashCommand()
 }
 
 private fun String.normalizedSlashCommand(): String {
-    return trim().lowercase().split(Regex("\\s+")).filter { it.isNotEmpty() }.joinToString(" ")
+    return trim().replace('／', '/').lowercase().split(Regex("\\s+")).filter { it.isNotEmpty() }.joinToString(" ")
 }
 
 private fun slashMatchRank(command: String, query: String): Int? {
-    return when {
-        query.isEmpty() -> 0
-        command == query -> 0
-        command.startsWith(query) -> 1
-        query.startsWith(command) -> 2
-        else -> null
+    if (query.isEmpty()) return 0
+    if (command == query) return 0
+    if (command.startsWith(query)) return 1
+    if (query.startsWith(command)) return 2
+
+    val compactCommand = command.compactSlashSearchText()
+    val compactQuery = query.compactSlashSearchText()
+    if (compactQuery.isEmpty()) return 0
+    if (compactCommand.contains(compactQuery)) return 3
+    if (compactQuery.isSubsequenceOf(compactCommand)) return 4
+    return null
+}
+
+private fun String.compactSlashSearchText(): String {
+    return trim().removePrefix("/").replace(Regex("\\s+"), "").lowercase()
+}
+
+private fun String.isSubsequenceOf(value: String): Boolean {
+    if (isEmpty()) return true
+    var queryIndex = 0
+    value.forEach { char ->
+        if (char == this[queryIndex]) {
+            queryIndex += 1
+            if (queryIndex == length) return true
+        }
     }
+    return false
 }
 
 private fun defaultSlashCategory(command: String): String {
@@ -151,7 +179,7 @@ private fun slashIcon(iconName: String?, command: String): ImageVector {
         icon.contains("stethoscope") || cmd.startsWith("/doctor") -> Icons.Default.CheckCircle
         icon.contains("clock") || cmd.startsWith("/cron") -> Icons.Default.Refresh
         icon.contains("wand") || cmd.startsWith("/skills") || cmd.startsWith("/skill") -> Icons.Default.AutoAwesome
-        icon.contains("list") || cmd.startsWith("/commands") -> Icons.Default.List
+        icon.contains("list") || cmd.startsWith("/commands") -> Icons.AutoMirrored.Filled.List
         icon.contains("stop") || cmd.startsWith("/stop") -> Icons.Default.Stop
         icon.contains("question") || cmd.startsWith("/help") -> Icons.Default.Description
         icon.contains("waveform") || cmd.startsWith("/status") -> Icons.Default.GraphicEq
@@ -160,73 +188,110 @@ private fun slashIcon(iconName: String?, command: String): ImageVector {
 }
 
 @Composable
-internal fun SlashCommandPanel(actions: List<SlashAction>, onAction: (SlashAction) -> Unit) {
+internal fun SlashCommandPanel(
+    actions: List<SlashAction>,
+    onAction: (SlashAction) -> Unit,
+    onLoadMore: (() -> Unit)? = null,
+    isLoadingMore: Boolean = false
+) {
     val grouped = actions.groupBy { it.category }
     val categoryOrder = listOf("SESSION", "TOOLS", "SKILLS", "SYSTEM")
+    val sections = categoryOrder.mapNotNull { category ->
+        grouped[category]?.takeIf { it.isNotEmpty() }?.let { category to it }
+    } + grouped
+        .filter { (category, _) -> category !in categoryOrder }
+        .toSortedMap()
+        .map { it.key to it.value }
+    val panelColor = MaterialTheme.colorScheme.surface.copy(alpha = if (isSystemInDarkTheme()) 0.94f else 0.96f)
+    val panelBorder = MaterialTheme.colorScheme.outline.copy(alpha = if (isSystemInDarkTheme()) 0.24f else 0.10f)
 
     Surface(
         shape = RoundedCornerShape(22.dp),
-        color = Color(0xFF101827),
-        modifier = Modifier.fillMaxWidth()
+        color = panelColor,
+        contentColor = MaterialTheme.colorScheme.onSurface,
+        border = BorderStroke(0.5.dp, panelBorder),
+        shadowElevation = 12.dp,
+        tonalElevation = 0.dp,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 14.dp)
     ) {
-        Column(
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
-            verticalArrangement = Arrangement.spacedBy(6.dp)
+        LazyColumn(
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(max = 360.dp),
+            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 10.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp)
         ) {
-            // Horizontal category pills
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .horizontalScroll(rememberScrollState()),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                categoryOrder.forEach { category ->
-                    val categoryActions = grouped[category] ?: return@forEach
-                    val categoryLabel = when (category) {
-                        "SESSION" -> choose("Session", "会话")
-                        "TOOLS" -> choose("Tools", "工具")
-                        "SKILLS" -> "Skills"
-                        else -> choose("System", "系统")
+            sections.forEach { (category, categoryActions) ->
+                item(key = "header-$category") {
+                    SlashCategoryHeader(category)
+                }
+                items(categoryActions, key = { it.command }) { action ->
+                    SlashCommandRow(action = action, onAction = onAction)
+                }
+            }
+            if (onLoadMore != null) {
+                item(key = "slash-load-more") {
+                    LaunchedEffect(actions.size, isLoadingMore) {
+                        if (!isLoadingMore) {
+                            onLoadMore()
+                        }
                     }
-                    // Category group
-                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                        SlashCategoryHeader(category)
-                        categoryActions.forEach { action ->
-                            Row(
-                                modifier = Modifier
-                                    .clip(RoundedCornerShape(12.dp))
-                                    .clickable { onAction(action) }
-                                    .padding(horizontal = 10.dp, vertical = 6.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(8.dp)
-                            ) {
-                                Icon(
-                                    action.icon,
-                                    null,
-                                    modifier = Modifier.size(14.dp),
-                                    tint = slashCategoryColor(category)
-                                )
-                                Column {
-                                    Text(
-                                        action.title,
-                                        style = MaterialTheme.typography.labelMedium,
-                                        color = Color.White,
-                                        fontWeight = FontWeight.SemiBold
-                                    )
-                                    if (action.detail.isNotBlank()) {
-                                        Text(
-                                            action.detail,
-                                            style = MaterialTheme.typography.labelSmall,
-                                            color = Color.White.copy(alpha = 0.54f),
-                                            maxLines = 1,
-                                            overflow = TextOverflow.Ellipsis
-                                        )
-                                    }
-                                }
-                            }
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 6.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        if (isLoadingMore) {
+                            Text(
+                                choose("Loading...", "加载中..."),
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.72f)
+                            )
                         }
                     }
                 }
+            }
+        }
+    }
+}
+
+@Composable
+private fun SlashCommandRow(action: SlashAction, onAction: (SlashAction) -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .clickable { onAction(action) }
+            .padding(horizontal = 10.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        Icon(
+            action.icon,
+            null,
+            modifier = Modifier.size(16.dp),
+            tint = slashCategoryColor(action.category)
+        )
+        Column {
+            Text(
+                action.command,
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.onSurface,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            if (action.detail.isNotBlank()) {
+                Text(
+                    action.detail,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
             }
         }
     }
@@ -240,13 +305,21 @@ private fun SlashCategoryHeader(category: String) {
         "SKILLS" -> "SKILLS"
         else -> "SYSTEM"
     }
-    Text(
-        label,
-        style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp),
-        color = slashCategoryColor(category).copy(alpha = 0.82f),
-        fontWeight = FontWeight.ExtraBold,
-        modifier = Modifier.padding(horizontal = 4.dp)
-    )
+    val color = slashCategoryColor(category)
+    Row(modifier = Modifier.padding(horizontal = 4.dp, vertical = 4.dp)) {
+        Surface(
+            shape = RoundedCornerShape(6.dp),
+            color = color.copy(alpha = if (isSystemInDarkTheme()) 0.18f else 0.14f),
+            contentColor = color
+        ) {
+            Text(
+                label,
+                style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp),
+                fontWeight = FontWeight.ExtraBold,
+                modifier = Modifier.padding(horizontal = 7.dp, vertical = 3.dp)
+            )
+        }
+    }
 }
 
 private fun slashCategoryColor(category: String): Color = when (category) {

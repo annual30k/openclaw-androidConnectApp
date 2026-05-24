@@ -207,17 +207,17 @@
     <string name="welcome_subtitle_office">Watch host status, workers, and tasks in the live office scene.</string>
     <string name="welcome_office_live">Live Office</string>
     <string name="welcome_office_gateway">Gateway State</string>
-    <string name="welcome_eyebrow_voice">Voice Reply</string>
-    <string name="welcome_title_voice">Speak and Hear Replies</string>
-    <string name="welcome_subtitle_voice">Use voice input and let the assistant answer aloud when the setup is ready.</string>
-    <string name="welcome_voice_reply">Voice Reply</string>
+    <string name="welcome_eyebrow_voice">Voice Input</string>
+    <string name="welcome_title_voice">Speak to Send</string>
+    <string name="welcome_subtitle_voice">Record on mobile and let the host transcribe before forwarding your prompt.</string>
+    <string name="welcome_voice_header">Voice Input</string>
     <string name="welcome_voice_hands_free">Hands-free</string>
     <string name="welcome_voice_input">Voice Input</string>
     <string name="welcome_voice_input_context">Send prompts faster</string>
-    <string name="welcome_voice_output">Assistant Reply</string>
-    <string name="welcome_voice_output_context">Read aloud after generation</string>
+    <string name="welcome_voice_output">Host Transcription</string>
+    <string name="welcome_voice_output_context">Convert audio before sending</string>
     <string name="welcome_voice_badge_live">Live</string>
-    <string name="welcome_voice_badge_reply">Reply</string>
+    <string name="welcome_voice_badge_reply">ASR</string>
 
 
     
@@ -712,13 +712,13 @@ Tap the button below to refresh manually.</string>
 
     <string name="chat_skill_installable">Installable Skills</string>
 
-    <string name="chat_skill_installable_desc">File transfer, voice sending, and other extensions unified here.</string>
+    <string name="chat_skill_installable_desc">File transfer and other extensions unified here.</string>
 
     <string name="chat_skill_extension_file_transfer">File transfer between PC and mobile</string>
 
-    <string name="chat_skill_extension_title">Skill Extensions</string>
+    <string name="chat_skill_extension_asr">Let the host transcribe mobile voice</string>
 
-    <string name="chat_skill_extension_voice_reply">Let assistant replies become voice</string>
+    <string name="chat_skill_extension_title">Skill Extensions</string>
 
     <string name="chat_skill_panel_title">Quick Commands</string>
 
@@ -742,10 +742,6 @@ Tap the button below to refresh manually.</string>
 
     <string name="chat_voice_expires_until">Expires %s</string>
 
-    <string name="chat_voice_generating">Generating voice...</string>
-
-    <string name="chat_voice_generating_hint">Generating voice message</string>
-
     <string name="chat_voice_hold_continue">Hold to continue talking</string>
 
     <string name="chat_voice_hold_hint">Hold to start recording. Release inside ellipse to send. Slide out to cancel.</string>
@@ -764,6 +760,8 @@ Tap the button below to refresh manually.</string>
 
     <string name="chat_voice_recording">Recording</string>
 
+    <string name="chat_voice_recorded_waiting">Voice recorded. Waiting for host transcription.</string>
+
     <string name="chat_voice_release_cancel">Release to cancel</string>
 
     <string name="chat_voice_release_send">Release to send</string>
@@ -773,26 +771,6 @@ Tap the button below to refresh manually.</string>
     <string name="chat_voice_transcript_hint">Tap to edit. Press confirm to send.</string>
 
     <string name="chat_voice_transcript_label">Voice recognition result</string>
-
-    <string name="chat_voice_reply_disabled_hint">Install voice sending extension skill first, then enable this switch.</string>
-
-    <string name="chat_voice_reply_enabled_hint">When enabled, messages become voice messages.</string>
-
-    <string name="chat_voice_reply_title">Voice Reply</string>
-
-    <string name="chat_voice_reply_toggle">Voice Reply</string>
-
-    <string name="chat_voice_settings_auto_select">Auto Select</string>
-
-    <string name="chat_voice_settings_chinese_male">Chinese Male</string>
-
-    <string name="chat_voice_settings_edge_tts_hint">edge-tts-universal will prioritize these values; system voice is only used as a fallback.</string>
-
-    <string name="chat_voice_settings_english_female">English Female</string>
-
-    <string name="chat_voice_settings_english_male">English Male</string>
-
-    <string name="chat_voice_settings_fast">Fast</string>
 
     <string name="chat_voice_settings_lively_female">Lively Female</string>
 
@@ -1072,11 +1050,11 @@ Tap the button below to refresh manually.</string>
     <string name="advanced_features">Features</string>
     <string name="advanced_data_management">Data Management</string>
     <string name="advanced_restart">Restart Gateway</string>
-    <string name="advanced_restart_detail">Restart the OpenClaw service on the host.</string>
+    <string name="advanced_restart_detail">Use when Gateway is online. Connection will briefly drop.</string>
     <string name="advanced_remote_restart">Remote Restart</string>
     <string name="advanced_remote_restart_detail">Reboot the remote host system entirely.</string>
     <string name="advanced_restart_confirm_title">Restart Gateway?</string>
-    <string name="advanced_restart_confirm_message">This will restart the OpenClaw software on the host. Current sessions might be briefly interrupted.</string>
+    <string name="advanced_restart_confirm_message">This will restart the selected gateway on the host. Current sessions might be briefly interrupted.</string>
     <string name="advanced_remote_restart_confirm_title">Remote Restart Host?</string>
     <string name="advanced_remote_restart_confirm_message">This will perform a full system reboot of the remote host. This action cannot be undone.</string>
     <string name="advanced_prefs_show_tools">Show Tool Invocation</string>
@@ -1086,6 +1064,7 @@ Tap the button below to refresh manually.</string>
     <string name="advanced_doctor_fix_execute">Execute OpenClaw Fix</string>
     <string name="advanced_backups">Backups</string>
     <string name="advanced_backups_detail">Manage and restore system configuration backups.</string>
+    <string name="advanced_backups_detail_hermes">Locally manage Hermes zip backups.</string>
     <string name="advanced_logs">Logs</string>
     <string name="advanced_logs_detail">View real-time system logs from the gateway.</string>
 
@@ -1114,8 +1093,6 @@ Tap the button below to refresh manually.</string>
 
     <string name="settings_row_usage_guide">Usage Guide</string>
 
-    <string name="settings_row_voice_setup">Voice Reply Setup</string>
-
     <string name="settings_section_about">About</string>
 
     <string name="settings_section_about_subtitle">Check for updates and release info</string>
@@ -1126,7 +1103,7 @@ Tap the button below to refresh manually.</string>
 
     <string name="settings_section_ai">AI</string>
 
-    <string name="settings_section_ai_subtitle">Configure models, sessions, and voice preferences</string>
+    <string name="settings_section_ai_subtitle">Configure models and sessions</string>
 
     <string name="settings_section_features">Features</string>
 
@@ -1225,26 +1202,6 @@ Tap the button below to refresh manually.</string>
     <string name="skills_expansion_file_step3_title">Install and verify transfer</string>
 
     <string name="skills_expansion_file_title">Start file transfer</string>
-
-    <string name="skills_expansion_voice_hero_subtitle">Install edge-tts-universal, save the default voice and rate, and fall back to system speech when generation is limited.</string>
-
-    <string name="skills_expansion_voice_hero_title">Let OpenClaw turn replies into voice</string>
-
-    <string name="skills_expansion_voice_install_button">Configure voice replies with OpenClaw</string>
-
-    <string name="skills_expansion_voice_step1_detail">Clarify how `edge-tts-universal`, the default voice, and system speech fallback work together so voice replies keep working.</string>
-
-    <string name="skills_expansion_voice_step1_title">Understand the capability</string>
-
-    <string name="skills_expansion_voice_step2_detail">This depends on `skill-creator`, `edge-tts-universal`, and the host speech engine. Confirm availability, then generate the skill with default voice and rate.</string>
-
-    <string name="skills_expansion_voice_step2_title">Confirm the skill source</string>
-
-    <string name="skills_expansion_voice_step3_detail">After tapping the button, OpenClaw will install and verify `edge-tts-universal`, then send a test voice message to iPhone with your selected voice and rate.</string>
-
-    <string name="skills_expansion_voice_step3_title">Install and verify voice sending</string>
-
-    <string name="skills_expansion_voice_title">Configure voice replies</string>
 
     <string name="skills_install_none">No visible installation method</string>
 
@@ -1538,10 +1495,13 @@ Tap the button below to refresh manually.</string>
     <string name="backup_latest_none">N/A</string>
     <string name="backup_create_prompt">Ready for a new backup?</string>
     <string name="backup_create_detail">Current config will be saved locally. Restore anytime.</string>
+    <string name="backup_create_detail_hermes">Create a Hermes zip backup on this Mac. Restore uses hermes import.</string>
     <string name="backup_list_title">Backup List</string>
     <string name="backup_list_subtitle">Restore will directly replace the host\'s openclaw.json</string>
+    <string name="backup_list_subtitle_hermes">Restore imports the selected zip backup into Hermes</string>
     <string name="backup_empty_title">No Backups Yet</string>
     <string name="backup_empty_subtitle">Create a local backup first. If OpenClaw breaks openclaw.json later, you can restore directly.</string>
+    <string name="backup_empty_subtitle_hermes">Create a Hermes zip backup first. You can restore it to Hermes from this page later.</string>
     <string name="backup_restore_button">Restore Backup</string>
     <string name="backup_size_label">Size</string>
     <string name="backup_delete_title">Delete Backup?</string>
@@ -1549,6 +1509,7 @@ Tap the button below to refresh manually.</string>
     <string name="backup_delete_action">Delete</string>
     <string name="backup_restore_title">Restore Backup?</string>
     <string name="backup_restore_message">This will overwrite the host\'s openclaw.json with \"%s\". Verify content before continuing.</string>
+    <string name="backup_restore_message_hermes">This will import \"%s\" into Hermes on the host Mac. Verify the backup before continuing.</string>
     <string name="backup_restore_action">Restore</string>
     <string name="backup_editor_name_label">Backup Name</string>
     <string name="backup_editor_name_placeholder">e.g. Pre-upgrade backup</string>
@@ -1608,21 +1569,6 @@ Tap the button below to refresh manually.</string>
     <string name="session_status_debug">Debug</string>
     <string name="session_action_create_session">New Session</string>
     <string name="session_action_switch_gateway">Switch Gateway</string>
-
-    <!-- Voice Setup Screen -->
-    <string name="voice_setup_title">Voice Reply Setup</string>
-    <string name="voice_settings_title">Voice Parameters</string>
-    <string name="voice_settings_subtitle">Choose a voice and adjust the speed to a comfortable pace.</string>
-    <string name="voice_settings_voice">Voice</string>
-    <string name="voice_settings_speed">Speed</string>
-    <string name="voice_settings_slow">Slow</string>
-    <string name="voice_settings_fast">Fast</string>
-    <string name="voice_settings_auto_select">Auto Select</string>
-    <string name="voice_settings_lively_female">Lively Female</string>
-    <string name="voice_settings_chinese_male">Chinese Male</string>
-    <string name="voice_settings_english_female">English Female</string>
-    <string name="voice_settings_english_male">English Male</string>
-    <string name="voice_settings_edge_tts_hint">edge-tts-universal will prioritize these values; system voice is only used as a fallback.</string>
 
     <!-- Language Screen -->
     <string name="language_title">Language</string>

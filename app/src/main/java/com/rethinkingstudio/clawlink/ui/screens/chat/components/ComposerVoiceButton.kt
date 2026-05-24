@@ -86,29 +86,30 @@ internal fun VoiceHoldToSpeakButton(
     onCancel: () -> Unit,
     onCancelPreviewChange: (Boolean) -> Unit
 ) {
+    val isHoldRecordingActive = isVoiceHoldRecordingActive(voiceInputPhase)
     val releaseSend = stringResource(R.string.chat_voice_release_send)
     val releaseCancel = stringResource(R.string.chat_voice_release_cancel)
     val holdContinue = stringResource(R.string.chat_voice_hold_continue)
     val holdTalk = stringResource(R.string.chat_voice_hold_talk)
     val buttonText = when {
         cancelPreview -> releaseCancel
-        voiceInputPhase.isBusy -> releaseSend
+        isHoldRecordingActive -> releaseSend
         hasDraftText -> holdContinue
         else -> holdTalk
     }
     val backgroundColor = when {
         cancelPreview -> ChatColors.offline.copy(alpha = 0.14f)
-        voiceInputPhase.isBusy -> ChatColors.linkBlue
+        isHoldRecordingActive -> ChatColors.linkBlue
         else -> ChatColors.dockControl
     }
     val borderColor = when {
         cancelPreview -> ChatColors.offline.copy(alpha = 0.34f)
-        voiceInputPhase.isBusy -> ChatColors.linkBlue.copy(alpha = 0.30f)
+        isHoldRecordingActive -> ChatColors.linkBlue.copy(alpha = 0.30f)
         else -> ChatColors.dockBorder
     }
     val textColor = when {
         cancelPreview -> ChatColors.offline
-        voiceInputPhase.isBusy -> Color.White
+        isHoldRecordingActive -> Color.White
         else -> Color.Black
     }
 
@@ -166,6 +167,12 @@ internal fun VoiceHoldToSpeakButton(
     }
 }
 
+internal fun isVoiceHoldRecordingActive(phase: VoiceInputPhase): Boolean {
+    return phase == VoiceInputPhase.Starting ||
+        phase == VoiceInputPhase.Recording ||
+        phase == VoiceInputPhase.Stopping
+}
+
 internal fun isPointInsideVoiceRegion(point: Offset, width: Float, height: Float): Boolean {
     if (width <= 0f || height <= 0f) return true
     val centerX = width * 0.5f
@@ -176,4 +183,3 @@ internal fun isPointInsideVoiceRegion(point: Offset, width: Float, height: Float
     val dy = (point.y - centerY) / radiusY
     return dx * dx + dy * dy <= 1f
 }
-

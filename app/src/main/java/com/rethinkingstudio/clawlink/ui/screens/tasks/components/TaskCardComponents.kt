@@ -6,6 +6,7 @@ import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.ExperimentalAnimationApi
 import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -94,6 +95,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.layout.offset
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.pointerInput
 import com.rethinkingstudio.clawlink.core.models.tasks.TaskDateCodec
 import com.rethinkingstudio.clawlink.core.models.tasks.TaskDraft
 import com.rethinkingstudio.clawlink.core.models.tasks.TaskItem
@@ -122,30 +124,105 @@ internal fun TasksTaskCard(
     val busy = updatingTaskId == task.id
     val disabled = busy || isRefreshingTasks || !canManageTasks
     val tint = if (task.enabled) SuccessGreen else WarningOrange
+    var isDeleteRevealed by remember(task.id) { mutableStateOf(false) }
+    val swipeOffset by androidx.compose.animation.core.animateDpAsState(
+        targetValue = if (isDeleteRevealed) TaskSwipeActionPresentation.RevealOffsetDp.dp else 0.dp,
+        label = "task_delete_swipe_offset"
+    )
+    LaunchedEffect(disabled) {
+        if (disabled) isDeleteRevealed = false
+    }
 
-    Surface(
-        color = Color.Transparent,
+    Box(
         modifier = modifier
             .fillMaxWidth()
-            .shadow(12.dp, CardShape, clip = false, ambientColor = Color.Black.copy(alpha = 0.10f), spotColor = Color.Black.copy(alpha = 0.12f))
-            .border(0.6.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.14f), CardShape)
             .clip(CardShape)
-            .background(
-                Brush.linearGradient(
-                    listOf(
-                        MaterialTheme.colorScheme.surface.copy(alpha = 0.94f),
-                        MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.82f),
-                        tint.copy(alpha = 0.08f)
+    ) {
+        if (isDeleteRevealed && !disabled) {
+            Box(
+                modifier = Modifier
+                    .matchParentSize()
+                    .padding(end = 18.dp),
+                contentAlignment = Alignment.CenterEnd
+            ) {
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(4.dp),
+                    modifier = Modifier.clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null
+                    ) {
+                        isDeleteRevealed = false
+                        onDelete(task)
+                    }
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(48.dp)
+                            .shadow(4.dp, CircleShape)
+                            .background(MaterialTheme.colorScheme.error, CircleShape),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            Icons.Default.Delete,
+                            contentDescription = choose("Delete", "删除"),
+                            tint = Color.White,
+                            modifier = Modifier.size(22.dp)
+                        )
+                    }
+                    Text(
+                        choose("Delete", "删除"),
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.error
+                    )
+                }
+            }
+        }
+
+        Surface(
+            color = Color.Transparent,
+            modifier = Modifier
+                .fillMaxWidth()
+                .offset(x = swipeOffset)
+                .shadow(12.dp, CardShape, clip = false, ambientColor = Color.Black.copy(alpha = 0.10f), spotColor = Color.Black.copy(alpha = 0.12f))
+                .border(0.6.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.14f), CardShape)
+                .clip(CardShape)
+                .background(
+                    Brush.linearGradient(
+                        listOf(
+                            MaterialTheme.colorScheme.surface.copy(alpha = 0.94f),
+                            MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.82f),
+                            tint.copy(alpha = 0.08f)
+                        )
                     )
                 )
-            )
-            .clickable(
-                enabled = canManageTasks,
-                interactionSource = remember { MutableInteractionSource() },
-                indication = null
-            ) { onEdit(task) }
-    ) {
-        Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 20.dp), verticalArrangement = Arrangement.spacedBy(15.dp)) {
+                .pointerInput(canManageTasks, disabled) {
+                    if (!disabled && canManageTasks) {
+                        detectHorizontalDragGestures { change, dragAmount ->
+                            change.consume()
+                            if (TaskSwipeActionPresentation.shouldRevealDelete(canManageTasks, disabled, dragAmount)) {
+                                isDeleteRevealed = true
+                            }
+                            if (TaskSwipeActionPresentation.shouldHideDelete(dragAmount)) {
+                                isDeleteRevealed = false
+                            }
+                        }
+                    }
+                }
+                .clickable(
+                    enabled = canManageTasks,
+                    interactionSource = remember { MutableInteractionSource() },
+                    indication = null
+                ) {
+                    if (isDeleteRevealed) {
+                        isDeleteRevealed = false
+                    } else {
+                        onEdit(task)
+                    }
+                }
+        ) {
+            Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 20.dp), verticalArrangement = Arrangement.spacedBy(15.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
                 Box(
                     modifier = Modifier
@@ -235,16 +312,10 @@ internal fun TasksTaskCard(
                         enabled = !disabled,
                         onClick = { onEdit(task) }
                     )
-                    TaskCircleButton(
-                        icon = Icons.Default.Delete,
-                        tint = MaterialTheme.colorScheme.error.copy(alpha = 0.9f),
-                        contentDescription = choose("Delete", "删除"),
-                        enabled = !disabled,
-                        onClick = { onDelete(task) }
-                    )
                 }
             }
         }
+    }
     }
 }
 

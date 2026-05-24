@@ -16,7 +16,6 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
-import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
@@ -137,32 +136,18 @@ class RelayWebSocketClient {
         gatewayId: String,
         sessionKey: String,
         content: String,
+        attachments: List<RelayChatSendAttachmentPayload> = emptyList(),
         idempotencyKey: String? = null,
-        voiceReplyEnabled: Boolean = false,
-        voiceReplyVoiceIdentifier: String? = null,
-        voiceReplyRatePercent: Int? = null,
         requestId: String = UUID.randomUUID().toString()
     ): String {
-        val params = buildJsonObject {
-            put("sessionKey", JsonPrimitive(sessionKey))
-            put("message", JsonPrimitive(content))
-            put("idempotencyKey", JsonPrimitive(idempotencyKey ?: requestId))
-        }
-        val payload = buildJsonObject {
-            put("type", JsonPrimitive("cmd"))
-            put("id", JsonPrimitive(requestId))
-            put("gatewayId", JsonPrimitive(gatewayId))
-            put("method", JsonPrimitive("chat.send"))
-            if (voiceReplyEnabled) {
-                put("voiceReplyEnabled", JsonPrimitive(true))
-                val voice = voiceReplyVoiceIdentifier?.trim().orEmpty()
-                if (voice.isNotBlank()) {
-                    put("voiceReplyVoiceIdentifier", JsonPrimitive(voice))
-                }
-                voiceReplyRatePercent?.let { put("voiceReplyRatePercent", JsonPrimitive(it)) }
-            }
-            put("params", params)
-        }
+        val payload = buildChatSendPayload(
+            gatewayId = gatewayId,
+            sessionKey = sessionKey,
+            content = content,
+            attachments = attachments,
+            idempotencyKey = idempotencyKey ?: requestId,
+            requestId = requestId
+        )
         send(payload.toString())
         return requestId
     }
@@ -180,29 +165,26 @@ class RelayWebSocketClient {
         send(payload.toString())
     }
 
-    fun syncVoiceReplyConfig(
+    fun sendVoiceMessage(
         gatewayId: String,
         sessionKey: String,
-        voiceReplyVoiceIdentifier: String?,
-        voiceReplyRatePercent: Int
-    ) {
-        val requestId = UUID.randomUUID().toString()
-        val params = buildJsonObject {
-            put("sessionKey", JsonPrimitive(sessionKey))
-            val voice = voiceReplyVoiceIdentifier?.trim().orEmpty()
-            if (voice.isNotBlank()) {
-                put("voiceReplyVoiceIdentifier", JsonPrimitive(voice))
-            }
-            put("voiceReplyRatePercent", JsonPrimitive(voiceReplyRatePercent))
-        }
-        val payload = buildJsonObject {
-            put("type", JsonPrimitive("cmd"))
-            put("id", JsonPrimitive(requestId))
-            put("gatewayId", JsonPrimitive(gatewayId))
-            put("method", JsonPrimitive("clawconnect.voiceReply.setConfig"))
-            put("params", params)
-        }
+        audio: VoiceSendAudioPayload,
+        message: String? = null,
+        languageHint: String? = null,
+        idempotencyKey: String? = null,
+        requestId: String = UUID.randomUUID().toString()
+    ): String {
+        val payload = buildChatVoiceSendPayload(
+            gatewayId = gatewayId,
+            sessionKey = sessionKey,
+            requestId = requestId,
+            idempotencyKey = idempotencyKey ?: requestId,
+            audio = audio,
+            message = message,
+            languageHint = languageHint
+        )
         send(payload.toString())
+        return requestId
     }
 
     fun sendCommand(

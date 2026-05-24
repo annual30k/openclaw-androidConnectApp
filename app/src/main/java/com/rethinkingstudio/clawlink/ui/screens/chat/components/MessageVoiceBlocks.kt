@@ -94,25 +94,30 @@ internal fun StandaloneVoiceMessage(
     gatewayId: String?,
     sessionKey: String?
 ) {
+    val block = blocks.firstOrNull() ?: return
+    val bubbleWidth = voiceBubbleWidth(block.durationMs)
     Column(
-        modifier = Modifier.widthIn(max = 336.dp),
+        modifier = Modifier.width(bubbleWidth),
         verticalArrangement = Arrangement.spacedBy(8.dp),
         horizontalAlignment = if (isUser) Alignment.End else Alignment.Start
     ) {
-        blocks.firstOrNull()?.let { block ->
-            VoiceBlock(
-                block = block,
-                isUser = isUser,
-                relayBaseUrl = relayBaseUrl,
-                accessToken = accessToken,
-                standalone = true,
-                readVoicePlaybackIdentifiers = readVoicePlaybackIdentifiers,
-                onVoicePlaybackStart = onVoicePlaybackStart,
-                gatewayId = gatewayId,
-                sessionKey = sessionKey
-            )
-        }
-        MessageFooter(title = if (isUser) "You" else "ClawLink", createdAt = createdAt, isUser = false, modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp))
+        VoiceBlock(
+            block = block,
+            isUser = isUser,
+            relayBaseUrl = relayBaseUrl,
+            accessToken = accessToken,
+            standalone = true,
+            readVoicePlaybackIdentifiers = readVoicePlaybackIdentifiers,
+            onVoicePlaybackStart = onVoicePlaybackStart,
+            gatewayId = gatewayId,
+            sessionKey = sessionKey
+        )
+        MessageFooter(
+            title = if (isUser) "You" else "ClawLink",
+            createdAt = createdAt,
+            isUser = false,
+            modifier = Modifier.padding(horizontal = 4.dp)
+        )
     }
 }
 

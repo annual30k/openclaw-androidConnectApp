@@ -1,86 +1,98 @@
 package com.rethinkingstudio.clawlink.ui.screens.chat
 
 import android.content.Context
-import android.content.Intent
-import android.os.Bundle
-import android.speech.RecognitionListener
-import android.speech.RecognizerIntent
-import android.speech.SpeechRecognizer
+import android.media.MediaRecorder
+import android.os.Build
 import com.rethinkingstudio.clawlink.core.state.LocalizedText.choose
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import java.util.Locale
+import java.io.File
 import java.util.UUID
+import kotlin.math.log10
 
 internal sealed class VoiceInputError(message: String) : Exception(message) {
     data object AlreadyRecording : VoiceInputError(choose("Voice input is already in progress.", "语音输入正在进行中。"))
-    data object Unsupported : VoiceInputError(choose("Speech recognition is not supported on this device.", "当前设备暂不支持语音识别。"))
-    data object Unavailable : VoiceInputError(choose("Speech recognition service is unavailable. Please try again later.", "语音识别服务当前不可用，请稍后再试。"))
-    data object NoSpeech : VoiceInputError(choose("No valid speech was recognized. Please try again.", "没有识别到有效语音，请再试一次。"))
+    data object NoSpeech : VoiceInputError(choose("No valid audio was recorded. Please try again.", "没有录到有效语音，请再试一次。"))
     data object PermissionDenied : VoiceInputError(choose("Microphone permission denied. Please enable it in Settings and try again.", "未获得麦克风权限，请到系统设置中允许后再试。"))
-    data class RecognitionFailed(val detail: String) : VoiceInputError(detail)
+    data class RecordingFailed(val detail: String) : VoiceInputError(detail)
 }
+
+internal data class RecordedVoiceInput(
+    val file: File,
+    val fileName: String,
+    val mimeType: String = "audio/mp4"
+)
 
 internal class ComposerSpeechCoordinator(
     private val scope: CoroutineScope,
-    private val onPartialTranscript: (String) -> Unit,
-    private val onFinalTranscript: (String) -> Unit,
+    private val onRecordingFinished: (RecordedVoiceInput) -> Unit,
     private val onAudioLevel: (Double) -> Unit,
     private val onError: (VoiceInputError) -> Unit
 ) {
-    private var speechRecognizer: SpeechRecognizer? = null
+    private var mediaRecorder: MediaRecorder? = null
+    private var outputFile: File? = null
     private var currentSessionId: UUID? = null
-    private var latestTranscript = ""
     private var isStopping = false
     private var isCancelled = false
-    private var stopFallbackJob: Job? = null
+    private var audioLevelJob: Job? = null
 
     fun start(context: Context) {
-        if (speechRecognizer != null) {
+        if (mediaRecorder != null) {
             throw VoiceInputError.AlreadyRecording
-        }
-        if (!SpeechRecognizer.isRecognitionAvailable(context)) {
-            throw VoiceInputError.Unsupported
         }
 
         val sessionId = UUID.randomUUID()
         currentSessionId = sessionId
-        latestTranscript = ""
         isStopping = false
         isCancelled = false
-        stopFallbackJob?.cancel()
-        stopFallbackJob = null
+        audioLevelJob?.cancel()
+        audioLevelJob = null
+        val file = File(context.cacheDir, "voice-input-${System.currentTimeMillis()}-${sessionId.toString().take(8)}.m4a")
+        outputFile = file
 
-        val recognizer = SpeechRecognizer.createSpeechRecognizer(context.applicationContext)
-        recognizer.setRecognitionListener(makeListener(sessionId))
-        speechRecognizer = recognizer
         runCatching {
-            recognizer.startListening(makeRecognitionIntent(context))
+            val recorder = createRecorder(context).apply {
+                setAudioSource(MediaRecorder.AudioSource.MIC)
+                setOutputFormat(MediaRecorder.OutputFormat.MPEG_4)
+                setAudioEncoder(MediaRecorder.AudioEncoder.AAC)
+                setAudioEncodingBitRate(96_000)
+                setAudioSamplingRate(44_100)
+                setOutputFile(file.absolutePath)
+                prepare()
+                start()
+            }
+            mediaRecorder = recorder
+            startAudioLevelPolling(sessionId, recorder)
         }.onFailure { error ->
             cleanup()
+            deleteOutputFile()
             currentSessionId = null
-            throw VoiceInputError.RecognitionFailed(error.localizedMessage ?: choose("Speech recognition failed to start. Please try again.", "语音识别启动失败，请重试。"))
+            throw VoiceInputError.RecordingFailed(error.localizedMessage ?: choose("Recording failed to start. Please try again.", "录音启动失败，请重试。"))
         }
     }
 
     fun stop() {
-        if (speechRecognizer == null || currentSessionId == null) return
+        val sessionId = currentSessionId ?: return
+        val recorder = mediaRecorder ?: return
         isStopping = true
         onAudioLevel(0.0)
-        speechRecognizer?.stopListening()
-        scheduleStopFallback(currentSessionId)
+        val recordedFile = outputFile
+        runCatching {
+            recorder.stop()
+        }.onFailure {
+            fail(sessionId, VoiceInputError.NoSpeech)
+            return
+        }
+        complete(sessionId, recordedFile)
     }
 
     fun cancel() {
         isCancelled = true
-        stopFallbackJob?.cancel()
-        stopFallbackJob = null
-        speechRecognizer?.cancel()
         cleanup()
+        deleteOutputFile()
         currentSessionId = null
-        latestTranscript = ""
         isStopping = false
         isCancelled = false
         onAudioLevel(0.0)
@@ -90,106 +102,48 @@ internal class ComposerSpeechCoordinator(
         cancel()
     }
 
-    private fun makeRecognitionIntent(context: Context): Intent {
-        val preferredLanguage = listOf(
-            "zh-CN",
-            "zh-Hans-CN",
-            "zh",
-            Locale.getDefault().toLanguageTag(),
-            "en-US"
-        ).firstOrNull { it.isNotBlank() } ?: "zh-CN"
+    private fun startAudioLevelPolling(sessionId: UUID, recorder: MediaRecorder) {
+        audioLevelJob = scope.launch {
+            while (currentSessionId == sessionId && !isCancelled && !isStopping) {
+                val amplitude = runCatching { recorder.maxAmplitude }.getOrDefault(0)
+                val level = if (amplitude > 0) {
+                    ((20.0 * log10(amplitude.toDouble()) - 36.0) / 54.0).coerceIn(0.0, 1.0)
+                } else {
+                    0.0
+                }
+                onAudioLevel(level)
+                delay(80)
+            }
+        }
+    }
 
-        return Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
-            putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
-            putExtra(RecognizerIntent.EXTRA_LANGUAGE, preferredLanguage)
-            putExtra(RecognizerIntent.EXTRA_LANGUAGE_PREFERENCE, preferredLanguage)
-            putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
-            putExtra(RecognizerIntent.EXTRA_CALLING_PACKAGE, context.packageName)
-            putExtra(
-                RecognizerIntent.EXTRA_PROMPT,
-                "ClawLink"
+    private fun complete(sessionId: UUID?, file: File?) {
+        if (currentSessionId != sessionId) return
+        val recordedFile = file?.takeIf { it.exists() && it.length() > 0L }
+        cleanup()
+        currentSessionId = null
+        isStopping = false
+        isCancelled = false
+        onAudioLevel(0.0)
+        outputFile = null
+        if (recordedFile == null) {
+            file?.delete()
+            onError(VoiceInputError.NoSpeech)
+        } else {
+            onRecordingFinished(
+                RecordedVoiceInput(
+                    file = recordedFile,
+                    fileName = recordedFile.name
+                )
             )
         }
     }
 
-    private fun makeListener(sessionId: UUID): RecognitionListener {
-        return object : RecognitionListener {
-            override fun onReadyForSpeech(params: Bundle?) = Unit
-            override fun onBeginningOfSpeech() = Unit
-            override fun onBufferReceived(buffer: ByteArray?) = Unit
-            override fun onEndOfSpeech() = Unit
-            override fun onEvent(eventType: Int, params: Bundle?) = Unit
-
-            override fun onRmsChanged(rmsdB: Float) {
-                if (currentSessionId == sessionId && !isCancelled) {
-                    onAudioLevel(((rmsdB + 2f) / 12f).coerceIn(0f, 1f).toDouble())
-                }
-            }
-
-            override fun onPartialResults(partialResults: Bundle?) {
-                handleTranscript(sessionId, partialResults, final = false)
-            }
-
-            override fun onResults(results: Bundle?) {
-                handleTranscript(sessionId, results, final = true)
-            }
-
-            override fun onError(error: Int) {
-                if (currentSessionId != sessionId || isCancelled) return
-                if (isStopping && latestTranscript.isNotBlank()) {
-                    complete(sessionId, latestTranscript)
-                    return
-                }
-                fail(sessionId, mapRecognitionError(error))
-            }
-        }
-    }
-
-    private fun handleTranscript(sessionId: UUID, bundle: Bundle?, final: Boolean) {
-        if (currentSessionId != sessionId || isCancelled) return
-        val transcript = bundle
-            ?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
-            ?.firstOrNull()
-            ?.trim()
-            .orEmpty()
-        if (transcript.isBlank()) return
-        latestTranscript = transcript
-        onPartialTranscript(transcript)
-        if (final) {
-            complete(sessionId, transcript)
-        }
-    }
-
-    private fun scheduleStopFallback(sessionId: UUID?) {
-        stopFallbackJob?.cancel()
-        stopFallbackJob = scope.launch {
-            delay(2_500)
-            if (currentSessionId == sessionId && isStopping) {
-                complete(sessionId, latestTranscript)
-            }
-        }
-    }
-
-    private fun complete(sessionId: UUID?, transcript: String) {
-        if (currentSessionId != sessionId) return
-        stopFallbackJob?.cancel()
-        stopFallbackJob = null
-        cleanup()
-        currentSessionId = null
-        latestTranscript = ""
-        isStopping = false
-        isCancelled = false
-        onAudioLevel(0.0)
-        onFinalTranscript(transcript)
-    }
-
     private fun fail(sessionId: UUID?, error: VoiceInputError) {
         if (currentSessionId != sessionId) return
-        stopFallbackJob?.cancel()
-        stopFallbackJob = null
         cleanup()
+        deleteOutputFile()
         currentSessionId = null
-        latestTranscript = ""
         isStopping = false
         isCancelled = false
         onAudioLevel(0.0)
@@ -197,21 +151,26 @@ internal class ComposerSpeechCoordinator(
     }
 
     private fun cleanup() {
-        speechRecognizer?.setRecognitionListener(null)
-        speechRecognizer?.destroy()
-        speechRecognizer = null
+        audioLevelJob?.cancel()
+        audioLevelJob = null
+        mediaRecorder?.let { recorder ->
+            runCatching { recorder.reset() }
+            runCatching { recorder.release() }
+        }
+        mediaRecorder = null
     }
 
-    private fun mapRecognitionError(error: Int): VoiceInputError {
-        return when (error) {
-            SpeechRecognizer.ERROR_AUDIO -> VoiceInputError.RecognitionFailed("麦克风会话配置失败，请稍后重试。")
-            SpeechRecognizer.ERROR_CLIENT -> VoiceInputError.RecognitionFailed("语音识别初始化失败，请稍后再试。")
-            SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS -> VoiceInputError.PermissionDenied
-            SpeechRecognizer.ERROR_NETWORK, SpeechRecognizer.ERROR_NETWORK_TIMEOUT -> VoiceInputError.Unavailable
-            SpeechRecognizer.ERROR_NO_MATCH, SpeechRecognizer.ERROR_SPEECH_TIMEOUT -> VoiceInputError.NoSpeech
-            SpeechRecognizer.ERROR_RECOGNIZER_BUSY -> VoiceInputError.RecognitionFailed("当前语音识别仍在进行中，请稍后再试。")
-            SpeechRecognizer.ERROR_SERVER -> VoiceInputError.RecognitionFailed("语音识别失败，请重试。")
-            else -> VoiceInputError.RecognitionFailed("语音识别失败，请重试。")
+    private fun deleteOutputFile() {
+        outputFile?.let { file -> runCatching { file.delete() } }
+        outputFile = null
+    }
+
+    private fun createRecorder(context: Context): MediaRecorder {
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            MediaRecorder(context.applicationContext)
+        } else {
+            @Suppress("DEPRECATION")
+            MediaRecorder()
         }
     }
 }

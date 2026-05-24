@@ -207,17 +207,17 @@
     <string name="welcome_subtitle_office">用实时办公室场景观察主机状态、员工和任务。</string>
     <string name="welcome_office_live">实时办公室</string>
     <string name="welcome_office_gateway">网关状态</string>
-    <string name="welcome_eyebrow_voice">语音回复</string>
-    <string name="welcome_title_voice">开口发送，也能听到回复</string>
-    <string name="welcome_subtitle_voice">语音输入之后，配置完成的助手可以把回答读出来。</string>
-    <string name="welcome_voice_reply">语音回复</string>
+    <string name="welcome_eyebrow_voice">语音输入</string>
+    <string name="welcome_title_voice">开口就能发送</string>
+    <string name="welcome_subtitle_voice">在手机端录音，由宿主机转写后再把提示词发给网关。</string>
+    <string name="welcome_voice_header">语音输入</string>
     <string name="welcome_voice_hands_free">免手持</string>
     <string name="welcome_voice_input">语音输入</string>
     <string name="welcome_voice_input_context">更快发送提示词</string>
-    <string name="welcome_voice_output">助手回复</string>
-    <string name="welcome_voice_output_context">生成后朗读</string>
+    <string name="welcome_voice_output">宿主机转写</string>
+    <string name="welcome_voice_output_context">发送前转换音频</string>
     <string name="welcome_voice_badge_live">实时</string>
-    <string name="welcome_voice_badge_reply">回复</string>
+    <string name="welcome_voice_badge_reply">ASR</string>
 
 
     
@@ -712,13 +712,13 @@
 
     <string name="chat_skill_installable">可安装的技能</string>
 
-    <string name="chat_skill_installable_desc">把文件互传、语音发送和其他扩展能力统一收纳在这里。</string>
+    <string name="chat_skill_installable_desc">把文件互传和其他扩展能力统一收纳在这里。</string>
 
     <string name="chat_skill_extension_file_transfer">PC与移动端实现文件互传</string>
 
-    <string name="chat_skill_extension_title">技能扩展</string>
+    <string name="chat_skill_extension_asr">让宿主机把手机语音转成文字</string>
 
-    <string name="chat_skill_extension_voice_reply">让助手回复也能变成语音</string>
+    <string name="chat_skill_extension_title">技能扩展</string>
 
     <string name="chat_skill_panel_title">快捷命令</string>
 
@@ -742,10 +742,6 @@
 
     <string name="chat_voice_expires_until">有效期至 %s</string>
 
-    <string name="chat_voice_generating">语音生成中...</string>
-
-    <string name="chat_voice_generating_hint">正在生成语音消息</string>
-
     <string name="chat_voice_hold_continue">按住继续说话</string>
 
     <string name="chat_voice_hold_hint">长按开始录音，在椭圆内松开发送，滑出后松开取消发送，滑回来继续发送</string>
@@ -764,6 +760,8 @@
 
     <string name="chat_voice_recording">录音中</string>
 
+    <string name="chat_voice_recorded_waiting">语音已录制，等待宿主机识别。</string>
+
     <string name="chat_voice_release_cancel">松开取消发送</string>
 
     <string name="chat_voice_release_send">松开发送</string>
@@ -773,26 +771,6 @@
     <string name="chat_voice_transcript_hint">点按后可继续修改，修改完成后点确定发送</string>
 
     <string name="chat_voice_transcript_label">语音识别结果</string>
-
-    <string name="chat_voice_reply_disabled_hint">先安装语音发送拓展技能，再回来开启这个开关。</string>
-
-    <string name="chat_voice_reply_enabled_hint">开启后，消息变为语音消息。</string>
-
-    <string name="chat_voice_reply_title">语音回复</string>
-
-    <string name="chat_voice_reply_toggle">语音回复</string>
-
-    <string name="chat_voice_settings_auto_select">自动选择</string>
-
-    <string name="chat_voice_settings_chinese_male">中文男声</string>
-
-    <string name="chat_voice_settings_edge_tts_hint">edge-tts-universal 会优先使用这里的值，系统语音只做兜底。</string>
-
-    <string name="chat_voice_settings_english_female">英文女声</string>
-
-    <string name="chat_voice_settings_english_male">英文男声</string>
-
-    <string name="chat_voice_settings_fast">快</string>
 
     <string name="chat_voice_settings_lively_female">活泼女声</string>
 
@@ -1071,11 +1049,11 @@
     <string name="advanced_features">特性</string>
     <string name="advanced_data_management">数据管理</string>
     <string name="advanced_restart">重启网关</string>
-    <string name="advanced_restart_detail">重启宿主机上的 OpenClaw 服务。</string>
+    <string name="advanced_restart_detail">Gateway 在线时使用，会短暂中断当前连接。</string>
     <string name="advanced_remote_restart">远程重启</string>
     <string name="advanced_remote_restart_detail">完全重启远程宿主系统。</string>
     <string name="advanced_restart_confirm_title">重启网关软件？</string>
-    <string name="advanced_restart_confirm_message">这将重启宿主机上的 OpenClaw 软件。当前正在进行的会话可能会有短暂中断。</string>
+    <string name="advanced_restart_confirm_message">这将重启宿主机上的当前网关。当前正在进行的会话可能会有短暂中断。</string>
     <string name="advanced_remote_restart_confirm_title">远程重启主机？</string>
     <string name="advanced_remote_restart_confirm_message">这将对远程宿主机执行完整的系统重启。此操作不可撤销，请确认主机已保存所有工作。</string>
     <string name="advanced_prefs_show_tools">显示工具调用过程</string>
@@ -1085,6 +1063,7 @@
     <string name="advanced_doctor_fix_execute">执行 OpenClaw 修复</string>
     <string name="advanced_backups">备份管理</string>
     <string name="advanced_backups_detail">管理并恢复系统配置备份。</string>
+    <string name="advanced_backups_detail_hermes">本地管理 Hermes zip 备份。</string>
     <string name="advanced_logs">系统日志</string>
     <string name="advanced_logs_detail">实时查看网关的系统运行日志。</string>
 
@@ -1114,8 +1093,6 @@
 
     <string name="settings_row_usage_guide">使用说明</string>
 
-    <string name="settings_row_voice_setup">配置语音发送</string>
-
     <string name="settings_section_about">关于</string>
 
     <string name="settings_section_about_subtitle">检查更新与发布入口</string>
@@ -1126,7 +1103,7 @@
 
     <string name="settings_section_ai">AI</string>
 
-    <string name="settings_section_ai_subtitle">配置模型、会话以及语音偏好</string>
+    <string name="settings_section_ai_subtitle">配置模型与会话</string>
 
     <string name="settings_section_features">功能</string>
 
@@ -1225,26 +1202,6 @@
     <string name="skills_expansion_file_step3_title">安装并验证文件互传</string>
 
     <string name="skills_expansion_file_title">启动文件互传</string>
-
-    <string name="skills_expansion_voice_hero_subtitle">先装 edge-tts-universal，再把默认音色和语速写进配置，受限时自动回退到系统语音。</string>
-
-    <string name="skills_expansion_voice_hero_title">让 OpenClaw 把回复变成语音</string>
-
-    <string name="skills_expansion_voice_install_button">让 OpenClaw 配置语音发送</string>
-
-    <string name="skills_expansion_voice_step1_detail">先把 `edge-tts-universal`、默认音色和系统语音的兜底关系理清楚，这样语音回复在生成受限时也不会断。</string>
-
-    <string name="skills_expansion_voice_step1_title">了解这个能力</string>
-
-    <string name="skills_expansion_voice_step2_detail">这个能力依赖 `skill-creator`、`edge-tts-universal` 和宿主机语音引擎，先确认可用再继续生成技能，并把音色和语速默认值写进去。</string>
-
-    <string name="skills_expansion_voice_step2_title">确认技能来源</string>
-
-    <string name="skills_expansion_voice_step3_detail">点底部按钮后，OpenClaw 会先安装并验证 `edge-tts-universal`，再按你选的音色和语速把测试语音发到 iPhone。</string>
-
-    <string name="skills_expansion_voice_step3_title">安装并验证语音发送</string>
-
-    <string name="skills_expansion_voice_title">配置语音发送</string>
 
     <string name="skills_install_none">没有可见安装方式</string>
 
@@ -1538,10 +1495,13 @@
     <string name="backup_latest_none">暂无</string>
     <string name="backup_create_prompt">准备好新的备份了吗？</string>
     <string name="backup_create_detail">当前配置将被保存到本地，随时可恢复。</string>
+    <string name="backup_create_detail_hermes">在这台 Mac 上创建 Hermes zip 备份，恢复时会调用 hermes import。</string>
     <string name="backup_list_title">备份列表</string>
     <string name="backup_list_subtitle">恢复操作将直接替换宿主机的 openclaw.json</string>
+    <string name="backup_list_subtitle_hermes">恢复操作会将选中的 zip 备份导入 Hermes</string>
     <string name="backup_empty_title">还没有备份</string>
     <string name="backup_empty_subtitle">先创建一份宿主机本地备份，后续 OpenClaw 改坏 openclaw.json 时可以直接恢复。</string>
+    <string name="backup_empty_subtitle_hermes">先创建一份 Hermes zip 备份，之后可在本页恢复到 Hermes。</string>
     <string name="backup_restore_button">恢复备份</string>
     <string name="backup_size_label">大小</string>
     <string name="backup_delete_title">删除备份？</string>
@@ -1549,6 +1509,7 @@
     <string name="backup_delete_action">删除</string>
     <string name="backup_restore_title">恢复备份？</string>
     <string name="backup_restore_message">将用「%s」覆盖宿主机上的 openclaw.json。建议确认内容无误后再继续。</string>
+    <string name="backup_restore_message_hermes">将把「%s」导入宿主机上的 Hermes。建议确认备份无误后再继续。</string>
     <string name="backup_restore_action">恢复</string>
     <string name="backup_editor_name_label">备份名称</string>
     <string name="backup_editor_name_placeholder">例如：升级前备份</string>
@@ -1608,21 +1569,6 @@
     <string name="session_status_debug">联调</string>
     <string name="session_action_create_session">新建会话</string>
     <string name="session_action_switch_gateway">切换网关</string>
-
-    <!-- Voice Setup Screen -->
-    <string name="voice_setup_title">语音回复设置</string>
-    <string name="voice_settings_title">语音参数</string>
-    <string name="voice_settings_subtitle">选一个常用音色，再把语速调到舒服的节奏。</string>
-    <string name="voice_settings_voice">声音</string>
-    <string name="voice_settings_speed">语速</string>
-    <string name="voice_settings_slow">慢</string>
-    <string name="voice_settings_fast">快</string>
-    <string name="voice_settings_auto_select">自动选择</string>
-    <string name="voice_settings_lively_female">活泼女声</string>
-    <string name="voice_settings_chinese_male">中文男声</string>
-    <string name="voice_settings_english_female">英文女声</string>
-    <string name="voice_settings_english_male">英文男声</string>
-    <string name="voice_settings_edge_tts_hint">edge-tts-universal 会优先使用这里的值，系统语音只做兜底。</string>
 
     <!-- Language Screen -->
     <string name="language_title">语言</string>

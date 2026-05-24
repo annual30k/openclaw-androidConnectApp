@@ -20,6 +20,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.rethinkingstudio.clawlink.R
+import com.rethinkingstudio.clawlink.core.models.gateway.GatewayType
 import com.rethinkingstudio.clawlink.core.state.UserPreferencesStore
 import com.rethinkingstudio.clawlink.core.state.gateway.GatewayStore
 import com.rethinkingstudio.clawlink.ui.components.ClawLinkCard
@@ -41,6 +42,8 @@ fun AdvancedScreen(
     val gatewayState by gatewayStore.state.collectAsState()
     val isNormalActionEnabled = gatewayState.isSelectedGatewayChatChainReady
     val isRecoveryActionEnabled = gatewayState.canExecuteRemoteHostAction
+    val selectedGatewayType = gatewayState.selectedGateway?.gatewayType ?: GatewayType.openclaw
+    val showsOpenClawFeatures = selectedGatewayType == GatewayType.openclaw
 
     ClawLinkScaffold(
         topBar = {
@@ -88,15 +91,17 @@ fun AdvancedScreen(
                         enabled = isRecoveryActionEnabled,
                         onClick = onNavigateToRemoteRestart
                     )
-                    HorizontalDivider(modifier = Modifier.padding(start = 64.dp), color = MaterialTheme.colorScheme.outline.copy(alpha = 0.16f))
-                    AdvancedFeatureRow(
-                        icon = Icons.Default.Build,
-                        title = stringResource(R.string.advanced_doctor_fix),
-                        detail = stringResource(R.string.advanced_doctor_fix_detail),
-                        tint = Color(0xFFF59E0B),
-                        enabled = isRecoveryActionEnabled,
-                        onClick = onNavigateToDoctorFix
-                    )
+                    if (showsOpenClawFeatures) {
+                        HorizontalDivider(modifier = Modifier.padding(start = 64.dp), color = MaterialTheme.colorScheme.outline.copy(alpha = 0.16f))
+                        AdvancedFeatureRow(
+                            icon = Icons.Default.Build,
+                            title = stringResource(R.string.advanced_doctor_fix),
+                            detail = stringResource(R.string.advanced_doctor_fix_detail),
+                            tint = Color(0xFFF59E0B),
+                            enabled = isRecoveryActionEnabled,
+                            onClick = onNavigateToDoctorFix
+                        )
+                    }
                     HorizontalDivider(modifier = Modifier.padding(start = 64.dp), color = MaterialTheme.colorScheme.outline.copy(alpha = 0.16f))
                     AdvancedFeatureRow(
                         icon = Icons.Default.Terminal,
@@ -109,7 +114,10 @@ fun AdvancedScreen(
                     AdvancedFeatureRow(
                         icon = Icons.Default.Archive,
                         title = stringResource(R.string.advanced_backups),
-                        detail = stringResource(R.string.advanced_backups_detail),
+                        detail = stringResource(
+                            if (selectedGatewayType == GatewayType.hermes) R.string.advanced_backups_detail_hermes
+                            else R.string.advanced_backups_detail
+                        ),
                         tint = Color(0xFF22C55E),
                         enabled = isNormalActionEnabled,
                         onClick = onNavigateToBackups

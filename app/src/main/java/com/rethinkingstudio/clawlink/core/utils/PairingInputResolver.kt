@@ -1,6 +1,7 @@
 package com.rethinkingstudio.clawlink.core.utils
 
 import android.os.Build
+import com.rethinkingstudio.clawlink.core.models.gateway.GatewayType
 import com.rethinkingstudio.clawlink.core.state.LocalizedText.choose
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.decodeFromString
@@ -8,15 +9,20 @@ import kotlinx.serialization.json.Json
 
 @Serializable
 data class PairingQRCode(
+    val type: String? = null,
     val server: String,
     val gatewayId: String,
-    val accessCode: String
+    val accessCode: String,
+    val gatewayType: String? = null,
+    val capabilities: List<String> = emptyList()
 )
 
 data class ResolvedPairingInput(
     val serverURL: String,
     val gatewayID: String?,
-    val accessCode: String
+    val accessCode: String,
+    val gatewayType: GatewayType? = null,
+    val capabilities: List<String> = emptyList()
 )
 
 object PairingInputResolver {
@@ -32,10 +38,16 @@ object PairingInputResolver {
         if (trimmedPayload.isNotEmpty()) {
             return try {
                 val decoded = json.decodeFromString<PairingQRCode>(trimmedPayload)
+                val payloadType = decoded.type?.trim().orEmpty()
+                if (payloadType.isNotEmpty() && payloadType != "clawlink_pairing") {
+                    throw Exception(choose("Invalid QR code payload", "二维码内容无效"))
+                }
                 ResolvedPairingInput(
                     serverURL = normalizeServerURL(decoded.server, currentServerURL),
                     gatewayID = if (decoded.gatewayId.isBlank()) null else decoded.gatewayId,
-                    accessCode = decoded.accessCode
+                    accessCode = decoded.accessCode,
+                    gatewayType = decoded.gatewayType?.let { GatewayType.fromString(it) },
+                    capabilities = decoded.capabilities
                 )
             } catch (e: Exception) {
                 // If it's not a JSON QR, maybe it's just the access code?

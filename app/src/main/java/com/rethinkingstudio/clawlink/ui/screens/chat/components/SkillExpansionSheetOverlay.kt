@@ -37,9 +37,9 @@ data class SkillExpansionGuideStep(
 
 object SkillExpansionGuideFile {
     val title get() = choose("Start file transfer", "启动文件互传")
-    val heroTitle get() = choose("Let OpenClaw send and receive files", "让 OpenClaw 帮你收发文件")
+    val heroTitle get() = choose("Let the host send and receive files", "让宿主机帮你收发文件")
     val heroSubtitle get() = choose("No need to write skill content manually. One tap lets OpenClaw create and verify it.", "不用手写技能内容，点一下就能让它自己创建并验证。")
-    val installButtonTitle get() = choose("Ask OpenClaw to install file transfer", "让 OpenClaw 安装文件互传")
+    val installButtonTitle get() = choose("Install file transfer on host", "让宿主机安装文件互传")
     val installPrompt = """
     先确认 OpenClaw 里是否已经可用 `skill-creator`；如果可用，直接使用 OpenClaw 的 `skill-creator`，把 `file-transfer` 技能写到 OpenClaw 的技能存放目录 `~/.openclaw/workspace/.agents/skills/file-transfer/SKILL.md`。如果本地已经存在 `file-transfer` skill，先判断是否需要更新；如果不需要更新，就直接告诉用户本地已存在，不要重复创建。不要写到 `~/.codex/skills`，也不要放到 Codex 的技能目录里。
 
@@ -63,6 +63,15 @@ object SkillExpansionGuideFile {
 
     使用 OpenClaw 的 `skill-creator` 创建或更新一个 OpenClaw skill，名称必须是 `file-transfer`，位置存放在 OpenClaw 技能存放的默认位置。不要让我手写技能内容，直接生成完整的技能文件。
     """.trimIndent()
+    val hermesInstallPrompt = """
+    请使用 Hermes Agent 的技能扩展机制创建或更新 `file-transfer` 技能。先执行 `hermes skills --help`、`hermes skills list` 或 Hermes 当前可用的等价命令，确认技能安装目录和安装方式；不要写到 `~/.codex/skills`，也不要假设 OpenClaw 的技能目录适用于 Hermes。
+
+    然后执行 `clawconnect --help`，必要时再执行 `clawconnect send-file --help`，确认命令结构、参数和输出。接着阅读用户可见文档 `clawconnect-agent/README.zh-CN.md` 和 `clawconnect-agent/README.md`。如果当前环境能运行 `clawconnect`，必须结合实际命令输出验证 `send-file` 的真实行为。
+
+    请创建或更新 Hermes 的 `file-transfer` 技能，触发范围覆盖：从 Mac / PC 向移动端发送图片或文件、ClawLink 文件互传、`clawconnect send-file`、电脑到手机发文件。技能内容必须明确：PC / Mac 侧发送文件优先使用 `clawconnect send-file <本地路径>`；这是宿主机命令，不是在手机本机执行；图片也走 host -> relay -> mobile 文件转发流程；如果文件在手机上，则使用 App 内附件上传入口。
+
+    完成后说明 Hermes 技能是否安装成功，并总结 `clawconnect send-file` 的真实用法、默认会话选择规则和限制。
+    """.trimIndent()
 
     val steps get() = listOf(
         SkillExpansionGuideStep("understand-capability", 1, choose("Understand this capability", "了解这个能力"), choose("After setup, ClawLink can send computer files to mobile via `clawconnect send-file`, and mobile can send files back through chat attachments.", "配置完成后，ClawLink 可以把电脑上的文件通过 `clawconnect send-file` 发到手机，手机端也能把文件通过附件入口回传到聊天中。")),
@@ -71,84 +80,52 @@ object SkillExpansionGuideFile {
     )
 }
 
-object SkillExpansionGuideVoice {
-    val title get() = choose("Configure voice sending", "配置语音发送")
-    val heroTitle get() = choose("Let OpenClaw turn replies into voice", "让 OpenClaw 把回复变成语音")
-    val heroSubtitle get() = choose("Install edge-tts-universal, write the default voice and speed into config, and fall back to system voice if limited.", "先装 edge-tts-universal，再把默认音色和语速写进配置，受限时自动回退到系统语音。")
-    val installButtonTitle get() = choose("Ask OpenClaw to configure voice sending", "让 OpenClaw 配置语音发送")
+object SkillExpansionGuideAsr {
+    val title get() = choose("Install voice recognition", "安装语音识别")
+    val heroTitle get() = choose("Let the host recognize mobile voice", "让宿主机识别手机语音")
+    val heroSubtitle get() = choose("Install SenseVoice int8 on the host, write OPENCLAW_ASR_COMMAND, and verify real transcription.", "在宿主机安装 SenseVoice int8，写入 OPENCLAW_ASR_COMMAND，并验证真实转写。")
+    val installButtonTitle get() = choose("Install voice recognition on host", "让宿主机安装语音识别")
     val installPrompt = """
-    先确认 OpenClaw 里是否已经可用 `skill-creator`；如果可用，直接使用 OpenClaw 的 `skill-creator`，把 `edge-tts-universal` 技能写到 OpenClaw 的技能存放目录 `~/.openclaw/workspace/.agents/skills/edge-tts-universal/SKILL.md`。如果本地已经存在 `edge-tts-universal` skill，先判断是否需要更新；如果不需要更新，就直接告诉用户本地已存在，不要重复创建。不要写到 `~/.codex/skills`，也不要放到 Codex 的技能目录里。
+    请在宿主机上安装并验证 ClawLink 的真实语音识别能力，不要使用测试假数据或硬编码返回值。目标是让手机发送 `chat.voice.send` 语音后，宿主机通过 `OPENCLAW_ASR_COMMAND` 转写成文字，再转发给当前网关聊天。
 
-    请在用户电脑上完成语音转文字/转语音能力的准备工作，目标是安装并验证 `edge-tts-universal`，并在安装后向移动端发送一条测试数据确认链路可用。
+    先判断当前助手类型：
+    - 如果是 OpenClaw，优先使用 OpenClaw 可用的 `skill-creator` 创建或更新 `clawlink-host-asr` 技能，位置放在 OpenClaw 的默认技能目录，不要写到 `~/.codex/skills`
+    - 如果是 Hermes Agent，优先使用 Hermes 自己的技能扩展/技能安装机制创建或更新同名技能；如果 Hermes 没有创建器，就直接完成宿主机安装和配置，并说明技能创建受限
 
-    当前默认配置如下：
-    - 音色：留空（自动选择）
-    - 语速：0%
+    真实安装步骤如下：
+    1. 检查 `python3`、`ffmpeg`、`curl` 是否可用。macOS 优先使用 Homebrew 安装缺失项：`brew install ffmpeg`。
+    2. 创建目录 `~/.clawconnect/bin` 和 `~/.clawconnect/models`，并创建隔离环境 `python3 -m venv ~/.clawconnect/sensevoice-venv`。
+    3. 在隔离环境中安装真实依赖：`~/.clawconnect/sensevoice-venv/bin/python -m pip install --upgrade pip setuptools wheel`，然后安装 `sherpa-onnx soundfile numpy`。
+    4. 下载官方 SenseVoice int8 模型 `sherpa-onnx-sense-voice-zh-en-ja-ko-yue-int8-2024-07-17.tar.bz2` 到 `~/.clawconnect/models` 并解压，确认目录里存在 `model.int8.onnx` 和 `tokens.txt`。
+    5. 创建可执行脚本 `~/.clawconnect/bin/transcribe-sensevoice-int8`。脚本入参为 `{file} {language} {mimeType}`，需要用 `ffmpeg` 把输入音频转成 16k 单声道 wav，再调用 `sherpa_onnx.OfflineRecognizer.from_sense_voice(..., use_itn=True)` 输出纯文本到 stdout。
+    6. 写入或更新 `~/.clawconnect/.env`，路径必须换成当前宿主机的真实绝对路径，例如：
+       `OPENCLAW_ASR_COMMAND=/Users/alex/.clawconnect/bin/transcribe-sensevoice-int8 {file} {language} {mimeType}`
+       `OPENCLAW_SENSEVOICE_MODEL_DIR=/Users/alex/.clawconnect/models/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-int8-2024-07-17`
+       `OPENCLAW_SENSEVOICE_THREADS=2`
+    7. 分别根据当前网关重启服务：OpenClaw 用 `clawconnect restart-openclaw`，Hermes Agent 用 `clawconnect restart-hermes`。如果两者都在使用，就两个都重启。
+    8. 必须做真实验证：用一段真实音频文件或系统合成语音生成的音频跑 `~/.clawconnect/bin/transcribe-sensevoice-int8 <audio> zh-CN audio/mp4`，确认 stdout 是可读文本。不要只检查文件存在。
+    9. 完成后说明模型路径、脚本路径、当前生效的 `OPENCLAW_ASR_COMMAND`，并提示用户可以从手机直接发一条语音做端到端验证。
 
-    执行顺序如下：
-
-    1. 先检查是否已经存在对应技能
-    - 如果当前环境里已经有用于语音转语音/转语音插件安装的技能，或者已经存在同名的相关技能，请不要重复创建
-    - 如果技能已存在，只需要更新或直接复用，不要再调用 `skill-creator` 重新创建同一个技能
-    - 只有在技能不存在时，才使用 OpenClaw 的 `skill-creator` 来创建新技能
-
-    2. 如果需要创建技能，必须使用 `skill-creator`
-    - 创建新技能时，明确使用 OpenClaw 的 `skill-creator`
-    - 不要手写成普通文本说明，也不要用其他创建方式替代
-    - 技能内容要围绕安装、验证和使用 `edge-tts-universal` 展开
-    - 把默认语速写入 `OPENCLAW_TTS_RATE`
-    - 如果 `edge-tts-universal` 的语音生成能力受到限制，就继续使用系统自带的语音生成做兜底
-
-    3. 检查 Node.js 是否可用
-    - 依次执行 `node -v` 和 `npm -v`
-    - 如果 `node` 或 `npm` 不可用，或者版本过旧，请先安装最新稳定版 Node.js
-    - 安装完成后再次确认 `node` 和 `npm` 可正常使用
-
-    4. 安装 `edge-tts-universal`
-    - 使用下面的命令安装：
-      `npm install -g edge-tts-universal`
-    - 如果已经安装过，先判断是否需要重新安装或升级
-    - 尽量不要破坏用户现有环境；如果需要额外权限，请先说明原因
-
-    5. 验证安装是否成功
-    - 确认 `edge-tts-universal` 安装完成
-    - 给出一个最小可执行的验证方式，证明后续可以用它生成语音
-    - 如果需要，先在本机生成一条最小测试数据
-    - 如果生成触发限制，就回退到系统自带语音生成，仍然把测试数据走完
-
-    6. 发送测试数据到移动端
-    - 在确认安装和功能都可用后，把一条测试数据发到移动端，通过clawconnect-agent发送
-    - 测试数据要能用于确认手机端已经收到，且跨设备发送链路正常
-    - 如果测试数据是音频、文件或其他可展示内容，请走 OpenClaw 现有的跨设备传输流程
-    - 不要只在本机完成测试，必须实际发到移动端验证
-
-    7. 输出结果
-    - 简要说明 Node.js 是否已安装、`edge-tts-universal` 是否安装成功
-    - 简要说明测试数据是否已成功发送到移动端
-    - 如果失败，请说明失败点和下一步建议
-
-    如果系统支持长期记忆，请把下面这条偏好写入 OpenClaw 的长期记忆：
-    - 以后遇到“把电脑上的语音回复发到手机”或“在 ClawLink / OpenClaw 里配置语音发送”的需求，优先使用 `edge-tts-universal` skill。
-
-    如果环境里已经存在对应技能，就直接复用或更新，不要重复创建；只有不存在时，才用 `skill-creator` 创建。
+    技能内容要明确：以后遇到 ClawLink 手机语音输入、`voice_asr_not_configured`、Hermes/OpenClaw 收不到语音转写时，优先检查并修复 `OPENCLAW_ASR_COMMAND` 这条宿主机 ASR 链路。
     """.trimIndent()
 
     val steps get() = listOf(
-        SkillExpansionGuideStep("understand-capability", 1, choose("Understand this capability", "了解这个能力"), choose("Clarify `edge-tts-universal`, default voice, and system voice fallback so voice replies keep working under generation limits.", "先把 `edge-tts-universal`、默认音色和系统语音的兜底关系理清楚，这样语音回复在生成受限时也不会断。")),
-        SkillExpansionGuideStep("confirm-source", 2, choose("Confirm skill source", "确认技能来源"), choose("This depends on `skill-creator`, `edge-tts-universal`, and the host voice engine. Confirm availability before generating the skill and writing default voice and speed.", "这个能力依赖 `skill-creator`、`edge-tts-universal` 和宿主机语音引擎，先确认可用再继续生成技能，并把音色和语速默认值写进去。")),
-        SkillExpansionGuideStep("install-verify", 3, choose("Install and verify voice sending", "安装并验证语音发送"), choose("After tapping the bottom button, OpenClaw will install and verify `edge-tts-universal`, then send test voice to mobile.", "点底部按钮后，OpenClaw 会先安装并验证 `edge-tts-universal`，再把测试语音发到手机。"))
+        SkillExpansionGuideStep("install-engine", 1, choose("Install recognition engine", "安装识别引擎"), choose("Install ffmpeg and sherpa-onnx, then download the real SenseVoice int8 model.", "先安装 ffmpeg、sherpa-onnx 等真实依赖，并下载真实 SenseVoice int8 模型。")),
+        SkillExpansionGuideStep("write-env", 2, choose("Write host config", "写入宿主机配置"), choose("Create the host transcription script and write OPENCLAW_ASR_COMMAND into ~/.clawconnect/.env.", "创建宿主机转写脚本，并把 OPENCLAW_ASR_COMMAND 写入 ~/.clawconnect/.env。")),
+        SkillExpansionGuideStep("verify-restart", 3, choose("Verify and restart", "验证并重启"), choose("Run the script against real audio, restart the selected gateway, then send voice from mobile to verify end to end.", "用真实音频跑脚本，重启当前网关，再从手机发送语音做端到端验证。"))
     )
 }
 
 enum class SkillExpansionScreen {
     MENU,
     FILE_TRANSFER,
-    VOICE_REPLY
+    VOICE_RECOGNITION
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SkillExpansionSheetOverlay(
+    isHermesGateway: Boolean = false,
     onDismiss: () -> Unit,
     onSendPrompt: (String) -> Unit
 ) {
@@ -180,9 +157,10 @@ fun SkillExpansionSheetOverlay(
                     when (screen) {
                         SkillExpansionScreen.MENU -> {
                             SkillExpansionMenu(
+                                isHermesGateway = isHermesGateway,
                                 onDismiss = onDismiss,
                                 onNavigateToFileTransfer = { currentScreen = SkillExpansionScreen.FILE_TRANSFER },
-                                onNavigateToVoiceReply = { currentScreen = SkillExpansionScreen.VOICE_REPLY }
+                                onNavigateToVoiceRecognition = { currentScreen = SkillExpansionScreen.VOICE_RECOGNITION }
                             )
                         }
                         SkillExpansionScreen.FILE_TRANSFER -> {
@@ -197,24 +175,24 @@ fun SkillExpansionSheetOverlay(
                                 tint = Color(0xFF5ECF7A),
                                 onBack = { currentScreen = SkillExpansionScreen.MENU },
                                 onInstall = {
-                                    onSendPrompt(SkillExpansionGuideFile.installPrompt)
+                                    onSendPrompt(if (isHermesGateway) SkillExpansionGuideFile.hermesInstallPrompt else SkillExpansionGuideFile.installPrompt)
                                     onDismiss()
                                 }
                             )
                         }
-                        SkillExpansionScreen.VOICE_REPLY -> {
+                        SkillExpansionScreen.VOICE_RECOGNITION -> {
                             SkillSetupDetailView(
-                                title = SkillExpansionGuideVoice.title,
-                                heroTitle = SkillExpansionGuideVoice.heroTitle,
-                                heroSubtitle = SkillExpansionGuideVoice.heroSubtitle,
-                                installButtonTitle = SkillExpansionGuideVoice.installButtonTitle,
-                                installPrompt = SkillExpansionGuideVoice.installPrompt,
-                                steps = SkillExpansionGuideVoice.steps,
-                                symbol = Icons.Default.GraphicEq,
-                                tint = ChatColors.linkBlue,
+                                title = SkillExpansionGuideAsr.title,
+                                heroTitle = SkillExpansionGuideAsr.heroTitle,
+                                heroSubtitle = SkillExpansionGuideAsr.heroSubtitle,
+                                installButtonTitle = SkillExpansionGuideAsr.installButtonTitle,
+                                installPrompt = SkillExpansionGuideAsr.installPrompt,
+                                steps = SkillExpansionGuideAsr.steps,
+                                symbol = Icons.Default.Mic,
+                                tint = Color(0xFFE0A52B),
                                 onBack = { currentScreen = SkillExpansionScreen.MENU },
                                 onInstall = {
-                                    onSendPrompt(SkillExpansionGuideVoice.installPrompt)
+                                    onSendPrompt(SkillExpansionGuideAsr.installPrompt)
                                     onDismiss()
                                 }
                             )
@@ -242,9 +220,10 @@ private fun SheetHeaderButton(icon: ImageVector, label: String, onClick: () -> U
 
 @Composable
 private fun SkillExpansionMenu(
+    isHermesGateway: Boolean,
     onDismiss: () -> Unit,
     onNavigateToFileTransfer: () -> Unit,
-    onNavigateToVoiceReply: () -> Unit
+    onNavigateToVoiceRecognition: () -> Unit
 ) {
     Column(
         modifier = Modifier
@@ -301,20 +280,22 @@ private fun SkillExpansionMenu(
             border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.10f))
         ) {
             Column {
+                if (!isHermesGateway) {
+                    AdvancedFeatureRow(
+                        title = SkillExpansionGuideFile.title,
+                        detail = stringResource(R.string.chat_skill_extension_file_transfer),
+                        icon = Icons.Default.ArrowUpward,
+                        tint = Color(0xFF5ECF7A),
+                        onClick = onNavigateToFileTransfer
+                    )
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.08f), modifier = Modifier.padding(horizontal = 18.dp))
+                }
                 AdvancedFeatureRow(
-                    title = SkillExpansionGuideFile.title,
-                    detail = stringResource(R.string.chat_skill_extension_file_transfer),
-                    icon = Icons.Default.ArrowUpward,
-                    tint = Color(0xFF5ECF7A),
-                    onClick = onNavigateToFileTransfer
-                )
-                HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.08f), modifier = Modifier.padding(horizontal = 18.dp))
-                AdvancedFeatureRow(
-                    title = SkillExpansionGuideVoice.title,
-                    detail = stringResource(R.string.chat_skill_extension_voice_reply),
-                    icon = Icons.Default.GraphicEq,
-                    tint = ChatColors.linkBlue,
-                    onClick = onNavigateToVoiceReply
+                    title = SkillExpansionGuideAsr.title,
+                    detail = stringResource(R.string.chat_skill_extension_asr),
+                    icon = Icons.Default.Mic,
+                    tint = Color(0xFFE0A52B),
+                    onClick = onNavigateToVoiceRecognition
                 )
             }
         }

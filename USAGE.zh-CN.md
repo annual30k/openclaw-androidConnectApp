@@ -238,27 +238,13 @@ clawconnect reset
 clawconnect send-file ~/Pictures/demo.jpg
 ```
 
-### 5.3 语音输入和语音回复
+### 5.3 语音输入
 
 Android 端支持语音输入：
 
 1. 在聊天输入区切换到语音模式。
 2. 按住说话。
 3. 松开发送，滑出后松开可取消。
-
-语音回复需要电脑端 Agent 和技能配置支持。电脑端可通过环境变量启用默认 TTS：
-
-```bash
-OPENCLAW_TTS_ENABLED=1 clawconnect run
-```
-
-App 中可进入：
-
-```text
-设置 -> 语音设置
-```
-
-配置语音回复相关选项。
 
 ### 5.4 网关管理
 
@@ -562,4 +548,3 @@ clawconnect update
 # 清除本机配对并重新开始
 clawconnect reset
 ```
-

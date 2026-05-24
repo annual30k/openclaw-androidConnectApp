@@ -38,7 +38,7 @@ fun ModelPickerSheetOverlay(
     onSelect: (ModelItem) -> Unit
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = false)
-    val groupedModels = models.groupBy { it.providerId }
+    val groupedModels = models.groupBy { it.provider.ifBlank { it.providerId } }
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -228,7 +228,7 @@ private fun ModelPickerRow(model: ModelItem, isSelected: Boolean, onClick: () ->
             Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     Text(
-                        text = model.displayName,
+                        text = model.displayTitle,
                         style = MaterialTheme.typography.bodyLarge,
                         fontWeight = FontWeight.SemiBold,
                         color = MaterialTheme.colorScheme.onSurface

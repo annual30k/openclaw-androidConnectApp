@@ -212,3 +212,15 @@ internal object TaskListPresentationLogic {
             .any { it.contains(term, ignoreCase = true) }
     }
 }
+
+internal object TaskSwipeActionPresentation {
+    const val RevealOffsetDp = -80f
+
+    fun shouldRevealDelete(
+        canManageTasks: Boolean,
+        isActionDisabled: Boolean,
+        dragAmount: Float
+    ): Boolean = canManageTasks && !isActionDisabled && dragAmount < -10f
+
+    fun shouldHideDelete(dragAmount: Float): Boolean = dragAmount > 10f
+}

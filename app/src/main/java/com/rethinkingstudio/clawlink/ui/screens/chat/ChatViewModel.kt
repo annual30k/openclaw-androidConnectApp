@@ -1,6 +1,7 @@
 package com.rethinkingstudio.clawlink.ui.screens.chat
 
 import android.content.Context
+import android.util.Base64
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -11,6 +12,8 @@ import com.rethinkingstudio.clawlink.R
 import com.rethinkingstudio.clawlink.core.models.chat.ComposerAttachmentUploadItem
 import com.rethinkingstudio.clawlink.core.models.chat.AttachmentUploadPhase
 import com.rethinkingstudio.clawlink.core.network.dto.RelayFileTransferItem
+import com.rethinkingstudio.clawlink.core.network.transport.RelayChatSendAttachmentPayload
+import com.rethinkingstudio.clawlink.core.network.transport.VoiceSendAudioPayload
 import com.rethinkingstudio.clawlink.core.models.gateway.AggregateStatus
 import com.rethinkingstudio.clawlink.core.state.LocalizedText.choose
 import com.rethinkingstudio.clawlink.core.state.chat.ChatStore
@@ -23,6 +26,8 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.delay
 import java.io.File
+import java.time.Instant
+import java.util.Locale
 import java.util.UUID
 
 /**
@@ -48,6 +53,8 @@ internal class ChatViewModel(
     var voiceInputBaseText by mutableStateOf("")
     var voiceInputAudioLevel by mutableStateOf(0.0)
     var voiceInputCancelPreview by mutableStateOf(false)
+    var voiceInputRecording by mutableStateOf<RecordedVoiceInput?>(null)
+        private set
     private var voiceInputHoldToken: UUID? = null
     private var voiceInputHoldJob: Job? = null
     var composerNotice by mutableStateOf<String?>(null)
@@ -59,11 +66,13 @@ internal class ChatViewModel(
     var documentPreview by mutableStateOf<ChatDocumentPreviewState?>(null)
     private val speechCoordinator = ComposerSpeechCoordinator(
         scope = scope,
-        onPartialTranscript = { transcript -> updateVoiceInputTranscript(transcript) },
-        onFinalTranscript = { transcript -> completeVoiceInput(transcript) },
+        onRecordingFinished = { recording -> completeVoiceInput(recording) },
         onAudioLevel = { audioLevel -> updateVoiceInputAudioLevel(audioLevel) },
         onError = { error -> handleVoiceInputFailure(error) }
     )
+
+    val hasVoiceInputRecording: Boolean
+        get() = voiceInputRecording?.file?.let { it.exists() && it.length() > 0L } == true
 
     fun clearError() {
         chatStore.clearError()
@@ -220,6 +229,7 @@ internal class ChatViewModel(
         composerNotice = null
         voiceInputBaseText = messageText
         voiceInputTranscript = ""
+        deleteVoiceInputRecording()
         voiceInputAudioLevel = 0.0
         voiceMode = true
         voiceInputPhase = VoiceInputPhase.Starting
@@ -268,39 +278,21 @@ internal class ChatViewModel(
         voiceInputPhase = VoiceInputPhase.Idle
         voiceInputTranscript = ""
         voiceInputBaseText = ""
+        deleteVoiceInputRecording()
         voiceInputHoldToken = null
         voiceMode = true
     }
 
     fun confirmVoiceInput(context: Context) {
         scope.launch {
-            sendComposerMessage(
-                context = context,
-                gatewayId = gatewayStore.state.value.selectedGateway?.id.orEmpty(),
-                sessionKey = chatStore.state.value.currentSessionKey,
-                rawInput = messageText,
-                attachments = composerAttachments
-            )
-            resetVoiceInputState(restoreComposer = false)
+            sendRecordedVoiceInput(context)
         }
     }
 
     fun disposeVoiceInput() {
         voiceInputHoldJob?.cancel()
         speechCoordinator.destroy()
-    }
-
-    private fun updateVoiceInputTranscript(transcript: String) {
-        if (voiceInputPhase != VoiceInputPhase.Starting &&
-            voiceInputPhase != VoiceInputPhase.Recording &&
-            voiceInputPhase != VoiceInputPhase.Stopping
-        ) return
-
-        voiceInputTranscript = transcript
-        messageText = composedVoiceInputText(
-            baseText = voiceInputBaseText,
-            transcript = transcript.trim()
-        )
+        deleteVoiceInputRecording()
     }
 
     private fun updateVoiceInputAudioLevel(audioLevel: Double) {
@@ -313,23 +305,20 @@ internal class ChatViewModel(
         voiceInputAudioLevel = maxOf(normalized, voiceInputAudioLevel * 0.72)
     }
 
-    private fun completeVoiceInput(transcript: String) {
+    private fun completeVoiceInput(recording: RecordedVoiceInput) {
         if (voiceInputPhase != VoiceInputPhase.Starting &&
             voiceInputPhase != VoiceInputPhase.Recording &&
             voiceInputPhase != VoiceInputPhase.Stopping
         ) return
 
-        val resolvedTranscript = transcript.trim()
-        if (resolvedTranscript.isEmpty()) {
+        if (!recording.file.exists() || recording.file.length() <= 0L) {
             resetVoiceInputState(restoreComposer = true)
             return
         }
 
-        messageText = composedVoiceInputText(
-            baseText = voiceInputBaseText,
-            transcript = resolvedTranscript
-        )
-        voiceInputTranscript = resolvedTranscript
+        messageText = voiceInputBaseText
+        voiceInputTranscript = ""
+        voiceInputRecording = recording
         voiceInputCancelPreview = false
         voiceInputAudioLevel = 0.0
         voiceInputPhase = VoiceInputPhase.Confirming
@@ -348,6 +337,7 @@ internal class ChatViewModel(
         if (restoreComposer) {
             messageText = voiceInputBaseText
         }
+        deleteVoiceInputRecording()
         voiceInputPhase = VoiceInputPhase.Idle
         voiceInputTranscript = ""
         voiceInputBaseText = ""
@@ -355,6 +345,52 @@ internal class ChatViewModel(
         voiceInputCancelPreview = false
         voiceInputHoldToken = null
         voiceMode = true
+    }
+
+    private suspend fun sendRecordedVoiceInput(context: Context) {
+        val recording = voiceInputRecording
+        val gatewayId = gatewayStore.state.value.selectedGateway?.id.orEmpty()
+        val sessionKey = chatStore.state.value.currentSessionKey
+        if (recording == null || !recording.file.exists() || recording.file.length() <= 0L) {
+            composerNotice = VoiceInputError.NoSpeech.message
+            resetVoiceInputState(restoreComposer = true)
+            return
+        }
+        if (gatewayId.isBlank() || sessionKey.isBlank()) {
+            composerNotice = context.getString(R.string.gateway_unpaired_host)
+            return
+        }
+
+        isUploadingAttachment = true
+        try {
+            val bytes = withContext(Dispatchers.IO) { recording.file.readBytes() }
+            chatStore.sendVoiceMessage(
+                gatewayId = gatewayId,
+                audio = VoiceSendAudioPayload(
+                    fileName = recording.fileName,
+                    mimeType = recording.mimeType,
+                    sizeBytes = bytes.size.toLong(),
+                    contentBase64 = Base64.encodeToString(bytes, Base64.NO_WRAP)
+                ),
+                message = messageText,
+                languageHint = Locale.getDefault().toLanguageTag()
+            )
+            composerNotice = null
+            messageText = ""
+            resetVoiceInputState(restoreComposer = false)
+        } catch (e: Exception) {
+            composerNotice = context.getString(
+                R.string.chat_attachment_send_failed_with_reason,
+                e.message ?: choose("Unknown error", "未知错误")
+            )
+        } finally {
+            isUploadingAttachment = false
+        }
+    }
+
+    private fun deleteVoiceInputRecording() {
+        voiceInputRecording?.file?.let { file -> runCatching { file.delete() } }
+        voiceInputRecording = null
     }
 
     private suspend fun sendComposerMessage(
@@ -398,21 +434,25 @@ internal class ChatViewModel(
                     failureMessage = null
                 )
             }
+            val sendStartedAt = System.currentTimeMillis() / 1000.0
             chatStore.beginComposerAttachmentUploadMessages(
                 attachments = attachments,
                 gatewayId = gatewayId,
                 sessionKey = sessionKey,
                 senderDisplayName = gatewayStore.state.value.selectedGateway?.displayName,
-                messageSortBaseTimestamp = System.currentTimeMillis() / 1000.0
+                messageSortBaseTimestamp = sendStartedAt
             )
             composerAttachments = emptyList()
 
-            attachments.forEach { attachment ->
+            val commandAttachments = mutableListOf<RelayChatSendAttachmentPayload>()
+            attachments.forEachIndexed { index, attachment ->
                 val record = withContext(Dispatchers.IO) {
                     uploadComposerAttachment(
                         gatewayId = gatewayId,
                         sessionKey = sessionKey,
                         attachment = attachment,
+                        senderDisplayName = gatewayStore.state.value.selectedGateway?.displayName,
+                        clientCreatedAt = Instant.ofEpochMilli(((sendStartedAt + (index * 0.001)) * 1000).toLong()).toString(),
                         onProgress = { progress ->
                             scope.launch(Dispatchers.Main) {
                                 setUploadItemProgress(attachment.id, progress)
@@ -428,6 +468,7 @@ internal class ChatViewModel(
                         }
                     )
                 }
+                makeRelayCommandAttachment(attachment)?.let { commandAttachments += it }
                 chatStore.completeComposerAttachmentUploadMessage(
                     attachment = attachment,
                     record = record,
@@ -438,13 +479,14 @@ internal class ChatViewModel(
                 setUploadItemPhase(attachment.id, AttachmentUploadPhase.completed)
             }
             if (trimmed.isNotBlank()) {
-                // iOS sends chat.send only for the text part; attachments are uploaded first
-                // and then surfaced through the relay's file events.
+                // Send direct attachment payloads with chat.send so agents do not depend on
+                // file event ordering before they receive the user message.
                 chatStore.sendMessage(
                     content = trimmed,
                     gatewayId = gatewayId,
                     attachmentIds = emptyList(),
-                    attachmentBlocks = emptyList()
+                    attachmentBlocks = emptyList(),
+                    commandAttachments = commandAttachments
                 )
             }
 
@@ -494,6 +536,8 @@ internal class ChatViewModel(
         gatewayId: String,
         sessionKey: String,
         attachment: ComposerAttachmentDraft,
+        senderDisplayName: String?,
+        clientCreatedAt: String?,
         onProgress: ((Double) -> Unit)? = null
     ): RelayFileTransferItem {
         val bytes = withContext(Dispatchers.IO) {
@@ -508,7 +552,23 @@ internal class ChatViewModel(
             durationMs = attachment.durationMs?.coerceAtMost(Int.MAX_VALUE.toLong())?.toInt(),
             imageWidth = attachment.imageWidth,
             imageHeight = attachment.imageHeight,
+            senderDisplayName = senderDisplayName,
+            clientCreatedAt = clientCreatedAt,
             onProgress = onProgress
         )
+    }
+
+    private suspend fun makeRelayCommandAttachment(attachment: ComposerAttachmentDraft): RelayChatSendAttachmentPayload? {
+        return withContext(Dispatchers.IO) {
+            runCatching {
+                val bytes = File(attachment.filePath).readBytes()
+                RelayChatSendAttachmentPayload(
+                    fileName = attachment.fileName,
+                    mimeType = attachment.mimeType,
+                    sizeBytes = attachment.sizeBytes,
+                    contentBase64 = Base64.encodeToString(bytes, Base64.NO_WRAP)
+                )
+            }.getOrNull()
+        }
     }
 }

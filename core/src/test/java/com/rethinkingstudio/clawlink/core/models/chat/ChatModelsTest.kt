@@ -1,5 +1,8 @@
 package com.rethinkingstudio.clawlink.core.models.chat
 
+import com.rethinkingstudio.clawlink.core.network.transport.VoiceSendAudioPayload
+import com.rethinkingstudio.clawlink.core.state.chat.buildLocalVoiceUserMessage
+import kotlinx.serialization.json.Json
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -43,6 +46,77 @@ class ChatModelsTest {
         )
 
         assertEquals(1, message.voiceContentBlocks.size)
+    }
+
+    @Test
+    fun localVoiceSendCreatesVisibleUserVoiceMessage() {
+        val message = buildLocalVoiceUserMessage(
+            audio = VoiceSendAudioPayload(
+                fileName = "voice-input.m4a",
+                mimeType = "audio/mp4",
+                sizeBytes = 4,
+                contentBase64 = "AQIDBA=="
+            ),
+            gatewayId = "gateway-1",
+            sessionKey = "main",
+            clientRunId = "run-1",
+            sortTimestamp = 123.0
+        )
+
+        assertEquals(MessageRole.user, message.role)
+        assertEquals(MessageState.completed, message.state)
+        assertEquals("local-user-run-1", message.runId)
+        assertTrue(message.hasVoiceContent)
+        assertTrue(message.shouldDisplayInChat(showInvocationProcess = false))
+        val voice = message.voiceContentBlocks.single()
+        assertEquals("voice", voice.type)
+        assertEquals("voice-input.m4a", voice.fileName)
+        assertEquals("audio/mp4", voice.mimeType)
+        assertEquals(4, voice.sizeBytes)
+        assertTrue(voice.voiceDownloadURLString!!.startsWith("file://"))
+    }
+
+    @Test
+    fun voiceContentBlocksDecodeSnakeCaseDownloadMetadata() {
+        val block = Json.decodeFromString<RelayChatContentBlock>(
+            """
+            {
+              "type": "voice",
+              "file_id": "file_voice_snake",
+              "file_name": "reply.mp3",
+              "mime_type": "audio/mpeg",
+              "duration_ms": 1200,
+              "download_url": "/api/mobile/files/file_voice_snake",
+              "sender_display_name": "Mac Book Pro"
+            }
+            """.trimIndent()
+        )
+
+        assertTrue(block.isVoiceMessageBlock)
+        assertEquals("file_voice_snake", block.fileId)
+        assertEquals("reply.mp3", block.fileName)
+        assertEquals("audio/mpeg", block.mimeType)
+        assertEquals(1200, block.durationMs)
+        assertEquals("Mac Book Pro", block.senderDisplayName)
+        assertEquals("/api/mobile/files/file_voice_snake", block.voiceDownloadURLString)
+        assertEquals("file_voice_snake", block.voicePlaybackIdentifier)
+    }
+
+    @Test
+    fun fileContentBlocksDecodeAssistantSourceRunId() {
+        val block = Json.decodeFromString<RelayChatContentBlock>(
+            """
+            {
+              "type": "file",
+              "file_id": "file_reply_image",
+              "file_name": "reply.jpg",
+              "mime_type": "image/jpeg",
+              "source_run_id": "run-voice-1"
+            }
+            """.trimIndent()
+        )
+
+        assertEquals("run-voice-1", block.sourceRunId)
     }
 
     @Test

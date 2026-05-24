@@ -34,7 +34,6 @@ import com.rethinkingstudio.clawlink.ui.screens.settings.MaintenanceMode
 import com.rethinkingstudio.clawlink.ui.screens.skills.SkillsScreen
 import com.rethinkingstudio.clawlink.ui.screens.tasks.TasksScreen
 import com.rethinkingstudio.clawlink.ui.screens.welcome.WelcomeCarouselScreen
-import com.rethinkingstudio.clawlink.core.models.skills.SkillItem
 
 object Routes {
     const val WELCOME = "welcome"
@@ -51,7 +50,6 @@ object Routes {
     const val HELP = "help"
     const val OFFICE = "office"
     const val SESSIONS = "sessions"
-    const val VOICE_SETUP = "voice_setup"
     const val LANGUAGE = "language"
     const val LOGS = "logs"
     const val BACKUPS = "backups"
@@ -71,16 +69,8 @@ fun AppNavigation(
     var hasRestoredSession by remember { mutableStateOf(false) }
     val authState by container.authStore.state.collectAsState()
     val gatewayState by container.gatewayStore.state.collectAsState()
-    val skillState by container.skillStore.state.collectAsState()
-    val chatState by container.chatStore.state.collectAsState()
-    val voiceReplyEnabled by container.userPreferencesStore.assistantVoiceRepliesEnabled.collectAsState()
-    val voiceIdentifier by container.userPreferencesStore.voiceReplyVoiceIdentifier.collectAsState()
-    val voiceRatePercent by container.userPreferencesStore.voiceReplyRatePercent.collectAsState()
     val showsToolInvocationProcess by container.userPreferencesStore.showsToolInvocationProcess.collectAsState()
     val scope = rememberCoroutineScope()
-    val hasVoiceReplyGenerationSetup = remember(skillState.skills) {
-        skillState.skills.any { it.isVoiceReplyGenerationSkillReady() }
-    }
 
     LaunchedEffect(Unit) {
         container.authStore.tryRestoreSession()
@@ -139,21 +129,8 @@ fun AppNavigation(
         }
     }
 
-    LaunchedEffect(voiceReplyEnabled, voiceIdentifier, voiceRatePercent, hasVoiceReplyGenerationSetup) {
-        container.chatStore.updateVoiceReplyConfig(
-            enabled = voiceReplyEnabled,
-            hasGenerationSetup = hasVoiceReplyGenerationSetup,
-            voiceIdentifier = voiceIdentifier,
-            ratePercent = voiceRatePercent
-        )
-    }
-
     LaunchedEffect(showsToolInvocationProcess) {
         container.chatStore.setShowInvocationProcess(showsToolInvocationProcess)
-    }
-
-    LaunchedEffect(voiceIdentifier, voiceRatePercent, chatState.currentGatewayId, chatState.currentSessionKey) {
-        container.chatStore.syncVoiceReplyConfigToRelay()
     }
 
     NavHost(navController = navController, startDestination = startDestination) {
@@ -214,6 +191,7 @@ fun AppNavigation(
         composable(Routes.GATEWAYS) {
             GatewayListScreen(
                 gatewayStore = container.gatewayStore,
+                chatStore = container.chatStore,
                 onNavigateToPairing = { navController.navigate(Routes.PAIRING) },
                 onBack = { navController.popBackStack() }
             )
@@ -270,7 +248,6 @@ fun AppNavigation(
                 onNavigateToHelp = { navController.navigate(Routes.HELP) },
                 onNavigateToOffice = { navController.navigate(Routes.OFFICE) },
                 onNavigateToSessions = { navController.navigate(Routes.SESSIONS) },
-                onNavigateToVoiceSetup = { navController.navigate(Routes.VOICE_SETUP) },
                 onNavigateToLanguage = { navController.navigate(Routes.LANGUAGE) },
                 onLogout = {}
             )
@@ -305,16 +282,6 @@ fun AppNavigation(
                 apiClient = container.apiClient,
                 onBack = { navController.popBackStack() },
                 onNavigateToGateways = { navController.navigate(Routes.GATEWAYS) }
-            )
-        }
-
-        composable(Routes.VOICE_SETUP) {
-            com.rethinkingstudio.clawlink.ui.screens.settings.VoiceSetupScreen(
-                prefsStore = container.userPreferencesStore,
-                gatewayStore = container.gatewayStore,
-                skillStore = container.skillStore,
-                chatStore = container.chatStore,
-                onBack = { navController.popBackStack() }
             )
         }
 
@@ -369,15 +336,4 @@ fun AppNavigation(
             )
         }
     }
-}
-
-private fun SkillItem.isVoiceReplyGenerationSkillReady(): Boolean {
-    if (blockedByAllowlist || !isEnabled || eligible == false || !missing.isEmpty) return false
-    val key = effectiveKey.trim().lowercase()
-    val name = effectiveName.trim().lowercase()
-    val voiceReplyGenerationSkillKey = "edge-tts-universal"
-    return key == voiceReplyGenerationSkillKey ||
-        name == voiceReplyGenerationSkillKey ||
-        key.contains(voiceReplyGenerationSkillKey) ||
-        name.contains(voiceReplyGenerationSkillKey)
 }

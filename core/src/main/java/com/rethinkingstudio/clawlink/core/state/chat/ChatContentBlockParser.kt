@@ -56,6 +56,7 @@ private fun parseContentBlock(element: JsonElement): RelayChatContentBlock? {
             expiresAt = obj.string("expiresAt", "expires_at"),
             senderDisplayName = obj.string("senderDisplayName", "sender_display_name"),
             transcript = obj.string("transcript"),
+            sourceRunId = obj.string("sourceRunId", "source_run_id"),
             gatewayId = obj.string("gatewayId", "gateway_id"),
             sessionKey = obj.string("sessionKey", "session_key"),
             arguments = obj["arguments"]?.let { RelayJSONValue.fromJsonElement(it) },
@@ -114,6 +115,7 @@ internal fun RelayChatContentBlock.signature(): String {
         text.orEmpty(),
         fileId.orEmpty(),
         fileName.orEmpty(),
+        sourceRunId.orEmpty(),
         status.orEmpty(),
         isError?.toString().orEmpty()
     ).joinToString("|")

@@ -96,34 +96,21 @@ internal fun ChatConversationList(
     modifier: Modifier = Modifier
 ) {
     val displayMessages = remember(
-    chatState.messages,
-    chatState.showInvocationProcess,
-    chatState.assistantVoiceRepliesEffectiveEnabled,
-    chatState.assistantVoiceRepliesEnabledAt,
-    chatState.voiceReplyTextOnlyRunIds
-) {
-    val now = System.currentTimeMillis() / 1000.0
-    chatState.messages.filter { message ->
-        val forceDisplayText = message.isVoiceReplyTextOnlyCandidate(
-            assistantVoiceRepliesEffectiveEnabled = chatState.assistantVoiceRepliesEffectiveEnabled,
-            assistantVoiceRepliesEnabledAt = chatState.assistantVoiceRepliesEnabledAt,
-            voiceReplyTextOnlyRunIds = chatState.voiceReplyTextOnlyRunIds,
-            now = now
-        )
-        message.shouldDisplayInChat(
-            showInvocationProcess = chatState.showInvocationProcess,
-            assistantVoiceRepliesEnabled = chatState.assistantVoiceRepliesEffectiveEnabled,
-            assistantVoiceRepliesEnabledAt = chatState.assistantVoiceRepliesEnabledAt,
-            forceDisplayTextWhenVoiceRepliesEnabled = forceDisplayText
-        ) ||
-            message.state == MessageState.streaming && message.role == MessageRole.assistant
+        chatState.messages,
+        chatState.showInvocationProcess
+    ) {
+        chatState.messages.filter { message ->
+            message.shouldDisplayInChat(
+                showInvocationProcess = chatState.showInvocationProcess
+            ) ||
+                message.state == MessageState.streaming && message.role == MessageRole.assistant
+        }
     }
-}
 
-val hasStreamingAssistantMessage = displayMessages.any {
-    it.role == MessageRole.assistant && it.state == MessageState.streaming
-}
-val conversationAnimationKey = "${gatewayId.orEmpty()}::${chatState.currentSessionKey}"
+    val hasStreamingAssistantMessage = displayMessages.any {
+        it.role == MessageRole.assistant && it.state == MessageState.streaming
+    }
+    val conversationAnimationKey = "${gatewayId.orEmpty()}::${chatState.currentSessionKey}"
 
 LazyColumn(
     modifier = modifier.pointerInput(onDismissKeyboard) {
@@ -149,12 +136,6 @@ LazyColumn(
     }
 
     items(displayMessages, key = { message -> "$conversationAnimationKey:${message.id}" }) { message ->
-        val isVoiceReplyTextOnly = message.isVoiceReplyTextOnlyCandidate(
-            assistantVoiceRepliesEffectiveEnabled = chatState.assistantVoiceRepliesEffectiveEnabled,
-            assistantVoiceRepliesEnabledAt = chatState.assistantVoiceRepliesEnabledAt,
-            voiceReplyTextOnlyRunIds = chatState.voiceReplyTextOnlyRunIds,
-            now = System.currentTimeMillis() / 1000.0
-        )
         ConversationMessageEnterAnimation(
             role = message.role,
             animationKey = "$conversationAnimationKey:${message.id}"
@@ -162,7 +143,6 @@ LazyColumn(
             MessageBubble(
                 message = message,
                 showInvocationProcess = chatState.showInvocationProcess,
-                isVoiceReplyTextOnly = isVoiceReplyTextOnly,
                 relayBaseUrl = chatStore.relayBaseUrl,
                 accessToken = chatStore.accessToken,
                 readVoicePlaybackIdentifiers = chatState.readVoicePlaybackIdentifiers,

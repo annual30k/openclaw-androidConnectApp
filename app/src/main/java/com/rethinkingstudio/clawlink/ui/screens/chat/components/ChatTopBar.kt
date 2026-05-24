@@ -44,6 +44,7 @@ import com.rethinkingstudio.clawlink.ui.screens.chat.ChatColors
 @Composable
 internal fun ChatTopBar(
     gateway: GatewaySummary?,
+    contextUsageLine: String?,
     appRelayStatus: AggregateStatus,
     onGatewayClick: () -> Unit,
     onRefresh: () -> Unit,
@@ -118,9 +119,10 @@ internal fun ChatTopBar(
                     )
                 }
 
-                if (hasGateway) {
+                val visibleContextUsageLine = contextUsageLine?.trim()?.takeIf { it.isNotEmpty() }
+                if (hasGateway && visibleContextUsageLine != null) {
                     Text(
-                        text = (stringResource(R.string.gateway_context_usage_label) + " " + (gateway?.contextUsage?.takeIf { it.isNotBlank() } ?: stringResource(R.string.gateway_context_usage_empty))),
+                        text = (stringResource(R.string.gateway_context_usage_label) + " " + visibleContextUsageLine),
                         style = MaterialTheme.typography.labelSmall.copy(fontSize = 11.sp),
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         fontWeight = FontWeight.Medium,

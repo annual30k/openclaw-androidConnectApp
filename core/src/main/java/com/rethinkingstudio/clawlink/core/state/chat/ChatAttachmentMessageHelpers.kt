@@ -104,6 +104,7 @@ internal fun makeFileContentBlock(record: RelayFileTransferItem): RelayChatConte
         downloadPath = record.downloadPath,
         expiresAt = record.expiresAt,
         senderDisplayName = record.senderDisplayName,
+        sourceRunId = record.sourceRunId,
         gatewayId = record.gatewayId,
         sessionKey = record.sessionKey,
         status = record.status
@@ -122,6 +123,51 @@ internal fun composerAttachmentUploadRunId(attachment: ComposerAttachmentDraft):
     return "upload-${attachment.id}"
 }
 
+private val ansiEscapeRegex = Regex("\u001B\\[[0-?]*[ -/]*[@-~]")
+private val hermesRuntimeContextRegex = Regex(
+    "(^|\\n)[ \\t]*\\[Hermes runtime context][ \\t]*(?:\\n[ \\t]*Current runtime:[^\\n]*)?(?:\\n[ \\t]*If the user asks which model or provider is currently being used, answer from this runtime context\\.)?"
+)
+private val mediaAttachmentReferenceRegex = Regex(
+    "(?m)[ \\t]*\\[media attached:\\s*(.+?)\\s*\\((.+?)\\)\\s*\\|\\s*(.+?)][ \\t]*"
+)
+private val fileAttachmentReferenceRegex = Regex(
+    "(?m)[ \\t]*\\[file attached:\\s*.+?][ \\t]*"
+)
+private val excessiveBlankLinesRegex = Regex("\\n{3,}")
+
+internal fun sanitizeChatMessageText(text: String): String {
+    val normalized = text
+        .replace("\r\n", "\n")
+        .replace("\r", "\n")
+    return normalized
+        .replace(ansiEscapeRegex, "")
+        .replace(hermesRuntimeContextRegex, "$1")
+        .replace(mediaAttachmentReferenceRegex, "")
+        .replace(fileAttachmentReferenceRegex, "")
+        .replace("\u001B", "")
+        .replace(excessiveBlankLinesRegex, "\n\n")
+        .trim()
+}
+
+internal fun chatMediaAttachmentReferenceFileNames(text: String): List<String> {
+    val normalized = text
+        .replace("\r\n", "\n")
+        .replace("\r", "\n")
+    return mediaAttachmentReferenceRegex.findAll(normalized)
+        .mapNotNull { match ->
+            val resolvedPath = match.groupValues.getOrNull(3)
+                ?.trim()
+                ?.takeIf { it.isNotEmpty() }
+                ?: match.groupValues.getOrNull(1)?.trim()?.takeIf { it.isNotEmpty() }
+            resolvedPath
+                ?.substringAfterLast('/')
+                ?.substringAfterLast('\\')
+                ?.trim()
+                ?.takeIf { it.isNotEmpty() }
+        }
+        .toList()
+}
+
 internal fun sanitizeChatDisplayText(text: String): String {
-    return text.trim().ifBlank { "attachment" }
+    return sanitizeChatMessageText(text).ifBlank { "attachment" }
 }

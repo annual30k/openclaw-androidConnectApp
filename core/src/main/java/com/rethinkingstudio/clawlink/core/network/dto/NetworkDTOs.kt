@@ -36,6 +36,7 @@ import kotlinx.serialization.SerializationException
 data class PairRequest(
     val gatewayId: String? = null,
     val accessCode: String,
+    val gatewayType: String? = null,
     val deviceId: String,
     val platform: String = "android",
     val appVersion: String = "1.0.0"

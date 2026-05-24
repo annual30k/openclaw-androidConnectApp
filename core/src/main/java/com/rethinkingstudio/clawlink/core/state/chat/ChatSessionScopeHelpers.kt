@@ -49,6 +49,17 @@ internal fun sameSessionKey(left: String?, right: String?): Boolean {
     if (parsedRight != null) {
         return normalizedLeft == parsedRight.rest
     }
+    val prefixedLeft = parseHermesSessionKey(normalizedLeft)
+    val prefixedRight = parseHermesSessionKey(normalizedRight)
+    if (prefixedLeft != null && prefixedRight != null) {
+        return prefixedLeft.first == prefixedRight.first && prefixedLeft.second == prefixedRight.second
+    }
+    if (prefixedLeft != null) {
+        return prefixedLeft.second == normalizedRight
+    }
+    if (prefixedRight != null) {
+        return normalizedLeft == prefixedRight.second
+    }
     return false
 }
 
@@ -64,6 +75,14 @@ internal fun parseAgentSessionKey(sessionKey: String): ParsedAgentSessionKey? {
     val rest = segments[2].trim()
     if (agentId.isBlank() || rest.isBlank()) return null
     return ParsedAgentSessionKey(agentId = agentId, rest = rest)
+}
+
+private fun parseHermesSessionKey(sessionKey: String): Pair<String, String>? {
+    val prefix = "hermes:"
+    if (!sessionKey.startsWith(prefix)) return null
+    val rest = sessionKey.substring(prefix.length).trim()
+    if (rest.isBlank()) return null
+    return "hermes" to rest
 }
 
 internal fun JsonObject.deepString(vararg keys: String): String? {

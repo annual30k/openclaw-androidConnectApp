@@ -45,14 +45,18 @@ import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.*
 
-internal fun createInitialDraft(): BackupDraft {
+internal fun createInitialDraft(isHermesGateway: Boolean = false): BackupDraft {
     val now = Date()
     val titleSdf = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault())
     val fileSdf = SimpleDateFormat("yyyyMMdd-HHmmss", Locale.getDefault())
+    val timestamp = fileSdf.format(now)
     return BackupDraft(
         title = choose("Backup ${titleSdf.format(now)}", "备份 ${titleSdf.format(now)}"),
         detail = "",
-        filename = "openclaw-${fileSdf.format(now)}.json"
+        filename = if (isHermesGateway) "hermes-backup-$timestamp.zip" else "openclaw-$timestamp.json"
     )
 }
 
+internal fun backupStorageLocation(isHermesGateway: Boolean): String {
+    return if (isHermesGateway) "~/hermes-backup-*.zip" else "~/.clawconnect/backups/openclaw"
+}

@@ -1,5 +1,8 @@
 package com.rethinkingstudio.clawlink.ui.screens.chat.components
 
+import android.media.MediaPlayer
+import android.net.Uri
+import android.widget.Toast
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
@@ -21,19 +24,26 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Undo
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.GraphicEq
 import androidx.compose.material.icons.filled.Mic
+import androidx.compose.material.icons.filled.Pause
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
@@ -43,15 +53,16 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.rethinkingstudio.clawlink.R
 import com.rethinkingstudio.clawlink.ui.screens.chat.ChatColors
+import com.rethinkingstudio.clawlink.ui.screens.chat.RecordedVoiceInput
 import com.rethinkingstudio.clawlink.ui.screens.chat.VoiceInputPhase
 import kotlin.math.abs
 import kotlin.math.sin
@@ -61,6 +72,7 @@ internal fun VoiceInputOverlay(
     phase: VoiceInputPhase,
     transcript: String,
     messageText: String,
+    recording: RecordedVoiceInput?,
     audioLevel: Double,
     cancelPreview: Boolean,
     canConfirm: Boolean,
@@ -76,7 +88,7 @@ internal fun VoiceInputOverlay(
     Box(
         modifier = modifier
             .fillMaxSize()
-            .background(Color.Black.copy(alpha = 0.70f))
+            .background(Color.Black.copy(alpha = 0.80f))
             .navigationBarsPadding()
     ) {
         when (phase) {
@@ -91,6 +103,7 @@ internal fun VoiceInputOverlay(
             )
             VoiceInputPhase.Confirming -> VoiceInputConfirmationOverlay(
                 messageText = messageText,
+                recording = recording,
                 canConfirm = canConfirm,
                 isSending = isSending,
                 onMessageTextChange = onMessageTextChange,
@@ -133,7 +146,7 @@ private fun VoiceInputRecordingOverlay(
                 .padding(horizontal = 24.dp, vertical = 8.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Spacer(Modifier.fillMaxHeight(0.22f))
+            Spacer(Modifier.fillMaxHeight(0.45f))
             SpeechStatusBubble(
                 text = if (cancelPreview && transcript.isBlank()) "" else liveTranscript,
                 audioLevel = audioLevel,
@@ -192,11 +205,10 @@ private fun SpeechStatusBubble(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            if (text.isBlank()) {
-                Row(horizontalArrangement = Arrangement.spacedBy(5.dp), modifier = Modifier.width(16.dp)) {
-                    Canvas(Modifier.size(3.dp)) { drawCircle(Color(0xFFC7CEDA)) }
-                    Canvas(Modifier.size(3.dp)) { drawCircle(Color(0xFFC7CEDA)) }
-                }
+            Row(horizontalArrangement = Arrangement.spacedBy(5.dp), modifier = Modifier.width(16.dp).padding(start = 2.dp)) {
+                val dotColor = if (cancelPreview) Color.White.copy(alpha = 0.82f) else Color(0xFFC7CEDA)
+                Canvas(Modifier.size(3.dp)) { drawCircle(dotColor) }
+                Canvas(Modifier.size(3.dp)) { drawCircle(dotColor) }
             }
             Text(
                 text = text,
@@ -278,6 +290,7 @@ private fun VoiceMicDock(cancelPreview: Boolean, modifier: Modifier) {
 @Composable
 private fun VoiceInputConfirmationOverlay(
     messageText: String,
+    recording: RecordedVoiceInput?,
     canConfirm: Boolean,
     isSending: Boolean,
     onMessageTextChange: (String) -> Unit,
@@ -287,17 +300,31 @@ private fun VoiceInputConfirmationOverlay(
     modifier: Modifier
 ) {
     Column(
-        modifier = modifier.padding(horizontal = 26.dp, vertical = 26.dp),
+        modifier = modifier
+            .padding(top = 14.dp)
+            .padding(bottom = 26.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Spacer(Modifier.fillMaxHeight(0.16f))
-        EditableSpeechBubble(
-            text = messageText,
-            onTextChange = onMessageTextChange
-        )
+        Spacer(Modifier.fillMaxHeight(0.45f))
+        Column(
+            modifier = Modifier.padding(horizontal = 18.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            RecordedVoicePreviewBubble(recording = recording)
+            if (messageText.trim().isNotEmpty()) {
+                EditableSpeechBubble(
+                    text = messageText,
+                    onTextChange = onMessageTextChange,
+                    modifier = Modifier.width(340.dp)
+                )
+            }
+        }
         Spacer(Modifier.weight(1f))
         Row(
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 26.dp),
             verticalAlignment = Alignment.Bottom,
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
@@ -309,11 +336,104 @@ private fun VoiceInputConfirmationOverlay(
 }
 
 @Composable
-private fun EditableSpeechBubble(text: String, onTextChange: (String) -> Unit) {
-    Box(
+private fun RecordedVoicePreviewBubble(recording: RecordedVoiceInput?) {
+    val context = LocalContext.current
+    var isPlaying by remember(recording?.file?.absolutePath) { mutableStateOf(false) }
+    var player by remember(recording?.file?.absolutePath) { mutableStateOf<MediaPlayer?>(null) }
+
+    DisposableEffect(recording?.file?.absolutePath) {
+        onDispose {
+            player?.release()
+            player = null
+            isPlaying = false
+        }
+    }
+
+    Surface(
+        onClick = {
+            val file = recording?.file ?: return@Surface
+            if (!file.exists() || file.length() <= 0L) return@Surface
+            if (isPlaying) {
+                player?.stop()
+                player?.release()
+                player = null
+                isPlaying = false
+                return@Surface
+            }
+            runCatching {
+                val mediaPlayer = MediaPlayer().apply {
+                    setDataSource(context, Uri.fromFile(file))
+                    setOnCompletionListener { completed ->
+                        if (player === completed) {
+                            player = null
+                        }
+                        isPlaying = false
+                        completed.release()
+                    }
+                    prepare()
+                    start()
+                }
+                player = mediaPlayer
+                isPlaying = true
+            }.onFailure { error ->
+                Toast.makeText(
+                    context,
+                    context.getString(R.string.chat_voice_play_failed, error.message ?: ""),
+                    Toast.LENGTH_SHORT
+                ).show()
+                player?.release()
+                player = null
+                isPlaying = false
+            }
+        },
+        enabled = recording != null,
+        shape = RoundedCornerShape(22.dp),
+        color = ChatColors.userBubble,
+        border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.10f)),
         modifier = Modifier
             .width(340.dp)
-            .height(64.dp),
+            .height(72.dp)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 18.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(44.dp)
+                    .background(Color.White.copy(alpha = 0.14f), RoundedCornerShape(12.dp)),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
+                    contentDescription = null,
+                    tint = Color.White,
+                    modifier = Modifier.size(18.dp)
+                )
+            }
+
+            Spacer(Modifier.weight(1f))
+
+            WaveformBars(
+                tint = Color.White.copy(alpha = if (isPlaying) 0.96f else 0.70f),
+                audioLevel = if (isPlaying) 0.55 else 0.0,
+                isAnimating = isPlaying
+            )
+        }
+    }
+}
+
+@Composable
+private fun EditableSpeechBubble(
+    text: String,
+    onTextChange: (String) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Box(
+        modifier = modifier.height(64.dp),
         contentAlignment = Alignment.Center
     ) {
         Canvas(Modifier.fillMaxSize()) {
@@ -325,13 +445,20 @@ private fun EditableSpeechBubble(text: String, onTextChange: (String) -> Unit) {
             maxLines = 3,
             textStyle = TextStyle(
                 color = Color(0xFF243040),
-                fontSize = 17.sp,
-                fontWeight = FontWeight.SemiBold,
-                textAlign = TextAlign.Start
+                fontSize = 15.sp,
+                fontWeight = FontWeight.SemiBold
             ),
             modifier = Modifier
                 .fillMaxSize()
-                .padding(start = 18.dp, end = 18.dp, bottom = 8.dp)
+                .padding(start = 18.dp, end = 18.dp, bottom = 8.dp),
+            decorationBox = { innerTextField ->
+                Box(
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.CenterStart
+                ) {
+                    innerTextField()
+                }
+            }
         )
     }
 }

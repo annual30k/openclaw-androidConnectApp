@@ -19,6 +19,7 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
@@ -29,6 +30,7 @@ import androidx.compose.ui.unit.sp
 import com.rethinkingstudio.clawlink.R
 import com.rethinkingstudio.clawlink.core.domain.NotificationPort
 import com.rethinkingstudio.clawlink.core.network.transport.RelayWebSocketClient
+import com.rethinkingstudio.clawlink.core.models.gateway.GatewayType
 import com.rethinkingstudio.clawlink.core.state.LanguageManager
 import com.rethinkingstudio.clawlink.core.state.LocalizedText.choose
 import com.rethinkingstudio.clawlink.core.state.auth.AuthStore
@@ -40,6 +42,9 @@ import com.rethinkingstudio.clawlink.ui.components.ClawLinkSectionHeader
 import com.rethinkingstudio.clawlink.ui.screens.settings.components.EmptyGatewayStatusCard
 import com.rethinkingstudio.clawlink.ui.screens.settings.components.GatewayStatusCard
 import kotlinx.coroutines.launch
+import android.content.ActivityNotFoundException
+import android.content.Intent
+import android.net.Uri
 
 private val SettingsGroupShape = RoundedCornerShape(24.dp)
 
@@ -60,14 +65,16 @@ fun SettingsScreen(
     onNavigateToHelp: () -> Unit,
     onNavigateToOffice: () -> Unit,
     onNavigateToSessions: () -> Unit,
-    onNavigateToVoiceSetup: () -> Unit,
     onNavigateToLanguage: () -> Unit,
     onLogout: () -> Unit,
 ) {
     val authState by authStore.state.collectAsState()
     val gatewayState by gatewayStore.state.collectAsState()
+    val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val isChatChainReady = gatewayState.isSelectedGatewayChatChainReady
+    val selectedGatewayType = gatewayState.selectedGateway?.gatewayType ?: GatewayType.openclaw
+    val showsGatewayAiControls = selectedGatewayType == GatewayType.openclaw || selectedGatewayType == GatewayType.hermes
 
     var showLogoutConfirm by remember { mutableStateOf(false) }
     var showDeleteConfirm by remember { mutableStateOf(false) }
@@ -200,25 +207,20 @@ fun SettingsScreen(
                 )
                 SettingsGroup(modifier = Modifier.fillMaxWidth()) {
                     Column {
-                        SettingsNavigationRow(
-                            icon = Icons.Default.Tune,
-                            title = stringResource(R.string.settings_row_models),
-                            enabled = isChatChainReady,
-                            onClick = onNavigateToModels
-                        )
-                        SettingsDivider()
+                        if (showsGatewayAiControls) {
+                            SettingsNavigationRow(
+                                icon = Icons.Default.Tune,
+                                title = stringResource(R.string.settings_row_models),
+                                enabled = isChatChainReady,
+                                onClick = onNavigateToModels
+                            )
+                            SettingsDivider()
+                        }
                         SettingsNavigationRow(
                             icon = Icons.Default.ChatBubble,
                             title = stringResource(R.string.settings_row_sessions),
                             enabled = isChatChainReady,
                             onClick = onNavigateToSessions
-                        )
-                        SettingsDivider()
-                        SettingsNavigationRow(
-                            icon = Icons.Default.Mic,
-                            title = stringResource(R.string.settings_row_voice_setup),
-                            enabled = isChatChainReady,
-                            onClick = onNavigateToVoiceSetup
                         )
                     }
                 }
@@ -296,7 +298,7 @@ fun SettingsScreen(
                         icon = Icons.Default.Info,
                         title = stringResource(R.string.settings_row_check_update),
                         subtitle = stringResource(R.string.settings_row_check_update_detail),
-                        onClick = { /* Open App Store or External URL */ }
+                        onClick = { openAndroidUpdateSearch(context) }
                     )
                 }
             }
@@ -393,6 +395,22 @@ fun SettingsScreen(
             confirmText = stringResource(R.string.common_action_ok),
             onConfirm = authStore::clearError
         )
+    }
+}
+
+private fun openAndroidUpdateSearch(context: android.content.Context) {
+    val packageName = context.packageName
+    val playStoreIntent = Intent(Intent.ACTION_VIEW, Uri.parse("market://details?id=$packageName"))
+        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+    val browserIntent = Intent(
+        Intent.ACTION_VIEW,
+        Uri.parse("https://play.google.com/store/apps/details?id=$packageName")
+    ).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+
+    try {
+        context.startActivity(playStoreIntent)
+    } catch (_: ActivityNotFoundException) {
+        context.startActivity(browserIntent)
     }
 }
 

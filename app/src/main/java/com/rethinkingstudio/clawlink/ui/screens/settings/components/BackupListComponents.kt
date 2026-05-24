@@ -58,7 +58,13 @@ internal fun BackupHeroCard(gatewayName: String, backupCount: Int, maxBackups: I
                     Text(stringResource(R.string.backup_hero_subtitle), fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
                 Column(horizontalAlignment = Alignment.End) {
-                    Text("$backupCount/$maxBackups", fontWeight = FontWeight.Black, fontSize = 17.sp, fontFamily = FontFamily.Monospace, color = MaterialTheme.colorScheme.onSurface)
+                    Text(
+                        if (maxBackups > 0) "$backupCount/$maxBackups" else "$backupCount",
+                        fontWeight = FontWeight.Black,
+                        fontSize = 17.sp,
+                        fontFamily = FontFamily.Monospace,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
                     Text(stringResource(R.string.backup_hero_count_label), fontSize = 10.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
@@ -95,7 +101,14 @@ internal fun BackupStatBlock(title: String, value: String, modifier: Modifier = 
 }
 
 @Composable
-internal fun BackupRowCard(backup: BackupItem, canManage: Boolean, onEdit: () -> Unit, onDelete: () -> Unit, onRestore: () -> Unit) {
+internal fun BackupRowCard(
+    backup: BackupItem,
+    canManage: Boolean,
+    supportsEditing: Boolean = true,
+    onEdit: () -> Unit,
+    onDelete: () -> Unit,
+    onRestore: () -> Unit
+) {
     BackupGlassCard {
         Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
             Row(verticalAlignment = Alignment.Top) {
@@ -139,12 +152,14 @@ internal fun BackupRowCard(backup: BackupItem, canManage: Boolean, onEdit: () ->
                     Text(stringResource(R.string.backup_restore_button), fontWeight = FontWeight.Bold)
                 }
                 
-                IconButton(
-                    onClick = onEdit, 
-                    enabled = canManage, 
-                    modifier = Modifier.size(44.dp).background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.56f), RoundedCornerShape(12.dp))
-                ) {
-                    Icon(Icons.Default.Edit, null, modifier = Modifier.size(20.dp), tint = MaterialTheme.colorScheme.onSurface)
+                if (supportsEditing) {
+                    IconButton(
+                        onClick = onEdit,
+                        enabled = canManage,
+                        modifier = Modifier.size(44.dp).background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.56f), RoundedCornerShape(12.dp))
+                    ) {
+                        Icon(Icons.Default.Edit, null, modifier = Modifier.size(20.dp), tint = MaterialTheme.colorScheme.onSurface)
+                    }
                 }
                 
                 IconButton(

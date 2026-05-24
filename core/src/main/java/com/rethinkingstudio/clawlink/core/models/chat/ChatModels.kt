@@ -1,8 +1,11 @@
 package com.rethinkingstudio.clawlink.core.models.chat
 
+import com.rethinkingstudio.clawlink.core.state.chat.isProtocolTypingMarkerText
 import kotlinx.serialization.KSerializer
+import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.SerializationException
+import kotlinx.serialization.json.JsonNames
 import kotlinx.serialization.descriptors.PrimitiveKind
 import kotlinx.serialization.descriptors.PrimitiveSerialDescriptor
 import kotlinx.serialization.descriptors.SerialDescriptor
@@ -165,20 +168,51 @@ data class RelayChatContentBlock(
     val type: String,
     val text: String? = null,
     val name: String? = null,
+    @OptIn(ExperimentalSerializationApi::class)
+    @JsonNames("file_id")
     val fileId: String? = null,
+    @OptIn(ExperimentalSerializationApi::class)
+    @JsonNames("file_name")
     val fileName: String? = null,
+    @OptIn(ExperimentalSerializationApi::class)
+    @JsonNames("mime_type")
     val mimeType: String? = null,
+    @OptIn(ExperimentalSerializationApi::class)
+    @JsonNames("size_bytes")
     val sizeBytes: Int? = null,
+    @OptIn(ExperimentalSerializationApi::class)
+    @JsonNames("duration_ms")
     val durationMs: Int? = null,
+    @OptIn(ExperimentalSerializationApi::class)
+    @JsonNames("image_width")
     val imageWidth: Int? = null,
+    @OptIn(ExperimentalSerializationApi::class)
+    @JsonNames("image_height")
     val imageHeight: Int? = null,
+    @OptIn(ExperimentalSerializationApi::class)
+    @JsonNames("download_url", "url")
     val downloadUrl: String? = null,
+    @OptIn(ExperimentalSerializationApi::class)
+    @JsonNames("download_path")
     val downloadPath: String? = null,
+    @OptIn(ExperimentalSerializationApi::class)
+    @JsonNames("thumbnail_url")
     val thumbnailUrl: String? = null,
+    @OptIn(ExperimentalSerializationApi::class)
+    @JsonNames("expires_at")
     val expiresAt: String? = null,
+    @OptIn(ExperimentalSerializationApi::class)
+    @JsonNames("sender_display_name")
     val senderDisplayName: String? = null,
     val transcript: String? = null,
+    @OptIn(ExperimentalSerializationApi::class)
+    @JsonNames("source_run_id")
+    val sourceRunId: String? = null,
+    @OptIn(ExperimentalSerializationApi::class)
+    @JsonNames("gateway_id")
     val gatewayId: String? = null,
+    @OptIn(ExperimentalSerializationApi::class)
+    @JsonNames("session_key")
     val sessionKey: String? = null,
     @Serializable(with = RelayJSONValueSerializer::class) val arguments: RelayJSONValue? = null,
     @Serializable(with = RelayJSONValueSerializer::class) val args: RelayJSONValue? = null,
@@ -362,25 +396,12 @@ data class ChatMessage(
     private val hasRenderablePlainTextContent: Boolean
         get() = content.trim().isNotEmpty()
 
-    @Suppress("UNUSED_PARAMETER")
     fun shouldDisplayInChat(
-        showInvocationProcess: Boolean,
-        assistantVoiceRepliesEnabled: Boolean = false,
-        assistantVoiceRepliesEnabledAt: Double? = null,
-        forceDisplayTextWhenVoiceRepliesEnabled: Boolean = false
+        showInvocationProcess: Boolean
     ): Boolean {
+        if (contentBlocks.isEmpty() && isProtocolTypingMarkerText(content)) return false
         val hasRenderableContent = hasRenderablePlainTextContent || contentBlocks.isNotEmpty()
         if (!hasRenderableContent) return false
-
-        if (
-            role == MessageRole.assistant &&
-            assistantVoiceRepliesEnabled &&
-            forceDisplayTextWhenVoiceRepliesEnabled &&
-            !hasVoiceContent &&
-            !hasFileContent
-        ) {
-            return false
-        }
 
         if (!hasToolContent) return true
 

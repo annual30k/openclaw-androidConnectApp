@@ -6,6 +6,7 @@ import com.rethinkingstudio.clawlink.core.network.transport.RelayWebSocketClient
 import com.rethinkingstudio.clawlink.core.network.transport.WsConnectionState
 import com.rethinkingstudio.clawlink.core.network.transport.WsEvent
 import com.rethinkingstudio.clawlink.core.network.dto.GatewaySummaryDTO
+import com.rethinkingstudio.clawlink.core.network.dto.SlashCommandListResponse
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -22,17 +23,22 @@ import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import com.rethinkingstudio.clawlink.core.models.gateway.AggregateStatus
 import com.rethinkingstudio.clawlink.core.models.gateway.GatewayStatus
 import com.rethinkingstudio.clawlink.core.models.gateway.GatewaySummary
 import com.rethinkingstudio.clawlink.core.models.gateway.ConnectionPhase
 import com.rethinkingstudio.clawlink.core.models.MaintenanceLogEntry
 import com.rethinkingstudio.clawlink.core.state.LocalizedText.choose
+import com.rethinkingstudio.clawlink.core.utils.TokenDisplayFormatter
 import java.util.UUID
 import java.util.Date
 import java.util.Locale
 import java.text.SimpleDateFormat
 import kotlinx.coroutines.delay
+import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.intOrNull
+import kotlinx.serialization.json.longOrNull
 
 class GatewayStore(
     private val apiClient: RelayAPIClient,
@@ -56,10 +62,12 @@ class GatewayStore(
     private fun handleWsEvent(event: WsEvent) {
         when (event.type) {
             "presence" -> handlePresence(event.payload)
+            "usage", "context_usage" -> handleUsageSnapshot(event.payload)
             "event" -> {
                 when (event.event) {
                     "presence" -> handlePresence(event.payload)
-                    "chat_run_log", "chat_run_delta", "chat_run_complete", "chat_run_error", "doctor_fix_log" -> {
+                    "usage", "context_usage" -> handleUsageSnapshot(event.payload)
+                    "chat_run_log", "chat_run_delta", "chat_run_complete", "chat_run_error", "doctor_fix_log", "maintenance_log" -> {
                         handleMaintenanceLog(event)
                         if (event.event == "chat_run_complete") {
                             handleRunComplete(event)
@@ -67,7 +75,7 @@ class GatewayStore(
                     }
                 }
             }
-            "chat_run_log", "chat_run_delta", "chat_run_complete", "chat_run_error", "doctor_fix_log" -> {
+            "chat_run_log", "chat_run_delta", "chat_run_complete", "chat_run_error", "doctor_fix_log", "maintenance_log" -> {
                 handleMaintenanceLog(event)
                 if (event.type == "chat_run_complete" || event.event == "chat_run_complete" || 
                     event.type == "chat_run_error" || event.event == "chat_run_error") {
@@ -165,6 +173,74 @@ class GatewayStore(
         } catch (_: Exception) { }
     }
 
+    private fun handleUsageSnapshot(payload: JsonElement?) {
+        try {
+            val fullObj = payload?.jsonObject ?: return
+            val payloadObj = fullObj["payload"]?.jsonObject ?: fullObj
+            val gatewayId = payloadObj.primitiveString("gatewayId", "gateway_id")
+                ?: fullObj.primitiveString("gatewayId", "gateway_id")
+                ?: _state.value.selectedGatewayId
+                ?: return
+            val current = _state.value.gateways.firstOrNull { it.id == gatewayId } ?: return
+            val usedTokens = payloadObj.primitiveInt(
+                "contextUsage",
+                "context_usage",
+                "contextUsageValue",
+                "context_usage_value",
+                "promptTokens",
+                "prompt_tokens",
+                "inputTokens",
+                "input_tokens",
+                "totalTokens",
+                "total_tokens"
+            ) ?: fullObj.primitiveInt(
+                "contextUsage",
+                "context_usage",
+                "contextUsageValue",
+                "context_usage_value",
+                "promptTokens",
+                "prompt_tokens",
+                "inputTokens",
+                "input_tokens",
+                "totalTokens",
+                "total_tokens"
+            )
+            val limitTokens = payloadObj.primitiveInt(
+                "contextLimit",
+                "context_limit",
+                "maxInputTokens",
+                "max_input_tokens",
+                "maxContextTokens",
+                "max_context_tokens",
+                "limit"
+            ) ?: fullObj.primitiveInt(
+                "contextLimit",
+                "context_limit",
+                "maxInputTokens",
+                "max_input_tokens",
+                "maxContextTokens",
+                "max_context_tokens",
+                "limit"
+            )
+            val currentModel = payloadObj.primitiveString("currentModel", "current_model", "model")
+                ?: fullObj.primitiveString("currentModel", "current_model", "model")
+            if (usedTokens == null && limitTokens == null && currentModel.isNullOrBlank()) return
+            updateGatewayStatus(
+                gatewayId,
+                current.copy(
+                    currentModel = currentModel?.takeIf { it.isNotBlank() } ?: current.currentModel,
+                    contextUsage = TokenDisplayFormatter.formatUsage(
+                        usedTokens = usedTokens ?: current.contextUsageValue,
+                        limitTokens = limitTokens ?: current.contextLimit,
+                        fallback = current.contextUsage
+                    ),
+                    contextUsageValue = usedTokens ?: current.contextUsageValue,
+                    contextLimit = limitTokens ?: current.contextLimit
+                )
+            )
+        } catch (_: Exception) { }
+    }
+
     private fun handlePresence(payload: JsonElement?) {
         try {
             val fullObj = payload?.jsonObject ?: return
@@ -225,6 +301,10 @@ class GatewayStore(
         }
     }
 
+    suspend fun fetchSlashCommands(gatewayId: String, query: String, limit: Int = 16, offset: Int = 0): SlashCommandListResponse {
+        return apiClient.fetchSlashCommands(gatewayId, query, limit, offset)
+    }
+
     fun selectGateway(gatewayId: String) {
         _state.value = _state.value.copy(selectedGatewayId = gatewayId)
         scope.launch { credentialStore.saveLastGatewayId(gatewayId) }
@@ -263,6 +343,29 @@ class GatewayStore(
             _state.value = _state.value.copy(gateways = list)
         } catch (e: Exception) {
             _state.value = _state.value.copy(errorMessage = choose("Failed to update name: ${e.message}", "名称更新失败：${e.message}"))
+        }
+    }
+
+    suspend fun unpairGateway(gatewayId: String) {
+        val normalizedGatewayId = gatewayId.trim()
+        if (normalizedGatewayId.isBlank()) return
+        try {
+            apiClient.deleteGateway(normalizedGatewayId)
+            val remaining = _state.value.gateways.filterNot { it.id == normalizedGatewayId }
+            val selectedId = when {
+                _state.value.selectedGatewayId != normalizedGatewayId -> _state.value.selectedGatewayId
+                else -> remaining.firstOrNull()?.id
+            }
+            _state.value = _state.value.copy(
+                gateways = remaining,
+                selectedGatewayId = selectedId,
+                errorMessage = null
+            )
+            if (selectedId != null) {
+                scope.launch { credentialStore.saveLastGatewayId(selectedId) }
+            }
+        } catch (e: Exception) {
+            _state.value = _state.value.copy(errorMessage = choose("Failed to unpair gateway: ${e.message}", "解绑网关失败：${e.message}"))
         }
     }
 
@@ -473,5 +576,24 @@ class GatewayStore(
                 choose("Session not established", "会话未建立")
             }
         ): List<GatewayStatus> = GatewayStatusResolver.selectedGatewayStatuses(selectedGateway, appRelayStatus, appRelayDetail)
+    }
+}
+
+private fun JsonObject.primitiveString(vararg keys: String): String? {
+    return keys.firstNotNullOfOrNull { key ->
+        (this[key] as? JsonPrimitive)
+            ?.contentOrNull
+            ?.trim()
+            ?.takeIf { it.isNotEmpty() }
+    }
+}
+
+private fun JsonObject.primitiveInt(vararg keys: String): Int? {
+    return keys.firstNotNullOfOrNull { key ->
+        val primitive = this[key] as? JsonPrimitive ?: return@firstNotNullOfOrNull null
+        val value = primitive.intOrNull
+            ?: primitive.longOrNull?.coerceAtMost(Int.MAX_VALUE.toLong())?.toInt()
+            ?: primitive.contentOrNull?.trim()?.toIntOrNull()
+        value?.takeIf { it >= 0 }
     }
 }

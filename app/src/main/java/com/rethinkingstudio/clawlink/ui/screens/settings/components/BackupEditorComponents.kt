@@ -49,6 +49,7 @@ import java.util.*
 @Composable
 internal fun BackupEditorSheet(
     isCreate: Boolean,
+    isHermesGateway: Boolean = false,
     initialDraft: BackupDraft,
     onDismiss: () -> Unit,
     onSave: (BackupDraft) -> Unit
@@ -81,7 +82,15 @@ internal fun BackupEditorSheet(
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                         Text(if (isCreate) choose("New backup", "新建备份") else choose("Edit backup", "编辑备份"), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
-                        Text(if (isCreate) choose("Fill in name, details, and filename. The backup is saved locally on the host.", "填写名称、详情和文件名，备份会保存在宿主机本地。") else choose("Adjust the backup display name, notes, and filename.", "可以调整备份的展示名、备注和文件名。"), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text(
+                            when {
+                                isCreate && isHermesGateway -> choose("Create a Hermes zip backup on the host.", "在宿主机上创建 Hermes zip 备份。")
+                                isCreate -> choose("Fill in name, details, and filename. The backup is saved locally on the host.", "填写名称、详情和文件名，备份会保存在宿主机本地。")
+                                else -> choose("Adjust the backup display name, notes, and filename.", "可以调整备份的展示名、备注和文件名。")
+                            },
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
                     }
                     TextButton(onClick = onDismiss) { Text(choose("Cancel", "取消")) }
                     Button(
@@ -132,10 +141,15 @@ internal fun BackupEditorSheet(
                         value = draft.filename,
                         onValueChange = { draft = draft.copy(filename = it) },
                         modifier = Modifier.fillMaxWidth(),
-                        placeholder = "example.json",
+                        placeholder = if (isHermesGateway) "hermes-backup-example.zip" else "example.json",
                         singleLine = true
                     )
-                    Text(choose("Tip: filename must end with .json", "提示：文件名必须以 .json 结尾"), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(
+                        if (isHermesGateway) choose("Tip: filename must end with .zip", "提示：文件名必须以 .zip 结尾")
+                        else choose("Tip: filename must end with .json", "提示：文件名必须以 .json 结尾"),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                 }
             }
 

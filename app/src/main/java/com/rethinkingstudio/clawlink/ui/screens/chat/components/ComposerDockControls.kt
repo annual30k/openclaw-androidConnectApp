@@ -76,15 +76,39 @@ import com.rethinkingstudio.clawlink.ui.screens.chat.filePath
 import com.rethinkingstudio.clawlink.ui.screens.chat.isImage
 
 @Composable
-internal fun DockPillButton(text: String, icon: ImageVector, enabled: Boolean, trailingIcon: ImageVector? = null, onClick: () -> Unit) {
+internal fun DockPillButton(
+    text: String,
+    icon: ImageVector,
+    enabled: Boolean,
+    trailingIcon: ImageVector? = null,
+    iconTint: Color? = null,
+    iconContainerColor: Color? = null,
+    accentTrailingIcon: ImageVector? = null,
+    accentTrailingTint: Color = Color(0xFFE3A22D),
+    onClick: () -> Unit
+) {
+    val resolvedIconTint = iconTint ?: MaterialTheme.colorScheme.primary
     Surface(
         onClick = onClick, enabled = enabled, shape = RoundedCornerShape(999.dp),
         color = ChatColors.dockControl, border = BorderStroke(1.dp, ChatColors.dockBorder),
         modifier = Modifier.alpha(if (enabled) 1f else 0.55f)
     ) {
         Row(modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            Icon(icon, null, modifier = Modifier.size(18.dp), tint = MaterialTheme.colorScheme.primary)
+            if (iconContainerColor != null) {
+                Box(
+                    modifier = Modifier
+                        .size(24.dp)
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(iconContainerColor),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(icon, null, modifier = Modifier.size(16.dp), tint = resolvedIconTint)
+                }
+            } else {
+                Icon(icon, null, modifier = Modifier.size(18.dp), tint = resolvedIconTint)
+            }
             Text(text, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface)
+            if (accentTrailingIcon != null) { Icon(accentTrailingIcon, null, modifier = Modifier.size(16.dp), tint = accentTrailingTint) }
             if (trailingIcon != null) { Icon(trailingIcon, null, modifier = Modifier.size(16.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.72f)) }
         }
     }

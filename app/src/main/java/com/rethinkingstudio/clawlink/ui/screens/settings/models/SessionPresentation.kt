@@ -74,6 +74,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.rethinkingstudio.clawlink.R
 import com.rethinkingstudio.clawlink.core.models.chat.ChatSessionItem
+import com.rethinkingstudio.clawlink.core.models.gateway.GatewayType
 import com.rethinkingstudio.clawlink.core.network.RelayAPIClient
 import com.rethinkingstudio.clawlink.core.state.LocalizedText.choose
 import com.rethinkingstudio.clawlink.core.state.chat.ChatStore
@@ -209,6 +210,7 @@ internal fun isProtectedSession(session: ChatSessionItem): Boolean {
 internal fun canDeleteSession(
     session: ChatSessionItem,
     gatewayId: String?,
+    gatewayType: GatewayType = GatewayType.openclaw,
     operationsLocked: Boolean,
     isStreaming: Boolean,
     isStoppingRun: Boolean,
@@ -216,7 +218,9 @@ internal fun canDeleteSession(
     deletingKey: String?,
     role: String?
 ): Boolean {
-    if (isProtectedSession(session)) return false
+    val normalized = session.normalizedSessionKey
+    val isHermesMainSession = gatewayType == GatewayType.hermes && normalized == "main"
+    if (isProtectedSession(session) && !isHermesMainSession) return false
     if (gatewayId == null) return false
     if (operationsLocked || isStreaming || isStoppingRun || isRefreshing) return false
     if (deletingKey != null && deletingKey != session.normalizedSessionKey) return false
@@ -233,4 +237,3 @@ internal fun lockMessage(gatewayId: String?, operationsLocked: Boolean, isStream
         else -> choose("Session switching is currently unavailable.", "当前不可切换会话。")
     }
 }
-

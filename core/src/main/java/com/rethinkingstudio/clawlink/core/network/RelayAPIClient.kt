@@ -39,6 +39,7 @@ class RelayAPIClient(
         install(HttpTimeout) {
             requestTimeoutMillis = 30_000
             connectTimeoutMillis = 15_000
+            socketTimeoutMillis = 30_000
         }
     }
 
@@ -179,8 +180,8 @@ class RelayAPIClient(
         request<EmptyResponse>(APIEndpoints.Auth.deleteAccount)
     }
 
-    suspend fun pairGateway(gatewayId: String?, accessCode: String, deviceId: String): SessionCredentials {
-        val req = PairRequest(gatewayId = gatewayId, accessCode = accessCode, deviceId = deviceId)
+    suspend fun pairGateway(gatewayId: String?, accessCode: String, gatewayType: String?, deviceId: String): SessionCredentials {
+        val req = PairRequest(gatewayId = gatewayId, accessCode = accessCode, gatewayType = gatewayType, deviceId = deviceId)
         val response: LoginResponse = request(APIEndpoints.Auth.pairGateway, req)
         return SessionCredentials(accessToken = response.accessToken, relayBaseURL = baseUrl)
     }
@@ -190,6 +191,10 @@ class RelayAPIClient(
     suspend fun fetchGateways(): List<GatewaySummary> {
         val response: GatewayListResponse = request(APIEndpoints.Mobile.Gateway.list())
         return response.gateways.map { it.toGatewaySummary() }
+    }
+
+    suspend fun deleteGateway(gatewayId: String) {
+        request<EmptyResponse>(APIEndpoints.Mobile.Gateway.delete(gatewayId))
     }
 
     suspend fun fetchModels(gatewayId: String): List<ModelItem> {
@@ -210,6 +215,10 @@ class RelayAPIClient(
     suspend fun fetchSkills(gatewayId: String): List<SkillItem> {
         val response: SkillsListResponse = request(APIEndpoints.Mobile.Gateway.skills(gatewayId))
         return response.skills
+    }
+
+    suspend fun fetchSlashCommands(gatewayId: String, query: String, limit: Int = 16, offset: Int = 0): SlashCommandListResponse {
+        return request(APIEndpoints.Mobile.Gateway.slashCommands(gatewayId, query, limit, offset))
     }
 
     suspend fun updateSkill(gatewayId: String, skillKey: String, enabled: Boolean? = null, apiKey: String? = null, env: Map<String, String>? = null) {
@@ -270,7 +279,9 @@ class RelayAPIClient(
         sha256: String,
         durationMs: Int? = null,
         imageWidth: Int? = null,
-        imageHeight: Int? = null
+        imageHeight: Int? = null,
+        senderDisplayName: String? = null,
+        clientCreatedAt: String? = null
     ): FileUploadInitResponse {
         val req = FileUploadInitRequest(
             sessionKey = sessionKey,
@@ -280,7 +291,9 @@ class RelayAPIClient(
             sha256 = sha256,
             durationMs = durationMs,
             imageWidth = imageWidth,
-            imageHeight = imageHeight
+            imageHeight = imageHeight,
+            senderDisplayName = senderDisplayName,
+            clientCreatedAt = clientCreatedAt
         )
         return request(APIEndpoints.Mobile.File.initUpload(APIOrigin.mobile, gatewayId), req)
     }
@@ -338,6 +351,10 @@ class RelayAPIClient(
 
     suspend fun createBackup(gatewayId: String, draft: BackupDraft): BackupMutationResponse {
         return request(APIEndpoints.Mobile.Backup.create(gatewayId), draft)
+    }
+
+    suspend fun updateBackup(gatewayId: String, backupId: String, draft: BackupDraft): BackupMutationResponse {
+        return request(APIEndpoints.Mobile.Backup.update(gatewayId, backupId), draft)
     }
 
     suspend fun deleteBackup(gatewayId: String, backupId: String): BackupMutationResponse {

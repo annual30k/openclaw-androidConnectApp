@@ -46,6 +46,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.blur
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.graphicsLayer
@@ -67,6 +68,7 @@ import com.rethinkingstudio.clawlink.core.models.chat.ChatMessage
 import com.rethinkingstudio.clawlink.core.models.chat.MessageRole
 import com.rethinkingstudio.clawlink.core.models.chat.MessageState
 import com.rethinkingstudio.clawlink.core.models.gateway.AggregateStatus
+import com.rethinkingstudio.clawlink.core.models.gateway.GatewayType
 import com.rethinkingstudio.clawlink.core.state.LocalizedText.choose
 import com.rethinkingstudio.clawlink.core.state.chat.ChatStore
 import com.rethinkingstudio.clawlink.core.state.chat.RemoteAttachmentCache
@@ -74,6 +76,7 @@ import com.rethinkingstudio.clawlink.core.state.chat.RemoteImageCache
 import com.rethinkingstudio.clawlink.core.state.chat.RemoteImageSizeCache
 import com.rethinkingstudio.clawlink.core.state.chat.chatAttachmentCacheKey
 import com.rethinkingstudio.clawlink.core.state.chat.chatImageCacheKey
+import com.rethinkingstudio.clawlink.core.state.chat.visibleContextUsageLine
 import com.rethinkingstudio.clawlink.core.state.gateway.GatewayStore
 import com.rethinkingstudio.clawlink.core.state.model.ModelStore
 import com.rethinkingstudio.clawlink.ui.components.ClawLinkAlertDialog
@@ -89,6 +92,7 @@ import com.rethinkingstudio.clawlink.ui.screens.chat.components.ImageFullscreenO
 import com.rethinkingstudio.clawlink.ui.screens.chat.components.MessageBubble
 import com.rethinkingstudio.clawlink.ui.screens.chat.components.ModelPickerSheetOverlay
 import com.rethinkingstudio.clawlink.ui.screens.chat.components.SkillExpansionSheetOverlay
+import com.rethinkingstudio.clawlink.ui.screens.chat.components.SlashAction
 import com.rethinkingstudio.clawlink.ui.screens.chat.components.slashCommandSuggestions
 import com.rethinkingstudio.clawlink.ui.screens.chat.components.documentPreviewKind
 import com.rethinkingstudio.clawlink.ui.screens.chat.components.SlashCommandPanel
@@ -136,16 +140,24 @@ fun ChatScreen(
     val hasSelectedGateway = gatewayState.selectedGateway != null
     val isChatChainReady = gatewayState.isSelectedGatewayChatChainReady
     val hasActiveSession = hasSelectedGateway && chatState.currentSessionKey.isNotBlank() && isChatChainReady
+    val selectedGatewayType = gatewayState.selectedGateway?.gatewayType ?: GatewayType.openclaw
+    val showsSkillExpansionControls = selectedGatewayType == GatewayType.openclaw || selectedGatewayType == GatewayType.hermes
+    val showsModelPicker = selectedGatewayType == GatewayType.openclaw || selectedGatewayType == GatewayType.hermes
     val connectionIssueMessage = remember(
         hasSelectedGateway,
         gatewayState.appRelayStatus,
         gatewayState.selectedGatewayAggregateStatus,
-        isChatChainReady
+        isChatChainReady,
+        selectedGatewayType
     ) {
         when {
             !hasSelectedGateway -> null
             gatewayState.appRelayStatus == AggregateStatus.offline -> "无法连接到 Relay 服务器，请确认服务已启动且地址可访问。"
-            !isChatChainReady -> "当前链路未全通，请确认 Relay 已连接到主机且 OpenClaw 已启动。"
+            !isChatChainReady -> if (selectedGatewayType == GatewayType.hermes) {
+                "当前链路未全通，请确认 Relay 已连接到主机且 Hermes Agent 已启动。"
+            } else {
+                "当前链路未全通，请确认 Relay 已连接到主机且 OpenClaw 已启动。"
+            }
             else -> null
         }
     }
@@ -157,24 +169,11 @@ fun ChatScreen(
     var hasPendingMessagesBelow by remember { mutableStateOf(false) }
     val visibleMessagesForScroll = remember(
         chatState.messages,
-        chatState.showInvocationProcess,
-        chatState.assistantVoiceRepliesEffectiveEnabled,
-        chatState.assistantVoiceRepliesEnabledAt,
-        chatState.voiceReplyTextOnlyRunIds
+        chatState.showInvocationProcess
     ) {
-        val now = System.currentTimeMillis() / 1000.0
         chatState.messages.filter { message ->
-            val forceDisplayText = message.isVoiceReplyTextOnlyCandidate(
-                assistantVoiceRepliesEffectiveEnabled = chatState.assistantVoiceRepliesEffectiveEnabled,
-                assistantVoiceRepliesEnabledAt = chatState.assistantVoiceRepliesEnabledAt,
-                voiceReplyTextOnlyRunIds = chatState.voiceReplyTextOnlyRunIds,
-                now = now
-            )
             message.shouldDisplayInChat(
-                showInvocationProcess = chatState.showInvocationProcess,
-                assistantVoiceRepliesEnabled = chatState.assistantVoiceRepliesEffectiveEnabled,
-                assistantVoiceRepliesEnabledAt = chatState.assistantVoiceRepliesEnabledAt,
-                forceDisplayTextWhenVoiceRepliesEnabled = forceDisplayText
+                showInvocationProcess = chatState.showInvocationProcess
             ) ||
                 message.state == MessageState.streaming && message.role == MessageRole.assistant
         }
@@ -244,18 +243,20 @@ fun ChatScreen(
         }
     }
 
-    val systemBarColor = MaterialTheme.colorScheme.background
-    val useDarkSystemBarIcons = systemBarColor.luminance() > 0.5f
+    val statusBarColor = MaterialTheme.colorScheme.background
+    val navigationBarColor = ChatColors.dockSurface
+    val useDarkStatusBarIcons = statusBarColor.luminance() > 0.5f
+    val useDarkNavigationBarIcons = navigationBarColor.luminance() > 0.5f
 
     SideEffect {
         val window = (view.context as? android.app.Activity)?.window ?: return@SideEffect
         @Suppress("DEPRECATION")
-        window.statusBarColor = systemBarColor.toArgb()
+        window.statusBarColor = statusBarColor.toArgb()
         @Suppress("DEPRECATION")
-        window.navigationBarColor = systemBarColor.toArgb()
+        window.navigationBarColor = navigationBarColor.toArgb()
         val controller = WindowCompat.getInsetsController(window, view)
-        controller.isAppearanceLightStatusBars = useDarkSystemBarIcons
-        controller.isAppearanceLightNavigationBars = useDarkSystemBarIcons
+        controller.isAppearanceLightStatusBars = useDarkStatusBarIcons
+        controller.isAppearanceLightNavigationBars = useDarkNavigationBarIcons
     }
 
     val filePickerLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
@@ -315,11 +316,96 @@ fun ChatScreen(
             }
         }
     }
-    val slashActions = remember(viewModel.messageText, gatewayState.selectedGateway?.slashCommands) {
+    val localSlashActions = remember(
+        viewModel.messageText,
+        gatewayState.selectedGateway?.slashCommands,
+        gatewayState.selectedGateway?.gatewayType
+    ) {
         slashCommandSuggestions(
             input = viewModel.messageText,
-            remoteCommands = gatewayState.selectedGateway?.slashCommands
+            remoteCommands = gatewayState.selectedGateway?.slashCommands,
+            includeDefaultActions = gatewayState.selectedGateway?.gatewayType != GatewayType.hermes
         )
+    }
+    var lazyHermesSlashActions by remember(gatewayId) { mutableStateOf<List<SlashAction>>(emptyList()) }
+    var lazyHermesSlashNextOffset by remember(gatewayId) { mutableStateOf<Int?>(null) }
+    var lazyHermesSlashQuery by remember(gatewayId) { mutableStateOf("") }
+    var isLoadingHermesSlashCommands by remember(gatewayId) { mutableStateOf(false) }
+    LaunchedEffect(gatewayId, selectedGatewayType, viewModel.messageText) {
+        val normalizedInput = viewModel.messageText.trim()
+        if (gatewayId == null || selectedGatewayType != GatewayType.hermes || !normalizedInput.startsWith("/")) {
+            lazyHermesSlashActions = emptyList()
+            lazyHermesSlashNextOffset = null
+            lazyHermesSlashQuery = ""
+            isLoadingHermesSlashCommands = false
+            return@LaunchedEffect
+        }
+        lazyHermesSlashActions = emptyList()
+        lazyHermesSlashNextOffset = null
+        lazyHermesSlashQuery = normalizedInput
+        delay(80)
+        isLoadingHermesSlashCommands = true
+        try {
+            val page = runCatching {
+                gatewayStore.fetchSlashCommands(gatewayId, normalizedInput, limit = 16, offset = 0)
+            }.getOrNull()
+            val remoteCommands = page?.items.orEmpty()
+            lazyHermesSlashActions = slashCommandSuggestions(
+                input = normalizedInput,
+                remoteCommands = remoteCommands,
+                includeDefaultActions = false,
+                limit = remoteCommands.size.coerceAtLeast(16)
+            )
+            lazyHermesSlashNextOffset = page?.nextOffset?.takeIf { page.hasMore }
+                ?: if (page?.hasMore == true) remoteCommands.size else null
+        } finally {
+            isLoadingHermesSlashCommands = false
+        }
+    }
+    val loadMoreHermesSlashCommands: (() -> Unit)? = if (
+        selectedGatewayType == GatewayType.hermes &&
+        gatewayId != null &&
+        lazyHermesSlashNextOffset != null
+    ) {
+        {
+            val nextOffset = lazyHermesSlashNextOffset
+            val activeGatewayId = gatewayId
+            val activeQuery = lazyHermesSlashQuery
+            if (
+                nextOffset != null &&
+                activeQuery.isNotBlank() &&
+                !isLoadingHermesSlashCommands
+            ) {
+                scope.launch {
+                    isLoadingHermesSlashCommands = true
+                    try {
+                        val page = runCatching {
+                            gatewayStore.fetchSlashCommands(activeGatewayId, activeQuery, limit = 16, offset = nextOffset)
+                        }.getOrNull()
+                        if (page != null && activeQuery == lazyHermesSlashQuery && activeGatewayId == gatewayId) {
+                            val pageActions = slashCommandSuggestions(
+                                input = activeQuery,
+                                remoteCommands = page.items,
+                                includeDefaultActions = false,
+                                limit = page.items.size.coerceAtLeast(16)
+                            )
+                            lazyHermesSlashActions = mergeDistinctSlashActions(lazyHermesSlashActions, pageActions)
+                            lazyHermesSlashNextOffset = page.nextOffset?.takeIf { page.hasMore }
+                                ?: if (page.hasMore) nextOffset + page.items.size else null
+                        }
+                    } finally {
+                        isLoadingHermesSlashCommands = false
+                    }
+                }
+            }
+        }
+    } else {
+        null
+    }
+    val slashActions = if (selectedGatewayType == GatewayType.hermes) {
+        lazyHermesSlashActions
+    } else {
+        localSlashActions
     }
 
     LaunchedEffect(Unit) {
@@ -383,11 +469,19 @@ fun ChatScreen(
         }
     }
 
+    val voiceOverlayActive = viewModel.voiceInputPhase != VoiceInputPhase.Idle
+
     Box(modifier = Modifier.fillMaxSize()) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .then(if (voiceOverlayActive) Modifier.blur(8.dp) else Modifier)
+        ) {
         ClawLinkScaffold(
             topBar = {
                 ChatTopBar(
                     gateway = gatewayState.selectedGateway,
+                    contextUsageLine = chatState.visibleContextUsageLine(gatewayState.selectedGateway),
                     appRelayStatus = gatewayState.appRelayStatus,
                     onGatewayClick = { viewModel.showGatewaySheet = true },
                     onRefresh = {
@@ -449,6 +543,8 @@ fun ChatScreen(
                         ) {
                             SlashCommandPanel(
                                 actions = slashActions,
+                                onLoadMore = loadMoreHermesSlashCommands,
+                                isLoadingMore = isLoadingHermesSlashCommands,
                                 onAction = { action ->
                                     viewModel.messageText = action.command
                                 }
@@ -464,6 +560,8 @@ fun ChatScreen(
                             voiceMode = viewModel.voiceMode,
                             voiceInputPhase = viewModel.voiceInputPhase,
                             voiceInputCancelPreview = viewModel.voiceInputCancelPreview,
+                            showsOpenClawControls = showsSkillExpansionControls,
+                            showsModelPicker = showsModelPicker,
                             attachments = viewModel.composerAttachments,
                             isUploadingAttachment = viewModel.isUploadingAttachment,
                             hasActiveSession = hasActiveSession,
@@ -612,8 +710,9 @@ fun ChatScreen(
                     )
                 }
 
-                if (viewModel.showSkillExpansionSheet) {
+                if (showsSkillExpansionControls && viewModel.showSkillExpansionSheet) {
                     SkillExpansionSheetOverlay(
+                        isHermesGateway = selectedGatewayType == GatewayType.hermes,
                         onDismiss = { viewModel.showSkillExpansionSheet = false },
                         onSendPrompt = { prompt ->
                             chatStore.sendCommand(
@@ -624,7 +723,7 @@ fun ChatScreen(
                     )
                 }
 
-                if (viewModel.showModelPicker) {
+                if (showsModelPicker && viewModel.showModelPicker) {
                     ModelPickerSheetOverlay(
                         models = modelState.models,
                         isLoading = modelState.isLoading,
@@ -638,9 +737,10 @@ fun ChatScreen(
                         },
                         onSelect = { model ->
                             if (gatewayId != null) {
+                                viewModel.showModelPicker = false
+                                val sessionKey = chatState.currentSessionKey.takeIf { it.isNotBlank() }
                                 scope.launch {
-                                    modelStore.selectModel(gatewayId, model, chatState.currentSessionKey.takeIf { it.isNotBlank() })
-                                    viewModel.showModelPicker = false
+                                    modelStore.selectModel(gatewayId, model, sessionKey)
                                 }
                             }
                         }
@@ -675,18 +775,20 @@ fun ChatScreen(
                 onDismiss = { viewModel.documentPreview = null }
             )
         }
+        }
 
         VoiceInputOverlay(
             phase = viewModel.voiceInputPhase,
             transcript = viewModel.voiceInputTranscript,
             messageText = viewModel.messageText,
+            recording = viewModel.voiceInputRecording,
             audioLevel = viewModel.voiceInputAudioLevel,
             cancelPreview = viewModel.voiceInputCancelPreview,
             canConfirm = hasActiveSession &&
                 !chatState.isStreaming &&
                 !chatState.isStoppingRun &&
                 !viewModel.isUploadingAttachment &&
-                (viewModel.messageText.trim().isNotEmpty() || viewModel.composerAttachments.isNotEmpty()),
+                viewModel.hasVoiceInputRecording,
             isSending = viewModel.isUploadingAttachment,
             onMessageTextChange = { viewModel.messageText = it },
             onCancel = { viewModel.cancelVoiceInput() },
@@ -694,5 +796,15 @@ fun ChatScreen(
             onConfirm = { viewModel.confirmVoiceInput(context) },
             modifier = Modifier.matchParentSize()
         )
+    }
+}
+
+private fun mergeDistinctSlashActions(
+    current: List<SlashAction>,
+    next: List<SlashAction>
+): List<SlashAction> {
+    val seen = current.map { it.command.trim().lowercase() }.toMutableSet()
+    return current + next.filter { action ->
+        seen.add(action.command.trim().lowercase())
     }
 }

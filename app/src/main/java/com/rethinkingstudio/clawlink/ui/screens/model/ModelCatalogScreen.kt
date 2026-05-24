@@ -78,6 +78,7 @@ import androidx.compose.ui.unit.dp
 import com.rethinkingstudio.clawlink.core.models.catalog.ModelItem
 import com.rethinkingstudio.clawlink.core.models.gateway.AggregateStatus
 import com.rethinkingstudio.clawlink.core.models.gateway.ConnectionPhase
+import com.rethinkingstudio.clawlink.core.models.gateway.GatewayType
 import com.rethinkingstudio.clawlink.core.models.gateway.GatewaySummary
 import com.rethinkingstudio.clawlink.core.state.LocalizedText.choose
 import com.rethinkingstudio.clawlink.core.state.gateway.GatewayStore
@@ -98,6 +99,7 @@ fun ModelCatalogScreen(
     val gatewayState by gatewayStore.state.collectAsState()
     val scope = rememberCoroutineScope()
     val gatewayId = gatewayState.selectedGatewayId
+    val selectedGatewayType = gatewayState.selectedGateway?.gatewayType ?: GatewayType.openclaw
     val operationsLocked = gatewayState.restartingGatewayId != null || !gatewayState.isSelectedGatewayChatChainReady
 
     var searchText by remember { mutableStateOf("") }
@@ -239,7 +241,7 @@ fun ModelCatalogScreen(
                 if (gatewayId != null && gatewayState.isSelectedGatewayChatChainReady) {
                     scope.launch {
                         val didUpdate = modelStore.setDefaultModel(gatewayId, model) {
-                            waitForGatewayRecoveryAfterDefaultModelChange(gatewayStore, gatewayId)
+                            selectedGatewayType == GatewayType.hermes || waitForGatewayRecoveryAfterDefaultModelChange(gatewayStore, gatewayId)
                         }
                         if (didUpdate) {
                             modelStore.loadModels(gatewayId)

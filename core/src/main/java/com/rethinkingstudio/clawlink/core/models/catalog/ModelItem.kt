@@ -17,6 +17,7 @@ data class ModelItem(
     val pricing: ModelPricing? = null
 ) {
     val displayName: String get() = modelAlias.ifBlank { modelName.ifBlank { modelId } }
+    val displayTitle: String get() = modelName.ifBlank { modelAlias.ifBlank { modelId } }
     val subtitle: String get() = provider.ifBlank { providerId }
 }
 

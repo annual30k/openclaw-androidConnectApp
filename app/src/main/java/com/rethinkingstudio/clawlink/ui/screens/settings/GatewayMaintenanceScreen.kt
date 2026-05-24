@@ -36,6 +36,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.rethinkingstudio.clawlink.R
 import com.rethinkingstudio.clawlink.core.models.gateway.AggregateStatus
+import com.rethinkingstudio.clawlink.core.models.gateway.GatewayType
 import com.rethinkingstudio.clawlink.core.state.gateway.GatewayStore
 import com.rethinkingstudio.clawlink.ui.components.ClawLinkScaffold
 import kotlinx.coroutines.delay
@@ -44,6 +45,11 @@ import kotlinx.coroutines.launch
 enum class MaintenanceMode {
     RESTART,
     REMOTE_RESTART
+}
+
+internal fun maintenanceRestartMethod(gatewayType: GatewayType?, isRemote: Boolean): String {
+    if (gatewayType == GatewayType.hermes) return "hermes.agent.restart"
+    return if (isRemote) "clawpilot.gateway.remoteRestart" else "clawpilot.gateway.restart"
 }
 
 @Composable
@@ -323,7 +329,7 @@ fun GatewayMaintenanceScreen(
                                                     onClick = {
                                                         isSendingRequest = true
                                                         scope.launch {
-                                                            val method = if (isRemote) "clawpilot.gateway.remoteRestart" else "clawpilot.gateway.restart"
+                                                            val method = maintenanceRestartMethod(selectedGateway?.gatewayType, isRemote)
                                                             val kind = if (isRemote) "gateway.remoteRestart" else "gateway.restart"
                                                             gatewayStore.executeAdvancedAction(selectedGateway?.id ?: "", method, kind)
                                                             isSendingRequest = false

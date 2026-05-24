@@ -46,7 +46,6 @@ import com.google.accompanist.permissions.rememberPermissionState
 import com.rethinkingstudio.clawlink.R
 import com.rethinkingstudio.clawlink.core.models.chat.ChatMessage
 import com.rethinkingstudio.clawlink.core.models.chat.MessageRole
-import com.rethinkingstudio.clawlink.core.models.chat.MessageState
 import com.rethinkingstudio.clawlink.core.models.gateway.AggregateStatus
 import com.rethinkingstudio.clawlink.core.state.chat.ChatStore
 import com.rethinkingstudio.clawlink.core.state.chat.RemoteAttachmentCache
@@ -122,18 +121,4 @@ internal fun ConversationMessageEnterAnimation(
     ) {
         content()
     }
-}
-
-internal fun ChatMessage.isVoiceReplyTextOnlyCandidate(
-    assistantVoiceRepliesEffectiveEnabled: Boolean,
-    assistantVoiceRepliesEnabledAt: Double?,
-    voiceReplyTextOnlyRunIds: Set<String>,
-    now: Double
-): Boolean {
-    if (hasVoiceContent || hasFileContent) return false
-    if (role != MessageRole.assistant || !assistantVoiceRepliesEffectiveEnabled) return false
-    if (state == MessageState.streaming) return true
-    val timestamp = sortTimestamp ?: return false
-    val enabledAt = assistantVoiceRepliesEnabledAt ?: return false
-    return timestamp >= enabledAt - 2.0 && now - timestamp < 120.0
 }

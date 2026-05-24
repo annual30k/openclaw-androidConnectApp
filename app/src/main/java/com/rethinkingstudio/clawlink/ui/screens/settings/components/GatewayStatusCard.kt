@@ -180,8 +180,24 @@ fun GatewayStatusCard(
                                 text = gateway.displayName,
                                 style = MaterialTheme.typography.titleMedium.copy(fontSize = 17.sp),
                                 fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.onSurface
+                                color = MaterialTheme.colorScheme.onSurface,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.weight(1f, fill = false)
                             )
+                            Surface(
+                                shape = RoundedCornerShape(999.dp),
+                                color = Color(0xFF0F73ED).copy(alpha = 0.12f)
+                            ) {
+                                Text(
+                                    text = gateway.gatewayType.displayTitle,
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                    style = MaterialTheme.typography.labelSmall,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = Color(0xFF0F73ED),
+                                    maxLines = 1
+                                )
+                            }
                             IconButton(
                                 onClick = {
                                     editedName = gateway.displayName

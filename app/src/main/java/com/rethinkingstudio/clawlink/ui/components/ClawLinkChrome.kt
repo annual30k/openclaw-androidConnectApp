@@ -21,21 +21,26 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 
-private val ClawLinkCardShape = RoundedCornerShape(28.dp)
+private val ClawLinkCardShape = RoundedCornerShape(24.dp)
 private val ClawLinkPillShape = RoundedCornerShape(999.dp)
 
 @Composable
 fun ClawLinkBackdrop(modifier: Modifier = Modifier) {
-    val brush = Brush.verticalGradient(
+    val brush = Brush.linearGradient(
         colors = listOf(
             MaterialTheme.colorScheme.background,
             MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.72f)
-        )
+        ),
+        start = Offset.Zero,
+        end = Offset.Infinite
     )
     Box(modifier = modifier.fillMaxSize().background(brush))
 }
@@ -64,32 +69,51 @@ fun ClawLinkScaffold(
 fun ClawLinkCard(
     modifier: Modifier = Modifier,
     onClick: (() -> Unit)? = null,
-    contentPadding: PaddingValues = PaddingValues(20.dp),
+    contentPadding: PaddingValues = PaddingValues(16.dp),
     content: @Composable ColumnScope.() -> Unit
 ) {
     val colors = CardDefaults.cardColors(
-        containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.94f),
+        containerColor = Color.Transparent,
         contentColor = MaterialTheme.colorScheme.onSurface
     )
+    val cardModifier = modifier
+        .shadow(
+            elevation = 16.dp,
+            shape = ClawLinkCardShape,
+            ambientColor = Color.Black.copy(alpha = 0.035f),
+            spotColor = Color.Black.copy(alpha = 0.08f)
+        )
+        .clip(ClawLinkCardShape)
+        .background(
+            brush = Brush.linearGradient(
+                colors = listOf(
+                    MaterialTheme.colorScheme.surface.copy(alpha = 0.96f),
+                    MaterialTheme.colorScheme.primary.copy(alpha = 0.055f),
+                    MaterialTheme.colorScheme.surface.copy(alpha = 0.90f)
+                ),
+                start = Offset.Zero,
+                end = Offset.Infinite
+            ),
+            shape = ClawLinkCardShape
+        )
+        .border(0.8.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.14f), ClawLinkCardShape)
 
     if (onClick != null) {
         Card(
             onClick = onClick,
-            modifier = modifier,
+            modifier = cardModifier,
             shape = ClawLinkCardShape,
             colors = colors,
             elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
-            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.12f))
         ) {
             Column(modifier = Modifier.padding(contentPadding), verticalArrangement = Arrangement.spacedBy(0.dp), content = content)
         }
     } else {
         Card(
-            modifier = modifier,
+            modifier = cardModifier,
             shape = ClawLinkCardShape,
             colors = colors,
             elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
-            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.12f))
         ) {
             Column(modifier = Modifier.padding(contentPadding), verticalArrangement = Arrangement.spacedBy(0.dp), content = content)
         }

@@ -371,7 +371,7 @@ internal fun VoiceHero(modifier: Modifier) {
             ) {
                 HeroHeaderRow(
                     icon = Icons.Default.Mic,
-                    title = stringResource(R.string.welcome_voice_reply),
+                    title = stringResource(R.string.welcome_voice_header),
                     trailing = stringResource(R.string.welcome_voice_hands_free),
                     tint = primary
                 )

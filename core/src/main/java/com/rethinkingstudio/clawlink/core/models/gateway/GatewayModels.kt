@@ -44,8 +44,29 @@ enum class ConnectionPhase {
             return when (normalized) {
                 "apprelay", "app_relay", "app_relay_phase" -> appRelay
                 "relayhost", "relay_host" -> relayHost
-                "hostgateway", "host_gateway", "host_openclaw", "host_to_openclaw" -> hostGateway
+                "hostgateway", "host_gateway", "host_openclaw", "host_to_openclaw",
+                "host_hermes_agent", "host_to_hermes_agent" -> hostGateway
                 else -> entries.find { it.name.equals(value?.trim(), ignoreCase = true) } ?: appRelay
+            }
+        }
+    }
+}
+
+@Serializable
+enum class GatewayType {
+    openclaw, hermes;
+
+    val displayTitle: String
+        get() = when (this) {
+            openclaw -> "OpenClaw"
+            hermes -> "Hermes Agent"
+        }
+
+    companion object {
+        fun fromString(value: String?): GatewayType {
+            return when (value?.trim()?.lowercase()) {
+                "hermes" -> hermes
+                else -> openclaw
             }
         }
     }
@@ -64,6 +85,8 @@ data class GatewaySummary(
     val gatewayId: String,
     val displayName: String,
     val platform: String,
+    val gatewayType: GatewayType = GatewayType.openclaw,
+    val capabilities: List<String> = emptyList(),
     val role: String? = null,
     val aggregateStatus: AggregateStatus,
     val lastSeenAt: String,

@@ -86,6 +86,6 @@ data class RelayFileTransferItem(
     val storagePath: String,
     val downloadPath: String,
     val chunkSize: Int,
-    val totalChunks: Int
+    val totalChunks: Int,
+    val sourceRunId: String? = null
 )
-

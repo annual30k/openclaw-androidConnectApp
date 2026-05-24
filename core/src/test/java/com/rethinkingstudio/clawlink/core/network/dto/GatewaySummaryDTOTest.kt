@@ -51,6 +51,18 @@ class GatewaySummaryDTOTest {
     }
 
     @Test
+    fun decodesHermesHostPhaseName() {
+        val status = GatewayStatusDTO(
+            phase = "Host -> Hermes Agent",
+            status = "在线",
+            detail = "Hermes Agent healthy"
+        ).toGatewayStatus()
+
+        assertEquals(ConnectionPhase.hostGateway, status.phase)
+        assertEquals(AggregateStatus.online, status.status)
+    }
+
+    @Test
     fun formatsNumericContextUsageFromRelaySummary() {
         val dto = json.decodeFromString<GatewaySummaryDTO>(
             """

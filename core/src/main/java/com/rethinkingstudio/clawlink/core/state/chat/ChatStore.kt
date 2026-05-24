@@ -11,7 +11,9 @@ import com.rethinkingstudio.clawlink.core.models.chat.ComposerAttachmentUploadIt
 import com.rethinkingstudio.clawlink.core.domain.NotificationPort
 import com.rethinkingstudio.clawlink.core.network.RelayAPIClient
 import com.rethinkingstudio.clawlink.core.network.dto.RelayFileTransferItem
+import com.rethinkingstudio.clawlink.core.network.transport.RelayChatSendAttachmentPayload
 import com.rethinkingstudio.clawlink.core.network.transport.RelayWebSocketClient
+import com.rethinkingstudio.clawlink.core.network.transport.VoiceSendAudioPayload
 import com.rethinkingstudio.clawlink.core.network.transport.WsEvent
 import com.rethinkingstudio.clawlink.core.state.LocalizedText.choose
 import com.rethinkingstudio.clawlink.core.state.chat.RemoteImageCache
@@ -73,10 +75,12 @@ class ChatStore(
     private fun handleWsEvent(event: WsEvent) {
         pruneLocallyStoppedRuns()
         when (event.type) {
+            "usage", "context_usage" -> handleChatPayload(event.payload)
             "event" -> {
                 // Relay server wraps chat events as {type: "event", event: "chat", payload: {...}}
                 when (event.event) {
                     "chat" -> handleChatPayload(event.payload)
+                    "context_usage", "usage" -> handleChatPayload(event.payload)
                     "agent" -> handleAgentPayload(event.payload)
                     "file" -> handleChatPayload(event.payload)
                     "office" -> handleOfficePayload(event.payload)
@@ -110,6 +114,7 @@ class ChatStore(
     private fun handleChatPayload(payload: JsonElement?) {
         val obj = payload as? JsonObject ?: return
         val payloadObj = obj["payload"]?.jsonObject ?: obj
+        _state.value = _state.value.withContextUsageFromPayload(obj, payloadObj)
 
         // Determine phase from payload
         val phase = payloadObj["state"]?.jsonPrimitive?.content
@@ -338,17 +343,11 @@ class ChatStore(
             )
         }
 
-        streamingContent.append(content)
         val messages = _state.value.messages.toMutableList()
         val idx = messages.indexOfFirst { it.id == streamingMessageId }
         if (idx >= 0) {
             val existing = messages[idx]
-            // If the message only contains a transient status text, replace it instead of appending
-            val updatedContent = if (isTransientAssistantPlaceholder(existing)) {
-                content
-            } else {
-                existing.content + content
-            }
+            val updatedContent = mergedAssistantStreamingDisplayContent(existing, content)
             messages[idx] = existing.copy(
                 content = updatedContent,
                 runId = runId.ifBlank { existing.runId }
@@ -384,11 +383,6 @@ class ChatStore(
         }
 
         val finalContentBlocks = contentBlocks
-        val shouldShowVoiceReplyTextFallback =
-            runId.isNotBlank() &&
-                _state.value.voiceReplyTextOnlyRunIds.contains(runId) &&
-                finalContentBlocks.none { it.isVoiceMessageBlock || it.isFileBlock } &&
-                content.isNotBlank()
 
         val finalRole = if (finalContentBlocks.any { it.isToolCallBlock || it.isToolResultBlock }) MessageRole.tool else role
 
@@ -412,7 +406,8 @@ class ChatStore(
                 content = content,
                 contentBlocks = finalContentBlocks,
                 runId = runId,
-                sortTimestamp = eventTimestampMillis(obj)?.toDouble()?.div(1000.0)
+                sortTimestamp = eventTimestampMillis(obj)?.toDouble()?.div(1000.0),
+                assistantMessageId = scope.runScope?.assistantMessageId
             )
             noteSessionActivity(scope, lastActivityAt = eventTimestampIso(obj))
             return
@@ -442,38 +437,35 @@ class ChatStore(
                 )
                 _state.value = _state.value.copy(
                     messages = messages,
-                    isStreaming = false,
-                    voiceReplyTextOnlyRunIds = if (shouldShowVoiceReplyTextFallback) {
-                        _state.value.voiceReplyTextOnlyRunIds - runId
-                    } else {
-                        _state.value.voiceReplyTextOnlyRunIds
-                    }
+                    isStreaming = false
                 )
             }
             forgetRunScope(runId, scope.runScope)
         } else {
+            val eventSortTimestamp = eventTimestampMillis(obj)?.toDouble()?.div(1000.0)
             val msg = ChatMessage(
                 id = UUID.randomUUID().toString(),
                 role = finalRole,
                 state = MessageState.completed,
                 content = content,
                 contentBlocks = finalContentBlocks,
-                createdAt = "",
+                createdAt = eventTimestampIso(obj),
                 runId = runId,
-                sortTimestamp = System.currentTimeMillis() / 1000.0
+                sortTimestamp = eventSortTimestamp ?: (System.currentTimeMillis() / 1000.0)
             )
+            val anchoredMessage = anchorAssistantFileMessageToSourceRun(msg, _state.value.messages)
             val fileIds = contentBlocks.mapNotNull { it.fileId?.trim()?.takeIf { id -> id.isNotEmpty() } }
             if (fileIds.isNotEmpty()) {
                 val messages = _state.value.messages.toMutableList()
                 val existingIndex = messages.indexOfFirst { existing ->
-                    sameFileMessage(existing, msg)
+                    sameFileMessage(existing, anchoredMessage)
                 }
                 if (existingIndex >= 0) {
                     val mergedMessage = mergeCompletedFileMessage(
                         existing = messages[existingIndex],
-                        completed = msg.copy(
+                        completed = anchoredMessage.copy(
                             id = messages[existingIndex].id,
-                            sortTimestamp = messages[existingIndex].sortTimestamp ?: msg.sortTimestamp
+                            sortTimestamp = messages[existingIndex].sortTimestamp ?: anchoredMessage.sortTimestamp
                         )
                     )
                     messages[existingIndex] = mergedMessage
@@ -486,13 +478,8 @@ class ChatStore(
                 }
             }
             _state.value = _state.value.copy(
-                messages = _state.value.messages + msg,
-                isStreaming = false,
-                voiceReplyTextOnlyRunIds = if (shouldShowVoiceReplyTextFallback) {
-                    _state.value.voiceReplyTextOnlyRunIds - runId
-                } else {
-                    _state.value.voiceReplyTextOnlyRunIds
-                }
+                messages = _state.value.messages + anchoredMessage,
+                isStreaming = false
             )
             forgetRunScope(runId, scope.runScope)
         }
@@ -514,47 +501,16 @@ class ChatStore(
         content: String,
         contentBlocks: List<RelayChatContentBlock>,
         runId: String,
-        sortTimestamp: Double?
+        sortTimestamp: Double?,
+        assistantMessageId: String? = null
     ) {
-        val trimmed = content.trim()
-        if (trimmed.isBlank() && contentBlocks.isEmpty()) return
-
-        val messages = _state.value.messages.toMutableList()
-        val localIndex = messages.indexOfLast { message ->
-            message.role == MessageRole.user &&
-                message.runId.startsWith("local-user-") &&
-                message.content.trim() == trimmed
-        }
-        if (localIndex >= 0) {
-            val existing = messages[localIndex]
-            messages[localIndex] = existing.copy(
-                state = MessageState.completed,
-                contentBlocks = if (existing.contentBlocks.isEmpty()) contentBlocks else existing.contentBlocks
-            )
-            _state.value = _state.value.copy(messages = messages)
-            return
-        }
-
-        val last = messages.lastOrNull()
-        if (last != null &&
-            last.role == MessageRole.user &&
-            last.content.trim() == trimmed &&
-            (runId.isBlank() || last.runId == runId)
-        ) {
-            return
-        }
-
-        messages.add(
-            ChatMessage(
-                id = UUID.randomUUID().toString(),
-                role = MessageRole.user,
-                state = MessageState.completed,
-                content = trimmed,
-                contentBlocks = contentBlocks,
-                createdAt = "",
-                runId = runId.ifBlank { "remote-user-${UUID.randomUUID().toString().take(8)}" },
-                sortTimestamp = sortTimestamp ?: (System.currentTimeMillis() / 1000.0)
-            )
+        val messages = mergeRemoteUserMessageIntoCurrentMessages(
+            currentMessages = _state.value.messages,
+            content = content,
+            contentBlocks = contentBlocks,
+            runId = runId,
+            sortTimestamp = sortTimestamp,
+            assistantMessageId = assistantMessageId
         )
         _state.value = _state.value.copy(messages = messages)
     }
@@ -584,8 +540,28 @@ class ChatStore(
         val errorObj = obj?.get("error") as? JsonObject
         val msg = errorObj?.string("message")
             ?: obj?.string("message", "errorMessage")
+            ?: obj?.let { ChatPayloadText.extract(it).takeIf { text -> text.isNotBlank() } }
             ?: "Unknown error"
-        _state.value = _state.value.copy(errorMessage = msg, isStreaming = false)
+        val assistantMessageId = scope?.runScope?.assistantMessageId
+        val currentMessages = _state.value.messages
+        val updatedMessages = applyAssistantErrorToCurrentMessages(
+            currentMessages = currentMessages,
+            runId = runId,
+            assistantMessageId = assistantMessageId,
+            errorMessage = msg,
+            sortTimestamp = obj?.let { eventTimestampMillis(it)?.toDouble()?.div(1000.0) }
+        )
+        val updatedAssistant = updatedMessages != currentMessages
+        if (updatedAssistant && assistantMessageId != null && streamingMessageId == assistantMessageId) {
+            streamingMessageId = null
+            streamingContent.clear()
+        }
+        _state.value = _state.value.copy(
+            messages = updatedMessages,
+            errorMessage = if (updatedAssistant) null else msg,
+            isStreaming = false,
+            isStoppingRun = false
+        )
         forgetRunScope(runId.orEmpty(), scope?.runScope)
     }
 
@@ -705,12 +681,7 @@ class ChatStore(
         streamingContent.clear()
         _state.value = _state.value.copy(
             isStreaming = false,
-            isStoppingRun = false,
-            voiceReplyTextOnlyRunIds = if (runId.isNotBlank()) {
-                _state.value.voiceReplyTextOnlyRunIds - runId
-            } else {
-                _state.value.voiceReplyTextOnlyRunIds
-            }
+            isStoppingRun = false
         )
     }
 
@@ -954,7 +925,8 @@ class ChatStore(
         content: String,
         gatewayId: String,
         attachmentIds: List<String> = emptyList(),
-        attachmentBlocks: List<RelayChatContentBlock> = emptyList()
+        attachmentBlocks: List<RelayChatContentBlock> = emptyList(),
+        commandAttachments: List<RelayChatSendAttachmentPayload> = emptyList()
     ) {
         val sessionKey = _state.value.currentSessionKey
         if (sessionKey.isBlank()) return
@@ -999,21 +971,69 @@ class ChatStore(
             messages = _state.value.messages + userMsg + assistantMsg,
             isStreaming = true
         )
-        val current = _state.value
-        val voiceReplyTextOnlyRunIds = if (current.assistantVoiceRepliesEffectiveEnabled) {
-            (current.voiceReplyTextOnlyRunIds + clientRunId).takeLastSet(512)
-        } else {
-            current.voiceReplyTextOnlyRunIds
-        }
-        _state.value = _state.value.copy(voiceReplyTextOnlyRunIds = voiceReplyTextOnlyRunIds)
         wsClient.sendChatMessage(
             gatewayId = gatewayId,
             sessionKey = sessionKey,
             content = content,
+            attachments = commandAttachments,
             idempotencyKey = clientRunId,
-            voiceReplyEnabled = current.assistantVoiceRepliesEffectiveEnabled,
-            voiceReplyVoiceIdentifier = current.voiceReplyVoiceIdentifier.takeIf { it.isNotBlank() },
-            voiceReplyRatePercent = current.voiceReplyRatePercent,
+            requestId = requestId
+        )
+    }
+
+    fun sendVoiceMessage(
+        gatewayId: String,
+        audio: VoiceSendAudioPayload,
+        message: String? = null,
+        languageHint: String? = null
+    ) {
+        val sessionKey = _state.value.currentSessionKey
+        if (sessionKey.isBlank()) return
+
+        val clientRunId = UUID.randomUUID().toString()
+        val requestId = UUID.randomUUID().toString()
+        val now = System.currentTimeMillis() / 1000.0
+        val userMsg = buildLocalVoiceUserMessage(
+            audio = audio,
+            gatewayId = gatewayId,
+            sessionKey = sessionKey,
+            clientRunId = clientRunId,
+            sortTimestamp = now
+        )
+        val assistantMsgId = UUID.randomUUID().toString()
+        val assistantMsg = ChatMessage(
+            id = assistantMsgId,
+            role = MessageRole.assistant,
+            state = MessageState.streaming,
+            content = choose("Waiting for host transcription...", "等待宿主机识别语音..."),
+            createdAt = "",
+            runId = clientRunId,
+            sortTimestamp = now + 0.001
+        )
+
+        streamingMessageId = assistantMsgId
+        streamingContent.setLength(0)
+        streamingContent.append(assistantMsg.content)
+        val runScope = ChatRunScope(
+            gatewayId = gatewayId,
+            sessionKey = sessionKey,
+            assistantMessageId = assistantMsgId
+        )
+        rememberRunScope(clientRunId, runScope)
+        rememberRunScope(requestId, runScope)
+        persistSelectedSession(gatewayId, sessionKey)
+
+        _state.value = _state.value.copy(
+            messages = _state.value.messages + userMsg + assistantMsg,
+            isStreaming = true
+        )
+        wsClient.sendVoiceMessage(
+            gatewayId = gatewayId,
+            sessionKey = sessionKey,
+            audio = audio,
+            message = message,
+            languageHint = languageHint,
+            idempotencyKey = clientRunId,
             requestId = requestId
         )
     }
@@ -1027,6 +1047,8 @@ class ChatStore(
         durationMs: Int? = null,
         imageWidth: Int? = null,
         imageHeight: Int? = null,
+        senderDisplayName: String? = null,
+        clientCreatedAt: String? = null,
         onProgress: ((Double) -> Unit)? = null
     ): RelayFileTransferItem {
         val sessionKey = _state.value.currentSessionKey
@@ -1040,7 +1062,9 @@ class ChatStore(
             sha256 = sha256,
             durationMs = durationMs,
             imageWidth = imageWidth,
-            imageHeight = imageHeight
+            imageHeight = imageHeight,
+            senderDisplayName = senderDisplayName,
+            clientCreatedAt = clientCreatedAt
         )
         val chunkSize = init.chunkSize.coerceAtLeast(1)
         var offset = 0
@@ -1144,39 +1168,7 @@ class ChatStore(
             ) {
                 apiClient.fetchChatHistory(normalizedGatewayId, normalizedSessionKey, limit)
             }
-            val rawHistoryMessages = items.map { item ->
-                val extractedContent = extractContent(item)
-                val sourceBlocks = item.contentBlocks ?: emptyList()
-                val normalizedRole = normalizedMessageRole(item.role)
-                val isToolRole = normalizedRole in listOf("tool", "toolresult")
-                val isToolHistory = isToolRole || sourceBlocks.any { it.isToolCallBlock || it.isToolResultBlock }
-                val role = if (isToolHistory) {
-                    MessageRole.tool
-                } else {
-                    messageRole(item.role)
-                }
-                val contentBlocks = sourceBlocks
-                val content = when {
-                    contentBlocks.isNotEmpty() && role == MessageRole.tool -> contentBlocks.firstNotNullOfOrNull { block ->
-                        block.text?.trim()?.takeIf { it.isNotEmpty() }
-                            ?: block.result?.renderedText(listOf("content", "markdown", "text", "body", "message", "value", "result", "output"))
-                            ?: block.partialResult?.renderedText(listOf("content", "markdown", "text", "body", "message", "value", "result", "output"))
-                            ?: block.content?.renderedText(listOf("content", "markdown", "text", "body", "message", "value", "result", "output"))
-                            ?: block.output?.renderedText(listOf("content", "markdown", "text", "body", "message", "value", "result", "output"))
-                            ?: block.error?.renderedText(listOf("content", "markdown", "text", "body", "message", "value", "result", "output"))
-                    }.orEmpty()
-                    else -> extractedContent
-                }
-                ChatMessage(
-                    id = item.id,
-                    role = role,
-                    content = content,
-                    contentBlocks = contentBlocks,
-                    createdAt = item.createdAt ?: "",
-                    runId = item.id,
-                    sortTimestamp = parseHistoryTimestamp(item.createdAt)
-                )
-            }
+            val rawHistoryMessages = buildHistoryMessagesFromItems(items)
             val historyMessages = rawHistoryMessages
             val current = _state.value
             val messages = if (current.currentGatewayId == normalizedGatewayId && current.currentSessionKey == normalizedSessionKey) {
@@ -1199,7 +1191,10 @@ class ChatStore(
             throw e
         } catch (e: Exception) {
             val currentState = _state.value
-            val shouldSuppressError = isTransientLoadFailure(e) && currentState.messages.isEmpty()
+            val shouldSuppressError = isTransientLoadFailure(e)
+            if (shouldSuppressError) {
+                android.util.Log.w("ChatStore", "Transient timeout while refreshing chat history for $normalizedGatewayId/$normalizedSessionKey", e)
+            }
             _state.value = currentState.copy(
                 isLoading = false,
                 isSwitchingSession = false,
@@ -1390,40 +1385,6 @@ class ChatStore(
 
     fun toggleShowInvocation() {
         setShowInvocationProcess(!_state.value.showInvocationProcess)
-    }
-
-    fun updateVoiceReplyConfig(
-        enabled: Boolean,
-        hasGenerationSetup: Boolean,
-        voiceIdentifier: String,
-        ratePercent: Int
-    ) {
-        val current = _state.value
-        val effectiveEnabled = enabled && hasGenerationSetup
-        _state.value = current.copy(
-            assistantVoiceRepliesEnabled = enabled,
-            assistantVoiceRepliesEffectiveEnabled = effectiveEnabled,
-            assistantVoiceRepliesEnabledAt = when {
-                effectiveEnabled && !current.assistantVoiceRepliesEffectiveEnabled -> System.currentTimeMillis() / 1000.0
-                effectiveEnabled -> current.assistantVoiceRepliesEnabledAt
-                else -> null
-            },
-            voiceReplyVoiceIdentifier = voiceIdentifier.trim(),
-            voiceReplyRatePercent = ratePercent
-        )
-    }
-
-    fun syncVoiceReplyConfigToRelay() {
-        val current = _state.value
-        val gatewayId = current.currentGatewayId?.trim().orEmpty()
-        val sessionKey = current.currentSessionKey.trim()
-        if (gatewayId.isBlank() || sessionKey.isBlank()) return
-        wsClient.syncVoiceReplyConfig(
-            gatewayId = gatewayId,
-            sessionKey = sessionKey,
-            voiceReplyVoiceIdentifier = current.voiceReplyVoiceIdentifier.takeIf { it.isNotBlank() },
-            voiceReplyRatePercent = current.voiceReplyRatePercent
-        )
     }
 
     private fun Set<String>.takeLastSet(limit: Int): Set<String> {
