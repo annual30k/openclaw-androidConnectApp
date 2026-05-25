@@ -1,6 +1,8 @@
 package com.rethinkingstudio.clawlink.core.state.chat
 
 import com.rethinkingstudio.clawlink.core.models.gateway.AggregateStatus
+import com.rethinkingstudio.clawlink.core.models.chat.ChatMessage
+import com.rethinkingstudio.clawlink.core.models.chat.MessageRole
 import com.rethinkingstudio.clawlink.core.models.gateway.GatewaySummary
 import com.rethinkingstudio.clawlink.core.models.gateway.GatewayType
 import kotlinx.serialization.json.JsonObject
@@ -23,6 +25,51 @@ class ChatContextUsagePresentationTest {
 
         val line = state.visibleContextUsageLine(
             gateway = gateway(type = GatewayType.hermes, contextUsage = "796k/272k (293%)")
+        )
+
+        assertEquals("0/272k (0%)", line)
+    }
+
+    @Test
+    fun hermesExistingSessionWithoutCachedUsageFallsBackToGatewaySummary() {
+        val state = ChatState(
+            currentGatewayId = "gw_hermes",
+            currentSessionKey = "session_existing",
+            messages = listOf(
+                ChatMessage(
+                    id = "assistant-history",
+                    role = MessageRole.assistant,
+                    content = "今天到目前为止，我主要做了这几件事。"
+                )
+            ),
+            contextUsageLinesByGatewayAndSession = mapOf(
+                "gw_hermes" to mapOf("session_old" to "0/272k (0%)")
+            )
+        )
+
+        val line = state.visibleContextUsageLine(
+            gateway = gateway(type = GatewayType.hermes, contextUsage = "33.6k/272k (12%)")
+        )
+
+        assertEquals("33.6k/272k (12%)", line)
+    }
+
+    @Test
+    fun hermesResetOnlySessionWithoutCachedUsageKeepsZeroContext() {
+        val state = ChatState(
+            currentGatewayId = "gw_hermes",
+            currentSessionKey = "session_reset",
+            messages = listOf(
+                ChatMessage(
+                    id = "reset-notice",
+                    role = MessageRole.assistant,
+                    content = "新会话已开始。有什么需要我帮你处理的？"
+                )
+            )
+        )
+
+        val line = state.visibleContextUsageLine(
+            gateway = gateway(type = GatewayType.hermes, contextUsage = "33.6k/272k (12%)")
         )
 
         assertEquals("0/272k (0%)", line)

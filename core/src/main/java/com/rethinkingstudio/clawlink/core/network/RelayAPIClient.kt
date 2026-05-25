@@ -26,6 +26,11 @@ class RelayAPIClient(
     var baseUrl: String = "",
     var accessToken: String = ""
 ) {
+    private val gatewayLoadHeaders = mapOf(
+        "X-ClawLink-Client" to "android",
+        "X-ClawLink-Fast-Gateway-Retry" to "1"
+    )
+
     private val json = Json {
         ignoreUnknownKeys = true
         isLenient = true
@@ -67,7 +72,12 @@ class RelayAPIClient(
         } else url
     }
 
-    private suspend inline fun <reified T> request(endpoint: APIEndpoint, body: Any? = null, token: String? = null): T {
+    private suspend inline fun <reified T> request(
+        endpoint: APIEndpoint,
+        body: Any? = null,
+        token: String? = null,
+        extraHeaders: Map<String, String> = emptyMap()
+    ): T {
         val url = buildUrl(endpoint)
         val response = httpClient.request(url) {
             method = when (endpoint.method) {
@@ -81,6 +91,9 @@ class RelayAPIClient(
             val authToken = token ?: accessToken
             if (authToken.isNotBlank()) {
                 header(HttpHeaders.Authorization, "Bearer $authToken")
+            }
+            extraHeaders.forEach { (name, value) ->
+                header(name, value)
             }
             if (body != null) {
                 setBody(body)
@@ -251,7 +264,10 @@ class RelayAPIClient(
     // ── Chat ─────────────────────────────────────────────────────────────
 
     suspend fun fetchChatHistory(gatewayId: String, sessionKey: String, limit: Int = 50): List<ChatHistoryItem> {
-        val response: ChatHistoryResponse = request(APIEndpoints.Mobile.Chat.history(gatewayId, sessionKey, limit))
+        val response: ChatHistoryResponse = request(
+            endpoint = APIEndpoints.Mobile.Chat.history(gatewayId, sessionKey, limit),
+            extraHeaders = gatewayLoadHeaders
+        )
         return response.items
     }
 
@@ -261,13 +277,16 @@ class RelayAPIClient(
     }
 
     suspend fun fetchChatSessions(gatewayId: String, limit: Int = 50, activeMinutes: Int? = null): List<ChatSessionItem> {
-        val response: ChatSessionListResponse = request(APIEndpoints.Mobile.Chat.sessions(gatewayId, limit, activeMinutes))
+        val response: ChatSessionListResponse = request(
+            endpoint = APIEndpoints.Mobile.Chat.sessions(gatewayId, limit, activeMinutes),
+            extraHeaders = gatewayLoadHeaders
+        )
         return response.items
     }
 
     suspend fun deleteChatSession(gatewayId: String, sessionKey: String, deleteTranscript: Boolean = false): Boolean {
         val response: ChatSessionDeleteResponse = request(APIEndpoints.Mobile.Chat.deleteSession(gatewayId, sessionKey, deleteTranscript))
-        return response.ok
+        return response.ok && response.deleted
     }
 
     suspend fun initMobileFileUpload(

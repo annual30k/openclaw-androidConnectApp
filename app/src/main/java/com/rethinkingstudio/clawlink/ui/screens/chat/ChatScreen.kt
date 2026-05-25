@@ -100,8 +100,10 @@ import com.rethinkingstudio.clawlink.ui.screens.chat.components.ThinkingRow
 import com.rethinkingstudio.clawlink.ui.screens.chat.components.UsageGuidePromptCard
 import com.rethinkingstudio.clawlink.ui.screens.chat.components.VoiceInputOverlay
 import com.rethinkingstudio.clawlink.ui.screens.chat.components.visibleToolContentBlocks
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.yield
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalPermissionsApi::class)
 @Composable
@@ -167,6 +169,8 @@ fun ChatScreen(
     var lastObservedVisibleMessageCount by remember { mutableStateOf(0) }
     var lastObservedMessageSignature by remember { mutableStateOf("") }
     var hasPendingMessagesBelow by remember { mutableStateOf(false) }
+    var activeGatewaySwitchId by remember { mutableStateOf<String?>(null) }
+    var lastAutoHistoryRequestKey by remember { mutableStateOf<String?>(null) }
     val visibleMessagesForScroll = remember(
         chatState.messages,
         chatState.showInvocationProcess
@@ -221,6 +225,20 @@ fun ChatScreen(
             scrollChatToBottom(animated = true)
             delay(220)
             scrollChatToBottom(animated = true)
+        }
+    }
+
+    suspend fun loadAutoHistoryOnce(request: GatewayHistoryRequest) {
+        val requestKey = gatewayHistoryRequestKey(request)
+        if (lastAutoHistoryRequestKey == requestKey) return
+        lastAutoHistoryRequestKey = requestKey
+        try {
+            chatStore.loadHistory(request.gatewayId, request.sessionKey)
+        } catch (e: CancellationException) {
+            if (lastAutoHistoryRequestKey == requestKey) {
+                lastAutoHistoryRequestKey = null
+            }
+            throw e
         }
     }
 
@@ -414,16 +432,42 @@ fun ChatScreen(
 
     LaunchedEffect(gatewayId) {
         if (gatewayId != null) {
-            chatStore.beginGatewaySwitch(gatewayId)
-            chatStore.connectWebSocket()
-            chatStore.loadSessions(gatewayId)
-            modelStore.loadModels(gatewayId)
+            activeGatewaySwitchId = gatewayId
+            try {
+                chatStore.beginGatewaySwitch(gatewayId)
+                chatStore.connectWebSocket()
+                val sessionsLoaded = chatStore.loadSessions(gatewayId)
+                if (sessionsLoaded) {
+                    val stateAfterSessionLoad = chatStore.state.value
+                    gatewaySwitchHistoryRequest(
+                        selectedGatewayId = gatewayId,
+                        currentGatewayId = stateAfterSessionLoad.currentGatewayId,
+                        currentSessionKey = stateAfterSessionLoad.currentSessionKey,
+                        isGatewaySwitchInProgress = false
+                    )?.let { request ->
+                        loadAutoHistoryOnce(request)
+                    }
+                }
+                modelStore.loadModels(gatewayId)
+            } finally {
+                if (activeGatewaySwitchId == gatewayId) {
+                    activeGatewaySwitchId = null
+                }
+            }
+        } else {
+            activeGatewaySwitchId = null
         }
     }
 
-    LaunchedEffect(gatewayId, chatState.currentSessionKey) {
-        if (gatewayId != null && chatState.currentSessionKey.isNotBlank()) {
-            chatStore.loadHistory(gatewayId, chatState.currentSessionKey)
+    LaunchedEffect(gatewayId, chatState.currentGatewayId, chatState.currentSessionKey) {
+        yield()
+        gatewaySwitchHistoryRequest(
+            selectedGatewayId = gatewayId,
+            currentGatewayId = chatState.currentGatewayId,
+            currentSessionKey = chatState.currentSessionKey,
+            isGatewaySwitchInProgress = activeGatewaySwitchId == gatewayId
+        )?.let { request ->
+            loadAutoHistoryOnce(request)
         }
     }
 
@@ -706,6 +750,9 @@ fun ChatScreen(
                             gatewayStore.selectGateway(gateway.id)
                             chatStore.selectSession(session.sessionKey)
                             viewModel.showGatewaySheet = false
+                        },
+                        onUnpair = { gateway ->
+                            scope.launch { gatewayStore.unpairGateway(gateway.id) }
                         }
                     )
                 }

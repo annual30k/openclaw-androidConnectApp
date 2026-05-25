@@ -18,7 +18,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
@@ -58,8 +57,10 @@ import com.rethinkingstudio.clawlink.R
 import com.rethinkingstudio.clawlink.core.models.chat.ChatSessionItem
 import com.rethinkingstudio.clawlink.core.models.gateway.AggregateStatus
 import com.rethinkingstudio.clawlink.core.models.gateway.GatewaySummary
+import com.rethinkingstudio.clawlink.core.models.gateway.GatewayType
 import com.rethinkingstudio.clawlink.core.state.LocalizedText.choose
 import com.rethinkingstudio.clawlink.core.state.gateway.GatewayStore
+import com.rethinkingstudio.clawlink.ui.components.GatewayTypeIconBadge
 import com.rethinkingstudio.clawlink.ui.screens.chat.ChatColors
 import com.rethinkingstudio.clawlink.ui.screens.chat.formatChatTimestamp
 import com.rethinkingstudio.clawlink.ui.screens.settings.components.GatewayFlowPanel
@@ -112,6 +113,7 @@ internal fun GatewayItemCard(
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
+                        GatewayTypeIconBadge(gateway.gatewayType)
                         Text(
                             gateway.displayName,
                             maxLines = 1,
@@ -119,21 +121,8 @@ internal fun GatewayItemCard(
                             style = MaterialTheme.typography.titleMedium.copy(fontSize = 16.sp),
                             fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.onSurface,
-                            modifier = Modifier.weight(1f, fill = false)
+                            modifier = Modifier.weight(1f)
                         )
-                        Surface(
-                            shape = RoundedCornerShape(999.dp),
-                            color = ChatColors.selectionBlue.copy(alpha = 0.12f)
-                        ) {
-                            Text(
-                                gateway.gatewayType.displayTitle,
-                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-                                style = MaterialTheme.typography.labelSmall,
-                                color = ChatColors.selectionBlue,
-                                fontWeight = FontWeight.SemiBold,
-                                maxLines = 1
-                            )
-                        }
                     }
                     Text(
                         stringResource(R.string.gateway_last_seen, formatChatTimestamp(gateway.lastSeenAt)),

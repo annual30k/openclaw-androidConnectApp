@@ -8,6 +8,7 @@ import com.rethinkingstudio.clawlink.core.models.chat.RelayChatContentBlock
 import com.rethinkingstudio.clawlink.core.models.chat.AttachmentUploadPhase
 import com.rethinkingstudio.clawlink.core.models.chat.ComposerAttachmentDraft
 import com.rethinkingstudio.clawlink.core.models.chat.ComposerAttachmentUploadItem
+import com.rethinkingstudio.clawlink.core.models.gateway.GatewayType
 import com.rethinkingstudio.clawlink.core.domain.NotificationPort
 import com.rethinkingstudio.clawlink.core.network.RelayAPIClient
 import com.rethinkingstudio.clawlink.core.network.dto.RelayFileTransferItem
@@ -1198,7 +1199,10 @@ class ChatStore(
             _state.value = currentState.copy(
                 isLoading = false,
                 isSwitchingSession = false,
-                errorMessage = if (shouldSuppressError) null else e.message
+                errorMessage = visibleGatewayLoadErrorMessage(
+                    isTransientLoadFailure = shouldSuppressError,
+                    rawMessage = e.message
+                )
             )
         }
     }
@@ -1219,11 +1223,11 @@ class ChatStore(
         wsClient.resumeConnection()
     }
 
-    suspend fun loadSessions(gatewayId: String) {
+    suspend fun loadSessions(gatewayId: String): Boolean {
         val normalizedGatewayId = gatewayId.trim()
         if (normalizedGatewayId.isBlank()) {
             _state.value = _state.value.copy(isSwitchingSession = false)
-            return
+            return false
         }
         try {
             val sessions = retryOnceOnTransientFailure(
@@ -1234,18 +1238,20 @@ class ChatStore(
             val currentState = _state.value
             val current = currentState.currentSessionKey
             val isNewGateway = currentState.currentGatewayId != normalizedGatewayId
-            val shouldKeepCurrent = !currentState.isSwitchingSession &&
-                !isNewGateway &&
-                current.isNotBlank()
+            val shouldKeepCurrent = shouldKeepCurrentSessionAfterLoad(
+                sessions = sessions,
+                currentSessionKey = current,
+                hasCurrentMessages = currentState.messages.isNotEmpty(),
+                isSwitchingSession = currentState.isSwitchingSession,
+                isNewGateway = isNewGateway
+            )
             val persisted = sessionSelectionStore?.load(normalizedGatewayId)
-            val selected = when {
-                shouldKeepCurrent -> current
-                persisted != null -> sessions.matchingSessionKey(persisted) ?: persisted
-                sessions.matchingSessionKey(defaultSessionKey) != null ->
-                    sessions.matchingSessionKey(defaultSessionKey) ?: defaultSessionKey
-                sessions.isNotEmpty() -> sessions.first().sessionKey
-                else -> defaultSessionKey
-            }
+            val selected = selectSessionKeyAfterLoad(
+                sessions = sessions,
+                currentSessionKey = current,
+                persistedSessionKey = persisted,
+                shouldKeepCurrent = shouldKeepCurrent
+            )
             persistSelectedSession(normalizedGatewayId, selected)
             
             _state.value = currentState.copy(
@@ -1256,6 +1262,7 @@ class ChatStore(
                 isSwitchingSession = currentState.isSwitchingSession || isNewGateway || selected != current,
                 errorMessage = null
             )
+            return true
         } catch (e: CancellationException) {
             val currentState = _state.value
             _state.value = currentState.copy(
@@ -1269,16 +1276,17 @@ class ChatStore(
             val currentState = _state.value
             val selected = currentState.currentSessionKey.ifBlank { defaultSessionKey }
             val isTransientLoadFailure = isTransientLoadFailure(e)
-            val hasOnlyPlaceholderSession =
-                currentState.sessions.isEmpty() ||
-                    (currentState.sessions.size == 1 && currentState.sessions.first().sessionKey == defaultSessionKey)
 
             _state.value = currentState.copy(
                 currentGatewayId = normalizedGatewayId,
                 currentSessionKey = selected,
                 isSwitchingSession = false,
-                errorMessage = if (isTransientLoadFailure && hasOnlyPlaceholderSession) null else e.message
+                errorMessage = visibleGatewayLoadErrorMessage(
+                    isTransientLoadFailure = isTransientLoadFailure,
+                    rawMessage = e.message
+                )
             )
+            return false
         }
     }
 
@@ -1306,9 +1314,7 @@ class ChatStore(
                 is SocketTimeoutException -> return true
             }
             val message = current.message.orEmpty()
-            if (message.contains("socket timeout has expired", ignoreCase = true) ||
-                (message.contains("timeout", ignoreCase = true) && message.contains("expired", ignoreCase = true))
-            ) {
+            if (isTransientGatewayLoadFailureMessage(message)) {
                 return true
             }
             current = current.cause
@@ -1435,16 +1441,115 @@ class ChatStore(
         return "$resolvedGatewayId|$resolvedSessionKey|$normalizedIdentifier"
     }
 
-    suspend fun deleteSession(gatewayId: String, sessionKey: String, deleteTranscript: Boolean = false): Boolean {
+    suspend fun deleteSession(
+        gatewayId: String,
+        sessionKey: String,
+        deleteTranscript: Boolean = true,
+        gatewayType: GatewayType = GatewayType.openclaw
+    ): Boolean {
         val normalizedGatewayId = gatewayId.trim()
         val normalizedSessionKey = sessionKey.trim().ifBlank { defaultSessionKey }
         if (normalizedGatewayId.isBlank() || normalizedSessionKey.isBlank()) return false
-        val deleted = apiClient.deleteChatSession(normalizedGatewayId, normalizedSessionKey, deleteTranscript)
-        if (deleted) {
-            clearSessionImageCaches(normalizedGatewayId, normalizedSessionKey)
-            sessionSelectionStore?.clear(normalizedGatewayId, normalizedSessionKey)
+
+        val apiFailure = try {
+            if (apiClient.deleteChatSession(normalizedGatewayId, normalizedSessionKey, deleteTranscript)) {
+                applyDeletedSessionLocally(normalizedGatewayId, normalizedSessionKey)
+                return true
+            }
+            null
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            if (!shouldFallbackToRelayCommandForSessionDelete(e)) {
+                throw e
+            }
+            e
         }
-        return deleted
+
+        if (confirmDeletedSession(normalizedGatewayId, normalizedSessionKey)) {
+            applyDeletedSessionLocally(normalizedGatewayId, normalizedSessionKey)
+            return true
+        }
+
+        android.util.Log.w(
+            "ChatStore",
+            "Falling back to relay command for chat session delete",
+            apiFailure
+        )
+        connectWebSocket()
+        wsClient.executeCommand(
+            gatewayId = normalizedGatewayId,
+            method = chatSessionDeleteRelayMethod(gatewayType),
+            params = buildChatSessionDeleteCommandParams(normalizedSessionKey, deleteTranscript)
+        )
+        delay(150)
+
+        if (confirmDeletedSession(normalizedGatewayId, normalizedSessionKey)) {
+            applyDeletedSessionLocally(normalizedGatewayId, normalizedSessionKey)
+            return true
+        }
+        return false
+    }
+
+    private suspend fun confirmDeletedSession(gatewayId: String, sessionKey: String): Boolean {
+        repeat(4) { attempt ->
+            val sessions = try {
+                retryOnceOnTransientFailure(operationName = "chat sessions after delete for $gatewayId") {
+                    apiClient.fetchChatSessions(gatewayId)
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                android.util.Log.w("ChatStore", "Failed to confirm deleted chat session for $gatewayId/$sessionKey", e)
+                null
+            }
+
+            if (sessions != null) {
+                val current = _state.value
+                _state.value = current.copy(
+                    sessions = sessions,
+                    currentGatewayId = gatewayId,
+                    errorMessage = null
+                )
+                if (sessions.none { sameSessionKey(it.sessionKey, sessionKey) }) {
+                    return true
+                }
+            }
+
+            if (attempt < 3) {
+                delay(200)
+            }
+        }
+        return false
+    }
+
+    private fun applyDeletedSessionLocally(gatewayId: String, sessionKey: String) {
+        val current = _state.value
+        val remainingSessions = current.sessions.filterNot { sameSessionKey(it.sessionKey, sessionKey) }
+        val isActiveDeleted = current.currentGatewayId == gatewayId && sameSessionKey(current.currentSessionKey, sessionKey)
+        val nextSessionKey = if (isActiveDeleted) {
+            remainingSessions.firstOrNull()?.sessionKey?.trim()?.ifBlank { defaultSessionKey } ?: defaultSessionKey
+        } else {
+            current.currentSessionKey
+        }
+        _state.value = current.copy(
+            sessions = remainingSessions,
+            currentSessionKey = nextSessionKey,
+            messages = if (isActiveDeleted) emptyList() else current.messages,
+            isSwitchingSession = current.isSwitchingSession || isActiveDeleted,
+            contextUsageLinesByGatewayAndSession = current.contextUsageLinesByGatewayAndSession.toMutableMap().also { byGateway ->
+                val usageBySession = byGateway[gatewayId]?.toMutableMap() ?: return@also
+                usageBySession.keys
+                    .filter { sameSessionKey(it, sessionKey) }
+                    .forEach { usageBySession.remove(it) }
+                byGateway[gatewayId] = usageBySession
+            }
+        )
+        clearSessionImageCaches(gatewayId, sessionKey)
+        sessionSelectionStore?.clear(gatewayId, sessionKey)
+        if (isActiveDeleted) {
+            persistSelectedSession(gatewayId, nextSessionKey)
+        }
     }
 
     private fun shouldIgnoreLocallyStoppedEvent(runId: String): Boolean {

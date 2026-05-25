@@ -60,6 +60,8 @@ import com.rethinkingstudio.clawlink.core.models.gateway.AggregateStatus
 import com.rethinkingstudio.clawlink.core.models.gateway.GatewaySummary
 import com.rethinkingstudio.clawlink.core.state.LocalizedText.choose
 import com.rethinkingstudio.clawlink.core.state.gateway.GatewayStore
+import com.rethinkingstudio.clawlink.ui.components.ClawLinkAlertActionRole
+import com.rethinkingstudio.clawlink.ui.components.ClawLinkAlertDialog
 import com.rethinkingstudio.clawlink.ui.screens.chat.ChatColors
 import com.rethinkingstudio.clawlink.ui.screens.chat.formatChatTimestamp
 import com.rethinkingstudio.clawlink.ui.screens.settings.components.GatewayFlowPanel
@@ -77,10 +79,13 @@ internal fun GatewaySheetOverlay(
     onRefresh: () -> Unit,
     onRefreshSessions: (GatewaySummary) -> Unit,
     onSelect: (GatewaySummary) -> Unit,
-    onSelectSession: (GatewaySummary, ChatSessionItem) -> Unit
+    onSelectSession: (GatewaySummary, ChatSessionItem) -> Unit,
+    onUnpair: (GatewaySummary) -> Unit
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = false)
     var expandedSessionGatewayId by remember { mutableStateOf<String?>(null) }
+    var revealedUnpairGatewayId by remember { mutableStateOf<String?>(null) }
+    var pendingUnpairGateway by remember { mutableStateOf<GatewaySummary?>(null) }
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -135,28 +140,66 @@ internal fun GatewaySheetOverlay(
                         }
                     } else {
                         items(gateways, key = { it.id }) { gateway ->
-                            GatewayItemCard(
-                                gateway = gateway,
-                                appRelayStatus = appRelayStatus,
-                                selected = selectedGatewayId == gateway.id,
-                                sessions = if (selectedGatewayId == gateway.id) sessions else emptyList(),
-                                currentSessionKey = if (selectedGatewayId == gateway.id) currentSessionKey else "",
-                                isSessionExpanded = expandedSessionGatewayId == gateway.id,
-                                onToggleSessionExpanded = {
-                                    val shouldExpand = expandedSessionGatewayId != gateway.id
-                                    expandedSessionGatewayId = if (shouldExpand) gateway.id else null
-                                    if (shouldExpand) {
-                                        onRefreshSessions(gateway)
-                                    }
+                            GatewaySwipeRevealRow(
+                                isRevealed = revealedUnpairGatewayId == gateway.id,
+                                actionLabel = stringResource(R.string.settings_gateway_unpair),
+                                enabled = expandedSessionGatewayId == null,
+                                onRevealChange = { shouldReveal ->
+                                    revealedUnpairGatewayId = if (shouldReveal) gateway.id else null
                                 },
-                                onRefreshSessions = { onRefreshSessions(gateway) },
-                                onSelectSession = { session -> onSelectSession(gateway, session) },
-                                onClick = { onSelect(gateway) }
-                            )
+                                onAction = {
+                                    revealedUnpairGatewayId = null
+                                    expandedSessionGatewayId = null
+                                    pendingUnpairGateway = gateway
+                                }
+                            ) {
+                                GatewayItemCard(
+                                    gateway = gateway,
+                                    appRelayStatus = appRelayStatus,
+                                    selected = selectedGatewayId == gateway.id,
+                                    sessions = if (selectedGatewayId == gateway.id) sessions else emptyList(),
+                                    currentSessionKey = if (selectedGatewayId == gateway.id) currentSessionKey else "",
+                                    isSessionExpanded = expandedSessionGatewayId == gateway.id,
+                                    onToggleSessionExpanded = {
+                                        revealedUnpairGatewayId = null
+                                        val shouldExpand = expandedSessionGatewayId != gateway.id
+                                        expandedSessionGatewayId = if (shouldExpand) gateway.id else null
+                                        if (shouldExpand) {
+                                            onRefreshSessions(gateway)
+                                        }
+                                    },
+                                    onRefreshSessions = { onRefreshSessions(gateway) },
+                                    onSelectSession = { session ->
+                                        revealedUnpairGatewayId = null
+                                        onSelectSession(gateway, session)
+                                    },
+                                    onClick = {
+                                        revealedUnpairGatewayId = null
+                                        onSelect(gateway)
+                                    }
+                                )
+                            }
                         }
                     }
                 }
             }
         }
+    }
+
+    pendingUnpairGateway?.let { gateway ->
+        ClawLinkAlertDialog(
+            onDismissRequest = { pendingUnpairGateway = null },
+            title = choose("Unpair ${gateway.displayName}?", "解绑「${gateway.displayName}」？"),
+            message = stringResource(R.string.gateway_unpair_session_message),
+            confirmText = stringResource(R.string.settings_gateway_unpair),
+            confirmRole = ClawLinkAlertActionRole.Destructive,
+            onConfirm = {
+                val target = gateway
+                pendingUnpairGateway = null
+                onUnpair(target)
+            },
+            dismissText = stringResource(R.string.common_action_cancel),
+            onDismissAction = { pendingUnpairGateway = null }
+        )
     }
 }

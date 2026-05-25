@@ -33,6 +33,33 @@ internal fun List<ChatSessionItem>.matchingSessionKey(candidate: String): String
         ?.ifBlank { defaultSessionKey }
 }
 
+internal fun selectSessionKeyAfterLoad(
+    sessions: List<ChatSessionItem>,
+    currentSessionKey: String,
+    persistedSessionKey: String?,
+    shouldKeepCurrent: Boolean
+): String {
+    if (shouldKeepCurrent) {
+        return normalizeSessionKey(currentSessionKey)
+    }
+    sessions.firstOrNull()?.sessionKey?.trim()?.ifBlank { defaultSessionKey }?.let { return it }
+    return persistedSessionKey?.trim()?.ifBlank { defaultSessionKey } ?: defaultSessionKey
+}
+
+internal fun shouldKeepCurrentSessionAfterLoad(
+    sessions: List<ChatSessionItem>,
+    currentSessionKey: String,
+    hasCurrentMessages: Boolean,
+    isSwitchingSession: Boolean,
+    isNewGateway: Boolean
+): Boolean {
+    val current = normalizeSessionKey(currentSessionKey)
+    if (isSwitchingSession || isNewGateway || current.isBlank()) return false
+    if (hasCurrentMessages) return true
+    val mostRecent = sessions.firstOrNull()?.sessionKey ?: return true
+    return sameSessionKey(mostRecent, current)
+}
+
 internal fun sameSessionKey(left: String?, right: String?): Boolean {
     val normalizedLeft = normalizeSessionKey(left)
     val normalizedRight = normalizeSessionKey(right)
@@ -65,6 +92,26 @@ internal fun sameSessionKey(left: String?, right: String?): Boolean {
 
 internal fun normalizeSessionKey(sessionKey: String?): String {
     return sessionKey?.trim()?.takeIf { it.isNotEmpty() } ?: defaultSessionKey
+}
+
+internal fun isTransientGatewayLoadFailureMessage(message: String): Boolean {
+    val normalizedMessage = message.trim()
+    if (normalizedMessage.isBlank()) return false
+    return normalizedMessage.contains("socket timeout has expired", ignoreCase = true) ||
+        normalizedMessage.contains("gateway command timed out", ignoreCase = true) ||
+        normalizedMessage.contains("gateway heartbeat is pending", ignoreCase = true) ||
+        normalizedMessage.contains("gateway heartbeat is stale", ignoreCase = true) ||
+        normalizedMessage.contains("gateway socket is not open", ignoreCase = true) ||
+        normalizedMessage.contains("gateway_unavailable", ignoreCase = true) ||
+        normalizedMessage.contains("timed out", ignoreCase = true) ||
+        normalizedMessage.contains("timeout", ignoreCase = true)
+}
+
+internal fun visibleGatewayLoadErrorMessage(
+    isTransientLoadFailure: Boolean,
+    rawMessage: String?
+): String? {
+    return if (isTransientLoadFailure) null else rawMessage
 }
 
 internal fun parseAgentSessionKey(sessionKey: String): ParsedAgentSessionKey? {

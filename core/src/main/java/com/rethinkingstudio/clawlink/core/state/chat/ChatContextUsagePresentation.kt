@@ -2,6 +2,7 @@ package com.rethinkingstudio.clawlink.core.state.chat
 
 import com.rethinkingstudio.clawlink.core.models.gateway.GatewaySummary
 import com.rethinkingstudio.clawlink.core.models.gateway.GatewayType
+import com.rethinkingstudio.clawlink.core.models.chat.MessageRole
 import com.rethinkingstudio.clawlink.core.utils.TokenDisplayFormatter
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
@@ -19,6 +20,8 @@ fun ChatState.visibleContextUsageLine(gateway: GatewaySummary?): String? {
         ) ?: "--"
         GatewayType.hermes -> sessionContextUsageLine
             ?: if (sameSessionKey(currentSessionKey, "main")) {
+                selectedGateway.contextUsage.trim().ifBlank { "--" }
+            } else if (!shouldShowHermesResetContext()) {
                 selectedGateway.contextUsage.trim().ifBlank { "--" }
             } else {
                 TokenDisplayFormatter.formatUsage(usedTokens = 0, limitTokens = selectedGateway.contextLimit, fallback = null)
@@ -158,6 +161,15 @@ private fun isZeroContextUsageLine(usageLine: String): Boolean {
         normalized.contains("(0%)")
 }
 
+private fun ChatState.shouldShowHermesResetContext(): Boolean {
+    val visibleMessages = messages
+        .filter { it.role != MessageRole.system }
+        .map { it.plainTextContent.trim() }
+        .filter { it.isNotEmpty() }
+    if (visibleMessages.isEmpty()) return true
+    return visibleMessages.all(::isNewSessionResetText)
+}
+
 private fun contextLimitFrom(payload: JsonObject): Int? {
     return payload.contextUsageCandidateObjects().firstNotNullOfOrNull {
         it.primitiveInt(
@@ -205,8 +217,13 @@ private fun JsonObject.primitiveInt(vararg keys: String): Int? {
 
 private fun isNewSessionResetPayload(payload: JsonObject): Boolean {
     val text = ChatPayloadText.extract(payload).trim()
-    if (text.isEmpty()) return false
-    val lower = text.lowercase()
-    return text.startsWith("新会话已开始") ||
+    return isNewSessionResetText(text)
+}
+
+private fun isNewSessionResetText(text: String): Boolean {
+    val normalized = text.trim()
+    if (normalized.isEmpty()) return false
+    val lower = normalized.lowercase()
+    return normalized.startsWith("新会话已开始") ||
         (lower.contains("new session") && (lower.contains("started") || lower.contains("created")))
 }

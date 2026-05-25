@@ -35,6 +35,7 @@ import com.rethinkingstudio.clawlink.core.models.gateway.GatewayStatus
 import com.rethinkingstudio.clawlink.core.models.gateway.GatewaySummary
 import com.rethinkingstudio.clawlink.core.state.LocalizedText.choose
 import com.rethinkingstudio.clawlink.core.state.gateway.GatewayStore
+import com.rethinkingstudio.clawlink.ui.components.GatewayTypeIconBadge
 import com.rethinkingstudio.clawlink.ui.screens.chat.formatChatTimestamp
 import kotlinx.coroutines.launch
 
@@ -176,6 +177,7 @@ fun GatewayStatusCard(
                                 isEditing = true
                             }
                         ) {
+                            GatewayTypeIconBadge(gateway.gatewayType)
                             Text(
                                 text = gateway.displayName,
                                 style = MaterialTheme.typography.titleMedium.copy(fontSize = 17.sp),
@@ -183,21 +185,8 @@ fun GatewayStatusCard(
                                 color = MaterialTheme.colorScheme.onSurface,
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis,
-                                modifier = Modifier.weight(1f, fill = false)
+                                modifier = Modifier.weight(1f)
                             )
-                            Surface(
-                                shape = RoundedCornerShape(999.dp),
-                                color = Color(0xFF0F73ED).copy(alpha = 0.12f)
-                            ) {
-                                Text(
-                                    text = gateway.gatewayType.displayTitle,
-                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-                                    style = MaterialTheme.typography.labelSmall,
-                                    fontWeight = FontWeight.SemiBold,
-                                    color = Color(0xFF0F73ED),
-                                    maxLines = 1
-                                )
-                            }
                             IconButton(
                                 onClick = {
                                     editedName = gateway.displayName

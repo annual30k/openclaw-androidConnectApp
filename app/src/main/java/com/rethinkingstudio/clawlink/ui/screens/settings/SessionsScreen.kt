@@ -381,7 +381,12 @@ fun SessionsScreen(
                 deletingKey = target.normalizedSessionKey
                 scope.launch {
                     try {
-                        val deleted = chatStore.deleteSession(id, target.sessionKey)
+                        val deleted = chatStore.deleteSession(
+                            gatewayId = id,
+                            sessionKey = target.sessionKey,
+                            deleteTranscript = true,
+                            gatewayType = selectedGatewayType
+                        )
                         if (deleted) {
                             chatStore.loadSessions(id)
                             issueMessage = null

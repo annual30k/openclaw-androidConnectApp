@@ -26,6 +26,7 @@ import com.rethinkingstudio.clawlink.ui.components.ClawLinkAlertActionRole
 import com.rethinkingstudio.clawlink.ui.components.ClawLinkAlertDialog
 import com.rethinkingstudio.clawlink.ui.components.ClawLinkScaffold
 import com.rethinkingstudio.clawlink.ui.screens.chat.components.GatewayItemCard
+import com.rethinkingstudio.clawlink.ui.screens.chat.components.GatewaySwipeRevealRow
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -40,6 +41,7 @@ fun GatewayListScreen(
     val chatState by chatStore.state.collectAsState()
     val scope = rememberCoroutineScope()
     var expandedGatewayId by remember { mutableStateOf<String?>(null) }
+    var revealedUnpairGatewayId by remember { mutableStateOf<String?>(null) }
     var pendingUnpairGateway by remember { mutableStateOf<GatewaySummary?>(null) }
 
     ClawLinkScaffold(
@@ -155,7 +157,12 @@ fun GatewayListScreen(
                         sessions = if (expandedGatewayId == gateway.id) chatState.sessions else emptyList(),
                         currentSessionKey = if (chatState.currentGatewayId == gateway.id) chatState.currentSessionKey else "main",
                         isSessionExpanded = expandedGatewayId == gateway.id,
+                        isRevealed = revealedUnpairGatewayId == gateway.id,
+                        onRevealChange = { shouldReveal ->
+                            revealedUnpairGatewayId = if (shouldReveal) gateway.id else null
+                        },
                         onToggleSessions = {
+                            revealedUnpairGatewayId = null
                             val shouldExpand = expandedGatewayId != gateway.id
                             expandedGatewayId = if (shouldExpand) gateway.id else null
                             if (shouldExpand && chatState.currentGatewayId != gateway.id) {
@@ -166,6 +173,7 @@ fun GatewayListScreen(
                             scope.launch { chatStore.loadSessions(gateway.id) }
                         },
                         onSelectSession = { session ->
+                            revealedUnpairGatewayId = null
                             scope.launch {
                                 gatewayStore.selectGateway(gateway.id)
                                 if (chatState.currentGatewayId != gateway.id) {
@@ -176,10 +184,15 @@ fun GatewayListScreen(
                             }
                         },
                         onSelect = {
+                            revealedUnpairGatewayId = null
                             gatewayStore.selectGateway(gateway.id)
                             onBack()
                         },
-                        onUnpair = { pendingUnpairGateway = gateway }
+                        onUnpair = {
+                            revealedUnpairGatewayId = null
+                            expandedGatewayId = null
+                            pendingUnpairGateway = gateway
+                        }
                     )
                 }
             }
@@ -212,13 +225,21 @@ private fun GatewayRow(
     sessions: List<com.rethinkingstudio.clawlink.core.models.chat.ChatSessionItem>,
     currentSessionKey: String,
     isSessionExpanded: Boolean,
+    isRevealed: Boolean,
+    onRevealChange: (Boolean) -> Unit,
     onToggleSessions: () -> Unit,
     onRefreshSessions: () -> Unit,
     onSelectSession: (com.rethinkingstudio.clawlink.core.models.chat.ChatSessionItem) -> Unit,
     onSelect: () -> Unit,
     onUnpair: () -> Unit
 ) {
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    GatewaySwipeRevealRow(
+        isRevealed = isRevealed,
+        actionLabel = stringResource(R.string.settings_gateway_unpair),
+        enabled = !isSessionExpanded,
+        onRevealChange = onRevealChange,
+        onAction = onUnpair
+    ) {
         GatewayItemCard(
             gateway = gateway,
             appRelayStatus = appRelayStatus,
@@ -231,12 +252,5 @@ private fun GatewayRow(
             onSelectSession = onSelectSession,
             onClick = onSelect
         )
-        TextButton(
-            onClick = onUnpair,
-            modifier = Modifier.align(Alignment.End),
-            colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)
-        ) {
-            Text(stringResource(R.string.settings_gateway_unpair), fontWeight = FontWeight.Bold)
-        }
     }
 }

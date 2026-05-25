@@ -97,7 +97,7 @@ fun HelpScreen(
             ) {
                 CodeBlock(
                     label = stringResource(R.string.usage_guide_step_1_label),
-                    code = "npm install -g clawconnect-agent",
+                    code = "npm install -g clawconnect-agent@latest",
                     onCopy = { clipboardManager.setText(AnnotatedString(it)) }
                 )
             }
@@ -112,13 +112,13 @@ fun HelpScreen(
             ) {
                 Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
                     CodeBlock(
-                        label = stringResource(R.string.usage_guide_step_2_label_scan),
-                        code = "clawconnect pair",
+                        label = stringResource(R.string.usage_guide_step_2_label_openclaw),
+                        code = "clawconnect pair-openclaw",
                         onCopy = { clipboardManager.setText(AnnotatedString(it)) }
                     )
                     CodeBlock(
-                        label = stringResource(R.string.usage_guide_step_2_label_manual),
-                        code = "clawconnect pair --code-only",
+                        label = stringResource(R.string.usage_guide_step_2_label_hermes),
+                        code = "clawconnect pair-hermes",
                         onCopy = { clipboardManager.setText(AnnotatedString(it)) }
                     )
                 }
@@ -134,13 +134,18 @@ fun HelpScreen(
             ) {
                 Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
                     CodeBlock(
-                        label = stringResource(R.string.usage_guide_step_3_label),
-                        code = "clawconnect install",
+                        label = stringResource(R.string.usage_guide_step_3_label_openclaw),
+                        code = "clawconnect restart-openclaw",
                         onCopy = { clipboardManager.setText(AnnotatedString(it)) }
                     )
                     CodeBlock(
-                        label = stringResource(R.string.usage_guide_step_3_label_fg),
-                        code = "clawconnect run",
+                        label = stringResource(R.string.usage_guide_step_3_label_hermes),
+                        code = "clawconnect restart-hermes",
+                        onCopy = { clipboardManager.setText(AnnotatedString(it)) }
+                    )
+                    CodeBlock(
+                        label = stringResource(R.string.usage_guide_step_3_label_status_all),
+                        code = "clawconnect status-all",
                         onCopy = { clipboardManager.setText(AnnotatedString(it)) }
                     )
                 }
