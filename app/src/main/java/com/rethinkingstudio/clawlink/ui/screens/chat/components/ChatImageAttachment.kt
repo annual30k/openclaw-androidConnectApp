@@ -304,7 +304,13 @@ internal fun ImageFullscreenOverlay(
         }
         bitmap = result; didFail = result == null
     }
-    Box(modifier = Modifier.fillMaxSize().background(Color.Black).zIndex(100f)) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .modalTouchBarrier()
+            .background(Color.Black)
+            .zIndex(100f)
+    ) {
         Box(modifier = Modifier.fillMaxWidth().fillMaxHeight(0.18f).background(Brush.verticalGradient(listOf(Color.Black.copy(alpha = 0.78f), Color.Transparent))))
         Box(modifier = Modifier.fillMaxWidth().fillMaxHeight(0.16f).align(Alignment.BottomCenter).background(Brush.verticalGradient(listOf(Color.Transparent, Color.Black.copy(alpha = 0.82f)))))
         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {

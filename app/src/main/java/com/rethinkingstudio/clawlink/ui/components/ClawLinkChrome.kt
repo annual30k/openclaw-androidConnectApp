@@ -28,6 +28,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.rethinkingstudio.clawlink.app.AppSystemBarsEffect
 
 private val ClawLinkCardShape = RoundedCornerShape(24.dp)
 private val ClawLinkPillShape = RoundedCornerShape(999.dp)
@@ -48,10 +49,14 @@ fun ClawLinkBackdrop(modifier: Modifier = Modifier) {
 @Composable
 fun ClawLinkScaffold(
     modifier: Modifier = Modifier,
+    applyDefaultSystemBars: Boolean = true,
     topBar: @Composable () -> Unit = {},
     bottomBar: @Composable () -> Unit = {},
     content: @Composable (PaddingValues) -> Unit
 ) {
+    if (applyDefaultSystemBars) {
+        AppSystemBarsEffect()
+    }
     Box(modifier = modifier.fillMaxSize()) {
         ClawLinkBackdrop()
         Scaffold(

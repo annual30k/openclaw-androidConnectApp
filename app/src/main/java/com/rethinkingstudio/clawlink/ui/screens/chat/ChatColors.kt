@@ -15,7 +15,7 @@ internal object ChatColors {
     val dockControl: Color
         @Composable get() = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = if (isSystemInDarkTheme()) 0.62f else 0.48f)
     val dockBorder: Color
-        @Composable get() = MaterialTheme.colorScheme.outline.copy(alpha = if (isSystemInDarkTheme()) 0.14f else 0.08f)
+        @Composable get() = MaterialTheme.colorScheme.outline.copy(alpha = chatDockBorderAlpha(isSystemInDarkTheme()))
     val secondaryText: Color
         @Composable get() = MaterialTheme.colorScheme.onSurfaceVariant
     val online = Color(0xFF5ECF7A)
@@ -30,3 +30,5 @@ internal object ChatColors {
     val disabledAction: Color
         @Composable get() = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.10f)
 }
+
+internal fun chatDockBorderAlpha(darkTheme: Boolean): Float = if (darkTheme) 0.10f else 0.08f

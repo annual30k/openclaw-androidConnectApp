@@ -94,6 +94,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.layout.offset
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.graphics.graphicsLayer
+import com.rethinkingstudio.clawlink.app.AppSystemBarsEffect
 import com.rethinkingstudio.clawlink.core.models.tasks.TaskDateCodec
 import com.rethinkingstudio.clawlink.core.models.tasks.TaskDraft
 import com.rethinkingstudio.clawlink.core.models.tasks.TaskItem
@@ -117,6 +118,8 @@ fun TasksScreen(
     gatewayStore: GatewayStore,
     onBack: () -> Unit
 ) {
+    AppSystemBarsEffect()
+
     val taskState by taskStore.state.collectAsState()
     val gatewayState by gatewayStore.state.collectAsState()
     val scope = rememberCoroutineScope()

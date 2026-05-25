@@ -73,6 +73,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.rethinkingstudio.clawlink.R
+import com.rethinkingstudio.clawlink.app.AppSystemBarsEffect
 import com.rethinkingstudio.clawlink.core.models.chat.ChatSessionItem
 import com.rethinkingstudio.clawlink.core.models.gateway.GatewayType
 import com.rethinkingstudio.clawlink.core.network.RelayAPIClient
@@ -97,6 +98,8 @@ fun SessionsScreen(
     onBack: () -> Unit,
     onNavigateToGateways: () -> Unit
 ) {
+    AppSystemBarsEffect()
+
     val gatewayState by gatewayStore.state.collectAsState()
     val chatState by chatStore.state.collectAsState()
     val scope = rememberCoroutineScope()

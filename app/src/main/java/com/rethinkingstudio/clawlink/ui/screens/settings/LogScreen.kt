@@ -40,6 +40,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.rethinkingstudio.clawlink.R
+import com.rethinkingstudio.clawlink.app.AppSystemBarsEffect
 import com.rethinkingstudio.clawlink.core.network.RelayAPIClient
 import com.rethinkingstudio.clawlink.core.network.dto.LogTailResponse
 import com.rethinkingstudio.clawlink.core.state.LocalizedText.choose
@@ -126,6 +127,8 @@ fun LogScreen(
     apiClient: RelayAPIClient,
     onBack: () -> Unit
 ) {
+    AppSystemBarsEffect()
+
     val gatewayState by gatewayStore.state.collectAsState()
     val scope = rememberCoroutineScope()
     val context = LocalContext.current

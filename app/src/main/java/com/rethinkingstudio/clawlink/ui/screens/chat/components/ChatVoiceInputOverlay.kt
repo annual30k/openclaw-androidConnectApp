@@ -88,6 +88,7 @@ internal fun VoiceInputOverlay(
     Box(
         modifier = modifier
             .fillMaxSize()
+            .modalTouchBarrier()
             .background(Color.Black.copy(alpha = 0.80f))
             .navigationBarsPadding()
     ) {

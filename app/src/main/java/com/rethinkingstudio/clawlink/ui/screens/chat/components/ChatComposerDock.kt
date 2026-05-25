@@ -140,7 +140,7 @@ internal fun ComposerDock(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(1.dp)
-                    .background(ChatColors.dockBorder.copy(alpha = 0.88f))
+                    .background(ChatColors.dockBorder)
             )
 
             Column(

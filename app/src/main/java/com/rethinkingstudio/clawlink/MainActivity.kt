@@ -1,6 +1,7 @@
 package com.rethinkingstudio.clawlink
 
 import android.content.pm.ActivityInfo
+import android.os.Build
 import android.os.Bundle
 import androidx.appcompat.app.AppCompatActivity
 import androidx.activity.compose.setContent
@@ -17,6 +18,7 @@ import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
@@ -31,6 +33,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -41,7 +44,9 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -49,6 +54,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
+import androidx.core.view.WindowCompat
 import com.rethinkingstudio.clawlink.ui.navigation.AppNavigation
 import com.rethinkingstudio.clawlink.app.PocketClawTheme
 import com.rethinkingstudio.clawlink.ui.components.ClawLinkBackdrop
@@ -84,7 +90,7 @@ class MainActivity : AppCompatActivity() {
     }
 }
 
-private enum class LaunchPhase {
+internal enum class LaunchPhase {
     StaticSplash,
     AnimatedSplash,
     Content
@@ -93,6 +99,13 @@ private enum class LaunchPhase {
 @Composable
 private fun LaunchRoot(container: AppContainer) {
     var launchPhase by remember { mutableStateOf(LaunchPhase.StaticSplash) }
+    val view = LocalView.current
+    val darkTheme = isSystemInDarkTheme()
+    val systemBarStyle = launchSystemBarStyle(
+        launchPhase = launchPhase,
+        darkTheme = darkTheme,
+        normalBackground = MaterialTheme.colorScheme.background
+    )
 
     LaunchedEffect(Unit) {
         delay(320)
@@ -129,6 +142,25 @@ private fun LaunchRoot(container: AppContainer) {
             LaunchAnimatedSplashView()
         }
     }
+
+    if (!view.isInEditMode) {
+        SideEffect {
+            val window = (view.context as? android.app.Activity)?.window ?: return@SideEffect
+            @Suppress("DEPRECATION")
+            window.statusBarColor = systemBarStyle.statusBarColor.toArgb()
+            @Suppress("DEPRECATION")
+            window.navigationBarColor = systemBarStyle.navigationBarColor.toArgb()
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                @Suppress("DEPRECATION")
+                window.isStatusBarContrastEnforced = systemBarStyle.enforceSystemBarContrast
+                @Suppress("DEPRECATION")
+                window.isNavigationBarContrastEnforced = systemBarStyle.enforceSystemBarContrast
+            }
+            val controller = WindowCompat.getInsetsController(window, view)
+            controller.isAppearanceLightStatusBars = systemBarStyle.useDarkStatusBarIcons
+            controller.isAppearanceLightNavigationBars = systemBarStyle.useDarkNavigationBarIcons
+        }
+    }
 }
 
 @Composable
@@ -143,7 +175,7 @@ private fun LaunchArtworkSplashView() {
             painter = painterResource(R.drawable.launch_splash_art),
             contentDescription = null,
             modifier = Modifier.fillMaxSize(),
-            contentScale = ContentScale.Fit
+            contentScale = ContentScale.Crop
         )
     }
 }

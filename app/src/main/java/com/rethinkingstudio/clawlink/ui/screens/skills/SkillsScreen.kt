@@ -84,6 +84,7 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.rethinkingstudio.clawlink.app.AppSystemBarsEffect
 import com.rethinkingstudio.clawlink.core.models.skills.SkillCommand
 import com.rethinkingstudio.clawlink.core.models.skills.SkillItem
 import com.rethinkingstudio.clawlink.core.state.LocalizedText.choose
@@ -99,6 +100,8 @@ fun SkillsScreen(
     gatewayStore: GatewayStore,
     onBack: () -> Unit
 ) {
+    AppSystemBarsEffect()
+
     val skillState by skillStore.state.collectAsState()
     val gatewayState by gatewayStore.state.collectAsState()
     val scope = rememberCoroutineScope()

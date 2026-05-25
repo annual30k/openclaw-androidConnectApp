@@ -181,7 +181,12 @@ internal fun DocumentFullscreenOverlay(
         }
     }
 
-    Box(modifier = Modifier.fillMaxSize().background(Color(0xFFF7F8FA))) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .modalTouchBarrier()
+            .background(Color(0xFFF7F8FA))
+    ) {
         when {
             didFail -> {
                 UnsupportedDocumentPreview(

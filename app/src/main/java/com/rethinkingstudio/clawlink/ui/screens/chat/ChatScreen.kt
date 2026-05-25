@@ -50,7 +50,6 @@ import androidx.compose.ui.draw.blur
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
@@ -261,20 +260,24 @@ fun ChatScreen(
         }
     }
 
-    val statusBarColor = MaterialTheme.colorScheme.background
-    val navigationBarColor = ChatColors.dockSurface
-    val useDarkStatusBarIcons = statusBarColor.luminance() > 0.5f
-    val useDarkNavigationBarIcons = navigationBarColor.luminance() > 0.5f
+    val voiceOverlayActive = viewModel.voiceInputPhase != VoiceInputPhase.Idle
+    val imagePreview = viewModel.imagePreview
+    val documentPreview = viewModel.documentPreview
+    val systemBarStyle = chatSystemBarStyle(
+        normalStatusBarColor = MaterialTheme.colorScheme.background,
+        normalNavigationBarColor = ChatColors.dockSurface,
+        modalOverlayActive = voiceOverlayActive || imagePreview != null || documentPreview != null
+    )
 
     SideEffect {
         val window = (view.context as? android.app.Activity)?.window ?: return@SideEffect
         @Suppress("DEPRECATION")
-        window.statusBarColor = statusBarColor.toArgb()
+        window.statusBarColor = systemBarStyle.statusBarColor.toArgb()
         @Suppress("DEPRECATION")
-        window.navigationBarColor = navigationBarColor.toArgb()
+        window.navigationBarColor = systemBarStyle.navigationBarColor.toArgb()
         val controller = WindowCompat.getInsetsController(window, view)
-        controller.isAppearanceLightStatusBars = useDarkStatusBarIcons
-        controller.isAppearanceLightNavigationBars = useDarkNavigationBarIcons
+        controller.isAppearanceLightStatusBars = systemBarStyle.useDarkStatusBarIcons
+        controller.isAppearanceLightNavigationBars = systemBarStyle.useDarkNavigationBarIcons
     }
 
     val filePickerLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
@@ -513,8 +516,6 @@ fun ChatScreen(
         }
     }
 
-    val voiceOverlayActive = viewModel.voiceInputPhase != VoiceInputPhase.Idle
-
     Box(modifier = Modifier.fillMaxSize()) {
         Box(
             modifier = Modifier
@@ -522,6 +523,7 @@ fun ChatScreen(
                 .then(if (voiceOverlayActive) Modifier.blur(8.dp) else Modifier)
         ) {
         ClawLinkScaffold(
+            applyDefaultSystemBars = false,
             topBar = {
                 ChatTopBar(
                     gateway = gatewayState.selectedGateway,
@@ -800,18 +802,16 @@ fun ChatScreen(
             ChatSessionSwitchLoadingOverlay(modifier = Modifier.matchParentSize())
         }
 
-        val preview = viewModel.imagePreview
-        if (preview != null) {
+        if (imagePreview != null) {
             ImageFullscreenOverlay(
-                url = preview.url,
-                accessToken = preview.accessToken,
-                fileName = preview.fileName,
-                cacheKey = preview.cacheKey,
+                url = imagePreview.url,
+                accessToken = imagePreview.accessToken,
+                fileName = imagePreview.fileName,
+                cacheKey = imagePreview.cacheKey,
                 onDismiss = { viewModel.imagePreview = null }
             )
         }
 
-        val documentPreview = viewModel.documentPreview
         if (documentPreview != null) {
             DocumentFullscreenOverlay(
                 url = documentPreview.url,

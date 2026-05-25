@@ -75,6 +75,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.rethinkingstudio.clawlink.app.AppSystemBarsEffect
 import com.rethinkingstudio.clawlink.core.models.catalog.ModelItem
 import com.rethinkingstudio.clawlink.core.models.gateway.AggregateStatus
 import com.rethinkingstudio.clawlink.core.models.gateway.ConnectionPhase
@@ -95,6 +96,8 @@ fun ModelCatalogScreen(
     gatewayStore: GatewayStore,
     onBack: () -> Unit
 ) {
+    AppSystemBarsEffect()
+
     val modelState by modelStore.state.collectAsState()
     val gatewayState by gatewayStore.state.collectAsState()
     val scope = rememberCoroutineScope()

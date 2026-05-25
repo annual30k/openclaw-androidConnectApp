@@ -36,6 +36,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.rethinkingstudio.clawlink.R
+import com.rethinkingstudio.clawlink.app.AppSystemBarsEffect
 import com.rethinkingstudio.clawlink.core.models.backups.BackupDraft
 import com.rethinkingstudio.clawlink.core.models.backups.BackupItem
 import com.rethinkingstudio.clawlink.core.models.gateway.GatewayType
@@ -55,6 +56,8 @@ fun BackupScreen(
     apiClient: RelayAPIClient,
     onBack: () -> Unit
 ) {
+    AppSystemBarsEffect()
+
     val gatewayState by gatewayStore.state.collectAsState()
     val scope = rememberCoroutineScope()
     val selectedGateway = gatewayState.selectedGateway
