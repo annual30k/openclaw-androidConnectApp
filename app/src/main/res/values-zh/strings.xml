@@ -1326,14 +1326,6 @@
 
     <string name="tasks_editor_presets_title">快速设置</string>
 
-    <string name="tasks_editor_preview_new_task">新任务</string>
-
-    <string name="tasks_editor_preview_once">一次执行</string>
-
-    <string name="tasks_editor_preview_repeat">循环执行</string>
-
-    <string name="tasks_editor_preview_title">计划预览 (保存后的外观)</string>
-
     <string name="tasks_editor_prompt_label">任务指令</string>
 
     <string name="tasks_editor_prompt_placeholder">例如：每天早上总结前一天的聊天要点...</string>

@@ -1326,14 +1326,6 @@ Tap the button below to refresh manually.</string>
 
     <string name="tasks_editor_presets_title">Quick Setup</string>
 
-    <string name="tasks_editor_preview_new_task">New Task</string>
-
-    <string name="tasks_editor_preview_once">One-time Run</string>
-
-    <string name="tasks_editor_preview_repeat">Repeating Run</string>
-
-    <string name="tasks_editor_preview_title">Schedule Preview After Saving</string>
-
     <string name="tasks_editor_prompt_label">Task Instruction</string>
 
     <string name="tasks_editor_prompt_placeholder">Example: Summarize yesterday\'s chat highlights every morning...</string>

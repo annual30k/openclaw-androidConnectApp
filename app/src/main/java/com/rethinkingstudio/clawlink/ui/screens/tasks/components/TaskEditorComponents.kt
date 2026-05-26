@@ -95,7 +95,6 @@ import androidx.compose.ui.draw.blur
 import androidx.compose.ui.graphics.graphicsLayer
 import com.rethinkingstudio.clawlink.core.models.tasks.TaskDateCodec
 import com.rethinkingstudio.clawlink.core.models.tasks.TaskDraft
-import com.rethinkingstudio.clawlink.core.models.tasks.TaskItem
 import com.rethinkingstudio.clawlink.core.state.LocalizedText.choose
 import com.rethinkingstudio.clawlink.core.state.gateway.GatewayStore
 import com.rethinkingstudio.clawlink.core.state.task.TaskStore
@@ -192,21 +191,6 @@ internal fun TaskEditorSheet(
 
             item {
                 ExecutionSettingsCard(draft = draft, onDraftChange = { draft = it })
-            }
-
-            item {
-                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    FieldLabel(choose("Preview", "预览"))
-                    TasksTaskCard(
-                        task = previewTask(normalizedDraft),
-                        updatingTaskId = null,
-                        isRefreshingTasks = false,
-                        canManageTasks = false,
-                        onEdit = {},
-                        onDelete = {},
-                        onTogglePause = {}
-                    )
-                }
             }
 
             if (validation != null) {
@@ -474,22 +458,4 @@ internal fun PresetButton(title: String, icon: ImageVector, onClick: () -> Unit)
 @Composable
 internal fun FieldLabel(text: String) {
     Text(text, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurfaceVariant)
-}
-
-internal fun previewTask(draft: TaskDraft): TaskItem {
-    val title = draft.title.ifBlank { TaskStore.deriveTaskTitle(draft.prompt).ifBlank { choose("New task", "新任务") } }
-    return TaskItem(
-        id = "preview",
-        title = title,
-        prompt = draft.prompt,
-        scheduleKind = draft.scheduleKind,
-        scheduleAt = draft.scheduleAt,
-        repeatAmount = draft.repeatAmount,
-        repeatUnit = draft.repeatUnit,
-        enabled = true,
-        lastResult = "",
-        nextRunAt = draft.scheduleAt,
-        createdAt = "",
-        updatedAt = ""
-    )
 }
