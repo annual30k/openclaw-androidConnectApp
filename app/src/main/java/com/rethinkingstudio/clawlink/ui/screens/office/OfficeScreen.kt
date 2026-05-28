@@ -35,7 +35,6 @@ import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import com.rethinkingstudio.clawlink.R
-import com.rethinkingstudio.clawlink.core.models.OfficeActivityKind
 import com.rethinkingstudio.clawlink.core.models.OfficeAgentSnapshot
 import com.rethinkingstudio.clawlink.core.models.OfficeSceneSnapshot
 import com.rethinkingstudio.clawlink.core.models.chat.MessageRole
@@ -140,20 +139,8 @@ fun OfficeScreen(
     val toolAgent = focusAgent?.takeIf { it.shouldShowToolDetail() }
     val shouldShowOfficeOccupants = gatewayState.isAppRelayOnline &&
         focusAgent?.aggregateStatus == AggregateStatus.online
-    val renderScene = remember(scene, shouldShowOfficeOccupants) {
-        if (!shouldShowOfficeOccupants) {
-            scene.copy(agents = listOfNotNull(scene.focusAgent))
-        } else {
-            val focusAgentId = scene.focusAgent?.id
-            scene.copy(
-                agents = scene.agents.filter { agent ->
-                    agent.id == focusAgentId ||
-                        (agent.aggregateStatus != AggregateStatus.offline &&
-                            agent.activityKind != OfficeActivityKind.SLEEPING &&
-                            agent.activityKind != OfficeActivityKind.OFFLINE)
-                }
-            )
-        }
+    val renderScene = remember(scene) {
+        officeStageRenderScene(scene)
     }
 
     Box(modifier = Modifier.fillMaxSize().background(OfficeSceneLetterboxColor)) {

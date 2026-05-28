@@ -96,4 +96,65 @@ class ChatPayloadToolTest {
 
         assertNull(ChatPayloadTool.extract(payload))
     }
+
+    @Test
+    fun detectsToolPayloadSentOnChatEvent() {
+        val payload = json.parseToJsonElement(
+            """
+            {
+              "state": "streaming",
+              "role": "tool",
+              "runId": "call-3",
+              "data": {
+                "tool_name": "read",
+                "tool_call_id": "call-3",
+                "args": { "path": "/tmp/a.txt" },
+                "partial_result": { "content": "reading" }
+              }
+            }
+            """.trimIndent()
+        ) as JsonObject
+
+        val tool = ChatPayloadTool.extract(payload)
+
+        assertEquals("call-3", tool?.toolCallId)
+        assertEquals("read", tool?.toolName)
+        assertEquals("reading", tool?.displayText)
+        assertEquals(MessageState.streaming, tool?.state)
+    }
+
+    @Test
+    fun detectsToolPayloadFromContentBlocks() {
+        val payload = json.parseToJsonElement(
+            """
+            {
+              "state": "final",
+              "role": "assistant",
+              "message": {
+                "content": [
+                  {
+                    "type": "tool_use",
+                    "name": "list",
+                    "tool_call_id": "call-4",
+                    "args": { "path": "/Users/me/Desktop" }
+                  },
+                  {
+                    "type": "tool_result",
+                    "name": "list",
+                    "tool_call_id": "call-4",
+                    "result": { "content": "a.txt\nb.txt" }
+                  }
+                ]
+              }
+            }
+            """.trimIndent()
+        ) as JsonObject
+
+        val tool = ChatPayloadTool.extract(payload)
+
+        assertEquals("call-4", tool?.toolCallId)
+        assertEquals("list", tool?.toolName)
+        assertEquals("a.txt\nb.txt", tool?.displayText)
+        assertEquals(MessageState.completed, tool?.state)
+    }
 }

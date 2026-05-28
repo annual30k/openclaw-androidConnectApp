@@ -202,12 +202,12 @@ internal fun mergeHistoryWithCurrentMessages(
         isTrackedPendingAssistantMessageId = isTrackedPendingAssistantMessageId
     )
     currentMessages.forEachIndexed { index, message ->
-        if (!shouldPreserveCurrentMessageAcrossHistoryRefresh(
+        val shouldPreserve = shouldPreserveCurrentMessageAcrossHistoryRefresh(
                 message = message,
                 currentStreamingMessageId = currentStreamingMessageId,
                 isTrackedPendingAssistantMessageId = isTrackedPendingAssistantMessageId
-            )
-        ) {
+            ) || completedFileMessageHasHistoryCounterpart(message, merged)
+        if (!shouldPreserve) {
             return@forEachIndexed
         }
         if (message.id in resolvedPendingAssistantMessageIds) {
@@ -266,10 +266,11 @@ internal fun orderMessagesWithSourceRunAnchors(messages: List<ChatMessage>): Lis
     val anchoredMessages = messages.map { message ->
         anchorAssistantFileMessageToSourceRun(message, messages)
     }
-    return anchoredMessages.sortedWith(
+    val orderedMessages = anchoredMessages.sortedWith(
         compareBy<ChatMessage> { it.sortTimestamp ?: Double.MAX_VALUE }
             .thenBy { it.createdAt }
     )
+    return normalizeChatTimelineMessages(orderedMessages)
 }
 
 internal fun anchorAssistantFileMessageToSourceRun(
@@ -403,11 +404,19 @@ private fun shouldPreserveCurrentMessageAcrossHistoryRefresh(
         return message.state == MessageState.streaming &&
             (message.id == currentStreamingMessageId || isTrackedPending)
     }
-    if (message.hasFileContent || message.hasVoiceContent || message.runId.startsWith("file-")) return true
     if (message.runId.startsWith("local-user-")) return true
     if (message.state == MessageState.streaming || message.state == MessageState.failed) return true
     if (message.role != MessageRole.assistant || message.content.trim().isEmpty()) return false
     return message.runId.isNotBlank()
+}
+
+private fun completedFileMessageHasHistoryCounterpart(
+    message: ChatMessage,
+    historyMessages: List<ChatMessage>
+): Boolean {
+    if (message.state != MessageState.completed) return false
+    if (!message.hasFileContent && !message.runId.startsWith("file-")) return false
+    return historyMessages.any { historyMessage -> sameFileMessage(historyMessage, message) }
 }
 
 internal fun isTransientAssistantPlaceholder(message: ChatMessage): Boolean {
@@ -465,7 +474,7 @@ private fun historyResolvesPendingAssistant(
         .lastOrNull { it.role == MessageRole.user }
         ?: return false
 
-    return historyMessages.indices.reversed().any { historyUserIndex ->
+    val hasMatchingHistoryTurn = historyMessages.indices.reversed().any { historyUserIndex ->
         val historyUser = historyMessages[historyUserIndex]
         if (!userMessagesMatchForLocalHistoryMerge(historyUser, triggeringUser)) {
             return@any false
@@ -481,6 +490,13 @@ private fun historyResolvesPendingAssistant(
             localTimestamp = pendingAssistant.sortTimestamp
         )
     }
+    if (hasMatchingHistoryTurn) return true
+
+    return truncatedHistoryWindowResolvesPendingAssistant(
+        historyMessages = historyMessages,
+        triggeringUser = triggeringUser,
+        pendingAssistant = pendingAssistant
+    )
 }
 
 private fun nextRenderableAssistantIndexAfter(index: Int, messages: List<ChatMessage>): Int {
@@ -495,6 +511,48 @@ private fun nextRenderableAssistantIndexAfter(index: Int, messages: List<ChatMes
         }
     }
     return -1
+}
+
+private fun truncatedHistoryWindowResolvesPendingAssistant(
+    historyMessages: List<ChatMessage>,
+    triggeringUser: ChatMessage,
+    pendingAssistant: ChatMessage
+): Boolean {
+    val triggerTimestamp = triggeringUser.sortTimestamp ?: return false
+    val pendingTimestamp = pendingAssistant.sortTimestamp ?: triggerTimestamp
+    return historyMessages.indices.any { assistantIndex ->
+        val candidate = historyMessages[assistantIndex]
+        if (!isRenderableAssistantHistoryMessage(candidate)) {
+            return@any false
+        }
+        val assistantTimestamp = candidate.sortTimestamp ?: return@any false
+        if (assistantTimestamp < triggerTimestamp - sameTurnClockSkewToleranceSeconds) {
+            return@any false
+        }
+        if (!timestampsCanRepresentSameTurn(
+                historyTimestamp = assistantTimestamp,
+                localTimestamp = pendingTimestamp
+            )
+        ) {
+            return@any false
+        }
+
+        val newerUnmatchedHistoryUserBeforeAssistant = historyMessages
+            .take(assistantIndex)
+            .any { message ->
+                message.role == MessageRole.user &&
+                    !userMessagesMatchForLocalHistoryMerge(message, triggeringUser) &&
+                    (message.sortTimestamp ?: Double.NEGATIVE_INFINITY) >= triggerTimestamp - sameTurnClockSkewToleranceSeconds
+            }
+        !newerUnmatchedHistoryUserBeforeAssistant
+    }
+}
+
+private fun isRenderableAssistantHistoryMessage(message: ChatMessage): Boolean {
+    if (message.role != MessageRole.assistant) return false
+    if (message.hasFileContent || message.hasVoiceContent || message.hasToolContent) return false
+    if (isTransientAssistantPlaceholder(message)) return false
+    return message.plainTextContent.trim().isNotEmpty()
 }
 
 private fun userMessagesMatchForLocalHistoryMerge(left: ChatMessage, right: ChatMessage): Boolean {

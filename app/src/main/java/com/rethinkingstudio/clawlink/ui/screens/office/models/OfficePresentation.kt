@@ -119,6 +119,10 @@ internal fun OfficeAgentSnapshot.prefersExpandedTaskLayout(): Boolean {
     }
 }
 
+internal fun officeStageRenderScene(scene: OfficeSceneSnapshot): OfficeSceneSnapshot {
+    return OfficeSceneSnapshot(agents = listOfNotNull(scene.focusAgent))
+}
+
 internal fun progressText(agent: OfficeAgentSnapshot): String {
     val progress = agent.activityProgress ?: return "—"
     return "${(progress * 100.0).coerceIn(0.0, 100.0).toInt()}%"

@@ -50,4 +50,45 @@ class RelayAPIEndpointsTest {
             endpoint.queryItems
         )
     }
+
+    @Test
+    fun chatHistoryIncludesPaginationQueryItemsInOrder() {
+        val endpoint = APIEndpoints.Mobile.Chat.history(
+            gatewayID = "gw_1",
+            sessionKey = "main",
+            limit = 100,
+            cursor = "seq:151",
+            direction = "older"
+        )
+
+        assertEquals("/api/mobile/gateways/gw_1/chat/history", endpoint.path)
+        assertEquals(
+            listOf(
+                "sessionKey" to "main",
+                "limit" to "100",
+                "cursor" to "seq%3A151",
+                "direction" to "older"
+            ),
+            endpoint.queryItems
+        )
+    }
+
+    @Test
+    fun chatHistoryOmitsBlankCursorAndKeepsDefaultDirection() {
+        val endpoint = APIEndpoints.Mobile.Chat.history(
+            gatewayID = "gw_1",
+            sessionKey = "main",
+            limit = 100,
+            cursor = "   "
+        )
+
+        assertEquals(
+            listOf(
+                "sessionKey" to "main",
+                "limit" to "100",
+                "direction" to "older"
+            ),
+            endpoint.queryItems
+        )
+    }
 }

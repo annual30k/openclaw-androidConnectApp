@@ -38,6 +38,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -74,7 +75,14 @@ internal fun ToolMessageCard(
     showInvocationProcess: Boolean,
     modifier: Modifier = Modifier
 ) {
-    var expanded by remember(message.id, visibleToolBlocks.size) { mutableStateOf(false) }
+    val shouldAutoExpand = showInvocationProcess && message.state == MessageState.streaming
+    var hasUserToggledExpansion by remember(message.id) { mutableStateOf(false) }
+    var expanded by remember(message.id) { mutableStateOf(shouldAutoExpand) }
+    LaunchedEffect(message.id, shouldAutoExpand) {
+        if (shouldAutoExpand && !hasUserToggledExpansion) {
+            expanded = true
+        }
+    }
     val cardTitle = if (showInvocationProcess && visibleToolBlocks.any { it.isToolCallBlock }) "Tool output" else "Tool result"
     val toolTitle = visibleToolBlocks.mapNotNull { it.resolvedName?.trim()?.takeIf { name -> name.isNotEmpty() } }.distinct().takeIf { it.isNotEmpty() }?.joinToString(", ")
         ?: message.toolDisplaySummary.trim().takeIf { it.isNotEmpty() }
@@ -102,7 +110,10 @@ internal fun ToolMessageCard(
             modifier = Modifier.padding(horizontal = 12.dp, vertical = 9.dp),
             verticalArrangement = Arrangement.spacedBy(7.dp)
         ) {
-            Surface(onClick = { expanded = !expanded }, color = Color.Transparent) {
+            Surface(onClick = {
+                hasUserToggledExpansion = true
+                expanded = !expanded
+            }, color = Color.Transparent) {
                 Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     Icon(if (expanded) Icons.Default.ExpandMore else Icons.AutoMirrored.Filled.KeyboardArrowRight, null, modifier = Modifier.size(14.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
                     Icon(Icons.Default.Bolt, null, modifier = Modifier.size(16.dp), tint = Color(0xFFF24E3E))

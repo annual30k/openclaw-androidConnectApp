@@ -5,6 +5,7 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -97,26 +98,16 @@ internal fun VoiceHoldToSpeakButton(
         hasDraftText -> holdContinue
         else -> holdTalk
     }
-    val backgroundColor = when {
-        cancelPreview -> ChatColors.offline.copy(alpha = 0.14f)
-        isHoldRecordingActive -> ChatColors.linkBlue
-        else -> ChatColors.dockControl
-    }
-    val borderColor = when {
-        cancelPreview -> ChatColors.offline.copy(alpha = 0.34f)
-        isHoldRecordingActive -> ChatColors.linkBlue.copy(alpha = 0.30f)
-        else -> ChatColors.dockBorder
-    }
-    val textColor = when {
-        cancelPreview -> ChatColors.offline
-        isHoldRecordingActive -> Color.White
-        else -> Color.Black
-    }
+    val palette = voiceHoldToSpeakPalette(
+        darkTheme = isSystemInDarkTheme(),
+        cancelPreview = cancelPreview,
+        isHoldRecordingActive = isHoldRecordingActive
+    )
 
     Surface(
         shape = RoundedCornerShape(14.dp),
-        color = backgroundColor,
-        border = BorderStroke(1.dp, borderColor),
+        color = palette.container,
+        border = BorderStroke(1.dp, palette.border),
         modifier = modifier
             .height(42.dp)
             .alpha(if (canBeginHoldToSpeak || voiceInputPhase.isBusy) 1f else 0.6f)
@@ -160,7 +151,7 @@ internal fun VoiceHoldToSpeakButton(
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
                 fontWeight = FontWeight.SemiBold,
-                color = textColor,
+                color = palette.content,
                 style = MaterialTheme.typography.bodyMedium
             )
         }

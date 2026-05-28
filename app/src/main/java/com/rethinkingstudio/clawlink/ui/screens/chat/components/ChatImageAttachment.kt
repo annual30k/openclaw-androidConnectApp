@@ -11,6 +11,7 @@ import android.graphics.BitmapFactory
 import android.os.Build
 import android.os.Environment
 import android.provider.MediaStore
+import android.util.Log
 import android.webkit.MimeTypeMap
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.LinearEasing
@@ -220,15 +221,7 @@ internal fun AuthenticatedRemoteImage(
     LaunchedEffect(resolvedCacheKey, url, accessToken) {
         if (bitmap != null) return@LaunchedEffect
         didFail = false
-        val result = withContext(Dispatchers.IO) {
-            runCatching {
-                val req = URL(url).openConnection() as HttpURLConnection
-                if (accessToken.isNotBlank()) req.setRequestProperty("Authorization", "Bearer $accessToken")
-                req.connectTimeout = 15_000; req.readTimeout = 30_000; req.connect()
-                if (req.responseCode !in 200..299) return@runCatching null
-                req.inputStream.use { BitmapFactory.decodeStream(it) }
-            }.getOrNull()
-        }
+        val result = withContext(Dispatchers.IO) { loadRemoteBitmap(url, accessToken, resolvedCacheKey) }
         if (result != null) {
             RemoteImageCache.put(resolvedCacheKey, result)
             val ratio = result.width.toFloat() / result.height.toFloat()
@@ -254,6 +247,34 @@ internal fun AuthenticatedRemoteImage(
             }
         }
     }
+}
+
+private fun loadRemoteBitmap(url: String, accessToken: String, cacheKey: String): Bitmap? {
+    return runCatching {
+        val req = URL(url).openConnection() as HttpURLConnection
+        if (accessToken.isNotBlank()) req.setRequestProperty("Authorization", "Bearer $accessToken")
+        req.connectTimeout = 15_000
+        req.readTimeout = 30_000
+        req.connect()
+        val responseCode = req.responseCode
+        val contentType = req.contentType.orEmpty()
+        if (responseCode !in 200..299) {
+            Log.w("ClawLinkImage", "download failed code=$responseCode contentType=$contentType key=${cacheKey.take(48)} url=${sanitizeImageUrl(url)}")
+            return@runCatching null
+        }
+        val bitmap = req.inputStream.use { BitmapFactory.decodeStream(it) }
+        if (bitmap == null) {
+            Log.w("ClawLinkImage", "decode failed code=$responseCode contentType=$contentType key=${cacheKey.take(48)} url=${sanitizeImageUrl(url)}")
+        }
+        bitmap
+    }.onFailure { err ->
+        Log.w("ClawLinkImage", "download exception key=${cacheKey.take(48)} url=${sanitizeImageUrl(url)} error=${err.javaClass.simpleName}: ${err.message}")
+    }.getOrNull()
+}
+
+private fun sanitizeImageUrl(url: String): String {
+    val queryIndex = url.indexOf('?')
+    return if (queryIndex >= 0) url.substring(0, queryIndex) + "?..." else url
 }
 
 @Composable
@@ -289,15 +310,7 @@ internal fun ImageFullscreenOverlay(
     LaunchedEffect(resolvedCacheKey, url, accessToken) {
         if (bitmap != null) return@LaunchedEffect
         didFail = false
-        val result = withContext(Dispatchers.IO) {
-            runCatching {
-                val req = URL(url).openConnection() as HttpURLConnection
-                if (accessToken.isNotBlank()) req.setRequestProperty("Authorization", "Bearer $accessToken")
-                req.connectTimeout = 15_000; req.readTimeout = 30_000; req.connect()
-                if (req.responseCode !in 200..299) return@runCatching null
-                req.inputStream.use { BitmapFactory.decodeStream(it) }
-            }.getOrNull()
-        }
+        val result = withContext(Dispatchers.IO) { loadRemoteBitmap(url, accessToken, resolvedCacheKey) }
         if (result != null) {
             RemoteImageCache.put(resolvedCacheKey, result)
             localCopyFile = RemoteImageCache.cachedFile(resolvedCacheKey)

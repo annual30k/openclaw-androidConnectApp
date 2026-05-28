@@ -15,13 +15,15 @@ data class ChatState(
     val errorMessage: String? = null,
     val showInvocationProcess: Boolean = true,
     val contextUsageLinesByGatewayAndSession: Map<String, Map<String, String>> = emptyMap(),
-    val readVoicePlaybackIdentifiers: Set<String> = emptySet()
+    val readVoicePlaybackIdentifiers: Set<String> = emptySet(),
+    val historyWindow: ChatHistoryWindowState = ChatHistoryWindowState()
 )
 
 internal data class ChatRunScope(
     val gatewayId: String,
     val sessionKey: String,
-    val assistantMessageId: String? = null
+    val assistantMessageId: String? = null,
+    val triggeringUserMessageId: String? = null
 )
 
 internal data class ChatEventScope(

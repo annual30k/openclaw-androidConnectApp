@@ -164,6 +164,60 @@ class ChatRealtimeMessageMergeHelpersTest {
         assertEquals("我听到了，正在处理。", updated)
     }
 
+    @Test
+    fun requestsHistorySyncWhenFinalArrivesWithoutRenderableAssistantText() {
+        val pendingAssistant = assistantMessage(
+            id = "assistant-1",
+            runId = "run-1",
+            content = "正在连接...",
+            sortTimestamp = 50.001
+        )
+
+        assertTrue(
+            shouldSyncAssistantFinalFromHistory(
+                existing = pendingAssistant,
+                finalText = "",
+                finalContentBlocks = emptyList()
+            )
+        )
+    }
+
+    @Test
+    fun requestsHistorySyncWhenFinalOnlyContainsEmptyTextBlock() {
+        val pendingAssistant = assistantMessage(
+            id = "assistant-1",
+            runId = "run-1",
+            content = "正在连接...",
+            sortTimestamp = 50.001
+        )
+
+        assertTrue(
+            shouldSyncAssistantFinalFromHistory(
+                existing = pendingAssistant,
+                finalText = "",
+                finalContentBlocks = listOf(RelayChatContentBlock(type = "text", text = ""))
+            )
+        )
+    }
+
+    @Test
+    fun completesLocallyWhenEmptyFinalHasRenderableStreamingText() {
+        val pendingAssistant = assistantMessage(
+            id = "assistant-1",
+            runId = "run-1",
+            content = "已经流式返回的答案",
+            sortTimestamp = 51.001
+        )
+
+        assertFalse(
+            shouldSyncAssistantFinalFromHistory(
+                existing = pendingAssistant,
+                finalText = "",
+                finalContentBlocks = emptyList()
+            )
+        )
+    }
+
     private fun voiceMessage(runId: String, sortTimestamp: Double): ChatMessage {
         return ChatMessage(
             id = runId,

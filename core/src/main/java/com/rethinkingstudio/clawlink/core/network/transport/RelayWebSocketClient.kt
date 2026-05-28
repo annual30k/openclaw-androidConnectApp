@@ -69,12 +69,14 @@ class RelayWebSocketClient {
         .build()
 
     fun connect(url: String, token: String) {
-        if (
-            baseUrl == url &&
-            accessToken == token &&
-            (isConnected.get() ||
-                _connectionState.value == WsConnectionState.connecting ||
-                _connectionState.value == WsConnectionState.reconnecting)
+        if (shouldIgnoreRelayWsConnectRequest(
+                currentBaseUrl = baseUrl,
+                currentAccessToken = accessToken,
+                nextBaseUrl = url,
+                nextAccessToken = token,
+                isConnected = isConnected.get(),
+                connectionState = _connectionState.value
+            )
         ) {
             return
         }
@@ -243,8 +245,7 @@ class RelayWebSocketClient {
         if (
             baseUrl.isNotBlank()
             && accessToken.isNotBlank()
-            && _connectionState.value != WsConnectionState.connecting
-            && _connectionState.value != WsConnectionState.reconnecting
+            && shouldStartRelayWsReconnectNow(_connectionState.value)
         ) {
             reconnectAttempts = 0
             reconnectEnabled.set(true)
@@ -327,4 +328,21 @@ class RelayWebSocketClient {
         okHttpClient.dispatcher.executorService.shutdown()
         scope.cancel()
     }
+}
+
+internal fun shouldIgnoreRelayWsConnectRequest(
+    currentBaseUrl: String,
+    currentAccessToken: String,
+    nextBaseUrl: String,
+    nextAccessToken: String,
+    isConnected: Boolean,
+    connectionState: WsConnectionState
+): Boolean {
+    val sameEndpoint = currentBaseUrl == nextBaseUrl && currentAccessToken == nextAccessToken
+    if (!sameEndpoint) return false
+    return isConnected || connectionState == WsConnectionState.connecting
+}
+
+internal fun shouldStartRelayWsReconnectNow(connectionState: WsConnectionState): Boolean {
+    return connectionState != WsConnectionState.connecting
 }

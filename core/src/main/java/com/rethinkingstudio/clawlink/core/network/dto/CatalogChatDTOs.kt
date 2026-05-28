@@ -23,8 +23,11 @@ import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.decodeFromJsonElement
+import kotlinx.serialization.json.encodeToJsonElement
 import kotlinx.serialization.json.intOrNull
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.longOrNull
@@ -40,10 +43,46 @@ data class SkillsListResponse(
     val skills: List<SkillItem>
 )
 
-@Serializable
+@Serializable(with = ChatHistoryResponseSerializer::class)
 data class ChatHistoryResponse(
-    val items: List<ChatHistoryItem>
+    val items: List<ChatHistoryItem>,
+    val hasMore: Boolean = false,
+    val nextCursor: String? = null,
+    val newestCursor: String? = null
 )
+
+object ChatHistoryResponseSerializer : KSerializer<ChatHistoryResponse> {
+    override val descriptor: SerialDescriptor = JsonElement.serializer().descriptor
+    private val itemJson = Json { ignoreUnknownKeys = true }
+
+    override fun serialize(encoder: Encoder, value: ChatHistoryResponse) {
+        val obj = buildJsonObject {
+            put("items", JsonArray(value.items.map { itemJson.encodeToJsonElement(ChatHistoryItem.serializer(), it) }))
+            put("hasMore", JsonPrimitive(value.hasMore))
+            value.nextCursor?.let { put("nextCursor", JsonPrimitive(it)) }
+            value.newestCursor?.let { put("newestCursor", JsonPrimitive(it)) }
+        }
+        encoder.encodeSerializableValue(JsonElement.serializer(), obj)
+    }
+
+    override fun deserialize(decoder: Decoder): ChatHistoryResponse {
+        val element = decoder.decodeSerializableValue(JsonElement.serializer())
+        val obj = element as? JsonObject ?: throw SerializationException("Expected chat history response object")
+        val items = (obj["items"] as? JsonArray)
+            ?.mapNotNull { element ->
+                runCatching {
+                    itemJson.decodeFromJsonElement(ChatHistoryItem.serializer(), element)
+                }.getOrNull()
+            }
+            ?: emptyList()
+        return ChatHistoryResponse(
+            items = items,
+            hasMore = obj.boolean("hasMore", "has_more") ?: false,
+            nextCursor = obj.string("nextCursor", "next_cursor"),
+            newestCursor = obj.string("newestCursor", "newest_cursor")
+        )
+    }
+}
 
 @Serializable(with = ChatHistoryItemSerializer::class)
 data class ChatHistoryItem(
@@ -199,3 +238,8 @@ private fun JsonObject.string(vararg keys: String): String? {
     }
 }
 
+private fun JsonObject.boolean(vararg keys: String): Boolean? {
+    return keys.firstNotNullOfOrNull { key ->
+        (this[key] as? JsonPrimitive)?.booleanOrNull
+    }
+}

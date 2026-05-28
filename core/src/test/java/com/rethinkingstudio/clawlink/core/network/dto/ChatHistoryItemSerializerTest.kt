@@ -62,4 +62,22 @@ class ChatHistoryItemSerializerTest {
         assertTrue(block?.isToolResultBlock == true)
         assertEquals("call-1", block?.toolCallId)
     }
+
+    @Test
+    fun decodesSnakeCaseHistoryPageMetadata() {
+        val response = Json.decodeFromString<ChatHistoryResponse>(
+            """
+            {
+              "items": [],
+              "has_more": true,
+              "next_cursor": "seq:101",
+              "newest_cursor": "seq:200"
+            }
+            """.trimIndent()
+        )
+
+        assertTrue(response.hasMore)
+        assertEquals("seq:101", response.nextCursor)
+        assertEquals("seq:200", response.newestCursor)
+    }
 }

@@ -131,6 +131,34 @@ internal fun mergedAssistantStreamingDisplayContent(existing: ChatMessage, delta
     }
 }
 
+internal fun shouldSyncAssistantFinalFromHistory(
+    existing: ChatMessage?,
+    finalText: String,
+    finalContentBlocks: List<RelayChatContentBlock>
+): Boolean {
+    if (sanitizeChatMessageText(finalText).isNotBlank() || hasRenderableFinalContentBlocks(finalContentBlocks)) {
+        return false
+    }
+    if (existing == null) return false
+    val existingText = existing.content.trim()
+    return existingText.isBlank() ||
+        isTransientAssistantPlaceholder(existing) ||
+        isProtocolTypingMarkerText(existingText)
+}
+
+private fun hasRenderableFinalContentBlocks(blocks: List<RelayChatContentBlock>): Boolean {
+    return blocks.any { block ->
+        block.isToolCallBlock ||
+            block.isToolResultBlock ||
+            block.isFileBlock ||
+            block.isVoiceMessageBlock ||
+            !block.text.isNullOrBlank() ||
+            listOf(block.result, block.partialResult, block.content, block.output, block.error).any { value ->
+                !value?.renderedText(listOf("content", "markdown", "text", "body", "message", "value", "result", "output")).isNullOrBlank()
+            }
+    }
+}
+
 private fun mergeRemoteVoiceTranscriptIntoLocalMessage(
     messages: MutableList<ChatMessage>,
     transcript: String,

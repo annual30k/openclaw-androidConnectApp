@@ -23,8 +23,6 @@ import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowDownward
@@ -63,7 +61,6 @@ import com.google.accompanist.permissions.ExperimentalPermissionsApi
 import com.google.accompanist.permissions.isGranted
 import com.google.accompanist.permissions.rememberPermissionState
 import com.rethinkingstudio.clawlink.R
-import com.rethinkingstudio.clawlink.core.models.chat.ChatMessage
 import com.rethinkingstudio.clawlink.core.models.chat.MessageRole
 import com.rethinkingstudio.clawlink.core.models.chat.MessageState
 import com.rethinkingstudio.clawlink.core.models.gateway.AggregateStatus
@@ -73,32 +70,23 @@ import com.rethinkingstudio.clawlink.core.state.chat.ChatStore
 import com.rethinkingstudio.clawlink.core.state.chat.RemoteAttachmentCache
 import com.rethinkingstudio.clawlink.core.state.chat.RemoteImageCache
 import com.rethinkingstudio.clawlink.core.state.chat.RemoteImageSizeCache
-import com.rethinkingstudio.clawlink.core.state.chat.chatAttachmentCacheKey
-import com.rethinkingstudio.clawlink.core.state.chat.chatImageCacheKey
 import com.rethinkingstudio.clawlink.core.state.chat.visibleContextUsageLine
 import com.rethinkingstudio.clawlink.core.state.gateway.GatewayStore
 import com.rethinkingstudio.clawlink.core.state.model.ModelStore
 import com.rethinkingstudio.clawlink.ui.components.ClawLinkAlertDialog
 import com.rethinkingstudio.clawlink.ui.components.ClawLinkScaffold
-import com.rethinkingstudio.clawlink.ui.screens.chat.components.ChatSessionLoadingCard
 import com.rethinkingstudio.clawlink.ui.screens.chat.components.ChatSessionSwitchLoadingOverlay
 import com.rethinkingstudio.clawlink.ui.screens.chat.components.ChatTopBar
 import com.rethinkingstudio.clawlink.ui.screens.chat.components.ComposerDock
-import com.rethinkingstudio.clawlink.ui.screens.chat.components.EmptyGatewayCard
 import com.rethinkingstudio.clawlink.ui.screens.chat.components.DocumentFullscreenOverlay
 import com.rethinkingstudio.clawlink.ui.screens.chat.components.GatewaySheetOverlay
 import com.rethinkingstudio.clawlink.ui.screens.chat.components.ImageFullscreenOverlay
-import com.rethinkingstudio.clawlink.ui.screens.chat.components.MessageBubble
 import com.rethinkingstudio.clawlink.ui.screens.chat.components.ModelPickerSheetOverlay
 import com.rethinkingstudio.clawlink.ui.screens.chat.components.SkillExpansionSheetOverlay
 import com.rethinkingstudio.clawlink.ui.screens.chat.components.SlashAction
 import com.rethinkingstudio.clawlink.ui.screens.chat.components.slashCommandSuggestions
-import com.rethinkingstudio.clawlink.ui.screens.chat.components.documentPreviewKind
 import com.rethinkingstudio.clawlink.ui.screens.chat.components.SlashCommandPanel
-import com.rethinkingstudio.clawlink.ui.screens.chat.components.ThinkingRow
-import com.rethinkingstudio.clawlink.ui.screens.chat.components.UsageGuidePromptCard
 import com.rethinkingstudio.clawlink.ui.screens.chat.components.VoiceInputOverlay
-import com.rethinkingstudio.clawlink.ui.screens.chat.components.visibleToolContentBlocks
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -167,6 +155,7 @@ fun ChatScreen(
     var dismissedStatusAlertMessage by remember { mutableStateOf<String?>(null) }
     var lastObservedVisibleMessageCount by remember { mutableStateOf(0) }
     var lastObservedMessageSignature by remember { mutableStateOf("") }
+    var lastObservedFirstVisibleMessageId by remember { mutableStateOf<String?>(null) }
     var hasPendingMessagesBelow by remember { mutableStateOf(false) }
     var activeGatewaySwitchId by remember { mutableStateOf<String?>(null) }
     var lastAutoHistoryRequestKey by remember { mutableStateOf<String?>(null) }
@@ -479,18 +468,35 @@ fun ChatScreen(
         if (messageUpdateSignature.isEmpty() || messageCount == 0) {
             lastObservedVisibleMessageCount = 0
             lastObservedMessageSignature = ""
+            lastObservedFirstVisibleMessageId = null
             hasPendingMessagesBelow = false
             return@LaunchedEffect
         }
 
         val previousCount = lastObservedVisibleMessageCount
         val previousSignature = lastObservedMessageSignature
+        val previousFirstMessageId = lastObservedFirstVisibleMessageId
+        val currentFirstMessageId = visibleMessagesForScroll.firstOrNull()?.id
         val isInitialLoad = previousSignature.isEmpty()
         val appended = messageCount > previousCount
-        val isOwnNewMessage = appended &&
-            visibleMessagesForScroll.drop(previousCount.coerceAtMost(messageCount)).any { it.role == MessageRole.user }
+        val previousFirstMessageStillVisible = previousFirstMessageId != null &&
+            visibleMessagesForScroll.any { it.id == previousFirstMessageId }
+        val isOlderHistoryWindowMove = !isInitialLoad &&
+            previousFirstMessageStillVisible &&
+            previousFirstMessageId != currentFirstMessageId
+        val newTailMessages = if (appended && !isOlderHistoryWindowMove) {
+            visibleMessagesForScroll.drop(previousCount.coerceAtMost(messageCount))
+        } else {
+            emptyList()
+        }
+        val isOwnNewMessage = newTailMessages.any { it.role == MessageRole.user }
         lastObservedVisibleMessageCount = messageCount
         lastObservedMessageSignature = messageUpdateSignature
+        lastObservedFirstVisibleMessageId = currentFirstMessageId
+
+        if (isOlderHistoryWindowMove) {
+            return@LaunchedEffect
+        }
 
         if (isInitialLoad || isOwnNewMessage || isNearListBottom) {
             scrollChatToBottom(animated = !isInitialLoad)
@@ -567,6 +573,14 @@ fun ChatScreen(
                         hasSelectedGateway = hasSelectedGateway,
                         onOpenUsageGuide = onOpenUsageGuide,
                         onOpenSettings = onOpenSettings,
+                        onLoadOlderHistory = {
+                            val resolvedGatewayId = gatewayId ?: return@ChatConversationList
+                            val resolvedSessionKey = chatState.currentSessionKey
+                            if (resolvedSessionKey.isBlank()) return@ChatConversationList
+                            scope.launch {
+                                chatStore.loadOlderHistory(resolvedGatewayId, resolvedSessionKey)
+                            }
+                        },
                         onDismissKeyboard = dismissKeyboard,
                         modifier = Modifier
                             .fillMaxWidth()

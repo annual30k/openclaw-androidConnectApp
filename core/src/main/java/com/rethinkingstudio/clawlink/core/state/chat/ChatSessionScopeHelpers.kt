@@ -54,7 +54,11 @@ internal fun shouldKeepCurrentSessionAfterLoad(
     isNewGateway: Boolean
 ): Boolean {
     val current = normalizeSessionKey(currentSessionKey)
-    if (isSwitchingSession || isNewGateway || current.isBlank()) return false
+    if (current.isBlank()) return false
+    if (isSwitchingSession) {
+        return !isNewGateway && sessions.matchingSessionKey(current) != null
+    }
+    if (isNewGateway) return false
     if (hasCurrentMessages) return true
     val mostRecent = sessions.firstOrNull()?.sessionKey ?: return true
     return sameSessionKey(mostRecent, current)

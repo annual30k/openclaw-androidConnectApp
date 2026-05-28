@@ -23,8 +23,10 @@ import com.rethinkingstudio.clawlink.core.state.skill.SkillStore
 import com.rethinkingstudio.clawlink.core.state.task.TaskStore
 import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKey
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.withContext
 
 val Context.dataStore: DataStore<Preferences> by preferencesDataStore(name = "clawlink_prefs")
 
@@ -61,7 +63,7 @@ class SecureCredentialStore(private val context: Context) : CredentialStore {
         }
     }
 
-    override suspend fun saveCredentials(credentials: SessionCredentials) {
+    override suspend fun saveCredentials(credentials: SessionCredentials) = withContext(Dispatchers.IO) {
         runCatching {
             credentialPrefs.edit()
                 .putString(TOKEN_KEY, credentials.accessToken)
@@ -75,10 +77,14 @@ class SecureCredentialStore(private val context: Context) : CredentialStore {
         }
     }
 
-    override suspend fun loadCredentials(): SessionCredentials? {
-        val token = readCredentialValue(TOKEN_KEY)?.takeIf { it.isNotBlank() } ?: return null
-        val url = readCredentialValue(RELAY_URL_KEY)?.takeIf { it.isNotBlank() } ?: return null
-        return SessionCredentials(accessToken = token, relayBaseURL = url)
+    override suspend fun loadCredentials(): SessionCredentials? = withContext(Dispatchers.IO) {
+        val token = readCredentialValue(TOKEN_KEY)?.takeIf { it.isNotBlank() }
+        val url = readCredentialValue(RELAY_URL_KEY)?.takeIf { it.isNotBlank() }
+        if (token == null || url == null) {
+            null
+        } else {
+            SessionCredentials(accessToken = token, relayBaseURL = url)
+        }
     }
 
     private fun readCredentialValue(key: String): String? {
@@ -86,21 +92,23 @@ class SecureCredentialStore(private val context: Context) : CredentialStore {
             ?: runCatching { fallbackPrefs.getString(key, null) }.getOrNull()
     }
 
-    override suspend fun clearCredentials() {
+    override suspend fun clearCredentials() = withContext(Dispatchers.IO) {
         runCatching { credentialPrefs.edit().clear().apply() }
         fallbackPrefs.edit()
             .remove(TOKEN_KEY)
             .remove(RELAY_URL_KEY)
             .apply()
         context.dataStore.edit { it.remove(LAST_GATEWAY_ID) }
+        Unit
     }
 
-    override suspend fun saveLastGatewayId(gatewayId: String) {
+    override suspend fun saveLastGatewayId(gatewayId: String) = withContext(Dispatchers.IO) {
         context.dataStore.edit { it[LAST_GATEWAY_ID] = gatewayId }
+        Unit
     }
 
-    override suspend fun loadLastGatewayId(): String? {
-        return context.dataStore.data.map { it[LAST_GATEWAY_ID] }.firstOrNull()
+    override suspend fun loadLastGatewayId(): String? = withContext(Dispatchers.IO) {
+        context.dataStore.data.map { it[LAST_GATEWAY_ID] }.firstOrNull()
     }
 }
 

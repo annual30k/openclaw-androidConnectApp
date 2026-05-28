@@ -103,7 +103,7 @@ internal fun FileBlock(block: RelayChatContentBlock, isUser: Boolean, messageSta
             else -> null
         }
     }
-    val downloadUrl = rawDownloadUrl?.takeIf { localFilePath == null }?.let { resolveFileUrl(it, relayBaseUrl) }
+    val downloadUrl = if (localFilePath == null) resolveFileDownloadUrl(block, relayBaseUrl) else null
     val isStandaloneUserFile = isUser && standalone
     val isUploadCard = isUploadingState || block.status?.contains("上传中") == true || block.status?.contains("uploading", ignoreCase = true) == true
     val primaryText = when {

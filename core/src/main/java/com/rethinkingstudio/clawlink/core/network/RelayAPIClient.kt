@@ -263,12 +263,21 @@ class RelayAPIClient(
 
     // ── Chat ─────────────────────────────────────────────────────────────
 
-    suspend fun fetchChatHistory(gatewayId: String, sessionKey: String, limit: Int = 50): List<ChatHistoryItem> {
-        val response: ChatHistoryResponse = request(
-            endpoint = APIEndpoints.Mobile.Chat.history(gatewayId, sessionKey, limit),
+    suspend fun fetchChatHistoryPage(
+        gatewayId: String,
+        sessionKey: String,
+        limit: Int = 100,
+        cursor: String? = null,
+        direction: String = "older"
+    ): ChatHistoryResponse {
+        return request(
+            endpoint = APIEndpoints.Mobile.Chat.history(gatewayId, sessionKey, limit, cursor, direction),
             extraHeaders = gatewayLoadHeaders
         )
-        return response.items
+    }
+
+    suspend fun fetchChatHistory(gatewayId: String, sessionKey: String, limit: Int = 100): List<ChatHistoryItem> {
+        return fetchChatHistoryPage(gatewayId, sessionKey, limit).items
     }
 
     suspend fun checkChatReady(gatewayId: String): Boolean {

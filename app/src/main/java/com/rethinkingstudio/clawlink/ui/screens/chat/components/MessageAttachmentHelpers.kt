@@ -78,6 +78,7 @@ import com.rethinkingstudio.clawlink.ui.screens.chat.formatChatTimestamp
 import java.io.File
 import java.net.HttpURLConnection
 import java.net.URL
+import java.net.URI
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -98,11 +99,56 @@ internal fun fileSubtitle(block: RelayChatContentBlock): String {
 
 internal fun resolveFileUrl(raw: String, relayBaseUrl: String): String {
     val trimmed = raw.trim()
-    if (trimmed.startsWith("http://", ignoreCase = true) || trimmed.startsWith("https://", ignoreCase = true)) return trimmed
+    if (trimmed.startsWith("http://", ignoreCase = true) || trimmed.startsWith("https://", ignoreCase = true)) {
+        return normalizeRelayHttpUrl(trimmed, relayBaseUrl)
+    }
     if (trimmed.startsWith("file://", ignoreCase = true)) return trimmed
     val base = relayBaseUrl.trim().trimEnd('/')
     if (base.isBlank()) return trimmed
     return "$base/${trimmed.trimStart('/')}"
+}
+
+internal fun resolveFileDownloadUrl(block: RelayChatContentBlock, relayBaseUrl: String): String? {
+    val raw = block.fileDownloadURLString?.trim()?.takeIf { it.isNotEmpty() }
+    val fileId = block.fileId?.trim()?.takeIf { it.isNotEmpty() }
+        ?: raw?.mediaUriFileId()
+    val shouldPreferFileEndpoint = fileId != null && raw?.let(::isDeviceLocalOrOpaqueFileReference) == true
+    val candidate = if (shouldPreferFileEndpoint) {
+        "/api/mobile/files/$fileId"
+    } else {
+        raw ?: fileId?.let { "/api/mobile/files/$it" }
+    } ?: return null
+    return resolveFileUrl(candidate, relayBaseUrl)
+}
+
+private fun normalizeRelayHttpUrl(raw: String, relayBaseUrl: String): String {
+    val base = relayBaseUrl.trim().trimEnd('/').takeIf { it.isNotEmpty() } ?: return raw
+    val sourceUri = runCatching { URI(raw) }.getOrNull() ?: return raw
+    val path = sourceUri.rawPath ?: return raw
+    if (!path.startsWith("/api/")) return raw
+    val host = sourceUri.host?.lowercase().orEmpty()
+    if (host != "127.0.0.1" && host != "localhost" && host != "::1") return raw
+    val query = sourceUri.rawQuery?.let { "?$it" }.orEmpty()
+    val fragment = sourceUri.rawFragment?.let { "#$it" }.orEmpty()
+    return "$base$path$query$fragment"
+}
+
+private fun isDeviceLocalOrOpaqueFileReference(raw: String): Boolean {
+    val trimmed = raw.trim()
+    return trimmed.startsWith("file://", ignoreCase = true) ||
+        trimmed.startsWith("media://", ignoreCase = true) ||
+        trimmed.startsWith("/") ||
+        trimmed.startsWith("content://", ignoreCase = true)
+}
+
+private fun String.mediaUriFileId(): String? {
+    val trimmed = trim()
+    if (!trimmed.startsWith("media://", ignoreCase = true)) return null
+    return trimmed
+        .substringAfter("://", missingDelimiterValue = "")
+        .substringAfterLast('/')
+        .trim()
+        .takeIf { it.isNotEmpty() && !it.contains('.') }
 }
 
 internal fun uploadProgressFromStatus(status: String?): Double? {

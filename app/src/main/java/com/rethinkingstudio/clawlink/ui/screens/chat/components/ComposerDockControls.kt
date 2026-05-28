@@ -5,6 +5,7 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -138,13 +139,16 @@ internal fun RoundIconButton(icon: ImageVector, label: String, enabled: Boolean,
 
 @Composable
 internal fun SendButton(enabled: Boolean, isStreaming: Boolean = false, isStoppingRun: Boolean = false, onClick: () -> Unit) {
-    val backgroundColor = when {
-        isStoppingRun -> ChatColors.offline.copy(alpha = 0.72f)
-        !enabled -> ChatColors.disabledAction
-        isStreaming -> ChatColors.offline
-        else -> ChatColors.linkBlue
-    }
-    Surface(onClick = onClick, enabled = enabled, shape = CircleShape, color = backgroundColor, contentColor = if (enabled) Color.White else Color.White.copy(alpha = 0.9f), modifier = Modifier.size(42.dp)) {
+    val palette = composerSendActionPalette(
+        darkTheme = isSystemInDarkTheme(),
+        enabled = enabled,
+        isStreaming = isStreaming,
+        isStoppingRun = isStoppingRun,
+        hasDraft = true,
+        lightReadyContainer = ChatColors.linkBlue,
+        idleContent = MaterialTheme.colorScheme.onSurface
+    )
+    Surface(onClick = onClick, enabled = enabled, shape = CircleShape, color = palette.container, contentColor = palette.content, modifier = Modifier.size(42.dp)) {
         Box(contentAlignment = Alignment.Center) {
             if (isStoppingRun) { CircularProgressIndicator(modifier = Modifier.size(20.dp), color = Color.White, strokeWidth = 2.dp) }
             else if (isStreaming) { Icon(Icons.Default.Stop, choose("Stop", "停止"), modifier = Modifier.size(20.dp)) }

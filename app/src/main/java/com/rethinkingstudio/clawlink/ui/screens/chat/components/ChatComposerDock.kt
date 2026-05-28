@@ -5,6 +5,7 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -505,17 +506,15 @@ private fun ComposerInputActionButton(
     onAbort: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val backgroundColor = when {
-        isStoppingRun -> ChatColors.offline.copy(alpha = 0.72f)
-        isStreaming -> ChatColors.offline
-        hasDraft && enabled -> MaterialTheme.colorScheme.onSurface
-        hasDraft -> ChatColors.disabledAction
-        else -> Color.Transparent
-    }
-    val contentColor = when {
-        hasDraft || isStreaming || isStoppingRun -> Color.White
-        else -> MaterialTheme.colorScheme.onSurface
-    }
+    val palette = composerSendActionPalette(
+        darkTheme = isSystemInDarkTheme(),
+        enabled = enabled,
+        isStreaming = isStreaming,
+        isStoppingRun = isStoppingRun,
+        hasDraft = hasDraft,
+        lightReadyContainer = MaterialTheme.colorScheme.onSurface,
+        idleContent = MaterialTheme.colorScheme.onSurface
+    )
     Surface(
         onClick = {
             when {
@@ -526,8 +525,8 @@ private fun ComposerInputActionButton(
         },
         enabled = enabled,
         shape = CircleShape,
-        color = backgroundColor,
-        contentColor = contentColor,
+        color = palette.container,
+        contentColor = palette.content,
         modifier = modifier.size(38.dp)
     ) {
         Box(contentAlignment = Alignment.Center) {

@@ -11,6 +11,7 @@ import com.rethinkingstudio.clawlink.core.models.chat.ComposerAttachmentUploadIt
 import com.rethinkingstudio.clawlink.core.models.gateway.GatewayType
 import com.rethinkingstudio.clawlink.core.domain.NotificationPort
 import com.rethinkingstudio.clawlink.core.network.RelayAPIClient
+import com.rethinkingstudio.clawlink.core.network.dto.ChatHistoryResponse
 import com.rethinkingstudio.clawlink.core.network.dto.RelayFileTransferItem
 import com.rethinkingstudio.clawlink.core.network.transport.RelayChatSendAttachmentPayload
 import com.rethinkingstudio.clawlink.core.network.transport.RelayWebSocketClient
@@ -24,6 +25,7 @@ import android.graphics.BitmapFactory
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -35,7 +37,6 @@ import kotlinx.coroutines.launch
 import io.ktor.client.plugins.HttpRequestTimeoutException
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
@@ -44,11 +45,51 @@ import java.net.SocketTimeoutException
 import java.time.Instant
 import java.util.UUID
 
+internal typealias ChatHistoryPageFetcher = suspend (
+    gatewayId: String,
+    sessionKey: String,
+    limit: Int,
+    cursor: String?,
+    direction: String
+) -> ChatHistoryResponse
+
+internal data class LocalStopCompletionResult(
+    val messages: List<ChatMessage>,
+    val stoppedRunId: String?
+)
+
+internal fun completeStreamingMessageLocallyAfterStop(
+    messages: List<ChatMessage>,
+    runId: String?
+): LocalStopCompletionResult {
+    val updatedMessages = messages.toMutableList()
+    val index = updatedMessages.indexOfLast { it.state == MessageState.streaming }
+    if (index < 0) {
+        return LocalStopCompletionResult(
+            messages = messages,
+            stoppedRunId = runId?.takeIf { it.isNotBlank() }
+        )
+    }
+
+    val existing = updatedMessages[index]
+    val resolvedRunId = runId?.takeIf { it.isNotBlank() } ?: existing.runId
+    if (isTransientAssistantPlaceholder(existing)) {
+        updatedMessages.removeAt(index)
+    } else {
+        updatedMessages[index] = existing.copy(state = MessageState.completed, runId = resolvedRunId)
+    }
+    return LocalStopCompletionResult(
+        messages = updatedMessages,
+        stoppedRunId = resolvedRunId.takeIf { it.isNotBlank() }
+    )
+}
+
 class ChatStore(
     private val apiClient: RelayAPIClient,
     private val wsClient: RelayWebSocketClient,
     private val notificationPort: NotificationPort,
-    private val sessionSelectionStore: ChatSessionSelectionStore? = null
+    private val sessionSelectionStore: ChatSessionSelectionStore? = null,
+    private val chatHistoryPageFetcher: ChatHistoryPageFetcher? = null
 ) {
     val relayBaseUrl: String get() = apiClient.baseUrl
     val accessToken: String get() = apiClient.accessToken
@@ -62,6 +103,7 @@ class ChatStore(
     private val chatRunScopes = linkedMapOf<String, ChatRunScope>()
     private val abortRequestIds = mutableSetOf<String>()
     private val locallyStoppedRunIds = mutableSetOf<String>()
+    private val chatFinalSyncJobs = mutableMapOf<String, Job>()
     private var ignoreRunlessStoppedEventsUntilMs: Long = 0
 
     init {
@@ -117,6 +159,11 @@ class ChatStore(
         val payloadObj = obj["payload"]?.jsonObject ?: obj
         _state.value = _state.value.withContextUsageFromPayload(obj, payloadObj)
 
+        ChatPayloadTool.extract(payloadObj)?.let { toolPayload ->
+            handleToolPayload(obj, payloadObj, toolPayload)
+            return
+        }
+
         // Determine phase from payload
         val phase = payloadObj["state"]?.jsonPrimitive?.content
             ?: payloadObj["phase"]?.jsonPrimitive?.content
@@ -139,80 +186,32 @@ class ChatStore(
         val obj = payload as? JsonObject ?: return
         val payloadObj = obj["payload"]?.jsonObject ?: obj
 
-        val stream = payloadObj["stream"]?.jsonPrimitive?.content?.trim()?.lowercase()
-        if (stream == "tool") {
-            ChatPayloadTool.extract(payloadObj)?.let { toolPayload ->
-                handleToolPayload(obj, payloadObj, toolPayload)
-                return
-            }
+        ChatPayloadTool.extract(payloadObj)?.let { toolPayload ->
+            handleToolPayload(obj, payloadObj, toolPayload)
+            return
         }
 
         // Not a tool stream — handle as regular assistant event
         handleChatPayload(payload)
     }
 
-    private fun handleToolPayload(envelope: JsonObject, payload: JsonObject, toolPayload: ChatPayloadTool.ToolPayload) {
-        val toolCallId = toolPayload.toolCallId
-            ?: payload.string("runId", "run_id")
-            ?: payload.string("toolRunId", "tool_run_id")
-            ?: UUID.randomUUID().toString()
-        val scope = resolveChatEventScope(envelope, payload, toolCallId)
+    private fun handleToolPayload(envelope: JsonObject, payload: JsonObject, toolPayload: ChatToolPayload) {
+        val plan = ChatToolMessagePlanner.plan(toolPayload) ?: return
+        val scope = resolveChatEventScope(envelope, payload, plan.toolCallId)
         if (!isCurrentChatScope(scope)) {
             noteSessionActivity(scope)
             return
         }
-        val toolRunId = "tool:$toolCallId"
-        val explicitBlocks = parseContentBlocks(payload)
-        val contentBlocks = if (explicitBlocks.any { it.isToolCallBlock || it.isToolResultBlock }) {
-            explicitBlocks
-        } else {
-            buildSyntheticToolContentBlocks(
-                payload = payload,
-                toolCallId = toolCallId,
-                toolName = toolPayload.toolName,
-                displayText = toolPayload.displayText,
-                isError = toolPayload.state == MessageState.failed
-            )
-        }
-        val finalRole = if (contentBlocks.any { it.isToolCallBlock || it.isToolResultBlock }) MessageRole.tool else MessageRole.assistant
-        val content = toolPayload.displayText.ifBlank {
-            contentBlocks.firstNotNullOfOrNull { block ->
-                block.text?.trim()?.takeIf { it.isNotEmpty() }
-                    ?: block.result?.renderedText(listOf("content", "markdown", "text", "body", "message", "value", "result", "output"))
-                    ?: block.partialResult?.renderedText(listOf("content", "markdown", "text", "body", "message", "value", "result", "output"))
-                    ?: block.content?.renderedText(listOf("content", "markdown", "text", "body", "message", "value", "result", "output"))
-                    ?: block.output?.renderedText(listOf("content", "markdown", "text", "body", "message", "value", "result", "output"))
-                    ?: block.error?.renderedText(listOf("content", "markdown", "text", "body", "message", "value", "result", "output"))
-            }.orEmpty()
-        }
-
-        if (content.isBlank() && contentBlocks.isEmpty()) {
-            return
-        }
-
-        val existingMessage = _state.value.messages.firstOrNull { it.id == toolRunId }
-        val mergedBlocks = if (existingMessage != null) {
-            (existingMessage.contentBlocks + contentBlocks)
-                .distinctBy { it.signature() }
-                .sortedBy { if (it.isToolCallBlock) 0 else 1 }
-        } else {
-            contentBlocks
-        }
-
-        upsertMessage(
-            ChatMessage(
-                id = toolRunId,
-                role = finalRole,
-                state = toolPayload.state,
-                content = content,
-                contentBlocks = mergedBlocks,
-                createdAt = existingMessage?.createdAt ?: "",
-                runId = toolCallId,
-                sortTimestamp = existingMessage?.sortTimestamp ?: (System.currentTimeMillis() / 1000.0)
-            )
+        val reduction = ChatToolMessageReducer.upsert(
+            messages = _state.value.messages,
+            plan = plan,
+            nowEpochSeconds = System.currentTimeMillis() / 1000.0,
+            anchorAssistantMessageId = scope.runScope?.assistantMessageId
         )
+        val ordered = orderedMessages(reduction.messages)
         _state.value = _state.value.copy(
-            isStreaming = toolPayload.state == MessageState.streaming,
+            messages = ordered,
+            isStreaming = plan.state == MessageState.streaming || hasPendingAssistantPlaceholder(ordered),
             isStoppingRun = false
         )
     }
@@ -221,83 +220,6 @@ class ChatStore(
         // Office events are surfaced through GatewayStore presence updates on Android.
         // They do not create chat messages here.
         return
-    }
-
-    private fun buildSyntheticToolContentBlocks(
-        payload: JsonObject?,
-        toolCallId: String,
-        toolName: String,
-        displayText: String,
-        isError: Boolean
-    ): List<RelayChatContentBlock> {
-        val source = payload?.let { it["data"] as? JsonObject ?: it["office"] as? JsonObject ?: it }
-            ?: buildJsonObject { }
-        val normalizedToolName = toolName.trim().ifEmpty { "tool" }
-        val displayValue = toolDisplayJsonValue(source, displayText)
-        val callArguments = firstJsonValue(source, "args", "arguments", "content")
-        val normalizedPhase = source.string("phase", "state", "status")?.trim()?.lowercase().orEmpty()
-        val isPartial = normalizedPhase == "update" || normalizedPhase == "streaming"
-
-        val blocks = mutableListOf<RelayChatContentBlock>()
-        if (callArguments != null || normalizedToolName.isNotEmpty()) {
-            blocks += RelayChatContentBlock(
-                type = "tool_use",
-                name = normalizedToolName,
-                toolCallId = toolCallId,
-                arguments = callArguments,
-                args = callArguments
-            )
-        }
-        if (displayValue != null || displayText.isNotBlank() || isError) {
-            blocks += RelayChatContentBlock(
-                type = "tool_result",
-                text = if (displayValue != null) null else displayText.ifBlank { null },
-                name = normalizedToolName,
-                toolCallId = toolCallId,
-                result = if (isError || isPartial) null else displayValue,
-                partialResult = if (isPartial) displayValue else null,
-                content = displayValue,
-                output = displayValue,
-                error = if (isError) displayValue else null,
-                isError = isError
-            )
-        }
-        return blocks
-    }
-
-    private fun toolDisplayJsonValue(source: JsonObject, displayText: String): com.rethinkingstudio.clawlink.core.models.chat.RelayJSONValue? {
-        val direct = firstJsonValue(source, "result", "partialResult", "partial_result", "output", "content", "args")
-        if (direct != null) {
-            return direct
-        }
-        source.string("text", "delta", "error")?.let {
-            return com.rethinkingstudio.clawlink.core.models.chat.RelayJSONValue.StringVal(it)
-        }
-        val message = source["message"] as? JsonObject
-        val messageContent = message?.get("content")
-        if (messageContent != null) {
-            return com.rethinkingstudio.clawlink.core.models.chat.RelayJSONValue.fromJsonElement(messageContent)
-        }
-        return displayText.trim().takeIf { it.isNotEmpty() }?.let {
-            com.rethinkingstudio.clawlink.core.models.chat.RelayJSONValue.StringVal(it)
-        }
-    }
-
-    private fun firstJsonValue(payload: JsonObject, vararg keys: String): com.rethinkingstudio.clawlink.core.models.chat.RelayJSONValue? {
-        return keys.firstNotNullOfOrNull { key ->
-            payload[key]?.let { com.rethinkingstudio.clawlink.core.models.chat.RelayJSONValue.fromJsonElement(it) }
-        }
-    }
-
-    private fun upsertMessage(message: ChatMessage) {
-        val messages = _state.value.messages.toMutableList()
-        val index = messages.indexOfFirst { it.id == message.id }
-        if (index >= 0) {
-            messages[index] = message
-        } else {
-            messages.add(message)
-        }
-        _state.value = _state.value.copy(messages = messages)
     }
 
     private fun handleDelta(envelope: JsonObject, payload: JsonElement?) {
@@ -339,7 +261,7 @@ class ChatStore(
                 sortTimestamp = System.currentTimeMillis() / 1000.0
             )
             _state.value = _state.value.copy(
-                messages = _state.value.messages + msg,
+                messages = orderedMessages(_state.value.messages + msg),
                 isStreaming = true
             )
         }
@@ -353,7 +275,7 @@ class ChatStore(
                 content = updatedContent,
                 runId = runId.ifBlank { existing.runId }
             )
-            _state.value = _state.value.copy(messages = messages)
+            _state.value = _state.value.copy(messages = orderedMessages(messages))
             streamingContent.setLength(0)
             streamingContent.append(updatedContent)
         }
@@ -386,7 +308,6 @@ class ChatStore(
         val finalContentBlocks = contentBlocks
 
         val finalRole = if (finalContentBlocks.any { it.isToolCallBlock || it.isToolResultBlock }) MessageRole.tool else role
-
         val preview = buildNotificationPreview(content, contentBlocks)
         if (!isCurrentChatScope(scope)) {
             noteSessionActivity(scope, lastActivityAt = eventTimestampIso(obj))
@@ -399,6 +320,27 @@ class ChatStore(
             }
             completeHiddenRunIfNeeded(runId, scope.runScope)
             forgetRunScope(runId, scope.runScope)
+            return
+        }
+
+        val existingAssistantForFinal = if (finalRole != MessageRole.user) {
+            pendingAssistantMessageForFinal(scope)
+        } else {
+            null
+        }
+        if (finalRole != MessageRole.user &&
+            shouldSyncAssistantFinalFromHistory(
+                existing = existingAssistantForFinal,
+                finalText = extractedContent,
+                finalContentBlocks = finalContentBlocks
+            )
+        ) {
+            markAssistantFinalSyncingFromHistory(
+                runId = runId,
+                runScope = scope.runScope,
+                existingAssistant = existingAssistantForFinal
+            )
+            noteSessionActivity(scope, lastActivityAt = eventTimestampIso(obj))
             return
         }
 
@@ -437,10 +379,11 @@ class ChatStore(
                     runId = runId.ifBlank { messages[idx].runId }
                 )
                 _state.value = _state.value.copy(
-                    messages = messages,
+                    messages = orderedMessages(messages),
                     isStreaming = false
                 )
             }
+            cancelChatFinalSync(scope.runScope)
             forgetRunScope(runId, scope.runScope)
         } else {
             val eventSortTimestamp = eventTimestampMillis(obj)?.toDouble()?.div(1000.0)
@@ -470,18 +413,20 @@ class ChatStore(
                         )
                     )
                     messages[existingIndex] = mergedMessage
-                    _state.value = _state.value.copy(messages = messages, isStreaming = false)
+                    _state.value = _state.value.copy(messages = orderedMessages(messages), isStreaming = false)
                     removeDuplicateFileMessages(mergedMessage)
                     streamingContent.clear()
                     streamingMessageId = null
+                    cancelChatFinalSync(scope.runScope)
                     forgetRunScope(runId, scope.runScope)
                     return
                 }
             }
             _state.value = _state.value.copy(
-                messages = _state.value.messages + anchoredMessage,
+                messages = orderedMessages(_state.value.messages + anchoredMessage),
                 isStreaming = false
             )
+            cancelChatFinalSync(scope.runScope)
             forgetRunScope(runId, scope.runScope)
         }
 
@@ -513,7 +458,313 @@ class ChatStore(
             sortTimestamp = sortTimestamp,
             assistantMessageId = assistantMessageId
         )
-        _state.value = _state.value.copy(messages = messages)
+        _state.value = _state.value.copy(messages = orderedMessages(messages))
+    }
+
+    private fun pendingAssistantMessageForFinal(scope: ChatEventScope): ChatMessage? {
+        val messages = _state.value.messages
+        scope.runScope?.assistantMessageId
+            ?.trim()
+            ?.takeIf { it.isNotEmpty() }
+            ?.let { assistantMessageId ->
+                messages.firstOrNull { it.id == assistantMessageId }?.let { return it }
+            }
+        streamingMessageId
+            ?.trim()
+            ?.takeIf { it.isNotEmpty() }
+            ?.let { assistantMessageId ->
+                messages.firstOrNull { it.id == assistantMessageId }?.let { return it }
+            }
+        return null
+    }
+
+    private fun markAssistantFinalSyncingFromHistory(
+        runId: String,
+        runScope: ChatRunScope?,
+        existingAssistant: ChatMessage?
+    ) {
+        val messages = _state.value.messages.toMutableList()
+        val assistantMessageId = runScope?.assistantMessageId
+            ?.trim()
+            ?.takeIf { it.isNotEmpty() }
+            ?: existingAssistant?.id
+            ?: streamingMessageId
+        val index = assistantMessageId
+            ?.let { id -> messages.indexOfFirst { it.id == id } }
+            ?: -1
+        val resolvedRunId = runId.trim().takeIf { it.isNotEmpty() }
+            ?: existingAssistant?.runId?.trim()?.takeIf { it.isNotEmpty() }
+            ?: assistantMessageId.orEmpty()
+
+        if (index >= 0) {
+            val existing = messages[index]
+            messages[index] = existing.copy(
+                state = MessageState.streaming,
+                content = choose("Syncing final content...", "正在同步最终内容..."),
+                runId = resolvedRunId.ifBlank { existing.runId }
+            )
+            streamingMessageId = existing.id
+            streamingContent.clear()
+            streamingContent.append(messages[index].content)
+            _state.value = _state.value.copy(
+                messages = orderedMessages(messages),
+                isStreaming = true,
+                isStoppingRun = false
+            )
+        } else {
+            _state.value = _state.value.copy(isStreaming = true, isStoppingRun = false)
+        }
+
+        if (resolvedRunId.isNotBlank() && runScope != null) {
+            rememberRunScope(resolvedRunId, runScope)
+            scheduleChatFinalSync(resolvedRunId, runScope)
+        }
+    }
+
+    private fun orderedMessages(messages: List<ChatMessage>): List<ChatMessage> {
+        return orderMessagesWithSourceRunAnchors(messages)
+    }
+
+    private fun scheduleChatFinalSync(runId: String, runScope: ChatRunScope?, attempt: Int = 0) {
+        val assistantMessageId = runScope?.assistantMessageId?.trim()?.takeIf { it.isNotEmpty() } ?: return
+        if (chatFinalSyncJobs[assistantMessageId]?.isActive == true) return
+        val gatewayId = runScope.gatewayId.trim()
+        val sessionKey = normalizeSessionKey(runScope.sessionKey)
+        if (gatewayId.isBlank() || sessionKey.isBlank()) return
+
+        val job = scope.launch {
+            delay(chatFinalSyncDelayMs(attempt))
+            chatFinalSyncJobs.remove(assistantMessageId)
+            if (!needsChatFinalSync(runId, runScope)) return@launch
+
+            android.util.Log.d("ChatStore", "Silent chat final sync attempt=${attempt + 1} runId=$runId session=$sessionKey")
+            resolvePendingFinalFromHistory(gatewayId = gatewayId, sessionKey = sessionKey, runId = runId, runScope = runScope)
+            if (needsChatFinalSync(runId, runScope) && attempt + 1 < chatFinalSyncMaxAttempts) {
+                scheduleChatFinalSync(runId, runScope, attempt + 1)
+            }
+        }
+        chatFinalSyncJobs[assistantMessageId] = job
+    }
+
+    private fun schedulePendingFinalSyncsForCurrentSession() {
+        val current = _state.value
+        val gatewayId = current.currentGatewayId?.trim().orEmpty()
+        val sessionKey = normalizeSessionKey(current.currentSessionKey)
+        if (gatewayId.isBlank() || sessionKey.isBlank()) return
+        current.messages
+            .filter { message ->
+                message.role == MessageRole.assistant &&
+                    (message.state == MessageState.streaming || isTransientAssistantPlaceholder(message))
+            }
+            .forEach { message ->
+                val runScope = ChatRunScope(
+                    gatewayId = gatewayId,
+                    sessionKey = sessionKey,
+                    assistantMessageId = message.id,
+                    triggeringUserMessageId = triggeringUserMessageIdBefore(message, current.messages)
+                )
+                val runId = message.runId.trim().takeIf { it.isNotEmpty() } ?: message.id
+                rememberRunScope(runId, runScope)
+                scheduleChatFinalSync(runId, runScope)
+            }
+    }
+
+    private fun chatFinalSyncDelayMs(attempt: Int): Long {
+        return when {
+            attempt <= 0 -> chatFinalSyncInitialDelayMs
+            attempt < 6 -> chatFinalSyncFastRetryDelayMs
+            else -> chatFinalSyncSlowRetryDelayMs
+        }
+    }
+
+    private fun cancelChatFinalSync(runScope: ChatRunScope?) {
+        val assistantMessageId = runScope?.assistantMessageId?.trim()?.takeIf { it.isNotEmpty() } ?: return
+        chatFinalSyncJobs.remove(assistantMessageId)?.cancel()
+    }
+
+    private fun needsChatFinalSync(runId: String, runScope: ChatRunScope): Boolean {
+        val messages = orderedMessages(_state.value.messages)
+        val assistantMessageId = runScope.assistantMessageId?.trim().orEmpty()
+        val directMessage = messages.firstOrNull { assistantMessageId.isNotBlank() && it.id == assistantMessageId }
+            ?: messages.firstOrNull { runId.isNotBlank() && it.role == MessageRole.assistant && it.runId == runId }
+        if (directMessage != null) {
+            return directMessage.role == MessageRole.assistant &&
+                (directMessage.state == MessageState.streaming || isTransientAssistantPlaceholder(directMessage))
+        }
+
+        val triggeringUserId = runScope.triggeringUserMessageId?.trim().orEmpty()
+        if (triggeringUserId.isBlank()) return false
+        val triggerIndex = messages.indexOfLast { it.id == triggeringUserId }
+        if (triggerIndex < 0) return false
+        return messages
+            .drop(triggerIndex + 1)
+            .takeWhile { it.role != MessageRole.user }
+            .any { it.role == MessageRole.assistant && (it.state == MessageState.streaming || isTransientAssistantPlaceholder(it)) }
+    }
+
+    private fun triggeringUserMessageIdBefore(message: ChatMessage, messages: List<ChatMessage>): String? {
+        val ordered = orderedMessages(messages)
+        val index = ordered.indexOfFirst { it.id == message.id }
+        if (index <= 0) return null
+        return ordered
+            .take(index)
+            .lastOrNull { it.role == MessageRole.user }
+            ?.id
+    }
+
+    private fun hasPendingAssistantPlaceholder(messages: List<ChatMessage>): Boolean {
+        return messages.any { message ->
+            message.role == MessageRole.assistant &&
+                (message.state == MessageState.streaming || isTransientAssistantPlaceholder(message))
+        }
+    }
+
+    private fun hasActiveStreamingMessage(messages: List<ChatMessage>): Boolean {
+        return messages.any { message ->
+            message.state == MessageState.streaming &&
+                (message.role == MessageRole.assistant || message.role == MessageRole.tool)
+        }
+    }
+
+    private fun clearStreamingPointersIfResolved(messages: List<ChatMessage>) {
+        val currentStreamingMessageId = streamingMessageId?.trim()?.takeIf { it.isNotEmpty() } ?: return
+        val stillStreaming = messages.any { message ->
+            message.id == currentStreamingMessageId && message.state == MessageState.streaming
+        }
+        if (!stillStreaming) {
+            streamingMessageId = null
+            streamingContent.clear()
+        }
+    }
+
+    private fun trimToNewestHistoryWindow(messages: List<ChatMessage>): List<ChatMessage> {
+        return newestBoundedHistoryWindowMessages(
+            messages = messages,
+            maxMessages = chatHistoryWindowMaxMessages
+        )
+    }
+
+    private fun trimToOlderHistoryWindow(messages: List<ChatMessage>): List<ChatMessage> {
+        return olderBoundedHistoryWindowMessages(
+            messages = messages,
+            maxMessages = chatHistoryWindowMaxMessages,
+            shouldPreserveActiveMessage = ::shouldPreserveDuringOlderWindowTrim
+        )
+    }
+
+    private fun shouldPreserveDuringOlderWindowTrim(message: ChatMessage): Boolean {
+        return message.state == MessageState.streaming ||
+            isTransientAssistantPlaceholder(message) ||
+            streamingMessageId == message.id ||
+            isTrackedPendingAssistantMessageId(message.id)
+    }
+
+    private fun matchesRequestedChatScope(
+        state: ChatState,
+        gatewayId: String,
+        sessionKey: String
+    ): Boolean {
+        return state.currentGatewayId == gatewayId && sameSessionKey(state.currentSessionKey, sessionKey)
+    }
+
+    private fun isTrackedPendingAssistantMessageId(messageId: String): Boolean {
+        return chatRunScopes.values.any { it.assistantMessageId == messageId }
+    }
+
+    private suspend fun fetchChatHistoryPage(
+        gatewayId: String,
+        sessionKey: String,
+        limit: Int,
+        cursor: String? = null,
+        direction: String = "older"
+    ): ChatHistoryResponse {
+        return chatHistoryPageFetcher?.invoke(gatewayId, sessionKey, limit, cursor, direction)
+            ?: apiClient.fetchChatHistoryPage(gatewayId, sessionKey, limit, cursor, direction)
+    }
+
+    private suspend fun resolvePendingFinalFromHistory(
+        gatewayId: String,
+        sessionKey: String,
+        runId: String,
+        runScope: ChatRunScope
+    ) {
+        val normalizedGatewayId = gatewayId.trim()
+        val normalizedSessionKey = normalizeSessionKey(sessionKey)
+        if (normalizedGatewayId.isBlank() || normalizedSessionKey.isBlank()) return
+        var cursor: String? = null
+        var pageCount = 0
+        try {
+            val startingState = _state.value
+            if (startingState.currentGatewayId == normalizedGatewayId &&
+                sameSessionKey(startingState.currentSessionKey, normalizedSessionKey)
+            ) {
+                _state.value = startingState.copy(
+                    historyWindow = startingState.historyWindow.copy(isCatchingUp = true)
+                )
+            }
+
+            while (pageCount < chatHistoryPendingResolveMaxPages && needsChatFinalSync(runId, runScope)) {
+                val response = retryOnceOnTransientFailure(
+                    operationName = "silent chat history page for $normalizedGatewayId/$normalizedSessionKey"
+                ) {
+                    fetchChatHistoryPage(
+                        normalizedGatewayId,
+                        normalizedSessionKey,
+                        chatHistoryPageSize,
+                        cursor,
+                        "older"
+                    )
+                }
+                val current = _state.value
+                if (current.currentGatewayId != normalizedGatewayId ||
+                    !sameSessionKey(current.currentSessionKey, normalizedSessionKey)
+                ) {
+                    return
+                }
+                val messages = mergeHistoryWithCurrentMessages(
+                    historyMessages = buildHistoryMessagesFromItems(response.items),
+                    currentMessages = current.messages,
+                    currentStreamingMessageId = streamingMessageId,
+                    isTrackedPendingAssistantMessageId = ::isTrackedPendingAssistantMessageId
+                )
+                val ordered = trimToNewestHistoryWindow(messages)
+                _state.value = current.copy(
+                    messages = ordered,
+                    historyWindow = current.historyWindow.copy(
+                        isCatchingUp = true,
+                        hasOlder = response.hasMore,
+                        olderCursor = response.nextCursor,
+                        newestCursor = response.newestCursor ?: current.historyWindow.newestCursor,
+                        loadedMessageCount = ordered.size
+                    ),
+                    isStreaming = hasActiveStreamingMessage(ordered),
+                    isStoppingRun = if (hasActiveStreamingMessage(ordered)) current.isStoppingRun else false
+                )
+                clearStreamingPointersIfResolved(ordered)
+                android.util.Log.d(
+                    "ChatStore",
+                    "Silent chat final sync merged page ${pageCount + 1} with ${response.items.size} history items for $normalizedGatewayId/$normalizedSessionKey"
+                )
+                pageCount += 1
+                cursor = response.nextCursor
+                if (!response.hasMore || cursor.isNullOrBlank()) {
+                    return
+                }
+            }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            android.util.Log.w("ChatStore", "Silent chat final sync failed for $normalizedGatewayId/$normalizedSessionKey", e)
+        } finally {
+            val current = _state.value
+            if (current.currentGatewayId == normalizedGatewayId &&
+                sameSessionKey(current.currentSessionKey, normalizedSessionKey)
+            ) {
+                _state.value = current.copy(
+                    historyWindow = current.historyWindow.copy(isCatchingUp = false)
+                )
+            }
+        }
     }
 
     private fun handleError(payload: JsonElement?) {
@@ -563,6 +814,7 @@ class ChatStore(
             isStreaming = false,
             isStoppingRun = false
         )
+        cancelChatFinalSync(scope?.runScope)
         forgetRunScope(runId.orEmpty(), scope?.runScope)
     }
 
@@ -578,6 +830,7 @@ class ChatStore(
             ?: response?.string("runId", "run_id")
         if (!resolvedRunId.isNullOrBlank()) {
             rememberRunScope(resolvedRunId, scope)
+            scheduleChatFinalSync(resolvedRunId, scope)
         }
     }
 
@@ -678,6 +931,7 @@ class ChatStore(
     private fun completeHiddenRunIfNeeded(runId: String, runScope: ChatRunScope?) {
         val assistantMessageId = runScope?.assistantMessageId ?: return
         if (assistantMessageId != streamingMessageId) return
+        cancelChatFinalSync(runScope)
         streamingMessageId = null
         streamingContent.clear()
         _state.value = _state.value.copy(
@@ -767,7 +1021,7 @@ class ChatStore(
             }
         }
 
-        _state.value = _state.value.copy(messages = messages)
+        _state.value = _state.value.copy(messages = orderedMessages(messages))
     }
 
     fun updateComposerAttachmentUploadMessage(
@@ -812,7 +1066,7 @@ class ChatStore(
                 )
             )
             messages.removeAt(completedDuplicateIndex)
-            _state.value = _state.value.copy(messages = messages)
+            _state.value = _state.value.copy(messages = orderedMessages(messages))
             return
         }
         val uploadItem = ComposerAttachmentUploadItem(
@@ -842,7 +1096,7 @@ class ChatStore(
             sortTimestamp = existing.sortTimestamp
         )
 
-        _state.value = _state.value.copy(messages = messages)
+        _state.value = _state.value.copy(messages = orderedMessages(messages))
     }
 
     @Suppress("ReturnCount")
@@ -906,7 +1160,7 @@ class ChatStore(
                 message.runId == composerAttachmentUploadRunId(attachment)
             messageIndex == index || (!isSameUploadPlaceholder && !sameFileMessage(message, finalMessage))
         }
-        _state.value = _state.value.copy(messages = dedupedMessages)
+        _state.value = _state.value.copy(messages = orderedMessages(dedupedMessages))
         return true
     }
 
@@ -918,7 +1172,7 @@ class ChatStore(
             index == canonicalIndex || !sameFileMessage(message, fileMessage)
         }
         if (deduped.size != currentMessages.size) {
-            _state.value = _state.value.copy(messages = deduped)
+            _state.value = _state.value.copy(messages = orderedMessages(deduped))
         }
     }
 
@@ -962,16 +1216,18 @@ class ChatStore(
         val runScope = ChatRunScope(
             gatewayId = gatewayId,
             sessionKey = sessionKey,
-            assistantMessageId = assistantMsgId
+            assistantMessageId = assistantMsgId,
+            triggeringUserMessageId = userMsg.id
         )
         rememberRunScope(clientRunId, runScope)
         rememberRunScope(requestId, runScope)
         persistSelectedSession(gatewayId, sessionKey)
 
         _state.value = _state.value.copy(
-            messages = _state.value.messages + userMsg + assistantMsg,
+            messages = orderedMessages(_state.value.messages + userMsg + assistantMsg),
             isStreaming = true
         )
+        scheduleChatFinalSync(clientRunId, runScope)
         wsClient.sendChatMessage(
             gatewayId = gatewayId,
             sessionKey = sessionKey,
@@ -1018,16 +1274,18 @@ class ChatStore(
         val runScope = ChatRunScope(
             gatewayId = gatewayId,
             sessionKey = sessionKey,
-            assistantMessageId = assistantMsgId
+            assistantMessageId = assistantMsgId,
+            triggeringUserMessageId = userMsg.id
         )
         rememberRunScope(clientRunId, runScope)
         rememberRunScope(requestId, runScope)
         persistSelectedSession(gatewayId, sessionKey)
 
         _state.value = _state.value.copy(
-            messages = _state.value.messages + userMsg + assistantMsg,
+            messages = orderedMessages(_state.value.messages + userMsg + assistantMsg),
             isStreaming = true
         )
+        scheduleChatFinalSync(clientRunId, runScope)
         wsClient.sendVoiceMessage(
             gatewayId = gatewayId,
             sessionKey = sessionKey,
@@ -1122,76 +1380,92 @@ class ChatStore(
     }
 
     private fun completeCurrentStreamingMessageLocally(runId: String?) {
-        val messages = _state.value.messages.toMutableList()
-        val index = messages.indexOfLast { it.state == MessageState.streaming }
-        if (index >= 0) {
-            val existing = messages[index]
-            val resolvedRunId = runId?.takeIf { it.isNotBlank() } ?: existing.runId
-            if (resolvedRunId.isNotBlank()) {
-                locallyStoppedRunIds.add(resolvedRunId)
-            }
-            val trimmed = existing.content.trim()
-            if (trimmed.isBlank() || trimmed.startsWith("正在连接") || trimmed.startsWith("正在同步")) {
-                messages.removeAt(index)
-            } else {
-                messages[index] = existing.copy(state = MessageState.completed, runId = resolvedRunId)
-            }
-        } else if (!runId.isNullOrBlank()) {
-            locallyStoppedRunIds.add(runId)
+        val result = completeStreamingMessageLocallyAfterStop(_state.value.messages, runId)
+        if (!result.stoppedRunId.isNullOrBlank()) {
+            locallyStoppedRunIds.add(result.stoppedRunId)
         }
 
         ignoreRunlessStoppedEventsUntilMs = System.currentTimeMillis() + stoppedRunlessEventIgnoreWindowMs
+        val runScope = runId?.let { chatRunScopes[it] }
+        cancelChatFinalSync(runScope)
         streamingMessageId = null
         streamingContent.clear()
         _state.value = _state.value.copy(
-            messages = messages,
+            messages = result.messages,
             isStreaming = false,
             isStoppingRun = false
         )
     }
 
-    suspend fun loadHistory(gatewayId: String, sessionKey: String, limit: Int = 50) {
+    suspend fun loadHistory(gatewayId: String, sessionKey: String, limit: Int = chatHistoryPageSize) {
         val normalizedGatewayId = gatewayId.trim()
-        val normalizedSessionKey = sessionKey.trim().ifBlank { defaultSessionKey }
+        val normalizedSessionKey = normalizeSessionKey(sessionKey)
         if (normalizedGatewayId.isBlank()) {
             _state.value = _state.value.copy(isLoading = false, isSwitchingSession = false)
             return
         }
-        _state.value = _state.value.copy(
-            currentGatewayId = normalizedGatewayId,
-            currentSessionKey = normalizedSessionKey,
-            isLoading = true
-        )
+            _state.value = _state.value.copy(
+                currentGatewayId = normalizedGatewayId,
+                currentSessionKey = normalizedSessionKey,
+                isLoading = true,
+                errorMessage = null,
+                historyWindow = ChatHistoryWindowState()
+            )
         persistSelectedSession(normalizedGatewayId, normalizedSessionKey)
         try {
-            val items = retryOnceOnTransientFailure(
+            val response = retryOnceOnTransientFailure(
                 operationName = "chat history for $normalizedGatewayId/$normalizedSessionKey"
             ) {
-                apiClient.fetchChatHistory(normalizedGatewayId, normalizedSessionKey, limit)
+                fetchChatHistoryPage(normalizedGatewayId, normalizedSessionKey, limit)
             }
-            val rawHistoryMessages = buildHistoryMessagesFromItems(items)
+            val rawHistoryMessages = buildHistoryMessagesFromItems(response.items)
             val historyMessages = rawHistoryMessages
             val current = _state.value
-            val messages = if (current.currentGatewayId == normalizedGatewayId && current.currentSessionKey == normalizedSessionKey) {
+            val messages = if (matchesRequestedChatScope(current, normalizedGatewayId, normalizedSessionKey)) {
                 mergeHistoryWithCurrentMessages(
                     historyMessages = historyMessages,
                     currentMessages = current.messages,
                     currentStreamingMessageId = streamingMessageId,
-                    isTrackedPendingAssistantMessageId = { messageId ->
-                        chatRunScopes.values.any { it.assistantMessageId == messageId }
-                    }
+                    isTrackedPendingAssistantMessageId = ::isTrackedPendingAssistantMessageId
                 )
             } else {
                 historyMessages
             }
-            if (current.currentGatewayId == normalizedGatewayId && current.currentSessionKey == normalizedSessionKey) {
-                _state.value = current.copy(messages = messages, isLoading = false, isSwitchingSession = false)
+            val ordered = trimToNewestHistoryWindow(messages)
+            if (matchesRequestedChatScope(current, normalizedGatewayId, normalizedSessionKey)) {
+                _state.value = current.copy(
+                    messages = ordered,
+                    isLoading = false,
+                    isSwitchingSession = false,
+                    isStreaming = hasActiveStreamingMessage(ordered),
+                    isStoppingRun = if (hasActiveStreamingMessage(ordered)) current.isStoppingRun else false,
+                    errorMessage = null,
+                    historyWindow = current.historyWindow.copy(
+                        isLoadingOlder = false,
+                        isCatchingUp = false,
+                        hasOlder = response.hasMore,
+                        olderCursor = response.nextCursor,
+                        newestCursor = response.newestCursor,
+                        loadedMessageCount = ordered.size
+                    )
+                )
+                clearStreamingPointersIfResolved(ordered)
             }
         } catch (e: CancellationException) {
-            _state.value = _state.value.copy(isLoading = false, isSwitchingSession = false)
+            val currentState = _state.value
+            if (matchesRequestedChatScope(currentState, normalizedGatewayId, normalizedSessionKey)) {
+                _state.value = currentState.copy(
+                    isLoading = false,
+                    isSwitchingSession = false,
+                    historyWindow = currentState.historyWindow.copy(isLoadingOlder = false, isCatchingUp = false)
+                )
+            }
             throw e
         } catch (e: Exception) {
             val currentState = _state.value
+            if (!matchesRequestedChatScope(currentState, normalizedGatewayId, normalizedSessionKey)) {
+                return
+            }
             val shouldSuppressError = isTransientLoadFailure(e)
             if (shouldSuppressError) {
                 android.util.Log.w("ChatStore", "Transient timeout while refreshing chat history for $normalizedGatewayId/$normalizedSessionKey", e)
@@ -1199,6 +1473,7 @@ class ChatStore(
             _state.value = currentState.copy(
                 isLoading = false,
                 isSwitchingSession = false,
+                historyWindow = currentState.historyWindow.copy(isLoadingOlder = false, isCatchingUp = false),
                 errorMessage = visibleGatewayLoadErrorMessage(
                     isTransientLoadFailure = shouldSuppressError,
                     rawMessage = e.message
@@ -1207,11 +1482,94 @@ class ChatStore(
         }
     }
 
+    suspend fun loadOlderHistory(gatewayId: String, sessionKey: String) {
+        val normalizedGatewayId = gatewayId.trim()
+        val requestedSessionKey = sessionKey.trim()
+        val normalizedSessionKey = normalizeSessionKey(requestedSessionKey)
+        val current = _state.value
+        val window = current.historyWindow
+        val cursor = window.olderCursor?.trim()?.takeIf { it.isNotEmpty() }
+        if (normalizedGatewayId.isBlank() ||
+            requestedSessionKey.isBlank() ||
+            current.currentGatewayId != normalizedGatewayId ||
+            !sameSessionKey(current.currentSessionKey, normalizedSessionKey) ||
+            !window.hasOlder ||
+            cursor == null ||
+            window.isLoadingOlder
+        ) {
+            return
+        }
+
+        _state.value = current.copy(
+            historyWindow = window.copy(isLoadingOlder = true)
+        )
+        try {
+            val response = retryOnceOnTransientFailure(
+                operationName = "older chat history for $normalizedGatewayId/$normalizedSessionKey"
+            ) {
+                fetchChatHistoryPage(
+                    normalizedGatewayId,
+                    normalizedSessionKey,
+                    chatHistoryPageSize,
+                    cursor,
+                    "older"
+                )
+            }
+            val latest = _state.value
+            if (latest.currentGatewayId != normalizedGatewayId ||
+                !sameSessionKey(latest.currentSessionKey, normalizedSessionKey)
+            ) {
+                return
+            }
+            val messages = mergeHistoryWithCurrentMessages(
+                historyMessages = buildHistoryMessagesFromItems(response.items),
+                currentMessages = latest.messages,
+                currentStreamingMessageId = streamingMessageId,
+                isTrackedPendingAssistantMessageId = ::isTrackedPendingAssistantMessageId
+            )
+            val ordered = trimToOlderHistoryWindow(messages)
+            _state.value = latest.copy(
+                messages = ordered,
+                historyWindow = latest.historyWindow.copy(
+                    isLoadingOlder = false,
+                    hasOlder = response.hasMore,
+                    olderCursor = response.nextCursor,
+                    newestCursor = response.newestCursor ?: latest.historyWindow.newestCursor,
+                    loadedMessageCount = ordered.size
+                ),
+                isStreaming = hasActiveStreamingMessage(ordered),
+                isStoppingRun = if (hasActiveStreamingMessage(ordered)) latest.isStoppingRun else false
+            )
+            clearStreamingPointersIfResolved(ordered)
+        } catch (e: CancellationException) {
+            val latest = _state.value
+            if (latest.currentGatewayId == normalizedGatewayId &&
+                sameSessionKey(latest.currentSessionKey, normalizedSessionKey)
+            ) {
+                _state.value = latest.copy(
+                    historyWindow = latest.historyWindow.copy(isLoadingOlder = false)
+                )
+            }
+            throw e
+        } catch (e: Exception) {
+            val latest = _state.value
+            if (latest.currentGatewayId == normalizedGatewayId &&
+                sameSessionKey(latest.currentSessionKey, normalizedSessionKey)
+            ) {
+                _state.value = latest.copy(
+                    historyWindow = latest.historyWindow.copy(isLoadingOlder = false)
+                )
+            }
+            logWarning("Older chat history load failed for $normalizedGatewayId/$normalizedSessionKey", e)
+        }
+    }
+
     fun connectWebSocket() {
         val url = apiClient.baseUrl
         val token = apiClient.accessToken
         if (url.isNotBlank() && token.isNotBlank()) {
             wsClient.connect(url, token)
+            schedulePendingFinalSyncsForCurrentSession()
         }
     }
 
@@ -1221,6 +1579,7 @@ class ChatStore(
 
     fun resumeWebSocket() {
         wsClient.resumeConnection()
+        schedulePendingFinalSyncsForCurrentSession()
     }
 
     suspend fun loadSessions(gatewayId: String): Boolean {
@@ -1260,15 +1619,18 @@ class ChatStore(
                 currentSessionKey = selected,
                 messages = if (isNewGateway || selected != current) emptyList() else currentState.messages,
                 isSwitchingSession = currentState.isSwitchingSession || isNewGateway || selected != current,
+                historyWindow = if (isNewGateway || selected != current) ChatHistoryWindowState() else currentState.historyWindow,
                 errorMessage = null
             )
             return true
         } catch (e: CancellationException) {
             val currentState = _state.value
+            val isNewGateway = currentState.currentGatewayId != normalizedGatewayId
             _state.value = currentState.copy(
                 currentGatewayId = normalizedGatewayId,
                 currentSessionKey = currentState.currentSessionKey.ifBlank { defaultSessionKey },
-                isSwitchingSession = false
+                isSwitchingSession = false,
+                historyWindow = if (isNewGateway) ChatHistoryWindowState() else currentState.historyWindow
             )
             throw e
         } catch (e: Exception) {
@@ -1276,11 +1638,13 @@ class ChatStore(
             val currentState = _state.value
             val selected = currentState.currentSessionKey.ifBlank { defaultSessionKey }
             val isTransientLoadFailure = isTransientLoadFailure(e)
+            val isNewGateway = currentState.currentGatewayId != normalizedGatewayId
 
             _state.value = currentState.copy(
                 currentGatewayId = normalizedGatewayId,
                 currentSessionKey = selected,
                 isSwitchingSession = false,
+                historyWindow = if (isNewGateway) ChatHistoryWindowState() else currentState.historyWindow,
                 errorMessage = visibleGatewayLoadErrorMessage(
                     isTransientLoadFailure = isTransientLoadFailure,
                     rawMessage = e.message
@@ -1303,6 +1667,16 @@ class ChatStore(
             android.util.Log.w("ChatStore", "Transient timeout while loading $operationName, retrying once", e)
             delay(350)
             block()
+        }
+    }
+
+    private fun logWarning(message: String, throwable: Throwable? = null) {
+        runCatching {
+            if (throwable == null) {
+                android.util.Log.w("ChatStore", message)
+            } else {
+                android.util.Log.w("ChatStore", message, throwable)
+            }
         }
     }
 
@@ -1335,6 +1709,7 @@ class ChatStore(
             isSwitchingSession = true,
             isStreaming = false,
             isStoppingRun = false,
+            historyWindow = ChatHistoryWindowState(),
             errorMessage = null
         )
         streamingMessageId = null
@@ -1357,6 +1732,7 @@ class ChatStore(
             isSwitchingSession = true,
             isStreaming = false,
             isStoppingRun = false,
+            historyWindow = ChatHistoryWindowState(),
             errorMessage = null
         )
         streamingMessageId = null
@@ -1376,6 +1752,7 @@ class ChatStore(
             isSwitchingSession = false,
             isStreaming = false,
             isStoppingRun = false,
+            historyWindow = ChatHistoryWindowState(),
             errorMessage = null
         )
         current.currentGatewayId?.let { gatewayId ->
@@ -1399,7 +1776,13 @@ class ChatStore(
     }
 
     fun clearMessages() {
-        _state.value = _state.value.copy(messages = emptyList(), isSwitchingSession = false, isStoppingRun = false, isStreaming = false)
+        _state.value = _state.value.copy(
+            messages = emptyList(),
+            isSwitchingSession = false,
+            isStoppingRun = false,
+            isStreaming = false,
+            historyWindow = ChatHistoryWindowState()
+        )
         streamingMessageId = null
         streamingContent.clear()
         abortRequestIds.clear()
@@ -1537,6 +1920,7 @@ class ChatStore(
             currentSessionKey = nextSessionKey,
             messages = if (isActiveDeleted) emptyList() else current.messages,
             isSwitchingSession = current.isSwitchingSession || isActiveDeleted,
+            historyWindow = if (isActiveDeleted) ChatHistoryWindowState() else current.historyWindow,
             contextUsageLinesByGatewayAndSession = current.contextUsageLinesByGatewayAndSession.toMutableMap().also { byGateway ->
                 val usageBySession = byGateway[gatewayId]?.toMutableMap() ?: return@also
                 usageBySession.keys
@@ -1576,5 +1960,44 @@ class ChatStore(
         const val stoppedRunlessEventIgnoreWindowMs = 15_000L
         const val maxLocallyStoppedRunIds = 64
         const val maxChatRunScopes = 256
+        const val chatFinalSyncInitialDelayMs = 2_500L
+        const val chatFinalSyncFastRetryDelayMs = 4_000L
+        const val chatFinalSyncSlowRetryDelayMs = 8_000L
+        const val chatFinalSyncMaxAttempts = 60
+        const val chatHistoryPageSize = 100
+        const val chatHistoryWindowMaxMessages = 500
+        const val chatHistoryPendingResolveMaxPages = 5
     }
+}
+
+internal fun newestBoundedHistoryWindowMessages(
+    messages: List<ChatMessage>,
+    maxMessages: Int
+): List<ChatMessage> {
+    if (maxMessages <= 0) return emptyList()
+    return orderMessagesWithSourceRunAnchors(messages).takeLast(maxMessages)
+}
+
+internal fun olderBoundedHistoryWindowMessages(
+    messages: List<ChatMessage>,
+    maxMessages: Int,
+    shouldPreserveActiveMessage: (ChatMessage) -> Boolean
+): List<ChatMessage> {
+    if (maxMessages <= 0) return emptyList()
+    val ordered = orderMessagesWithSourceRunAnchors(messages)
+    if (ordered.size <= maxMessages) return ordered
+
+    val oldestWindow = ordered.take(maxMessages)
+    val oldestWindowIds = oldestWindow.mapTo(mutableSetOf()) { it.id }
+    val activeMessagesOutsideOldestWindow = ordered.filter { message ->
+        message.id !in oldestWindowIds && shouldPreserveActiveMessage(message)
+    }
+    if (activeMessagesOutsideOldestWindow.isEmpty()) {
+        return oldestWindow
+    }
+
+    val retainedOldestCount = (maxMessages - activeMessagesOutsideOldestWindow.size).coerceAtLeast(0)
+    val retainedOldestWindow = oldestWindow.take(retainedOldestCount)
+    return orderMessagesWithSourceRunAnchors(retainedOldestWindow + activeMessagesOutsideOldestWindow)
+        .take(maxMessages)
 }

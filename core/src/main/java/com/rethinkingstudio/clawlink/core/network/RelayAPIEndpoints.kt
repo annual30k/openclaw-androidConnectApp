@@ -55,10 +55,27 @@ object APIEndpoints {
         }
 
         object Chat {
-            fun history(gatewayID: String, sessionKey: String, limit: Int) = APIEndpoint(
-                HTTPMethod.GET, "/api/mobile/gateways/${pathSegment(gatewayID)}/chat/history",
-                listOf("sessionKey" to queryValue(sessionKey), "limit" to limit.toString())
-            )
+            fun history(
+                gatewayID: String,
+                sessionKey: String,
+                limit: Int,
+                cursor: String? = null,
+                direction: String = "older"
+            ): APIEndpoint {
+                val queries = mutableListOf(
+                    "sessionKey" to queryValue(sessionKey),
+                    "limit" to limit.toString()
+                )
+                cursor?.trim()?.takeIf { it.isNotEmpty() }?.let {
+                    queries.add("cursor" to queryValue(it))
+                }
+                queries.add("direction" to queryValue(direction))
+                return APIEndpoint(
+                    HTTPMethod.GET,
+                    "/api/mobile/gateways/${pathSegment(gatewayID)}/chat/history",
+                    queries
+                )
+            }
             fun ready(gatewayID: String) = APIEndpoint(HTTPMethod.GET, "/api/mobile/gateways/${pathSegment(gatewayID)}/chat/ready")
             fun sessions(gatewayID: String, limit: Int = 50, activeMinutes: Int? = null, includeGlobal: Boolean = true, includeUnknown: Boolean = false): APIEndpoint {
                 val queries = mutableListOf("limit" to limit.toString(), "includeGlobal" to includeGlobal.toString(), "includeUnknown" to includeUnknown.toString())

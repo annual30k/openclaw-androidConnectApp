@@ -41,7 +41,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
@@ -115,13 +114,14 @@ private fun LaunchRoot(container: AppContainer) {
     }
 
     Box(modifier = Modifier.fillMaxSize()) {
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .scale(if (launchPhase == LaunchPhase.Content) 1f else 0.995f)
-        ) {
-            ClawLinkBackdrop()
-            AppNavigation(container = container)
+        if (launchPhase == LaunchPhase.Content) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+            ) {
+                ClawLinkBackdrop()
+                AppNavigation(container = container)
+            }
         }
 
         AnimatedVisibility(

@@ -68,6 +68,37 @@ class ChatSessionSelectionHelpersTest {
     }
 
     @Test
+    fun keepsSwitchingSessionWhenItExistsInFetchedSessions() {
+        val shouldKeep = shouldKeepCurrentSessionAfterLoad(
+            sessions = listOf(
+                ChatSessionItem(sessionKey = "main", lastActivityAt = "2026-05-24T14:41:00Z"),
+                ChatSessionItem(sessionKey = "session_selected", lastActivityAt = "2026-05-24T14:40:00Z")
+            ),
+            currentSessionKey = "session_selected",
+            hasCurrentMessages = false,
+            isSwitchingSession = true,
+            isNewGateway = false
+        )
+
+        assertEquals(true, shouldKeep)
+    }
+
+    @Test
+    fun doesNotKeepSwitchingSessionWhenItIsStale() {
+        val shouldKeep = shouldKeepCurrentSessionAfterLoad(
+            sessions = listOf(
+                ChatSessionItem(sessionKey = "main", lastActivityAt = "2026-05-24T14:41:00Z")
+            ),
+            currentSessionKey = "session_deleted",
+            hasCurrentMessages = false,
+            isSwitchingSession = true,
+            isNewGateway = false
+        )
+
+        assertEquals(false, shouldKeep)
+    }
+
+    @Test
     fun doesNotKeepEmptyCurrentSessionWhenItIsNotMostRecentFetchedSession() {
         val shouldKeep = shouldKeepCurrentSessionAfterLoad(
             sessions = listOf(
