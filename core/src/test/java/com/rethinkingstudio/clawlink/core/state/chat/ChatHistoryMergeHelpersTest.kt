@@ -1183,6 +1183,60 @@ class ChatHistoryMergeHelpersTest {
     }
 
     @Test
+    fun dropsFailedUploadPlaceholderWhenCompletedImageExistsInHistory() {
+        val historyImage = ChatMessage(
+            id = "history-image",
+            role = MessageRole.user,
+            state = MessageState.completed,
+            content = "photo.jpg",
+            contentBlocks = listOf(
+                RelayChatContentBlock(
+                    type = "image",
+                    fileId = "file-photo",
+                    fileName = "photo.jpg",
+                    mimeType = "image/jpeg",
+                    sizeBytes = 12345,
+                    downloadUrl = "/api/mobile/files/file-photo",
+                    gatewayId = "gw-hermes",
+                    sessionKey = "android-e2e-hermes"
+                )
+            ),
+            runId = "file-file-photo",
+            sortTimestamp = 101.0
+        )
+        val failedUpload = ChatMessage(
+            id = "upload-photo",
+            role = MessageRole.user,
+            state = MessageState.failed,
+            content = "photo.jpg",
+            contentBlocks = listOf(
+                RelayChatContentBlock(
+                    type = "image",
+                    fileName = "photo.jpg",
+                    mimeType = "image/jpeg",
+                    sizeBytes = 12345,
+                    downloadUrl = "file:///tmp/photo.jpg",
+                    gatewayId = "gw-hermes",
+                    sessionKey = "android-e2e-hermes"
+                )
+            ),
+            runId = "upload-photo",
+            sortTimestamp = 100.0
+        )
+
+        val merged = mergeHistoryWithCurrentMessages(
+            historyMessages = listOf(historyImage),
+            currentMessages = listOf(failedUpload),
+            currentStreamingMessageId = null,
+            isTrackedPendingAssistantMessageId = { false }
+        )
+
+        assertEquals(listOf("file-file-photo"), merged.map { it.runId })
+        assertEquals(MessageState.completed, merged.single().state)
+        assertEquals("file-photo", merged.single().fileContentBlocks.single().fileId)
+    }
+
+    @Test
     fun dropsCompletedLocalFileWhenDesktopHistoryDoesNotReferenceIt() {
         val fileBlock = RelayChatContentBlock(
             type = "image",
@@ -1433,6 +1487,52 @@ class ChatHistoryMergeHelpersTest {
         assertEquals(listOf("file-photo-1", "history-assistant"), messages.map { it.runId })
         assertEquals("分析一下这张图片", messages.first().content)
         assertEquals(listOf(fileBlock), messages.first().fileContentBlocks)
+    }
+
+    @Test
+    fun coalescesCompactMediaUriEchoIntoLocalImagePrompt() {
+        val localImageBlock = RelayChatContentBlock(
+            type = "image",
+            fileName = "album-8E28059F-104B-43E1-8059-2E97E07F0E1B.heic",
+            mimeType = "image/heic",
+            downloadUrl = "file:///tmp/album-8E28059F-104B-43E1-8059-2E97E07F0E1B.heic"
+        )
+        val messages = orderMessagesWithSourceRunAnchors(
+            listOf(
+                ChatMessage(
+                    id = "local-image",
+                    role = MessageRole.user,
+                    content = "分析一下这张图片",
+                    contentBlocks = listOf(localImageBlock),
+                    runId = "local-user-mobile-run",
+                    sortTimestamp = 100.0
+                ),
+                ChatMessage(
+                    id = "history-media-echo",
+                    role = MessageRole.user,
+                    content = """
+                        分析一下这张图片
+
+                        [media attached: media://inbound/album-8E28059F-104B-43E1-8059-2E97E07F0E1B---d786f4a0-bb83-4853-97ae-cb7a604326e0.heic]
+                    """.trimIndent(),
+                    runId = "history-media-echo",
+                    sortTimestamp = 101.0
+                ),
+                ChatMessage(
+                    id = "history-answer",
+                    role = MessageRole.assistant,
+                    content = "这是一张花的图片。",
+                    runId = "history-answer",
+                    sortTimestamp = 102.0
+                )
+            )
+        )
+
+        assertEquals(listOf("local-user-mobile-run", "history-answer"), messages.map { it.runId })
+        assertEquals("分析一下这张图片", messages.first().content)
+        assertEquals(1, messages.first().fileContentBlocks.size)
+        assertEquals("file:///tmp/album-8E28059F-104B-43E1-8059-2E97E07F0E1B.heic", messages.first().fileContentBlocks.first().downloadUrl)
+        assertFalse(messages.any { it.content.contains("media://inbound") })
     }
 
     @Test

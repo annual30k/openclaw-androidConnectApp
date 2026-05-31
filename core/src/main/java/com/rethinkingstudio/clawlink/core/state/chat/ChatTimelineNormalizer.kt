@@ -7,9 +7,6 @@ import com.rethinkingstudio.clawlink.core.models.chat.RelayChatContentBlock
 
 private const val mediaPromptMergeWindowSeconds = 600.0
 private const val plainDuplicateWindowSeconds = 180.0
-private val mediaReferenceRegex = Regex(
-    "(?m)[ \\t]*\\[media attached:\\s*(.+?)\\s*\\((.+?)\\)\\s*\\|\\s*(.+?)][ \\t]*"
-)
 private const val internalContinuationMarker =
     "The previous attempt did not produce a user-visible answer. Continue from the current state and produce the visible answer now. Do not restart from scratch."
 
@@ -429,16 +426,28 @@ private fun isInternalVisionContextToolMessage(message: ChatMessage): Boolean {
 }
 
 private fun mediaReferences(text: String): List<MediaReference> {
-    val normalized = text.replace("\r\n", "\n").replace("\r", "\n")
-    return mediaReferenceRegex.findAll(normalized).mapNotNull { match ->
-        val mimeType = match.groupValues.getOrNull(2)?.trim()?.takeIf { it.isNotEmpty() }
-            ?: "application/octet-stream"
-        val path = match.groupValues.getOrNull(3)?.trim()?.takeIf { it.isNotEmpty() }
-            ?: match.groupValues.getOrNull(1)?.trim()?.takeIf { it.isNotEmpty() }
-            ?: return@mapNotNull null
-        val fileName = path.substringAfterLast('/').substringAfterLast('\\').trim().ifBlank { "attachment" }
-        MediaReference(path = path, mimeType = mimeType, fileName = fileName)
-    }.toList()
+    return chatMediaAttachmentReferences(text).map { reference ->
+        MediaReference(
+            path = reference.path,
+            mimeType = reference.mimeType ?: inferMediaReferenceMimeType(reference.fileName),
+            fileName = reference.fileName
+        )
+    }
+}
+
+private fun inferMediaReferenceMimeType(fileName: String): String {
+    val lower = fileName.lowercase()
+    return when {
+        lower.endsWith(".png") -> "image/png"
+        lower.endsWith(".jpg") || lower.endsWith(".jpeg") -> "image/jpeg"
+        lower.endsWith(".heic") || lower.endsWith(".heif") -> "image/heic"
+        lower.endsWith(".gif") -> "image/gif"
+        lower.endsWith(".webp") -> "image/webp"
+        lower.endsWith(".m4a") -> "audio/mp4"
+        lower.endsWith(".mp3") -> "audio/mpeg"
+        lower.endsWith(".wav") -> "audio/wav"
+        else -> "application/octet-stream"
+    }
 }
 
 private fun timestampsAreClose(

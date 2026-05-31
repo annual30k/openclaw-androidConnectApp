@@ -27,6 +27,21 @@ class ChatAttachmentMessageHelpersTest {
     }
 
     @Test
+    fun stripsCompactMediaUriAttachmentReferencesFromChatMessageText() {
+        val text = """
+            分析一下这张图片
+
+            [media attached: media://inbound/album-8E28059F-104B-43E1-8059-2E97E07F0E1B---d786f4a0-bb83-4853-97ae-cb7a604326e0.heic]
+        """.trimIndent()
+
+        assertEquals("分析一下这张图片", sanitizeChatMessageText(text))
+        assertEquals(
+            listOf("album-8E28059F-104B-43E1-8059-2E97E07F0E1B---d786f4a0-bb83-4853-97ae-cb7a604326e0.heic"),
+            chatMediaAttachmentReferenceFileNames(text)
+        )
+    }
+
+    @Test
     fun stripsRelayFileAttachmentReferencesFromChatMessageText() {
         val text = """
             请看看这个文件

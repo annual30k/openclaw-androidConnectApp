@@ -23,7 +23,7 @@ internal fun mergeCompletedFileMessage(existing: ChatMessage, completed: ChatMes
         }
         val localPreviewPath = localBlock?.fileDownloadURLString
             ?.trim()
-            ?.takeIf { it.isNotEmpty() && File(it).exists() }
+            ?.takeIf { it.isNotEmpty() && isLocalPreviewReference(it) }
         if (localPreviewPath != null) {
             completedBlock.copy(
                 downloadUrl = localPreviewPath,
@@ -37,6 +37,12 @@ internal fun mergeCompletedFileMessage(existing: ChatMessage, completed: ChatMes
     return completed.copy(contentBlocks = mergedBlocks)
 }
 
+private fun isLocalPreviewReference(value: String): Boolean {
+    return value.startsWith("file://", ignoreCase = true) ||
+        value.startsWith("content://", ignoreCase = true) ||
+        File(value).exists()
+}
+
 private fun sameTransferIdentity(left: RelayChatContentBlock, right: RelayChatContentBlock): Boolean {
     val leftName = left.fileDisplayName?.trim().orEmpty()
     val rightName = right.fileDisplayName?.trim().orEmpty()
@@ -44,13 +50,22 @@ private fun sameTransferIdentity(left: RelayChatContentBlock, right: RelayChatCo
 
     val leftMime = left.mimeType?.trim().orEmpty()
     val rightMime = right.mimeType?.trim().orEmpty()
-    if (leftMime.isNotBlank() && rightMime.isNotBlank() && !leftMime.equals(rightMime, ignoreCase = true)) {
+    if (!attachmentMimeTypesCompatible(leftMime.lowercase(), rightMime.lowercase())) {
         return false
     }
 
     val leftSize = left.sizeBytes?.takeIf { it > 0 }
     val rightSize = right.sizeBytes?.takeIf { it > 0 }
     return leftSize == null || rightSize == null || leftSize == rightSize
+}
+
+private fun attachmentMimeTypesCompatible(left: String, right: String): Boolean {
+    if (left.isBlank() || right.isBlank()) return true
+    if (left == right) return true
+    if (left == "application/octet-stream" || right == "application/octet-stream") return true
+    if (left.startsWith("image/") && right.startsWith("image/")) return true
+    if (left.startsWith("audio/") && right.startsWith("audio/")) return true
+    return false
 }
 
 internal fun makeComposerAttachmentUploadContentBlock(
@@ -130,6 +145,9 @@ private val hermesRuntimeContextRegex = Regex(
 private val mediaAttachmentReferenceRegex = Regex(
     "(?m)[ \\t]*\\[media attached:\\s*(.+?)\\s*\\((.+?)\\)\\s*\\|\\s*(.+?)][ \\t]*"
 )
+private val compactMediaAttachmentReferenceRegex = Regex(
+    "(?m)[ \\t]*\\[media attached:\\s*([^\\]\\n]+)][ \\t]*"
+)
 private val fileAttachmentReferenceRegex = Regex(
     "(?m)[ \\t]*\\[file attached:\\s*.+?][ \\t]*"
 )
@@ -147,6 +165,7 @@ internal fun sanitizeChatMessageText(text: String): String {
         .replace(ansiEscapeRegex, "")
         .replace(hermesRuntimeContextRegex, "$1")
         .replace(mediaAttachmentReferenceRegex, "")
+        .replace(compactMediaAttachmentReferenceRegex, "")
         .replace(fileAttachmentReferenceRegex, "")
         .replace(mobileBridgeTimestampPrefixRegex, "")
         .replace("\u001B", "")
@@ -155,22 +174,57 @@ internal fun sanitizeChatMessageText(text: String): String {
 }
 
 internal fun chatMediaAttachmentReferenceFileNames(text: String): List<String> {
+    return chatMediaAttachmentReferences(text).map { it.fileName }
+}
+
+internal fun chatMediaAttachmentReferences(text: String): List<ChatMediaAttachmentReference> {
     val normalized = text
         .replace("\r\n", "\n")
         .replace("\r", "\n")
-    return mediaAttachmentReferenceRegex.findAll(normalized)
+    val legacyMatches = mediaAttachmentReferenceRegex.findAll(normalized).mapNotNull { match ->
+        val resolvedPath = match.groupValues.getOrNull(3)
+            ?.trim()
+            ?.takeIf { it.isNotEmpty() }
+            ?: match.groupValues.getOrNull(1)?.trim()?.takeIf { it.isNotEmpty() }
+        resolvedPath?.let { path ->
+            ChatMediaAttachmentReference(
+                path = path,
+                mimeType = match.groupValues.getOrNull(2)?.trim()?.takeIf { it.isNotEmpty() },
+                fileName = path.mediaReferenceFileName()
+            )
+        }
+    }.toList()
+    val legacyRanges = mediaAttachmentReferenceRegex.findAll(normalized).map { it.range }.toList()
+    val compactMatches = compactMediaAttachmentReferenceRegex.findAll(normalized)
+        .filterNot { match -> legacyRanges.any { range -> match.range.first <= range.last && range.first <= match.range.last } }
         .mapNotNull { match ->
-            val resolvedPath = match.groupValues.getOrNull(3)
+            match.groupValues.getOrNull(1)
                 ?.trim()
                 ?.takeIf { it.isNotEmpty() }
-                ?: match.groupValues.getOrNull(1)?.trim()?.takeIf { it.isNotEmpty() }
-            resolvedPath
-                ?.substringAfterLast('/')
-                ?.substringAfterLast('\\')
-                ?.trim()
-                ?.takeIf { it.isNotEmpty() }
+                ?.let { path ->
+                    ChatMediaAttachmentReference(
+                        path = path,
+                        mimeType = null,
+                        fileName = path.mediaReferenceFileName()
+                    )
+                }
         }
         .toList()
+    return legacyMatches + compactMatches
+}
+
+internal data class ChatMediaAttachmentReference(
+    val path: String,
+    val mimeType: String?,
+    val fileName: String
+)
+
+private fun String.mediaReferenceFileName(): String {
+    return substringAfterLast('/')
+        .substringAfterLast('\\')
+        .trim()
+        .takeIf { it.isNotEmpty() }
+        ?: "attachment"
 }
 
 internal fun sanitizeChatDisplayText(text: String): String {

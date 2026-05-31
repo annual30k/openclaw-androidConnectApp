@@ -2,6 +2,8 @@ package com.rethinkingstudio.clawlink.ui.screens.chat.components
 
 import com.rethinkingstudio.clawlink.core.models.chat.MessageRole
 import com.rethinkingstudio.clawlink.core.models.chat.MessageState
+import androidx.compose.ui.unit.dp
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -88,6 +90,13 @@ class MessageBubblePresentationTest {
                 hasVoiceBlocks = false
             )
         )
+    }
+
+    @Test
+    fun mixedMediaBubbleWidthUsesAvailableRowSpace() {
+        assertEquals(336.dp, mixedMediaBubbleWidth(390.dp))
+        assertEquals(560.dp, mixedMediaBubbleWidth(728.dp))
+        assertEquals(0.dp, mixedMediaBubbleWidth(44.dp))
     }
 
     @Test

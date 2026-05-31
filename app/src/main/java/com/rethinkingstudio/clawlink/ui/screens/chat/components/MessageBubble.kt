@@ -156,7 +156,7 @@ internal fun MessageBubble(
             return@Column
         }
         BoxWithConstraints(modifier = Modifier.fillMaxWidth(), contentAlignment = if (isUser) Alignment.CenterEnd else Alignment.CenterStart) {
-            val expandedBubbleWidth = minOf(maxWidth * 0.88f, 326.dp)
+            val expandedBubbleWidth = mixedMediaBubbleWidth(maxWidth)
             val embeddedImageMaxWidth = maxOf(120.dp, expandedBubbleWidth - 32.dp)
             Surface(
                 color = if (isUser) ChatColors.userBubble else MaterialTheme.colorScheme.surface.copy(alpha = 0.96f),
@@ -278,6 +278,11 @@ internal fun shouldUseExpandedMixedMediaBubble(
     hasFileBlocks: Boolean,
     hasVoiceBlocks: Boolean
 ): Boolean = displayText.isNotBlank() && (hasFileBlocks || hasVoiceBlocks)
+
+internal fun mixedMediaBubbleWidth(availableRowWidth: Dp): Dp {
+    val usableWidth = (availableRowWidth - 54.dp).coerceAtLeast(0.dp)
+    return minOf(usableWidth, 560.dp)
+}
 
 @Composable
 internal fun MessageFooter(title: String, createdAt: String, isUser: Boolean, modifier: Modifier = Modifier) {

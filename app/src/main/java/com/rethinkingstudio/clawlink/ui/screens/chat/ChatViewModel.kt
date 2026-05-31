@@ -433,6 +433,16 @@ internal class ChatViewModel(
             return
         }
 
+        if (attachments.isEmpty()) {
+            chatStore.sendMessage(
+                content = trimmed,
+                gatewayId = gatewayId
+            )
+            messageText = ""
+            composerNotice = null
+            return
+        }
+
         isUploadingAttachment = true
         try {
             composerAttachmentUploadItems = attachments.map { attachment ->

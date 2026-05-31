@@ -36,7 +36,16 @@ internal object ChatTimelineReducer {
     private fun ChatTimelineState.applyUserTurn(event: TimelineEvent.TurnUserCreated): ChatTimelineState {
         if (messages.any { it.id == event.messageId }) return this
         val localIndex = messages.indexOfFirst { it.runId == "local-user-${event.turnId}" }
-        val existing = messages.getOrNull(localIndex)
+            .takeIf { it >= 0 }
+            ?: matchingLocalUserIndex(
+                excludingMessageId = event.messageId,
+                turnId = event.turnId,
+                runId = null,
+                content = event.content.timelineText(),
+                contentBlocks = event.content,
+                createdAt = event.createdAt
+            )
+        val existing = localIndex?.let(messages::getOrNull)
         val message = ChatMessage(
             id = event.messageId,
             role = MessageRole.user,
@@ -44,11 +53,12 @@ internal object ChatTimelineReducer {
             content = event.content.timelineText(),
             contentBlocks = event.content,
             createdAt = event.createdAt.orEmpty().ifBlank { existing?.createdAt.orEmpty() },
-            runId = "local-user-${event.turnId}",
+            runId = existing?.runId?.takeIf { it.startsWith("local-user-") } ?: "local-user-${event.turnId}",
             sortTimestamp = existing?.sortTimestamp ?: timelineSortTimestamp(event.createdAt)
         )
-        if (localIndex < 0) return copy(messages = messages + message)
-        return copy(messages = messages.toMutableList().also { it[localIndex] = message })
+        if (localIndex == null || localIndex < 0) return copy(messages = messages + message)
+        val mergedMessage = existing?.let { mergeLocalUserMessage(local = it, incoming = message) } ?: message
+        return copy(messages = messages.toMutableList().also { it[localIndex] = mergedMessage })
     }
 
     private fun ChatTimelineState.applyPartDelta(event: TimelineEvent.MessagePartDelta): ChatTimelineState {
@@ -275,8 +285,66 @@ internal object ChatTimelineReducer {
                     runId = item.runId?.takeIf { it.isNotBlank() } ?: item.messageId,
                     sortTimestamp = sortTimestamp
                 )
+                val localUser = if (message.role == MessageRole.user) {
+                    nextState.matchingLocalUser(
+                        excludingMessageId = item.messageId,
+                        turnId = item.turnId,
+                        runId = item.runId,
+                        content = item.displayText,
+                        contentBlocks = item.content,
+                        createdAt = item.createdAt
+                    )
+                } else {
+                    null
+                }
+                val localPlaceholder = if (
+                    message.role == MessageRole.assistant &&
+                    message.state == MessageState.completed &&
+                    message.hasRenderableTimelineCompletedContent()
+                ) {
+                    nextState.messages.firstOrNull { candidate ->
+                        candidate.id != item.messageId &&
+                            candidate.role == MessageRole.assistant &&
+                            candidate.state == MessageState.streaming &&
+                            isTransientAssistantPlaceholder(candidate) &&
+                            nextState.historyItemMatchesPlaceholder(item, candidate)
+                    }
+                } else {
+                    null
+                }
+                val placeholderRunId = localPlaceholder?.runId?.takeIf { it.isNotBlank() }
+                val messageForUpsert = if (localPlaceholder != null && (message.sortTimestamp == null || item.createdAt.isNullOrBlank())) {
+                    message.copy(
+                        createdAt = message.createdAt.ifBlank { localPlaceholder.createdAt },
+                        sortTimestamp = localPlaceholder.sortTimestamp
+                    )
+                } else {
+                    message
+                }
+                val turnIdsToClear = buildSet {
+                    item.turnId.takeIf { it.isNotBlank() }?.let { turnId ->
+                        if (nextState.activeRunsByTurnId[turnId] == placeholderRunId) add(turnId)
+                    }
+                    placeholderRunId?.let { runId ->
+                        nextState.activeTurnByRunId[runId]?.let(::add)
+                    }
+                }
                 nextState = nextState.copy(
-                    messages = nextState.upsertMessage(message),
+                    messages = nextState.upsertMessage(
+                        message = localUser?.let { mergeLocalUserMessage(local = it, incoming = messageForUpsert) } ?: messageForUpsert,
+                        replaceMessageId = localUser?.id ?: localPlaceholder?.id
+                    ),
+                    activeRunId = if (nextState.activeRunId != null && nextState.activeRunId == placeholderRunId) {
+                        null
+                    } else {
+                        nextState.activeRunId
+                    },
+                    activeRunsByTurnId = nextState.activeRunsByTurnId
+                        .filterKeys { turnId -> turnId !in turnIdsToClear }
+                        .filterValues { activeRunId -> activeRunId != placeholderRunId },
+                    activeTurnByRunId = nextState.activeTurnByRunId
+                        .filterKeys { activeRunId -> activeRunId != placeholderRunId }
+                        .filterValues { turnId -> turnId !in turnIdsToClear },
                     historySnapshotTurnIds = nextState.historySnapshotTurnIds + item.turnId,
                     historySnapshotMessageIds = nextState.historySnapshotMessageIds + item.messageId
                 )
@@ -303,6 +371,78 @@ internal object ChatTimelineReducer {
     private fun ChatTimelineState.latestKnownSortTimestamp(): Double? {
         return messages.maxOfOrNull { it.sortTimestamp ?: Double.NEGATIVE_INFINITY }
             ?.takeIf { it != Double.NEGATIVE_INFINITY }
+    }
+
+    private fun ChatTimelineState.historyItemMatchesPlaceholder(
+        item: HistorySnapshotItem,
+        message: ChatMessage
+    ): Boolean {
+        val runId = item.runId?.takeIf { it.isNotBlank() }
+        if (runId != null && message.runId == runId) return true
+
+        val turnId = item.turnId.takeIf { it.isNotBlank() } ?: return false
+        if (messagePartsById[message.id]?.turnId == turnId) return true
+        if (activeRunsByTurnId[turnId] == message.runId) return true
+        return activeTurnByRunId[message.runId] == turnId
+    }
+
+    private fun ChatTimelineState.matchingLocalUser(
+        excludingMessageId: String,
+        turnId: String?,
+        runId: String?,
+        content: String,
+        contentBlocks: List<RelayChatContentBlock>,
+        createdAt: String?
+    ): ChatMessage? {
+        return matchingLocalUserIndex(
+            excludingMessageId = excludingMessageId,
+            turnId = turnId,
+            runId = runId,
+            content = content,
+            contentBlocks = contentBlocks,
+            createdAt = createdAt
+        )?.let(messages::get)
+    }
+
+    private fun ChatTimelineState.matchingLocalUserIndex(
+        excludingMessageId: String,
+        turnId: String?,
+        runId: String?,
+        content: String,
+        contentBlocks: List<RelayChatContentBlock>,
+        createdAt: String?
+    ): Int? {
+        val localRunIds = listOfNotNull(
+            turnId?.takeIf { it.isNotBlank() },
+            runId?.takeIf { it.isNotBlank() }
+        ).map { "local-user-$it" }.toSet()
+        if (localRunIds.isNotEmpty()) {
+            val explicitIndex = messages.indexOfLast { message ->
+                message.role == MessageRole.user &&
+                    message.id != excludingMessageId &&
+                    message.runId in localRunIds
+            }
+            if (explicitIndex >= 0) return explicitIndex
+        }
+
+        val incomingTimestamp = timelineSortTimestamp(createdAt)
+        val incomingUserText = userPromptText(content = content, contentBlocks = contentBlocks)
+        val candidates = messages.indices.filter { index ->
+            val message = messages[index]
+            if (message.role != MessageRole.user ||
+                message.id == excludingMessageId ||
+                !message.runId.startsWith("local-user-") ||
+                normalizeTimelineUserText(message.content) != normalizeTimelineUserText(incomingUserText)
+            ) {
+                return@filter false
+            }
+            if (fileContentBlocksOverlap(message.contentBlocks, contentBlocks)) {
+                return@filter true
+            }
+            val localTimestamp = message.sortTimestamp
+            incomingTimestamp != null && localTimestamp != null && kotlin.math.abs(incomingTimestamp - localTimestamp) < 180.0
+        }
+        return candidates.singleOrNull()
     }
 
     private fun ChatTimelineState.matchesTerminalRun(message: ChatMessage, turnId: String?, runId: String?): Boolean {
@@ -410,6 +550,91 @@ internal object ChatTimelineReducer {
         val eventId = event.eventId?.takeIf { it.isNotBlank() } ?: return this
         return copy(seenEventIds = seenEventIds + eventId)
     }
+}
+
+private fun ChatMessage.hasRenderableTimelineCompletedContent(): Boolean {
+    return content.trim().isNotEmpty() || contentBlocks.hasRenderableTimelineCompletedContent()
+}
+
+private fun mergeLocalUserMessage(local: ChatMessage, incoming: ChatMessage): ChatMessage {
+    val mergedBlocks = mergedLocalUserContentBlocks(local = local, incoming = incoming)
+    return incoming.copy(
+        content = local.content.takeIf { it.trim().isNotEmpty() } ?: incoming.content,
+        contentBlocks = mergedBlocks,
+        createdAt = incoming.createdAt.ifBlank { local.createdAt },
+        runId = local.runId.takeIf { it.startsWith("local-user-") } ?: incoming.runId,
+        sortTimestamp = local.sortTimestamp ?: incoming.sortTimestamp
+    )
+}
+
+private fun mergedLocalUserContentBlocks(local: ChatMessage, incoming: ChatMessage): List<RelayChatContentBlock> {
+    if (local.contentBlocks.isEmpty()) return incoming.contentBlocks
+    if (incoming.contentBlocks.isEmpty()) return local.contentBlocks
+    if (local.hasFileContent && incoming.hasFileContent) {
+        return mergeCompletedFileMessage(existing = local, completed = incoming).contentBlocks
+    }
+    return local.contentBlocks
+}
+
+private fun normalizeTimelineUserText(value: String): String {
+    return sanitizeChatMessageText(value)
+        .trim()
+        .replace(Regex("[\\s\\u2000-\\u200A\\u202F\\u205F\\u3000]+"), " ")
+        .lowercase()
+}
+
+private fun userPromptText(content: String, contentBlocks: List<RelayChatContentBlock>): String {
+    val blockText = contentBlocks.mapNotNull { block ->
+        if (block.isFileBlock || block.isVoiceMessageBlock || block.isToolCallBlock || block.isToolResultBlock) {
+            null
+        } else {
+            block.text?.trim()?.takeIf { it.isNotEmpty() }
+        }
+    }.joinToString("\n\n")
+    return blockText.ifBlank { content }
+}
+
+private fun fileContentBlocksOverlap(
+    left: List<RelayChatContentBlock>,
+    right: List<RelayChatContentBlock>
+): Boolean {
+    val leftBlocks = left.filter { it.isFileBlock }
+    val rightBlocks = right.filter { it.isFileBlock }
+    if (leftBlocks.isEmpty() || rightBlocks.isEmpty()) return false
+    return leftBlocks.any { leftBlock ->
+        rightBlocks.any { rightBlock -> fileContentBlockMatches(leftBlock, rightBlock) }
+    }
+}
+
+private fun fileContentBlockMatches(left: RelayChatContentBlock, right: RelayChatContentBlock): Boolean {
+    val leftFileId = left.fileId?.trim()?.takeIf { it.isNotEmpty() }
+    val rightFileId = right.fileId?.trim()?.takeIf { it.isNotEmpty() }
+    if (leftFileId != null && rightFileId != null && leftFileId == rightFileId) return true
+
+    val leftName = normalizedFileName(left)
+    val rightName = normalizedFileName(right)
+    if (leftName.isBlank() || leftName != rightName) return false
+
+    val leftMimeType = left.mimeType?.trim()?.lowercase().orEmpty()
+    val rightMimeType = right.mimeType?.trim()?.lowercase().orEmpty()
+    if (!timelineMimeTypesCompatible(leftMimeType, rightMimeType)) return false
+    if (left.sizeBytes != null && right.sizeBytes != null && left.sizeBytes != right.sizeBytes) return false
+    if (left.imageWidth != null && right.imageWidth != null && left.imageWidth != right.imageWidth) return false
+    if (left.imageHeight != null && right.imageHeight != null && left.imageHeight != right.imageHeight) return false
+    return true
+}
+
+private fun timelineMimeTypesCompatible(left: String, right: String): Boolean {
+    if (left.isBlank() || right.isBlank()) return true
+    if (left == right) return true
+    if (left == "application/octet-stream" || right == "application/octet-stream") return true
+    if (left.startsWith("image/") && right.startsWith("image/")) return true
+    if (left.startsWith("audio/") && right.startsWith("audio/")) return true
+    return false
+}
+
+private fun normalizedFileName(block: RelayChatContentBlock): String {
+    return (block.fileName ?: block.name ?: block.text).orEmpty().trim().lowercase()
 }
 
 private fun String?.toMessageRole(default: MessageRole): MessageRole {

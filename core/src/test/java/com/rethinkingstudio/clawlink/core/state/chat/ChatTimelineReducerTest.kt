@@ -3,6 +3,7 @@ package com.rethinkingstudio.clawlink.core.state.chat
 import com.rethinkingstudio.clawlink.core.models.chat.ChatMessage
 import com.rethinkingstudio.clawlink.core.models.chat.MessageRole
 import com.rethinkingstudio.clawlink.core.models.chat.MessageState
+import com.rethinkingstudio.clawlink.core.models.chat.RelayChatContentBlock
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -66,6 +67,64 @@ class ChatTimelineReducerTest {
         assertEquals(listOf("user-1", "user-2"), state.messages.map { it.id })
         assertEquals(listOf("same", "same"), state.messages.map { it.content })
         assertEquals(listOf(MessageRole.user, MessageRole.user), state.messages.map { it.role })
+    }
+
+    @Test
+    fun turnUserCreatedReplacesLocalImageUserMessageForSameTurn() {
+        val localImageBlock = RelayChatContentBlock(
+            type = "file",
+            text = "album-D1.jpeg",
+            fileName = "album-D1.jpeg",
+            mimeType = "image/jpeg",
+            sizeBytes = 12_345,
+            imageWidth = 1200,
+            imageHeight = 900,
+            downloadUrl = "file:///tmp/album-D1.jpeg"
+        )
+        val localUser = ChatMessage(
+            id = "local-user-message",
+            role = MessageRole.user,
+            state = MessageState.completed,
+            content = "帮我分析一下这个图片",
+            contentBlocks = listOf(localImageBlock),
+            runId = "local-user-client-run-1",
+            sortTimestamp = 200.0
+        )
+
+        val state = ChatTimelineReducer.reduce(
+            ChatTimelineState(messages = listOf(localUser)),
+            event(
+                """
+                {
+                  "protocolVersion": 2,
+                  "eventId": "user-server",
+                  "eventType": "turn.user.created",
+                  "turnId": "relay-turn-1",
+                  "messageId": "server-user-message",
+                  "createdAt": "1970-01-01T00:03:20.500Z",
+                  "content": [
+                    { "type": "text", "text": "帮我分析一下这个图片" },
+                    {
+                      "type": "file",
+                      "text": "album-D1.jpeg",
+                      "fileId": "file-photo-1",
+                      "fileName": "album-D1.jpeg",
+                      "mimeType": "image/jpeg",
+                      "sizeBytes": 12345,
+                      "imageWidth": 1200,
+                      "imageHeight": 900,
+                      "downloadUrl": "/api/mobile/files/file-photo-1"
+                    }
+                  ]
+                }
+                """.trimIndent()
+            )
+        )
+
+        assertEquals(listOf("server-user-message"), state.messages.map { it.id })
+        assertEquals("local-user-client-run-1", state.messages.single().runId)
+        assertEquals("file-photo-1", state.messages.single().fileContentBlocks.first().fileId)
+        assertEquals("file:///tmp/album-D1.jpeg", state.messages.single().fileContentBlocks.first().downloadUrl)
     }
 
     @Test
@@ -492,6 +551,146 @@ class ChatTimelineReducerTest {
 
         assertTrue(state.hasActiveRun)
         assertFalse(hasActiveVisibleTimelineRun(state, messages))
+    }
+
+    @Test
+    fun historySnapshotReplacesOldWaitingPlaceholderWithoutStealingNewPlaceholder() {
+        val oldUser = ChatMessage(
+            id = "user-old",
+            role = MessageRole.user,
+            state = MessageState.completed,
+            content = "old prompt",
+            runId = "local-user-turn-old",
+            sortTimestamp = 200.0
+        )
+        val oldAssistantPlaceholder = ChatMessage(
+            id = "assistant-old-local",
+            role = MessageRole.assistant,
+            state = MessageState.streaming,
+            content = protocolTypingMarkerText,
+            runId = "run-old",
+            sortTimestamp = 200.001
+        )
+        val newUser = ChatMessage(
+            id = "user-new",
+            role = MessageRole.user,
+            state = MessageState.completed,
+            content = "new prompt",
+            runId = "local-user-turn-new",
+            sortTimestamp = 201.0
+        )
+        val newAssistantPlaceholder = ChatMessage(
+            id = "assistant-new-local",
+            role = MessageRole.assistant,
+            state = MessageState.streaming,
+            content = protocolTypingMarkerText,
+            runId = "run-new",
+            sortTimestamp = 201.001
+        )
+
+        val state = ChatTimelineReducer.reduce(
+            ChatTimelineState(
+                messages = listOf(oldUser, oldAssistantPlaceholder, newUser, newAssistantPlaceholder),
+                activeRunId = "run-new",
+                activeRunsByTurnId = mapOf("turn-new" to "run-new"),
+                activeTurnByRunId = mapOf("run-new" to "turn-new")
+            ),
+            event(
+                """
+                {
+                  "protocolVersion": 2,
+                  "eventId": "history-old",
+                  "eventType": "history.snapshot.page",
+                  "messages": [
+                    {
+                      "turnId": "turn-old",
+                      "runId": "run-old",
+	                      "messageId": "assistant-old-server",
+	                      "role": "assistant",
+	                      "messageState": "completed",
+	                      "content": [{ "type": "text", "text": "old reply" }]
+	                    }
+	                  ]
+                }
+                """.trimIndent()
+            )
+        )
+        val ordered = orderMessagesWithSourceRunAnchors(state.messages)
+
+        assertEquals(
+            listOf("user-old", "assistant-old-server", "user-new", "assistant-new-local"),
+            ordered.map { it.id }
+	        )
+	        assertEquals("old reply", ordered[1].content)
+	        assertEquals(200.001, ordered[1].sortTimestamp ?: -1.0, 0.0001)
+	        assertEquals(MessageState.streaming, ordered.last().state)
+        assertEquals("run-new", state.activeRunId)
+        assertTrue(hasActiveVisibleTimelineRun(state, ordered))
+    }
+
+    @Test
+    fun historySnapshotReplacesLocalImageUserMessageForSameTurn() {
+        val localImageBlock = RelayChatContentBlock(
+            type = "file",
+            text = "album-D1.jpeg",
+            fileName = "album-D1.jpeg",
+            mimeType = "image/jpeg",
+            sizeBytes = 12_345,
+            imageWidth = 1200,
+            imageHeight = 900,
+            downloadUrl = "file:///tmp/album-D1.jpeg"
+        )
+        val localUser = ChatMessage(
+            id = "local-user-message",
+            role = MessageRole.user,
+            state = MessageState.completed,
+            content = "帮我分析一下这个图片",
+            contentBlocks = listOf(localImageBlock),
+            runId = "local-user-client-run-1",
+            sortTimestamp = 200.0
+        )
+
+        val state = ChatTimelineReducer.reduce(
+            ChatTimelineState(messages = listOf(localUser)),
+            event(
+                """
+                {
+                  "protocolVersion": 2,
+                  "eventId": "history-user",
+                  "eventType": "history.snapshot.page",
+                  "messages": [
+                    {
+                      "turnId": "relay-turn-1",
+                      "runId": "history-user-message",
+                      "messageId": "server-user-message",
+                      "role": "user",
+                      "messageState": "completed",
+                      "createdAt": "1970-01-01T00:03:20.500Z",
+                      "content": [
+                        { "type": "text", "text": "帮我分析一下这个图片" },
+                        {
+                          "type": "file",
+                          "text": "album-D1.jpeg",
+                          "fileId": "file-photo-1",
+                          "fileName": "album-D1.jpeg",
+                          "mimeType": "image/jpeg",
+                          "sizeBytes": 12345,
+                          "imageWidth": 1200,
+                          "imageHeight": 900,
+                          "downloadUrl": "/api/mobile/files/file-photo-1"
+                        }
+                      ]
+                    }
+                  ]
+                }
+                """.trimIndent()
+            )
+        )
+
+        assertEquals(listOf("server-user-message"), state.messages.map { it.id })
+        assertEquals("local-user-client-run-1", state.messages.single().runId)
+        assertEquals("file-photo-1", state.messages.single().fileContentBlocks.first().fileId)
+        assertEquals("file:///tmp/album-D1.jpeg", state.messages.single().fileContentBlocks.first().downloadUrl)
     }
 
     @Test

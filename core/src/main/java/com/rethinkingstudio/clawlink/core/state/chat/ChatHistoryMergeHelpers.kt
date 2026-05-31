@@ -384,10 +384,25 @@ private fun localUserMessageReplacingHistoryUser(
         else -> localUserMessage.sortTimestamp
     }
     return localUserMessage.copy(
-        contentBlocks = if (localUserMessage.contentBlocks.isEmpty()) historyUserMessage.contentBlocks else localUserMessage.contentBlocks,
+        contentBlocks = mergedLocalUserHistoryContentBlocks(
+            localUserMessage = localUserMessage,
+            historyUserMessage = historyUserMessage
+        ),
         createdAt = historyUserMessage.createdAt.ifBlank { localUserMessage.createdAt },
         sortTimestamp = resolvedSortTimestamp
     )
+}
+
+private fun mergedLocalUserHistoryContentBlocks(
+    localUserMessage: ChatMessage,
+    historyUserMessage: ChatMessage
+): List<RelayChatContentBlock> {
+    if (localUserMessage.contentBlocks.isEmpty()) return historyUserMessage.contentBlocks
+    if (historyUserMessage.contentBlocks.isEmpty()) return localUserMessage.contentBlocks
+    if (localUserMessage.hasFileContent && historyUserMessage.hasFileContent) {
+        return mergeCompletedFileMessage(existing = localUserMessage, completed = historyUserMessage).contentBlocks
+    }
+    return localUserMessage.contentBlocks
 }
 
 private fun localVoiceClientRunId(message: ChatMessage): String? {
@@ -658,10 +673,26 @@ private fun isRenderableAssistantHistoryMessage(message: ChatMessage): Boolean {
 
 private fun userMessagesMatchForLocalHistoryMerge(left: ChatMessage, right: ChatMessage): Boolean {
     if (left.role != MessageRole.user || right.role != MessageRole.user) return false
-    if (left.hasFileContent || right.hasFileContent || left.hasVoiceContent || right.hasVoiceContent) {
+    if (left.hasVoiceContent || right.hasVoiceContent) {
         return false
     }
-    return normalizeUserMessageText(left.content) == normalizeUserMessageText(right.content)
+    val leftText = normalizeUserMessageText(left.userPromptContentForMerge())
+    val rightText = normalizeUserMessageText(right.userPromptContentForMerge())
+    if (left.hasFileContent && right.hasFileContent && !sameFileMessage(left, right)) {
+        return false
+    }
+    return leftText.isNotBlank() && leftText == rightText
+}
+
+private fun ChatMessage.userPromptContentForMerge(): String {
+    val blockText = contentBlocks.mapNotNull { block ->
+        if (block.isFileBlock || block.isVoiceMessageBlock || block.isToolCallBlock || block.isToolResultBlock) {
+            null
+        } else {
+            block.text?.trim()?.takeIf { it.isNotEmpty() }
+        }
+    }.joinToString("\n\n")
+    return blockText.ifBlank { content }
 }
 
 private fun normalizeUserMessageText(value: String): String {
@@ -716,7 +747,78 @@ internal fun sameFileMessage(existing: ChatMessage, candidate: ChatMessage): Boo
         return true
     }
 
+    val existingBlocks = existing.transferContentBlocks()
+    val candidateBlocks = candidate.transferContentBlocks()
+    if (existingBlocks.isNotEmpty() &&
+        candidateBlocks.isNotEmpty() &&
+        existingBlocks.any { existingBlock ->
+            candidateBlocks.any { candidateBlock -> transferBlocksReferToSameFile(existingBlock, candidateBlock) }
+        }
+    ) {
+        return true
+    }
+
     return samePendingUploadMessage(existing, candidate) || samePendingUploadMessage(candidate, existing)
+}
+
+private fun transferBlocksReferToSameFile(left: RelayChatContentBlock, right: RelayChatContentBlock): Boolean {
+    val leftName = normalizedTransferFileName(left)
+    val rightName = normalizedTransferFileName(right)
+    val leftStem = stableTransferFileStem(left)
+    val rightStem = stableTransferFileStem(right)
+    val namesMatch = leftName.isNotBlank() && leftName == rightName
+    val stemsMatch = leftStem.isNotBlank() && leftStem == rightStem
+    if (!namesMatch && !stemsMatch) return false
+
+    val leftMime = left.mimeType?.trim()?.lowercase().orEmpty()
+    val rightMime = right.mimeType?.trim()?.lowercase().orEmpty()
+    if (!mimeTypesCompatible(leftMime, rightMime)) return false
+
+    val leftSize = left.sizeBytes?.takeIf { it > 0 }
+    val rightSize = right.sizeBytes?.takeIf { it > 0 }
+    if (leftSize != null && rightSize != null && leftSize != rightSize) return false
+
+    val leftGatewayId = left.gatewayId?.trim().orEmpty()
+    val rightGatewayId = right.gatewayId?.trim().orEmpty()
+    if (leftGatewayId.isNotBlank() && rightGatewayId.isNotBlank() && leftGatewayId != rightGatewayId) return false
+
+    val leftSessionKey = left.sessionKey?.trim().orEmpty()
+    val rightSessionKey = right.sessionKey?.trim().orEmpty()
+    if (leftSessionKey.isNotBlank() && rightSessionKey.isNotBlank() && leftSessionKey != rightSessionKey) return false
+
+    val leftWidth = left.imageWidth?.takeIf { it > 0 }
+    val rightWidth = right.imageWidth?.takeIf { it > 0 }
+    if (leftWidth != null && rightWidth != null && leftWidth != rightWidth) return false
+
+    val leftHeight = left.imageHeight?.takeIf { it > 0 }
+    val rightHeight = right.imageHeight?.takeIf { it > 0 }
+    if (leftHeight != null && rightHeight != null && leftHeight != rightHeight) return false
+
+    return true
+}
+
+private fun mimeTypesCompatible(left: String, right: String): Boolean {
+    if (left.isBlank() || right.isBlank()) return true
+    if (left == right) return true
+    if (left == "application/octet-stream" || right == "application/octet-stream") return true
+    if (left.startsWith("image/") && right.startsWith("image/")) return true
+    if (left.startsWith("audio/") && right.startsWith("audio/")) return true
+    return false
+}
+
+private fun normalizedTransferFileName(block: RelayChatContentBlock): String {
+    return (block.fileDisplayName ?: block.fileDownloadURLString)
+        .orEmpty()
+        .substringAfterLast('/')
+        .substringAfterLast('\\')
+        .trim()
+        .lowercase()
+}
+
+private fun stableTransferFileStem(block: RelayChatContentBlock): String {
+    val name = normalizedTransferFileName(block)
+    val stem = name.substringBeforeLast('.', name)
+    return stem.substringBefore("---")
 }
 
 private fun canonicalFileRunId(message: ChatMessage): String? {
@@ -745,7 +847,7 @@ internal fun samePendingUploadMessage(pending: ChatMessage, completed: ChatMessa
 
     val pendingMime = pendingBlock.mimeType?.trim().orEmpty()
     val completedMime = completedBlock.mimeType?.trim().orEmpty()
-    if (pendingMime.isNotBlank() && completedMime.isNotBlank() && !pendingMime.equals(completedMime, ignoreCase = true)) {
+    if (!mimeTypesCompatible(pendingMime.lowercase(), completedMime.lowercase())) {
         return false
     }
 
@@ -767,6 +869,10 @@ internal fun samePendingUploadMessage(pending: ChatMessage, completed: ChatMessa
 }
 
 private fun mergeFileMessage(existing: ChatMessage, candidate: ChatMessage): ChatMessage {
+    if (isPendingUploadPlaceholderSupersededByCompletedFile(pending = candidate, completed = existing)) {
+        return existing
+    }
+
     val shouldUseLocalUserFileOrdering =
         existing.role == MessageRole.user &&
             candidate.role == MessageRole.user &&
@@ -792,6 +898,13 @@ private fun mergeFileMessage(existing: ChatMessage, candidate: ChatMessage): Cha
         createdAt = candidate.createdAt.ifBlank { existing.createdAt },
         sortTimestamp = candidate.sortTimestamp
     )
+}
+
+private fun isPendingUploadPlaceholderSupersededByCompletedFile(
+    pending: ChatMessage,
+    completed: ChatMessage
+): Boolean {
+    return completed.state == MessageState.completed && samePendingUploadMessage(pending, completed)
 }
 
 internal fun fileMessageRunId(fileId: String): String {
