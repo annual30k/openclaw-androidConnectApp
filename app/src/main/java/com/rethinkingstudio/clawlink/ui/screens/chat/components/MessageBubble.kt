@@ -17,6 +17,7 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
@@ -123,6 +124,7 @@ internal fun MessageBubble(
     } else rawDisplayText
     val isStandaloneFileMessage = !isTool && displayText.isBlank() && fileBlocks.isNotEmpty() && voiceBlocks.isEmpty()
     val isStandaloneVoiceMessage = !isTool && displayText.isBlank() && voiceBlocks.isNotEmpty() && fileBlocks.isEmpty()
+    val useExpandedMixedMediaBubble = shouldUseExpandedMixedMediaBubble(displayText, fileBlocks.isNotEmpty(), voiceBlocks.isNotEmpty())
 
     Column(modifier = Modifier.fillMaxWidth(), horizontalAlignment = if (isUser) Alignment.End else Alignment.Start) {
         if (isTool) {
@@ -153,35 +155,57 @@ internal fun MessageBubble(
             StreamingIndicatorBubble()
             return@Column
         }
-        Surface(
-            color = if (isUser) ChatColors.userBubble else MaterialTheme.colorScheme.surface.copy(alpha = 0.96f),
-            shape = RoundedCornerShape(28.dp),
-            border = androidx.compose.foundation.BorderStroke(1.dp, if (isUser) Color.White.copy(alpha = 0.08f) else MaterialTheme.colorScheme.outline.copy(alpha = 0.12f)),
-            tonalElevation = 0.dp, shadowElevation = 0.dp,
-            modifier = Modifier.widthIn(max = 326.dp)
-        ) {
-            Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 13.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                voiceBlocks.forEach {
-                    VoiceBlock(
-                        it,
-                        isUser,
-                        relayBaseUrl = relayBaseUrl,
-                        accessToken = accessToken,
-                        readVoicePlaybackIdentifiers = readVoicePlaybackIdentifiers,
-                        onVoicePlaybackStart = onVoicePlaybackStart,
-                        gatewayId = gatewayId,
-                        sessionKey = sessionKey
-                    )
-                }
-                fileBlocks.forEach { FileBlock(it, isUser, message.state, relayBaseUrl = relayBaseUrl, accessToken = accessToken, onImageClick = onImageClick, onFileClick = onFileClick) }
-                if (displayText.isNotEmpty()) {
-                    MarkdownMessageText(text = displayText, textColor = if (isUser) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface, linkColor = if (isUser) Color.White else MaterialTheme.colorScheme.primary, textSizeSp = 13f, onDarkBackground = isUser)
-                }
-                if (shouldShowInlineStreamingIndicator(message.role, message.state, displayText, fileBlocks.isNotEmpty(), voiceBlocks.isNotEmpty())) {
-                    InlineStreamingIndicator()
-                }
-                if (shouldShowMessageFooter(message.role, message.state, displayText, fileBlocks.isNotEmpty(), voiceBlocks.isNotEmpty(), isTool)) {
-                    MessageFooter(title = if (isUser) "You" else "ClawLink", createdAt = message.createdAt, isUser = isUser)
+        BoxWithConstraints(modifier = Modifier.fillMaxWidth(), contentAlignment = if (isUser) Alignment.CenterEnd else Alignment.CenterStart) {
+            val expandedBubbleWidth = minOf(maxWidth * 0.88f, 326.dp)
+            val embeddedImageMaxWidth = maxOf(120.dp, expandedBubbleWidth - 32.dp)
+            Surface(
+                color = if (isUser) ChatColors.userBubble else MaterialTheme.colorScheme.surface.copy(alpha = 0.96f),
+                shape = RoundedCornerShape(28.dp),
+                border = androidx.compose.foundation.BorderStroke(1.dp, if (isUser) Color.White.copy(alpha = 0.08f) else MaterialTheme.colorScheme.outline.copy(alpha = 0.12f)),
+                tonalElevation = 0.dp, shadowElevation = 0.dp,
+                modifier = if (useExpandedMixedMediaBubble) Modifier.width(expandedBubbleWidth) else Modifier.widthIn(max = 326.dp)
+            ) {
+                Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 13.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    voiceBlocks.forEach {
+                        VoiceBlock(
+                            it,
+                            isUser,
+                            relayBaseUrl = relayBaseUrl,
+                            accessToken = accessToken,
+                            readVoicePlaybackIdentifiers = readVoicePlaybackIdentifiers,
+                            onVoicePlaybackStart = onVoicePlaybackStart,
+                            gatewayId = gatewayId,
+                            sessionKey = sessionKey
+                        )
+                    }
+                    fileBlocks.forEach {
+                        FileBlock(
+                            it,
+                            isUser,
+                            message.state,
+                            relayBaseUrl = relayBaseUrl,
+                            accessToken = accessToken,
+                            imageMaxWidth = if (useExpandedMixedMediaBubble) embeddedImageMaxWidth else 290.dp,
+                            onImageClick = onImageClick,
+                            onFileClick = onFileClick
+                        )
+                    }
+                    if (displayText.isNotEmpty()) {
+                        MarkdownMessageText(
+                            text = displayText,
+                            modifier = if (useExpandedMixedMediaBubble) Modifier.fillMaxWidth() else Modifier,
+                            textColor = if (isUser) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface,
+                            linkColor = if (isUser) Color.White else MaterialTheme.colorScheme.primary,
+                            textSizeSp = 13f,
+                            onDarkBackground = isUser
+                        )
+                    }
+                    if (shouldShowInlineStreamingIndicator(message.role, message.state, displayText, fileBlocks.isNotEmpty(), voiceBlocks.isNotEmpty())) {
+                        InlineStreamingIndicator()
+                    }
+                    if (shouldShowMessageFooter(message.role, message.state, displayText, fileBlocks.isNotEmpty(), voiceBlocks.isNotEmpty(), isTool)) {
+                        MessageFooter(title = if (isUser) "You" else "ClawLink", createdAt = message.createdAt, isUser = isUser)
+                    }
                 }
             }
         }
@@ -222,7 +246,7 @@ internal fun shouldUseStandaloneStreamingIndicator(
     hasFileBlocks: Boolean,
     hasVoiceBlocks: Boolean
 ): Boolean =
-    !hasFileBlocks && !hasVoiceBlocks
+    !hasFileBlocks && !hasVoiceBlocks && isStreamingIndicatorDisplayText(displayText)
 
 internal fun shouldShowInlineStreamingIndicator(
     role: MessageRole,
@@ -234,6 +258,7 @@ internal fun shouldShowInlineStreamingIndicator(
     shouldShowStreamingWaitState(role, state) &&
         !hasFileBlocks &&
         !hasVoiceBlocks &&
+        isStreamingIndicatorDisplayText(displayText) &&
         !shouldUseStandaloneStreamingIndicator(displayText, hasFileBlocks, hasVoiceBlocks)
 
 internal fun shouldShowMessageFooter(
@@ -247,6 +272,12 @@ internal fun shouldShowMessageFooter(
     !isToolMessage &&
         !(shouldShowStreamingWaitState(role, state) &&
             shouldUseStandaloneStreamingIndicator(displayText, hasFileBlocks, hasVoiceBlocks))
+
+internal fun shouldUseExpandedMixedMediaBubble(
+    displayText: String,
+    hasFileBlocks: Boolean,
+    hasVoiceBlocks: Boolean
+): Boolean = displayText.isNotBlank() && (hasFileBlocks || hasVoiceBlocks)
 
 @Composable
 internal fun MessageFooter(title: String, createdAt: String, isUser: Boolean, modifier: Modifier = Modifier) {

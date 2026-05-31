@@ -26,9 +26,10 @@ class MessageBubblePresentationTest {
     }
 
     @Test
-    fun assistantStreamingPartialReplyKeepsWaitingPresentation() {
+    fun assistantStreamingTypingMarkerUsesWaitingPresentationUntilRealReplyArrives() {
         assertTrue(shouldShowStreamingWaitState(MessageRole.assistant, MessageState.streaming))
-        assertTrue(shouldUseStandaloneStreamingIndicator("partial reply", hasFileBlocks = false, hasVoiceBlocks = false))
+        assertTrue(shouldUseStandaloneStreamingIndicator("[[clawlink:typing]]", hasFileBlocks = false, hasVoiceBlocks = false))
+        assertFalse(shouldUseStandaloneStreamingIndicator("partial reply", hasFileBlocks = false, hasVoiceBlocks = false))
         assertFalse(
             shouldShowInlineStreamingIndicator(
                 role = MessageRole.assistant,
@@ -60,6 +61,31 @@ class MessageBubblePresentationTest {
                 hasFileBlocks = false,
                 hasVoiceBlocks = false,
                 isToolMessage = false
+            )
+        )
+    }
+
+    @Test
+    fun mixedMediaMessagesUseExpandedBubbleWidth() {
+        assertTrue(
+            shouldUseExpandedMixedMediaBubble(
+                displayText = "这张图里有什么",
+                hasFileBlocks = true,
+                hasVoiceBlocks = false
+            )
+        )
+        assertFalse(
+            shouldUseExpandedMixedMediaBubble(
+                displayText = "",
+                hasFileBlocks = true,
+                hasVoiceBlocks = false
+            )
+        )
+        assertFalse(
+            shouldUseExpandedMixedMediaBubble(
+                displayText = "plain text",
+                hasFileBlocks = false,
+                hasVoiceBlocks = false
             )
         )
     }

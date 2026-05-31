@@ -92,7 +92,7 @@ internal fun StandaloneFileMessage(blocks: List<RelayChatContentBlock>, isUser: 
 }
 
 @Composable
-internal fun FileBlock(block: RelayChatContentBlock, isUser: Boolean, messageState: MessageState, standalone: Boolean = false, relayBaseUrl: String, accessToken: String, onImageClick: (block: RelayChatContentBlock, url: String, fileName: String?) -> Unit = { _, _, _ -> }, onFileClick: (block: RelayChatContentBlock, url: String, fileName: String?) -> Unit = { _, _, _ -> }) {
+internal fun FileBlock(block: RelayChatContentBlock, isUser: Boolean, messageState: MessageState, standalone: Boolean = false, relayBaseUrl: String, accessToken: String, imageMaxWidth: Dp = 290.dp, onImageClick: (block: RelayChatContentBlock, url: String, fileName: String?) -> Unit = { _, _, _ -> }, onFileClick: (block: RelayChatContentBlock, url: String, fileName: String?) -> Unit = { _, _, _ -> }) {
     val rawDownloadUrl = block.fileDownloadURLString?.trim()?.takeIf { it.isNotEmpty() }
     val isUploadingState = messageState == MessageState.streaming
     val localFilePath = rawDownloadUrl?.let { raw ->
@@ -131,7 +131,7 @@ internal fun FileBlock(block: RelayChatContentBlock, isUser: Boolean, messageSta
         else -> MaterialTheme.colorScheme.outline.copy(alpha = 0.16f)
     }
     if (block.isImageFileBlock) {
-        val dimensions = imagePreviewDimensions(block)
+        val dimensions = imagePreviewDimensions(block, maxWidth = imageMaxWidth)
         val cachedLocalImagePath = block.chatAttachmentCacheKey()
             ?.let { RemoteAttachmentCache.cachedFile(it) }
             ?.takeIf { it.exists() }
@@ -172,7 +172,8 @@ internal fun FileBlock(block: RelayChatContentBlock, isUser: Boolean, messageSta
                             width = dimensions.first,
                             height = dimensions.second,
                             cacheKey = block.chatImageCacheKey(),
-                            cornerRadius = 18.dp
+                            cornerRadius = 18.dp,
+                            maxWidth = imageMaxWidth
                         )
                     }
                 }

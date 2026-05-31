@@ -248,6 +248,58 @@ class ChatTimelineReducerTest {
     }
 
     @Test
+    fun emptyMessageCompletedKeepsOptimisticAssistantPlaceholderWaitingForFirstReplyText() {
+        val localUser = ChatMessage(
+            id = "local-user-new",
+            role = MessageRole.user,
+            state = MessageState.completed,
+            content = "new prompt",
+            runId = "local-user-run-new",
+            sortTimestamp = 200.0
+        )
+        val localAssistant = ChatMessage(
+            id = "assistant-local",
+            role = MessageRole.assistant,
+            state = MessageState.streaming,
+            content = protocolTypingMarkerText,
+            runId = "run-new",
+            sortTimestamp = 200.001
+        )
+
+        val state = ChatTimelineReducer.reduce(
+            ChatTimelineState(
+                messages = listOf(localUser, localAssistant),
+                activeRunId = "run-new",
+                activeRunsByTurnId = mapOf("turn-new" to "run-new"),
+                activeTurnByRunId = mapOf("run-new" to "turn-new")
+            ),
+            event(
+                """
+                {
+                  "protocolVersion": 2,
+                  "eventId": "final-empty",
+                  "eventType": "message.completed",
+                  "turnId": "turn-new",
+                  "runId": "run-new",
+                  "messageId": "assistant-server",
+                  "role": "assistant",
+                  "content": [{ "type": "text", "text": "" }],
+                  "createdAt": "1970-01-01T00:03:20.001Z"
+                }
+                """.trimIndent()
+            )
+        )
+        val ordered = orderMessagesWithSourceRunAnchors(state.messages)
+
+        assertEquals(listOf("local-user-new", "assistant-local"), ordered.map { it.id })
+        assertEquals(protocolTypingMarkerText, ordered.last().content)
+        assertEquals(MessageState.streaming, ordered.last().state)
+        assertTrue(hasActiveVisibleTimelineRun(state, ordered))
+        assertTrue(state.hasActiveRun)
+        assertTrue("final-empty" in state.seenEventIds)
+    }
+
+    @Test
     fun messageCompletedReplacesOnlyOptimisticAssistantPlaceholderWhenGatewayUsesRequestRunId() {
         val localUser = ChatMessage(
             id = "local-user-new",

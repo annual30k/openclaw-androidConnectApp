@@ -3,6 +3,7 @@ package com.rethinkingstudio.clawlink.core.state.chat
 import com.rethinkingstudio.clawlink.core.models.chat.ChatMessage
 import com.rethinkingstudio.clawlink.core.models.chat.MessageRole
 import com.rethinkingstudio.clawlink.core.models.chat.MessageState
+import com.rethinkingstudio.clawlink.core.models.chat.RelayChatContentBlock
 import java.time.Instant
 import java.time.format.DateTimeParseException
 
@@ -138,6 +139,13 @@ internal object ChatTimelineReducer {
         val matchedMessage = existing ?: localPlaceholder
         val content = event.content.timelineText().ifBlank { matchedMessage?.content.orEmpty() }
         val role = matchedMessage?.role ?: eventRole
+        if (role == MessageRole.assistant &&
+            matchedMessage?.state == MessageState.streaming &&
+            isTransientAssistantPlaceholder(matchedMessage) &&
+            !event.content.hasRenderableTimelineCompletedContent()
+        ) {
+            return this
+        }
         val completedTurnId = event.turnId ?: matchedMessage?.runId?.let { activeTurnByRunId[it] }
         val completedRunId = completedTurnId?.let { activeRunsByTurnId[it] }
             ?: event.runId?.takeIf { it.isNotBlank() }
@@ -420,6 +428,20 @@ private fun partSeqKey(messageId: String, partId: String, seq: Long): String = "
 
 private fun List<com.rethinkingstudio.clawlink.core.models.chat.RelayChatContentBlock>.timelineText(): String {
     return mapNotNull { it.text?.takeIf { value -> value.isNotBlank() } }.joinToString("\n\n")
+}
+
+private fun List<RelayChatContentBlock>.hasRenderableTimelineCompletedContent(): Boolean {
+    return any { block ->
+        block.isToolCallBlock ||
+            block.isToolResultBlock ||
+            block.isFileBlock ||
+            block.isVoiceMessageBlock ||
+            !block.text.isNullOrBlank() ||
+            !block.transcript.isNullOrBlank() ||
+            listOf(block.result, block.partialResult, block.content, block.output, block.error).any { value ->
+                !value?.renderedText(listOf("content", "markdown", "text", "body", "message", "value", "result", "output")).isNullOrBlank()
+            }
+    }
 }
 
 private fun isWaitingOnlyStreamingContent(content: String): Boolean {

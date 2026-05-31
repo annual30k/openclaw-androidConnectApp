@@ -90,8 +90,7 @@ import java.io.File
 import java.net.HttpURLConnection
 import java.net.URL
 
-internal fun imagePreviewDimensions(block: RelayChatContentBlock): Pair<Dp, Dp> {
-    val maxWidth = 290.dp
+internal fun imagePreviewDimensions(block: RelayChatContentBlock, maxWidth: Dp = 290.dp): Pair<Dp, Dp> {
     val maxHeight = 400.dp
     val cacheKey = block.chatImageCacheKey()
     val w = block.resolvedImageWidth?.takeIf { it > 0 }
@@ -197,7 +196,8 @@ internal fun AuthenticatedRemoteImage(
     width: Dp,
     height: Dp,
     cacheKey: String? = null,
-    cornerRadius: Dp = 18.dp
+    cornerRadius: Dp = 18.dp,
+    maxWidth: Dp = 290.dp
 ) {
     val resolvedCacheKey = cacheKey ?: url
     var bitmap by remember(resolvedCacheKey, url) { mutableStateOf(RemoteImageCache.get(resolvedCacheKey)) }
@@ -207,7 +207,7 @@ internal fun AuthenticatedRemoteImage(
         if (isFallback && bitmap != null) {
             val bmp = bitmap!!
             val ratio = bmp.width.toFloat() / bmp.height.toFloat()
-            val maxW = 290.dp
+            val maxW = maxWidth
             val maxH = 400.dp
             if (ratio >= 1f) maxW to (maxW / ratio).coerceIn(60.dp, maxH)
             else {
@@ -225,7 +225,7 @@ internal fun AuthenticatedRemoteImage(
         if (result != null) {
             RemoteImageCache.put(resolvedCacheKey, result)
             val ratio = result.width.toFloat() / result.height.toFloat()
-            val maxW = 290.dp
+            val maxW = maxWidth
             val maxH = 400.dp
             val size = if (ratio >= 1f) maxW to (maxW / ratio).coerceIn(60.dp, maxH)
             else {
