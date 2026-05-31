@@ -82,6 +82,7 @@ import com.rethinkingstudio.clawlink.core.state.chat.ChatStore
 import com.rethinkingstudio.clawlink.core.state.gateway.GatewayStore
 import com.rethinkingstudio.clawlink.ui.components.ClawLinkAlertActionRole
 import com.rethinkingstudio.clawlink.ui.components.ClawLinkAlertDialog
+import com.rethinkingstudio.clawlink.ui.screens.chat.newMobileDraftSessionKey
 import kotlinx.coroutines.launch
 import java.time.Instant
 import java.time.ZoneId
@@ -201,7 +202,14 @@ fun SessionsScreen(
                         onSwitchGateway = onNavigateToGateways,
                         onCreateSession = {
                             if (!canSwitchSessions) return@SessionManagerSummaryCard
-                            chatStore.newSession()
+                            if (selectedGatewayType == GatewayType.hermes) {
+                                chatStore.newSession(newMobileDraftSessionKey())
+                                gatewayId?.let { id ->
+                                    chatStore.sendCommand(id, "/new")
+                                }
+                            } else {
+                                chatStore.newSession()
+                            }
                             issueMessage = null
                             onBack()
                         }

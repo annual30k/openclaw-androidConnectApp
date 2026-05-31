@@ -7,7 +7,6 @@ import com.rethinkingstudio.clawlink.core.models.chat.RelayChatContentBlock
 import com.rethinkingstudio.clawlink.core.network.transport.VoiceSendAudioPayload
 import java.io.File
 import java.util.Base64
-import java.util.UUID
 
 internal fun buildLocalVoiceUserMessage(
     audio: VoiceSendAudioPayload,
@@ -27,7 +26,7 @@ internal fun buildLocalVoiceUserMessage(
         sessionKey = sessionKey
     )
     return ChatMessage(
-        id = UUID.randomUUID().toString(),
+        id = "user-$clientRunId",
         role = MessageRole.user,
         state = MessageState.completed,
         content = audio.fileName,

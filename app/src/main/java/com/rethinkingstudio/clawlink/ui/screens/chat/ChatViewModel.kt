@@ -15,6 +15,7 @@ import com.rethinkingstudio.clawlink.core.network.dto.RelayFileTransferItem
 import com.rethinkingstudio.clawlink.core.network.transport.RelayChatSendAttachmentPayload
 import com.rethinkingstudio.clawlink.core.network.transport.VoiceSendAudioPayload
 import com.rethinkingstudio.clawlink.core.models.gateway.AggregateStatus
+import com.rethinkingstudio.clawlink.core.models.gateway.GatewayType
 import com.rethinkingstudio.clawlink.core.state.LocalizedText.choose
 import com.rethinkingstudio.clawlink.core.state.chat.ChatStore
 import com.rethinkingstudio.clawlink.core.state.gateway.GatewayStore
@@ -131,7 +132,7 @@ internal class ChatViewModel(
         showAttachmentMenu = false
         imagePreview = null
         documentPreview = null
-        resetVoiceInputState(restoreComposer = false)
+        resetVoiceInputState(restoreComposer = false, voiceModeAfterReset = false)
         (pendingAttachments.map { it.filePath } + uploadItems.map { it.attachment.filePath })
             .distinct()
             .forEach { filePath -> runCatching { File(filePath).delete() } }
@@ -331,7 +332,7 @@ internal class ChatViewModel(
         composerNotice = error.message
     }
 
-    private fun resetVoiceInputState(restoreComposer: Boolean) {
+    private fun resetVoiceInputState(restoreComposer: Boolean, voiceModeAfterReset: Boolean = true) {
         voiceInputHoldJob?.cancel()
         voiceInputHoldJob = null
         if (restoreComposer) {
@@ -344,7 +345,7 @@ internal class ChatViewModel(
         voiceInputAudioLevel = 0.0
         voiceInputCancelPreview = false
         voiceInputHoldToken = null
-        voiceMode = true
+        voiceMode = voiceModeAfterReset
     }
 
     private suspend fun sendRecordedVoiceInput(context: Context) {
@@ -409,14 +410,23 @@ internal class ChatViewModel(
         }
         
         if (trimmed.startsWith("/")) {
-            chatStore.sendCommand(
-                gatewayId = gatewayId,
-                command = trimmed
-            )
-            if (trimmed == "/new") {
-                chatStore.newSession()
+            if (trimmed == "/new" && gatewayStore.state.value.selectedGateway?.gatewayType == GatewayType.hermes) {
+                chatStore.newSession(newMobileDraftSessionKey())
+                chatStore.sendCommand(
+                    gatewayId = gatewayId,
+                    command = trimmed
+                )
                 resetComposerForNewSession()
             } else {
+                chatStore.sendCommand(
+                    gatewayId = gatewayId,
+                    command = trimmed
+                )
+                if (trimmed == "/new") {
+                    chatStore.newSession()
+                    resetComposerForNewSession()
+                    return
+                }
                 messageText = ""
                 composerNotice = null
             }
@@ -572,3 +582,6 @@ internal class ChatViewModel(
         }
     }
 }
+
+internal fun newMobileDraftSessionKey(): String =
+    "mobile-${UUID.randomUUID().toString().lowercase()}"

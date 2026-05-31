@@ -17,6 +17,7 @@ private const val messageOrderEpsilon = 0.001
 private const val historyTranscriptOrderWindowSeconds = 900.0
 private const val sameTurnWindowSeconds = 180.0
 private const val sameTurnClockSkewToleranceSeconds = 15.0
+internal const val protocolTypingMarkerText = "[[clawlink:typing]]"
 private val protocolTypingMarkerRegex = Regex("^(?:\\[\\[clawlink:typing]]\\s*)+$")
 
 internal fun extractContent(item: ChatHistoryItem): String {
@@ -213,6 +214,15 @@ internal fun mergeHistoryWithCurrentMessages(
         if (message.id in resolvedPendingAssistantMessageIds) {
             return@forEachIndexed
         }
+        if (historyResolvesCompletedAssistant(
+                historyMessages = merged,
+                currentMessages = currentMessages,
+                currentIndex = index,
+                completedAssistant = message
+            )
+        ) {
+            return@forEachIndexed
+        }
 
         if (message.role == MessageRole.user && message.runId.startsWith("local-user-") && message.hasVoiceContent) {
             val transcriptIndex = localVoiceTranscriptHistoryIndex(merged, message)
@@ -344,7 +354,7 @@ private fun localVoiceTranscriptHistoryIndex(messages: List<ChatMessage>, localV
 }
 
 private fun historyUserIndexMatchingLocalUserEcho(messages: List<ChatMessage>, localUserMessage: ChatMessage): Int {
-    return messages.indices.reversed().firstOrNull { index ->
+    messages.indices.reversed().firstOrNull { index ->
         val candidate = messages[index]
         candidate.role == MessageRole.user &&
             userMessagesMatchForLocalHistoryMerge(candidate, localUserMessage) &&
@@ -352,7 +362,15 @@ private fun historyUserIndexMatchingLocalUserEcho(messages: List<ChatMessage>, l
                 historyTimestamp = candidate.sortTimestamp,
                 localTimestamp = localUserMessage.sortTimestamp
             )
-    } ?: -1
+    }?.let { return it }
+
+    val contentMatchedIndices = messages.indices.filter { index ->
+        val candidate = messages[index]
+        candidate.role == MessageRole.user &&
+            userMessagesMatchForLocalHistoryMerge(candidate, localUserMessage) &&
+            (candidate.sortTimestamp == null || localUserMessage.sortTimestamp == null)
+    }
+    return contentMatchedIndices.singleOrNull() ?: -1
 }
 
 private fun localUserMessageReplacingHistoryUser(
@@ -422,9 +440,14 @@ private fun completedFileMessageHasHistoryCounterpart(
 internal fun isTransientAssistantPlaceholder(message: ChatMessage): Boolean {
     if (message.role != MessageRole.assistant) return false
     if (message.hasFileContent || message.hasVoiceContent || message.hasToolContent) return false
-    val trimmed = message.content.trim()
+    return isTransientAssistantPlaceholderContent(message.content)
+}
+
+internal fun isTransientAssistantPlaceholderContent(content: String): Boolean {
+    val trimmed = content.trim()
     return trimmed.isEmpty() ||
         trimmed.startsWith("正在连接") ||
+        trimmed.startsWith("连接中") ||
         trimmed.startsWith("Connecting") ||
         trimmed.startsWith("连接中断") ||
         trimmed.startsWith("Connection interrupted") ||
@@ -497,6 +520,84 @@ private fun historyResolvesPendingAssistant(
         triggeringUser = triggeringUser,
         pendingAssistant = pendingAssistant
     )
+}
+
+private fun historyResolvesCompletedAssistant(
+    historyMessages: List<ChatMessage>,
+    currentMessages: List<ChatMessage>,
+    currentIndex: Int,
+    completedAssistant: ChatMessage
+): Boolean {
+    if (completedAssistant.role != MessageRole.assistant ||
+        completedAssistant.state != MessageState.completed ||
+        completedAssistant.hasFileContent ||
+        completedAssistant.hasVoiceContent ||
+        completedAssistant.hasToolContent ||
+        isTransientAssistantPlaceholder(completedAssistant)
+    ) {
+        return false
+    }
+    val triggeringUser = currentMessages
+        .take(currentIndex)
+        .lastOrNull { it.role == MessageRole.user }
+        ?: return false
+    val historicalResolutionCount = historyMessages.countHistoryTurnResolutions(
+        triggeringUser = triggeringUser,
+        completedAssistant = completedAssistant
+    )
+    if (historicalResolutionCount <= 0) return false
+
+    val currentResolutionCount = currentMessages
+        .take(currentIndex + 1)
+        .mapIndexedNotNull { index, candidate ->
+            if (!assistantMessagesMatchForHistoryMerge(candidate, completedAssistant)) {
+                return@mapIndexedNotNull null
+            }
+            val candidateTriggeringUser = currentMessages
+                .take(index)
+                .lastOrNull { it.role == MessageRole.user }
+                ?: return@mapIndexedNotNull null
+            if (userMessagesMatchForLocalHistoryMerge(candidateTriggeringUser, triggeringUser)) {
+                candidate
+            } else {
+                null
+            }
+        }
+        .count()
+    return historicalResolutionCount >= currentResolutionCount
+}
+
+private fun List<ChatMessage>.countHistoryTurnResolutions(
+    triggeringUser: ChatMessage,
+    completedAssistant: ChatMessage
+): Int {
+    return indices.count { historyUserIndex ->
+        val historyUser = this[historyUserIndex]
+        if (!userMessagesMatchForLocalHistoryMerge(historyUser, triggeringUser)) {
+            return@count false
+        }
+        val historyAssistantIndex = nextRenderableAssistantIndexAfter(historyUserIndex, this)
+        if (historyAssistantIndex < 0) return@count false
+        val historyAssistant = this[historyAssistantIndex]
+        assistantMessagesMatchForHistoryMerge(historyAssistant, completedAssistant) &&
+            timestampsCanRepresentSameTurn(
+                historyTimestamp = historyUser.sortTimestamp,
+                localTimestamp = triggeringUser.sortTimestamp
+            ) &&
+            timestampsCanRepresentSameTurn(
+                historyTimestamp = historyAssistant.sortTimestamp,
+                localTimestamp = completedAssistant.sortTimestamp
+            )
+    }
+}
+
+private fun assistantMessagesMatchForHistoryMerge(left: ChatMessage, right: ChatMessage): Boolean {
+    if (left.role != MessageRole.assistant || right.role != MessageRole.assistant) return false
+    if (left.hasFileContent || right.hasFileContent || left.hasVoiceContent || right.hasVoiceContent) return false
+    if (left.hasToolContent || right.hasToolContent) return false
+    val leftText = sanitizeChatMessageText(left.plainTextContent).trim()
+    val rightText = sanitizeChatMessageText(right.plainTextContent).trim()
+    return leftText.isNotEmpty() && leftText == rightText
 }
 
 private fun nextRenderableAssistantIndexAfter(index: Int, messages: List<ChatMessage>): Int {

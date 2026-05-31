@@ -133,6 +133,10 @@ private val mediaAttachmentReferenceRegex = Regex(
 private val fileAttachmentReferenceRegex = Regex(
     "(?m)[ \\t]*\\[file attached:\\s*.+?][ \\t]*"
 )
+private val mobileBridgeTimestampPrefixRegex = Regex(
+    "^\\s*\\[(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun)\\s+\\d{4}-\\d{2}-\\d{2}\\s+\\d{1,2}:\\d{2}(?::\\d{2})?\\s+(?:GMT|UTC)(?:[+-]\\d{1,2}(?::?\\d{2})?)?]\\s*",
+    RegexOption.IGNORE_CASE
+)
 private val excessiveBlankLinesRegex = Regex("\\n{3,}")
 
 internal fun sanitizeChatMessageText(text: String): String {
@@ -144,6 +148,7 @@ internal fun sanitizeChatMessageText(text: String): String {
         .replace(hermesRuntimeContextRegex, "$1")
         .replace(mediaAttachmentReferenceRegex, "")
         .replace(fileAttachmentReferenceRegex, "")
+        .replace(mobileBridgeTimestampPrefixRegex, "")
         .replace("\u001B", "")
         .replace(excessiveBlankLinesRegex, "\n\n")
         .trim()

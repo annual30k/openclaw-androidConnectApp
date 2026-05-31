@@ -130,8 +130,13 @@ fun ChatScreen(
     val isChatChainReady = gatewayState.isSelectedGatewayChatChainReady
     val hasActiveSession = hasSelectedGateway && chatState.currentSessionKey.isNotBlank() && isChatChainReady
     val selectedGatewayType = gatewayState.selectedGateway?.gatewayType ?: GatewayType.openclaw
-    val showsSkillExpansionControls = selectedGatewayType == GatewayType.openclaw || selectedGatewayType == GatewayType.hermes
-    val showsModelPicker = selectedGatewayType == GatewayType.openclaw || selectedGatewayType == GatewayType.hermes
+    val showsSkillExpansionControls = showsSkillExpansionControlsForGateway(selectedGatewayType)
+    val showsModelPicker = showsModelPickerForGateway(selectedGatewayType)
+    LaunchedEffect(gatewayId, showsModelPicker) {
+        if (showsModelPicker && !gatewayId.isNullOrBlank()) {
+            modelStore.loadModels(gatewayId)
+        }
+    }
     val connectionIssueMessage = remember(
         hasSelectedGateway,
         gatewayState.appRelayStatus,
@@ -156,6 +161,7 @@ fun ChatScreen(
     var lastObservedVisibleMessageCount by remember { mutableStateOf(0) }
     var lastObservedMessageSignature by remember { mutableStateOf("") }
     var lastObservedFirstVisibleMessageId by remember { mutableStateOf<String?>(null) }
+    var lastObservedUserMessageIds by remember { mutableStateOf<Set<String>>(emptySet()) }
     var hasPendingMessagesBelow by remember { mutableStateOf(false) }
     var activeGatewaySwitchId by remember { mutableStateOf<String?>(null) }
     var lastAutoHistoryRequestKey by remember { mutableStateOf<String?>(null) }
@@ -241,6 +247,8 @@ fun ChatScreen(
         RemoteImageCache.init(context.applicationContext)
         RemoteAttachmentCache.init(context.applicationContext)
         com.rethinkingstudio.clawlink.core.state.chat.VoicePlaybackReadStore.init(context.applicationContext)
+        com.rethinkingstudio.clawlink.core.state.chat.TimelinePersistenceMiddleware.init(context.applicationContext)
+        chatStore.rehydrateTimelineState()
     }
 
     DisposableEffect(viewModel) {
@@ -469,6 +477,7 @@ fun ChatScreen(
             lastObservedVisibleMessageCount = 0
             lastObservedMessageSignature = ""
             lastObservedFirstVisibleMessageId = null
+            lastObservedUserMessageIds = emptySet()
             hasPendingMessagesBelow = false
             return@LaunchedEffect
         }
@@ -477,6 +486,11 @@ fun ChatScreen(
         val previousSignature = lastObservedMessageSignature
         val previousFirstMessageId = lastObservedFirstVisibleMessageId
         val currentFirstMessageId = visibleMessagesForScroll.firstOrNull()?.id
+        val currentUserMessageIds = visibleMessagesForScroll
+            .asSequence()
+            .filter { it.role == MessageRole.user }
+            .map { it.id }
+            .toSet()
         val isInitialLoad = previousSignature.isEmpty()
         val appended = messageCount > previousCount
         val previousFirstMessageStillVisible = previousFirstMessageId != null &&
@@ -489,12 +503,14 @@ fun ChatScreen(
         } else {
             emptyList()
         }
-        val isOwnNewMessage = newTailMessages.any { it.role == MessageRole.user }
+        val hasNewUserMessage = !isInitialLoad && currentUserMessageIds.any { it !in lastObservedUserMessageIds }
+        val isOwnNewMessage = newTailMessages.any { it.role == MessageRole.user } || hasNewUserMessage
         lastObservedVisibleMessageCount = messageCount
         lastObservedMessageSignature = messageUpdateSignature
         lastObservedFirstVisibleMessageId = currentFirstMessageId
+        lastObservedUserMessageIds = currentUserMessageIds
 
-        if (isOlderHistoryWindowMove) {
+        if (isOlderHistoryWindowMove && !isOwnNewMessage) {
             return@LaunchedEffect
         }
 
@@ -859,6 +875,12 @@ fun ChatScreen(
         )
     }
 }
+
+internal fun showsSkillExpansionControlsForGateway(gatewayType: GatewayType): Boolean =
+    gatewayType == GatewayType.openclaw || gatewayType == GatewayType.hermes
+
+internal fun showsModelPickerForGateway(gatewayType: GatewayType): Boolean =
+    gatewayType == GatewayType.openclaw || gatewayType == GatewayType.hermes
 
 private fun mergeDistinctSlashActions(
     current: List<SlashAction>,

@@ -1058,6 +1058,7 @@ Tap the button below to refresh manually.</string>
     <string name="advanced_restart_detail">Use when Gateway is online. Connection will briefly drop.</string>
     <string name="advanced_remote_restart">Remote Restart</string>
     <string name="advanced_remote_restart_detail">Reboot the remote host system entirely.</string>
+    <string name="advanced_remote_restart_detail_hermes">Start or restart the Hermes gateway through the host agent.</string>
     <string name="advanced_restart_confirm_title">Restart Gateway?</string>
     <string name="advanced_restart_confirm_message">This will restart the selected gateway on the host. Current sessions might be briefly interrupted.</string>
     <string name="advanced_remote_restart_confirm_title">Remote Restart Host?</string>
@@ -1116,7 +1117,7 @@ Tap the button below to refresh manually.</string>
 
     <string name="settings_section_gateway">Gateway</string>
 
-    <string name="settings_section_gateway_subtitle">Check connectivity between App, Relay, and OpenClaw</string>
+    <string name="settings_section_gateway_subtitle">Check connectivity between App, Relay, and the host agent</string>
 
     <string name="settings_section_management">Management</string>
 
@@ -1524,9 +1525,10 @@ Tap the button below to refresh manually.</string>
     <string name="maintenance_restart_gateway">Restart Gateway</string>
     <string name="maintenance_remote_restart">Remote Restart</string>
     <string name="maintenance_online_restart_detail">Use when gateway is still online. Connection will briefly drop before restart.</string>
-    <string name="maintenance_remote_restart_detail">When Gateway is stopped but Relay and Agent are online, directly start OpenClaw.</string>
+    <string name="maintenance_remote_restart_detail">When the gateway service has stopped but Relay and the host agent are online, start the selected gateway again.</string>
     <string name="maintenance_suggestion_title">Suggestion</string>
     <string name="maintenance_suggestion_body">If you need to restore openclaw.json, select a backup from the backup page before restarting.</string>
+    <string name="maintenance_suggestion_body_hermes">If you need to import a Hermes backup, select a zip backup from the backup page before restarting.</string>
     <string name="maintenance_metric_elapsed">Elapsed</string>
     <string name="maintenance_metric_status">Status</string>
     <string name="maintenance_restart_waiting">Waiting for Restart</string>

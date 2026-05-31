@@ -63,3 +63,40 @@ fun StreamingIndicatorBubble(
         }
     }
 }
+
+@Composable
+fun InlineStreamingIndicator(
+    modifier: Modifier = Modifier
+) {
+    Row(
+        modifier = modifier.padding(top = 1.dp, bottom = 1.dp),
+        horizontalArrangement = Arrangement.spacedBy(5.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        val infiniteTransition = rememberInfiniteTransition(label = "inline-dots")
+
+        repeat(3) { index ->
+            val animationProgress by infiniteTransition.animateFloat(
+                initialValue = 0f,
+                targetValue = 1f,
+                animationSpec = infiniteRepeatable(
+                    animation = tween(durationMillis = 720, easing = LinearEasing),
+                    repeatMode = RepeatMode.Reverse,
+                    initialStartOffset = StartOffset(index * 160)
+                ),
+                label = "inline-dot-$index"
+            )
+
+            Box(
+                modifier = Modifier
+                    .size(6.dp)
+                    .scale(0.82f + (0.18f * animationProgress))
+                    .alpha(0.38f + (0.62f * animationProgress))
+                    .background(
+                        color = ChatColors.secondaryText.copy(alpha = 0.72f),
+                        shape = CircleShape
+                    )
+            )
+        }
+    }
+}

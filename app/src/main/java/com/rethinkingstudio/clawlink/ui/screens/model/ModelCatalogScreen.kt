@@ -89,6 +89,14 @@ import com.rethinkingstudio.clawlink.ui.components.ClawLinkAlertDialog
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
+internal fun modelDefaultConfirmationMessage(modelDisplayName: String, gatewayType: GatewayType?): String {
+    val gatewayLabel = if (gatewayType == GatewayType.hermes) "Hermes Agent" else "OpenClaw"
+    return choose(
+        "Set \"$modelDisplayName\" as $gatewayLabel's global default model. The host may briefly restart and recover.",
+        "将「$modelDisplayName」设为 $gatewayLabel 的全局默认模型。主机可能会短暂重启恢复。"
+    )
+}
+
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 fun ModelCatalogScreen(
@@ -207,7 +215,7 @@ fun ModelCatalogScreen(
         }
 
         if (isProcessing) {
-            ProcessingOverlay(operationsLocked = operationsLocked)
+            ProcessingOverlay(operationsLocked = operationsLocked, gatewayType = selectedGatewayType)
         }
 
         ModelSearchBar(
@@ -236,7 +244,7 @@ fun ModelCatalogScreen(
         ClawLinkAlertDialog(
             onDismissRequest = { modelToConfirm = null },
             title = choose("Set as global default model?", "设为全局默认模型？"),
-            message = choose("Set \"${model.displayName}\" as OpenClaw's global default model. The host may briefly restart and recover.", "将「${model.displayName}」设为 OpenClaw 的全局默认模型。主机可能会短暂重启恢复。"),
+            message = modelDefaultConfirmationMessage(model.displayName, selectedGatewayType),
             confirmText = choose("Set as default", "设为默认"),
             confirmRole = ClawLinkAlertActionRole.Destructive,
             onConfirm = {

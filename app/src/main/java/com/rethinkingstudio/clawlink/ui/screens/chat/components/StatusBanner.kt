@@ -31,7 +31,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.rethinkingstudio.clawlink.R
-import com.rethinkingstudio.clawlink.core.state.LocalizedText.choose
 import com.rethinkingstudio.clawlink.ui.components.ClawLinkCard
 import com.rethinkingstudio.clawlink.ui.screens.chat.ChatColors
 
@@ -198,19 +197,15 @@ internal fun ChatSessionSwitchLoadingOverlay(modifier: Modifier = Modifier) {
 
 @Composable
 internal fun ThinkingRow() {
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(10.dp),
+    Column(
+        verticalArrangement = Arrangement.spacedBy(8.dp),
         modifier = Modifier.padding(vertical = 4.dp)
     ) {
-        CircularProgressIndicator(
-            modifier = Modifier.size(18.dp),
-            strokeWidth = 2.dp,
-            color = ChatColors.linkBlue
-        )
+        StreamingIndicatorBubble()
         Text(
-            choose("ClawLink is thinking...", "ClawLink 正在思考…"),
-            style = MaterialTheme.typography.labelMedium,
+            "ClawLink",
+            modifier = Modifier.padding(horizontal = 4.dp),
+            style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
             color = ChatColors.secondaryText,
             fontWeight = FontWeight.Medium
         )

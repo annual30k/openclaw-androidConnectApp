@@ -52,6 +52,14 @@ internal fun maintenanceRestartMethod(gatewayType: GatewayType?, isRemote: Boole
     return if (isRemote) "clawpilot.gateway.remoteRestart" else "clawpilot.gateway.restart"
 }
 
+internal fun maintenanceSuggestionBodyRes(gatewayType: GatewayType?): Int {
+    return if (gatewayType == GatewayType.hermes) {
+        R.string.maintenance_suggestion_body_hermes
+    } else {
+        R.string.maintenance_suggestion_body
+    }
+}
+
 @Composable
 fun AppBackground() {
     val accentBlue = Color(0xFF0A84FF)
@@ -356,7 +364,7 @@ fun GatewayMaintenanceScreen(
                                 GlassCard {
                                     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                                         Text(stringResource(R.string.maintenance_suggestion_title), fontWeight = FontWeight.Bold, fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurface)
-                                        Text(stringResource(R.string.maintenance_suggestion_body), fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                        Text(stringResource(maintenanceSuggestionBodyRes(selectedGateway?.gatewayType)), fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                     }
                                 }
                             }

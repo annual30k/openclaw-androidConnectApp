@@ -91,11 +91,42 @@ private fun coalescedMediaMessages(messages: List<ChatMessage>): List<ChatMessag
         }
         if (isInternalContinuationDuplicateOfNearbyPrompt(message, coalesced)) return@forEach
         if (isDuplicateFileTransferStatusText(message, coalesced)) return@forEach
+        if (isDuplicateUserMessageInSameTurn(message, coalesced)) return@forEach
 
         coalesced += message
     }
 
     return coalesced
+}
+
+private fun isDuplicateUserMessageInSameTurn(message: ChatMessage, messages: List<ChatMessage>): Boolean {
+    if (message.role != MessageRole.user ||
+        message.state != MessageState.completed ||
+        message.hasFileContent ||
+        message.hasVoiceContent
+    ) {
+        return false
+    }
+    val normalized = normalizedPromptText(message.content)
+    if (normalized.isBlank()) return false
+
+    val previousUser = messages.asReversed().firstOrNull { candidate ->
+        candidate.role == MessageRole.user || isRenderableAssistantBoundary(candidate)
+    } ?: return false
+    if (previousUser.role != MessageRole.user ||
+        previousUser.hasFileContent ||
+        previousUser.hasVoiceContent
+    ) {
+        return false
+    }
+    return normalizedPromptText(previousUser.content) == normalized
+}
+
+private fun isRenderableAssistantBoundary(message: ChatMessage): Boolean {
+    return message.role == MessageRole.assistant &&
+        !message.hasToolContent &&
+        !isTransientAssistantPlaceholder(message) &&
+        message.plainTextContent.trim().isNotEmpty()
 }
 
 private fun nearbyMatchingUserPromptIndex(message: ChatMessage, messages: List<ChatMessage>): Int {

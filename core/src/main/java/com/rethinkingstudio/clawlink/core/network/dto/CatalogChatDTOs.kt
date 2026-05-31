@@ -48,7 +48,8 @@ data class ChatHistoryResponse(
     val items: List<ChatHistoryItem>,
     val hasMore: Boolean = false,
     val nextCursor: String? = null,
-    val newestCursor: String? = null
+    val newestCursor: String? = null,
+    val timelineSnapshot: JsonElement? = null
 )
 
 object ChatHistoryResponseSerializer : KSerializer<ChatHistoryResponse> {
@@ -61,6 +62,7 @@ object ChatHistoryResponseSerializer : KSerializer<ChatHistoryResponse> {
             put("hasMore", JsonPrimitive(value.hasMore))
             value.nextCursor?.let { put("nextCursor", JsonPrimitive(it)) }
             value.newestCursor?.let { put("newestCursor", JsonPrimitive(it)) }
+            value.timelineSnapshot?.let { put("timelineSnapshot", it) }
         }
         encoder.encodeSerializableValue(JsonElement.serializer(), obj)
     }
@@ -79,7 +81,8 @@ object ChatHistoryResponseSerializer : KSerializer<ChatHistoryResponse> {
             items = items,
             hasMore = obj.boolean("hasMore", "has_more") ?: false,
             nextCursor = obj.string("nextCursor", "next_cursor"),
-            newestCursor = obj.string("newestCursor", "newest_cursor")
+            newestCursor = obj.string("newestCursor", "newest_cursor"),
+            timelineSnapshot = obj["timelineSnapshot"]
         )
     }
 }

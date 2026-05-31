@@ -147,15 +147,10 @@ internal fun MessageBubble(
             StandaloneFileMessage(blocks = fileBlocks, isUser = isUser, messageState = message.state, createdAt = message.createdAt, relayBaseUrl = relayBaseUrl, accessToken = accessToken, onImageClick = onImageClick, onFileClick = onFileClick)
             return@Column
         }
-        if (!isUser && message.state == MessageState.streaming &&
-            isStreamingIndicatorDisplayText(displayText) &&
-            fileBlocks.isEmpty() &&
-            voiceBlocks.isEmpty()
+        if (shouldShowStreamingWaitState(message.role, message.state) &&
+            shouldUseStandaloneStreamingIndicator(displayText, fileBlocks.isNotEmpty(), voiceBlocks.isNotEmpty())
         ) {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                StreamingIndicatorBubble()
-                Text("ClawLink", modifier = Modifier.padding(horizontal = 4.dp), style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp), color = ChatColors.secondaryText, fontWeight = FontWeight.Medium)
-            }
+            StreamingIndicatorBubble()
             return@Column
         }
         Surface(
@@ -182,7 +177,12 @@ internal fun MessageBubble(
                 if (displayText.isNotEmpty()) {
                     MarkdownMessageText(text = displayText, textColor = if (isUser) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface, linkColor = if (isUser) Color.White else MaterialTheme.colorScheme.primary, textSizeSp = 13f, onDarkBackground = isUser)
                 }
-                MessageFooter(title = if (isUser) "You" else "ClawLink", createdAt = message.createdAt, isUser = isUser)
+                if (shouldShowInlineStreamingIndicator(message.role, message.state, displayText, fileBlocks.isNotEmpty(), voiceBlocks.isNotEmpty())) {
+                    InlineStreamingIndicator()
+                }
+                if (shouldShowMessageFooter(message.role, message.state, displayText, fileBlocks.isNotEmpty(), voiceBlocks.isNotEmpty(), isTool)) {
+                    MessageFooter(title = if (isUser) "You" else "ClawLink", createdAt = message.createdAt, isUser = isUser)
+                }
             }
         }
     }
@@ -199,6 +199,7 @@ internal fun isStreamingIndicatorDisplayText(text: String): Boolean {
     val trimmed = text.trim()
     return trimmed.isBlank() ||
         trimmed.startsWith("正在连接") ||
+        trimmed.startsWith("连接中") ||
         trimmed.startsWith("Connecting") ||
         trimmed.startsWith("连接中断") ||
         trimmed.startsWith("Connection interrupted") ||
@@ -212,6 +213,40 @@ internal fun isStreamingIndicatorDisplayText(text: String): Boolean {
         trimmed.startsWith("Waiting for host transcription") ||
         isProtocolTypingMarkerDisplayText(trimmed)
 }
+
+internal fun shouldShowStreamingWaitState(role: MessageRole, state: MessageState): Boolean =
+    role == MessageRole.assistant && state == MessageState.streaming
+
+internal fun shouldUseStandaloneStreamingIndicator(
+    displayText: String,
+    hasFileBlocks: Boolean,
+    hasVoiceBlocks: Boolean
+): Boolean =
+    !hasFileBlocks && !hasVoiceBlocks
+
+internal fun shouldShowInlineStreamingIndicator(
+    role: MessageRole,
+    state: MessageState,
+    displayText: String,
+    hasFileBlocks: Boolean,
+    hasVoiceBlocks: Boolean
+): Boolean =
+    shouldShowStreamingWaitState(role, state) &&
+        !hasFileBlocks &&
+        !hasVoiceBlocks &&
+        !shouldUseStandaloneStreamingIndicator(displayText, hasFileBlocks, hasVoiceBlocks)
+
+internal fun shouldShowMessageFooter(
+    role: MessageRole,
+    state: MessageState,
+    displayText: String,
+    hasFileBlocks: Boolean,
+    hasVoiceBlocks: Boolean,
+    isToolMessage: Boolean
+): Boolean =
+    !isToolMessage &&
+        !(shouldShowStreamingWaitState(role, state) &&
+            shouldUseStandaloneStreamingIndicator(displayText, hasFileBlocks, hasVoiceBlocks))
 
 @Composable
 internal fun MessageFooter(title: String, createdAt: String, isUser: Boolean, modifier: Modifier = Modifier) {

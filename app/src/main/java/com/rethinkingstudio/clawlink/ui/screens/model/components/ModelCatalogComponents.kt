@@ -79,6 +79,7 @@ import com.rethinkingstudio.clawlink.core.models.catalog.ModelItem
 import com.rethinkingstudio.clawlink.core.models.gateway.AggregateStatus
 import com.rethinkingstudio.clawlink.core.models.gateway.ConnectionPhase
 import com.rethinkingstudio.clawlink.core.models.gateway.GatewaySummary
+import com.rethinkingstudio.clawlink.core.models.gateway.GatewayType
 import com.rethinkingstudio.clawlink.core.state.LocalizedText.choose
 import com.rethinkingstudio.clawlink.core.state.gateway.GatewayStore
 import com.rethinkingstudio.clawlink.core.state.model.ModelStore
@@ -428,8 +429,17 @@ internal fun ModelEmptyState(
     }
 }
 
+internal fun modelProcessingTitle(operationsLocked: Boolean, gatewayType: GatewayType?): String {
+    if (operationsLocked) return choose("Gateway is recovering", "网关正在恢复")
+    return if (gatewayType == GatewayType.hermes) {
+        choose("Waiting for Hermes Agent", "等待 Hermes Agent 响应")
+    } else {
+        choose("Waiting for OpenClaw", "等待 OpenClaw 响应")
+    }
+}
+
 @Composable
-internal fun ProcessingOverlay(operationsLocked: Boolean) {
+internal fun ProcessingOverlay(operationsLocked: Boolean, gatewayType: GatewayType?) {
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -464,7 +474,7 @@ internal fun ProcessingOverlay(operationsLocked: Boolean) {
             
             Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(
-                    if (operationsLocked) choose("Gateway is recovering", "网关正在恢复") else choose("Waiting for OpenClaw", "等待 OpenClaw 响应"),
+                    modelProcessingTitle(operationsLocked, gatewayType),
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.onSurface

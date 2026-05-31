@@ -77,6 +77,60 @@ class ChatModelsTest {
     }
 
     @Test
+    fun streamingAssistantProtocolTypingMarkerRemainsDisplayable() {
+        val streaming = ChatMessage(
+            id = "assistant-typing",
+            role = MessageRole.assistant,
+            state = MessageState.streaming,
+            content = "[[clawlink:typing]]"
+        )
+        val completed = streaming.copy(state = MessageState.completed)
+
+        assertTrue(streaming.shouldDisplayInChat(showInvocationProcess = false))
+        assertFalse(completed.shouldDisplayInChat(showInvocationProcess = false))
+    }
+
+    @Test
+    fun completedAssistantProtocolTypingMarkerContentBlockIsHidden() {
+        val completed = ChatMessage(
+            id = "assistant-typing-block",
+            role = MessageRole.assistant,
+            state = MessageState.completed,
+            contentBlocks = listOf(RelayChatContentBlock(type = "text", text = "[[clawlink:typing]]"))
+        )
+
+        assertFalse(completed.shouldDisplayInChat(showInvocationProcess = false))
+    }
+
+    @Test
+    fun completedAssistantLegacyConnectingPlaceholderIsHidden() {
+        val placeholders = listOf("正在连接...", "连接中", "Connecting...", "正在同步回复...", "Syncing reply...")
+
+        placeholders.forEach { placeholder ->
+            val completed = ChatMessage(
+                id = "assistant-legacy-connecting",
+                role = MessageRole.assistant,
+                state = MessageState.completed,
+                content = placeholder
+            )
+
+            assertFalse(completed.shouldDisplayInChat(showInvocationProcess = false))
+        }
+    }
+
+    @Test
+    fun completedAssistantBlankTextContentBlockIsHidden() {
+        val completed = ChatMessage(
+            id = "assistant-empty-block",
+            role = MessageRole.assistant,
+            state = MessageState.completed,
+            contentBlocks = listOf(RelayChatContentBlock(type = "text", text = ""))
+        )
+
+        assertFalse(completed.shouldDisplayInChat(showInvocationProcess = false))
+    }
+
+    @Test
     fun voiceContentBlocksDecodeSnakeCaseDownloadMetadata() {
         val block = Json.decodeFromString<RelayChatContentBlock>(
             """

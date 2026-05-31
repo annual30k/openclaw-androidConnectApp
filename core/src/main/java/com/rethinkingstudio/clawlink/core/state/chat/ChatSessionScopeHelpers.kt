@@ -42,8 +42,22 @@ internal fun selectSessionKeyAfterLoad(
     if (shouldKeepCurrent) {
         return normalizeSessionKey(currentSessionKey)
     }
+    val current = normalizeSessionKey(currentSessionKey)
+    val persisted = persistedSessionKey?.trim()?.takeIf { it.isNotEmpty() }?.let { normalizeSessionKey(it) }
+    if (persisted != null && sameSessionKey(current, persisted) && isLocalDraftSessionKey(persisted)) {
+        return persisted
+    }
     sessions.firstOrNull()?.sessionKey?.trim()?.ifBlank { defaultSessionKey }?.let { return it }
-    return persistedSessionKey?.trim()?.ifBlank { defaultSessionKey } ?: defaultSessionKey
+    return persisted ?: defaultSessionKey
+}
+
+private fun isLocalDraftSessionKey(sessionKey: String): Boolean {
+    val localComponent = normalizeSessionKey(sessionKey).substringAfterLast(':')
+    if (localComponent.startsWith("mobile-") || localComponent.startsWith("ios-") || localComponent.startsWith("tui-")) {
+        return localComponent.length > "ios-".length
+    }
+    return localComponent.startsWith("session_") &&
+        localComponent.removePrefix("session_").toLongOrNull() != null
 }
 
 internal fun shouldKeepCurrentSessionAfterLoad(

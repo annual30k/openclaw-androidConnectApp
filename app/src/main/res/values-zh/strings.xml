@@ -1057,6 +1057,7 @@
     <string name="advanced_restart_detail">Gateway 在线时使用，会短暂中断当前连接。</string>
     <string name="advanced_remote_restart">远程重启</string>
     <string name="advanced_remote_restart_detail">完全重启远程宿主系统。</string>
+    <string name="advanced_remote_restart_detail_hermes">通过宿主机 Agent 拉起或重启 Hermes 网关。</string>
     <string name="advanced_restart_confirm_title">重启网关软件？</string>
     <string name="advanced_restart_confirm_message">这将重启宿主机上的当前网关。当前正在进行的会话可能会有短暂中断。</string>
     <string name="advanced_remote_restart_confirm_title">远程重启主机？</string>
@@ -1116,7 +1117,7 @@
 
     <string name="settings_section_gateway">网关</string>
 
-    <string name="settings_section_gateway_subtitle">检查 App、Relay 与 OpenClaw 哪一段没有连通</string>
+    <string name="settings_section_gateway_subtitle">检查 App、Relay 与宿主机 Agent 哪一段没有连通</string>
 
     <string name="settings_section_management">管理</string>
 
@@ -1524,9 +1525,10 @@
     <string name="maintenance_restart_gateway">重启 Gateway</string>
     <string name="maintenance_remote_restart">远程重启</string>
     <string name="maintenance_online_restart_detail">网关仍在线时使用，会短暂中断当前连接后再拉起。</string>
-    <string name="maintenance_remote_restart_detail">当 Gateway 已停止、但 Relay 和 Agent 仍在线时，直接拉起 OpenClaw。</string>
+    <string name="maintenance_remote_restart_detail">当网关服务已停止、但 Relay 和宿主机 Agent 仍在线时，直接拉起当前选中的网关。</string>
     <string name="maintenance_suggestion_title">建议</string>
     <string name="maintenance_suggestion_body">如果需要恢复 openclaw.json，请先在备份页面选择备份后再执行重启。</string>
+    <string name="maintenance_suggestion_body_hermes">如果需要导入 Hermes 备份，请先在备份页面选择 zip 备份后再执行重启。</string>
     <string name="maintenance_metric_elapsed">已等待</string>
     <string name="maintenance_metric_status">状态</string>
     <string name="maintenance_restart_waiting">重启等待中</string>

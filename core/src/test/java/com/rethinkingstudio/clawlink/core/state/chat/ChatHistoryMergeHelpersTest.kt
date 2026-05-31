@@ -10,8 +10,14 @@ import com.rethinkingstudio.clawlink.core.network.dto.ChatHistoryResponse
 import com.rethinkingstudio.clawlink.core.network.dto.ChatHistoryItem
 import com.rethinkingstudio.clawlink.core.network.transport.RelayWebSocketClient
 import java.time.Instant
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.runBlocking
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -99,6 +105,133 @@ class ChatHistoryMergeHelpersTest {
         assertEquals(1, result.messages.size)
         assertEquals(MessageState.completed, result.messages.single().state)
         assertEquals("已经输出的内容", result.messages.single().content)
+    }
+
+    @Test
+    fun refreshKeepsCompletedAssistantWhenHistoryHasNotCaughtUp() {
+        val historyUser = ChatMessage(
+            id = "history-user-completed-lag",
+            role = MessageRole.user,
+            content = "hello",
+            runId = "history-user-completed-lag",
+            sortTimestamp = 1_000.0
+        )
+        val localUser = ChatMessage(
+            id = "local-user-completed-lag",
+            role = MessageRole.user,
+            content = "hello",
+            runId = "local-user-completed-lag",
+            sortTimestamp = 1_000.0
+        )
+        val completedAssistant = ChatMessage(
+            id = "assistant-completed-lag",
+            role = MessageRole.assistant,
+            state = MessageState.completed,
+            content = "final answer",
+            runId = "run-completed-lag",
+            sortTimestamp = 1_001.0
+        )
+
+        val merged = mergeHistoryWithCurrentMessages(
+            historyMessages = listOf(historyUser),
+            currentMessages = listOf(localUser, completedAssistant),
+            currentStreamingMessageId = null,
+            isTrackedPendingAssistantMessageId = { false }
+        )
+
+        assertEquals(listOf("local-user-completed-lag", "run-completed-lag"), merged.map { it.runId })
+    }
+
+    @Test
+    fun refreshKeepsNewRepeatedCompletedAssistantWhenOnlyOldHistoryMatches() {
+        val historyUser = ChatMessage(
+            id = "history-old-user",
+            role = MessageRole.user,
+            content = "hello",
+            runId = "history-old-user",
+            sortTimestamp = 100.0
+        )
+        val historyAssistant = ChatMessage(
+            id = "history-old-assistant",
+            role = MessageRole.assistant,
+            state = MessageState.completed,
+            content = "final answer",
+            runId = "history-old-assistant",
+            sortTimestamp = 101.0
+        )
+        val localUser = ChatMessage(
+            id = "local-user-new-turn",
+            role = MessageRole.user,
+            content = "hello",
+            runId = "local-user-new-turn",
+            sortTimestamp = 1_000.0
+        )
+        val completedAssistant = ChatMessage(
+            id = "assistant-new-turn",
+            role = MessageRole.assistant,
+            state = MessageState.completed,
+            content = "final answer",
+            runId = "run-new-turn",
+            sortTimestamp = 1_001.0
+        )
+
+        val merged = mergeHistoryWithCurrentMessages(
+            historyMessages = listOf(historyUser, historyAssistant),
+            currentMessages = listOf(localUser, completedAssistant),
+            currentStreamingMessageId = null,
+            isTrackedPendingAssistantMessageId = { false }
+        )
+
+        assertEquals(
+            listOf("history-old-user", "history-old-assistant", "local-user-new-turn", "run-new-turn"),
+            merged.map { it.runId }
+        )
+    }
+
+    @Test
+    fun refreshDropsCompletedAssistantWhenHistoryAlreadyContainsIt() {
+        val historyUser = ChatMessage(
+            id = "history-user-completed-present",
+            role = MessageRole.user,
+            content = "hello",
+            runId = "history-user-completed-present",
+            sortTimestamp = 2_000.0
+        )
+        val historyAssistant = ChatMessage(
+            id = "history-assistant-completed-present",
+            role = MessageRole.assistant,
+            state = MessageState.completed,
+            content = "final answer",
+            runId = "history-assistant-completed-present",
+            sortTimestamp = 2_001.0
+        )
+        val localUser = ChatMessage(
+            id = "local-user-completed-present",
+            role = MessageRole.user,
+            content = "hello",
+            runId = "local-user-completed-present",
+            sortTimestamp = 2_000.0
+        )
+        val completedAssistant = ChatMessage(
+            id = "assistant-completed-present",
+            role = MessageRole.assistant,
+            state = MessageState.completed,
+            content = "final answer",
+            runId = "run-completed-present",
+            sortTimestamp = 2_001.0
+        )
+
+        val merged = mergeHistoryWithCurrentMessages(
+            historyMessages = listOf(historyUser, historyAssistant),
+            currentMessages = listOf(localUser, completedAssistant),
+            currentStreamingMessageId = null,
+            isTrackedPendingAssistantMessageId = { false }
+        )
+
+        assertEquals(
+            listOf("local-user-completed-present", "history-assistant-completed-present"),
+            merged.map { it.runId }
+        )
     }
 
     @Test
@@ -281,6 +414,196 @@ class ChatHistoryMergeHelpersTest {
     }
 
     @Test
+    fun loadHistoryTimelineSnapshotReplacesStaleLocalStreamingState() = runBlocking {
+        val wsClient = RelayWebSocketClient()
+        try {
+            val store = ChatStore(
+                apiClient = RelayAPIClient(),
+                wsClient = wsClient,
+                notificationPort = object : NotificationPort {
+                    override fun showReplyNotification(sessionKey: String, title: String, body: String) = Unit
+                    override fun cancelNotification(id: Int) = Unit
+                    override fun cancelAll() = Unit
+                },
+                chatHistoryPageFetcher = { _, _, _, _, _ ->
+                    ChatHistoryResponse(
+                        items = emptyList(),
+                        hasMore = false,
+                        timelineSnapshot = Json.parseToJsonElement(
+                            """
+                            {
+                              "protocolVersion": 2,
+                              "eventType": "history.snapshot.page",
+                              "gatewayId": "gw_1",
+                              "sessionKey": "main",
+                              "source": "history",
+                              "messages": [
+                                {
+                                  "turnId": "turn-1",
+                                  "runId": "run-1",
+                                  "messageId": "user-1",
+                                  "role": "user",
+                                  "messageState": "completed",
+                                  "createdAt": "2026-05-29T09:18:00.000Z",
+                                  "content": [{ "type": "text", "text": "hello" }]
+                                },
+                                {
+                                  "turnId": "turn-1",
+                                  "runId": "run-1",
+                                  "messageId": "assistant-1",
+                                  "role": "assistant",
+                                  "messageState": "completed",
+                                  "createdAt": "2026-05-29T09:18:05.000Z",
+                                  "content": [{ "type": "text", "text": "reply" }]
+                                }
+                              ],
+                              "attachments": []
+                            }
+                            """.trimIndent()
+                        )
+                    )
+                }
+            )
+            val stale = ChatMessage(
+                id = "assistant-stale",
+                role = MessageRole.assistant,
+                state = MessageState.streaming,
+                content = "Connecting...",
+                runId = "stale-run"
+            )
+            store.setStateForTest(
+                ChatState(
+                    messages = listOf(stale),
+                    currentGatewayId = "gw_1",
+                    currentSessionKey = "main",
+                    isStreaming = true
+                )
+            )
+            store.setTimelineStateForTest(
+                ChatTimelineState(
+                    messages = listOf(stale),
+                    activeRunId = "stale-run",
+                    activeRunsByTurnId = mapOf("stale-turn" to "stale-run"),
+                    activeTurnByRunId = mapOf("stale-run" to "stale-turn")
+                )
+            )
+            store.setRunScopesForTest(
+                linkedMapOf(
+                    "stale-run" to ChatRunScope(
+                        gatewayId = "gw_1",
+                        sessionKey = "main",
+                        assistantMessageId = "assistant-stale",
+                        triggeringUserMessageId = null
+                    )
+                )
+            )
+
+            store.loadHistory("gw_1", "main", limit = 100)
+
+            val state = store.state.value
+            assertEquals(listOf("user-1", "assistant-1"), state.messages.map { it.id })
+            assertEquals(listOf(MessageState.completed, MessageState.completed), state.messages.map { it.state })
+            assertFalse(state.isStreaming)
+            assertFalse(state.isStoppingRun)
+        } finally {
+            wsClient.destroy()
+        }
+    }
+
+    @Test
+    fun localTextAssistantPlaceholderUsesProtocolTypingMarker() {
+        val assistant = buildLocalTextAssistantPlaceholderMessage(
+            id = "assistant-run-1",
+            clientRunId = "run-1",
+            sortTimestamp = 10.001
+        )
+
+        assertEquals(MessageRole.assistant, assistant.role)
+        assertEquals(MessageState.streaming, assistant.state)
+        assertTrue(isProtocolTypingMarkerText(assistant.content))
+        assertFalse(assistant.content.contains("正在连接"))
+        assertFalse(assistant.content.contains("Connecting"))
+    }
+
+    @Test
+    fun legacyAssistantFinalClearsPersistedTimelineRun() {
+        val wsClient = RelayWebSocketClient()
+        try {
+            val store = ChatStore(
+                apiClient = RelayAPIClient(),
+                wsClient = wsClient,
+                notificationPort = object : NotificationPort {
+                    override fun showReplyNotification(sessionKey: String, title: String, body: String) = Unit
+                    override fun cancelNotification(id: Int) = Unit
+                    override fun cancelAll() = Unit
+                }
+            )
+            val user = ChatMessage(
+                id = "user-run-1",
+                role = MessageRole.user,
+                state = MessageState.completed,
+                content = "reply OK",
+                runId = "local-user-run-1",
+                sortTimestamp = 10.0
+            )
+            val placeholder = buildLocalTextAssistantPlaceholderMessage(
+                id = "assistant-run-1",
+                clientRunId = "run-1",
+                sortTimestamp = 10.001
+            )
+            val runScope = ChatRunScope(
+                gatewayId = "gw_1",
+                sessionKey = "main",
+                assistantMessageId = placeholder.id,
+                triggeringUserMessageId = user.id
+            )
+            store.setStateForTest(
+                ChatState(
+                    messages = listOf(user, placeholder),
+                    currentGatewayId = "gw_1",
+                    currentSessionKey = "main",
+                    isStreaming = true
+                )
+            )
+            store.setTimelineStateForTest(
+                ChatTimelineState(
+                    messages = listOf(user, placeholder),
+                    activeRunId = "run-1",
+                    activeRunsByTurnId = mapOf("run-1" to "run-1"),
+                    activeTurnByRunId = mapOf("run-1" to "run-1")
+                )
+            )
+            store.setRunScopesForTest(linkedMapOf("run-1" to runScope))
+
+            store.invokeHandleFinalForTest(
+                envelope = buildJsonObject {
+                    put("gatewayId", "gw_1")
+                    put("sessionKey", "main")
+                },
+                payload = buildJsonObject {
+                    put("runId", "run-1")
+                    put("role", "assistant")
+                    put("content", "OK805")
+                }
+            )
+
+            val state = store.state.value
+            assertEquals(listOf("user-run-1", "assistant-run-1"), state.messages.map { it.id })
+            assertEquals(MessageState.completed, state.messages.last().state)
+            assertEquals("OK805", state.messages.last().content)
+            assertFalse(state.isStreaming)
+
+            val timelineState = store.timelineStateForTest()
+            assertEquals(null, timelineState.activeRunId)
+            assertTrue(timelineState.activeRunsByTurnId.isEmpty())
+            assertTrue(timelineState.activeTurnByRunId.isEmpty())
+            assertEquals(listOf(MessageState.completed, MessageState.completed), timelineState.messages.map { it.state })
+        } finally {
+            wsClient.destroy()
+        }
+    }
+
+    @Test
     fun loadOlderHistoryFailureKeepsExistingWindowAndCursor() = runBlocking {
         var shouldFailOlder = false
         val wsClient = RelayWebSocketClient()
@@ -327,6 +650,45 @@ class ChatHistoryMergeHelpersTest {
         val direction: String
     )
 
+    @Suppress("UNCHECKED_CAST")
+    private fun ChatStore.setStateForTest(state: ChatState) {
+        val field = ChatStore::class.java.getDeclaredField("_state")
+        field.isAccessible = true
+        val flow = field.get(this) as MutableStateFlow<ChatState>
+        flow.value = state
+    }
+
+    private fun ChatStore.setTimelineStateForTest(state: ChatTimelineState) {
+        val field = ChatStore::class.java.getDeclaredField("timelineState")
+        field.isAccessible = true
+        field.set(this, state)
+    }
+
+    private fun ChatStore.setRunScopesForTest(scopes: LinkedHashMap<String, ChatRunScope>) {
+        val field = ChatStore::class.java.getDeclaredField("chatRunScopes")
+        field.isAccessible = true
+        @Suppress("UNCHECKED_CAST")
+        val value = field.get(this) as MutableMap<String, ChatRunScope>
+        value.clear()
+        value.putAll(scopes)
+    }
+
+    private fun ChatStore.timelineStateForTest(): ChatTimelineState {
+        val field = ChatStore::class.java.getDeclaredField("timelineState")
+        field.isAccessible = true
+        return field.get(this) as ChatTimelineState
+    }
+
+    private fun ChatStore.invokeHandleFinalForTest(envelope: JsonObject, payload: JsonElement) {
+        val method = ChatStore::class.java.getDeclaredMethod(
+            "handleFinal",
+            JsonObject::class.java,
+            JsonElement::class.java
+        )
+        method.isAccessible = true
+        method.invoke(this, envelope, payload)
+    }
+
     private fun chatHistoryItems(indices: IntRange): List<ChatHistoryItem> {
         return indices.map { index ->
             ChatHistoryItem(
@@ -367,6 +729,40 @@ class ChatHistoryMergeHelpersTest {
 
         assertEquals(listOf("history-user", "history-tool", "history-assistant"), ordered.map { it.runId })
         assertTrue((messages[1].sortTimestamp ?: 0.0) > (messages[0].sortTimestamp ?: 0.0))
+    }
+
+    @Test
+    fun historyNormalizationCollapsesTimestampPrefixedUserShadowInSameTurn() {
+        val messages = buildHistoryMessagesFromItems(
+            listOf(
+                ChatHistoryItem(
+                    id = "mobile-user",
+                    role = "user",
+                    content = JsonPrimitive("你可以做什么吗"),
+                    createdAt = "2026-05-29T08:08:00.000Z"
+                ),
+                ChatHistoryItem(
+                    id = "host-user-shadow",
+                    role = "user",
+                    content = JsonPrimitive("[Fri 2026-05-29 16:08 GMT+8] 你可以做什么吗"),
+                    createdAt = "2026-05-29T08:08:01.000Z"
+                ),
+                ChatHistoryItem(
+                    id = "assistant",
+                    role = "assistant",
+                    content = JsonPrimitive("可以。简单说，我能当你的本地助理兼工程搭子。"),
+                    createdAt = "2026-05-29T08:08:05.000Z"
+                )
+            )
+        )
+
+        val normalized = orderMessagesWithSourceRunAnchors(messages)
+
+        assertEquals(listOf("mobile-user", "assistant"), normalized.map { it.runId })
+        assertEquals(
+            listOf("你可以做什么吗", "可以。简单说，我能当你的本地助理兼工程搭子。"),
+            normalized.map { it.content }
+        )
     }
 
     @Test
@@ -549,6 +945,51 @@ class ChatHistoryMergeHelpersTest {
 
         assertEquals(listOf("local-user", "history-assistant"), merged.map { it.id })
         assertFalse(merged.any { it.id == pendingAssistant.id })
+    }
+
+    @Test
+    fun keepsCompletedLiveAssistantWhenOnlyContentMatchesOldSyntheticHistory() {
+        val historyUser = ChatMessage(
+            id = "history-user",
+            role = MessageRole.user,
+            content = "Android smoke 104037",
+            runId = "history-user",
+            sortTimestamp = 0.001
+        )
+        val historyAssistant = ChatMessage(
+            id = "history-assistant",
+            role = MessageRole.assistant,
+            content = "看起来像是一个测试用例编号或 Bug 工单号？",
+            runId = "history-assistant",
+            sortTimestamp = 0.002
+        )
+        val localUser = ChatMessage(
+            id = "local-user",
+            role = MessageRole.user,
+            content = "Android smoke 104037",
+            runId = "local-user-client-run",
+            sortTimestamp = 1_780_000_000.0
+        )
+        val liveAssistant = ChatMessage(
+            id = "live-assistant",
+            role = MessageRole.assistant,
+            state = MessageState.completed,
+            content = "看起来像是一个测试用例编号或 Bug 工单号？",
+            runId = "client-run",
+            sortTimestamp = 1_780_000_002.0
+        )
+
+        val merged = mergeHistoryWithCurrentMessages(
+            historyMessages = listOf(historyUser, historyAssistant),
+            currentMessages = listOf(localUser, liveAssistant),
+            currentStreamingMessageId = null,
+            isTrackedPendingAssistantMessageId = { false }
+        )
+
+        assertEquals(
+            listOf("history-user", "history-assistant", "local-user", "live-assistant"),
+            merged.map { it.id }
+        )
     }
 
     @Test

@@ -26,6 +26,14 @@ import com.rethinkingstudio.clawlink.core.state.gateway.GatewayStore
 import com.rethinkingstudio.clawlink.ui.components.ClawLinkCard
 import com.rethinkingstudio.clawlink.ui.components.ClawLinkScaffold
 
+internal fun advancedRemoteRestartDetailRes(gatewayType: GatewayType?): Int {
+    return if (gatewayType == GatewayType.hermes) {
+        R.string.advanced_remote_restart_detail_hermes
+    } else {
+        R.string.advanced_remote_restart_detail
+    }
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AdvancedScreen(
@@ -86,7 +94,7 @@ fun AdvancedScreen(
                     AdvancedFeatureRow(
                         icon = Icons.Default.SettingsRemote,
                         title = stringResource(R.string.advanced_remote_restart),
-                        detail = stringResource(R.string.advanced_remote_restart_detail),
+                        detail = stringResource(advancedRemoteRestartDetailRes(selectedGatewayType)),
                         tint = Color(0xFF6366F1),
                         enabled = isRecoveryActionEnabled,
                         onClick = onNavigateToRemoteRestart

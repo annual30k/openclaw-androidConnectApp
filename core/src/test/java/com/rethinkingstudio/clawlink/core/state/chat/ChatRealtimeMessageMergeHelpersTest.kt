@@ -218,6 +218,251 @@ class ChatRealtimeMessageMergeHelpersTest {
         )
     }
 
+    @Test
+    fun mergesDuplicateCompletedAssistantFinalForSameRun() {
+        val current = listOf(
+            ChatMessage(
+                id = "user-1",
+                role = MessageRole.user,
+                state = MessageState.completed,
+                content = "Reply only OK",
+                runId = "local-user-run-1",
+                sortTimestamp = 60.0
+            ),
+            ChatMessage(
+                id = "assistant-timeline",
+                role = MessageRole.assistant,
+                state = MessageState.completed,
+                content = "OK",
+                runId = "run-1",
+                sortTimestamp = 60.001
+            )
+        )
+        val legacyFinal = ChatMessage(
+            id = "assistant-legacy-final",
+            role = MessageRole.assistant,
+            state = MessageState.completed,
+            content = "OK",
+            runId = "run-1",
+            sortTimestamp = 62.0
+        )
+
+        val merged = mergeCompletedAssistantFinalIntoCurrentMessages(current, legacyFinal)
+
+        requireNotNull(merged)
+        assertEquals(listOf("user-1", "assistant-timeline"), merged.map { it.id })
+        assertEquals(1, merged.count { it.role == MessageRole.assistant && it.content == "OK" })
+        assertEquals(60.001, merged.last().sortTimestamp ?: -1.0, 0.0001)
+    }
+
+    @Test
+    fun removesTransientPlaceholderWhenSameRunFails() {
+        val current = listOf(
+            ChatMessage(
+                id = "user-1",
+                role = MessageRole.user,
+                state = MessageState.completed,
+                content = "trigger failure",
+                runId = "local-user-run-1",
+                sortTimestamp = 70.0
+            ),
+            ChatMessage(
+                id = "assistant-placeholder",
+                role = MessageRole.assistant,
+                state = MessageState.streaming,
+                content = protocolTypingMarkerText,
+                runId = "run-1",
+                sortTimestamp = 70.001
+            ),
+            ChatMessage(
+                id = "assistant-error",
+                role = MessageRole.assistant,
+                state = MessageState.failed,
+                content = "API call failed after 3 retries: HTTP 429",
+                runId = "run-1",
+                sortTimestamp = 71.0
+            )
+        )
+
+        val resolved = removeResolvedTransientAssistantPlaceholders(current)
+
+        assertEquals(listOf("user-1", "assistant-error"), resolved.map { it.id })
+        assertFalse(resolved.any { it.state == MessageState.streaming })
+    }
+
+    @Test
+    fun removesTransientPlaceholderWhenSameTurnCompletesWithDifferentRun() {
+        val current = listOf(
+            ChatMessage(
+                id = "user-1",
+                role = MessageRole.user,
+                state = MessageState.completed,
+                content = "reply OK831",
+                runId = "local-user-client-run",
+                sortTimestamp = 80.0
+            ),
+            ChatMessage(
+                id = "assistant-placeholder",
+                role = MessageRole.assistant,
+                state = MessageState.streaming,
+                content = protocolTypingMarkerText,
+                runId = "client-run",
+                sortTimestamp = 80.001
+            ),
+            ChatMessage(
+                id = "assistant-server-final",
+                role = MessageRole.assistant,
+                state = MessageState.completed,
+                content = "OK831",
+                runId = "server-run",
+                sortTimestamp = 81.0
+            )
+        )
+
+        val resolved = removeResolvedTransientAssistantPlaceholders(current)
+
+        assertEquals(listOf("user-1", "assistant-server-final"), resolved.map { it.id })
+        assertFalse(resolved.any { it.state == MessageState.streaming })
+    }
+
+    @Test
+    fun doesNotMergeSameAssistantTextAcrossDifferentRuns() {
+        val current = listOf(
+            ChatMessage(
+                id = "assistant-old",
+                role = MessageRole.assistant,
+                state = MessageState.completed,
+                content = "OK",
+                runId = "run-old"
+            )
+        )
+        val nextFinal = ChatMessage(
+            id = "assistant-new",
+            role = MessageRole.assistant,
+            state = MessageState.completed,
+            content = "OK",
+            runId = "run-new"
+        )
+
+        assertEquals(null, mergeCompletedAssistantFinalIntoCurrentMessages(current, nextFinal))
+    }
+
+    @Test
+    fun removesResolvedTransientPlaceholderWhenCompletedAssistantExistsForSameRun() {
+        val messages = listOf(
+            ChatMessage(
+                id = "user-1",
+                role = MessageRole.user,
+                state = MessageState.completed,
+                content = "Reply only OK",
+                runId = "local-user-run-1"
+            ),
+            ChatMessage(
+                id = "assistant-local",
+                role = MessageRole.assistant,
+                state = MessageState.streaming,
+                content = "正在连接...",
+                runId = "run-1"
+            ),
+            ChatMessage(
+                id = "assistant-final",
+                role = MessageRole.assistant,
+                state = MessageState.completed,
+                content = "OK",
+                runId = "run-1"
+            )
+        )
+
+        val resolved = removeResolvedTransientAssistantPlaceholders(messages)
+
+        assertEquals(listOf("user-1", "assistant-final"), resolved.map { it.id })
+    }
+
+    @Test
+    fun removesDuplicateCompletedAssistantRepliesWithinSameUserTurn() {
+        val messages = listOf(
+            ChatMessage(
+                id = "user-1",
+                role = MessageRole.user,
+                state = MessageState.completed,
+                content = "garbled marker802"
+            ),
+            ChatMessage(
+                id = "assistant-timeline",
+                role = MessageRole.assistant,
+                state = MessageState.completed,
+                content = "Please send that again.",
+                runId = "timeline-run"
+            ),
+            ChatMessage(
+                id = "assistant-legacy",
+                role = MessageRole.assistant,
+                state = MessageState.completed,
+                content = "Please send that again.",
+                runId = "legacy-run"
+            ),
+            ChatMessage(
+                id = "user-2",
+                role = MessageRole.user,
+                state = MessageState.completed,
+                content = "same answer is valid for a new turn"
+            ),
+            ChatMessage(
+                id = "assistant-new-turn",
+                role = MessageRole.assistant,
+                state = MessageState.completed,
+                content = "Please send that again.",
+                runId = "new-turn-run"
+            )
+        )
+
+        val deduped = removeDuplicateCompletedAssistantRepliesInSameTurn(messages)
+
+        assertEquals(
+            listOf("user-1", "assistant-timeline", "user-2", "assistant-new-turn"),
+            deduped.map { it.id }
+        )
+    }
+
+    @Test
+    fun hiddenUserMessageDoesNotSplitDuplicateAssistantReplies() {
+        val messages = listOf(
+            ChatMessage(
+                id = "user-1",
+                role = MessageRole.user,
+                state = MessageState.completed,
+                content = "reply only OK"
+            ),
+            ChatMessage(
+                id = "assistant-timeline",
+                role = MessageRole.assistant,
+                state = MessageState.completed,
+                content = "OK805",
+                runId = "timeline-run"
+            ),
+            ChatMessage(
+                id = "hidden-user",
+                role = MessageRole.user,
+                state = MessageState.completed,
+                content = ""
+            ),
+            ChatMessage(
+                id = "assistant-legacy",
+                role = MessageRole.assistant,
+                state = MessageState.completed,
+                content = "OK805",
+                runId = "legacy-run"
+            )
+        )
+
+        val deduped = removeDuplicateCompletedAssistantRepliesInSameTurn(messages)
+
+        assertEquals(
+            listOf("user-1", "assistant-timeline", "hidden-user"),
+            deduped.map { it.id }
+        )
+    }
+
     private fun voiceMessage(runId: String, sortTimestamp: Double): ChatMessage {
         return ChatMessage(
             id = runId,

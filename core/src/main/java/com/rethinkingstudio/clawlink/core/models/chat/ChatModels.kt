@@ -1,6 +1,7 @@
 package com.rethinkingstudio.clawlink.core.models.chat
 
 import com.rethinkingstudio.clawlink.core.state.chat.isProtocolTypingMarkerText
+import com.rethinkingstudio.clawlink.core.state.chat.isTransientAssistantPlaceholderContent
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.Serializable
@@ -396,12 +397,27 @@ data class ChatMessage(
     private val hasRenderablePlainTextContent: Boolean
         get() = content.trim().isNotEmpty()
 
+    private val hasRenderableStructuredContent: Boolean
+        get() = contentBlocks.any { block ->
+            block.isFileBlock ||
+                block.isVoiceMessageBlock ||
+                block.isToolCallBlock ||
+                block.isToolResultBlock ||
+                !block.text.isNullOrBlank() ||
+                !block.transcript.isNullOrBlank()
+        }
+
     fun shouldDisplayInChat(
         showInvocationProcess: Boolean
     ): Boolean {
-        if (contentBlocks.isEmpty() && isProtocolTypingMarkerText(content)) return false
-        val hasRenderableContent = hasRenderablePlainTextContent || contentBlocks.isNotEmpty()
-        if (!hasRenderableContent) return false
+        val isStreamingAssistantPlaceholder = role == MessageRole.assistant && state == MessageState.streaming
+        if (isProtocolTypingMarkerText(plainTextContent) && !isStreamingAssistantPlaceholder) return false
+        if (role == MessageRole.assistant &&
+            !isStreamingAssistantPlaceholder &&
+            isTransientAssistantPlaceholderContent(plainTextContent)
+        ) return false
+        val hasRenderableContent = hasRenderablePlainTextContent || hasRenderableStructuredContent
+        if (!hasRenderableContent && !isStreamingAssistantPlaceholder) return false
 
         if (!hasToolContent) return true
 

@@ -146,6 +146,148 @@ internal fun shouldSyncAssistantFinalFromHistory(
         isProtocolTypingMarkerText(existingText)
 }
 
+internal fun mergeCompletedAssistantFinalIntoCurrentMessages(
+    currentMessages: List<ChatMessage>,
+    candidate: ChatMessage
+): List<ChatMessage>? {
+    if (candidate.role != MessageRole.assistant ||
+        candidate.state != MessageState.completed ||
+        candidate.runId.isBlank() ||
+        candidate.hasFileContent ||
+        candidate.hasVoiceContent ||
+        candidate.hasToolContent
+    ) {
+        return null
+    }
+    val candidateText = sanitizeChatMessageText(candidate.plainTextContent).trim()
+    if (candidateText.isBlank()) return null
+
+    val messages = currentMessages.toMutableList()
+    val existingIndex = messages.indexOfFirst { existing ->
+        existing.id != candidate.id &&
+            existing.role == MessageRole.assistant &&
+            existing.state == MessageState.completed &&
+            existing.runId == candidate.runId &&
+            !existing.hasFileContent &&
+            !existing.hasVoiceContent &&
+            !existing.hasToolContent &&
+            sanitizeChatMessageText(existing.plainTextContent).trim() == candidateText
+    }
+    if (existingIndex < 0) return null
+
+    val existing = messages[existingIndex]
+    messages[existingIndex] = existing.copy(
+        content = existing.content.ifBlank { candidate.content },
+        contentBlocks = if (existing.contentBlocks.isEmpty()) candidate.contentBlocks else existing.contentBlocks,
+        createdAt = existing.createdAt.ifBlank { candidate.createdAt },
+        sortTimestamp = existing.sortTimestamp ?: candidate.sortTimestamp
+    )
+    return orderMessagesWithSourceRunAnchors(messages)
+}
+
+internal fun removeResolvedTransientAssistantPlaceholders(
+    messages: List<ChatMessage>
+): List<ChatMessage> {
+    val terminalAssistantRunIds = messages
+        .asSequence()
+        .filter { message ->
+            message.role == MessageRole.assistant &&
+                (message.state == MessageState.completed || message.state == MessageState.failed) &&
+                message.runId.isNotBlank() &&
+                !isTransientAssistantPlaceholder(message) &&
+                !isProtocolTypingMarkerText(message.plainTextContent)
+        }
+        .map { it.runId }
+        .toSet()
+    val sameTurnResolvedPlaceholderIds = sameTurnResolvedTransientAssistantIds(messages)
+    if (terminalAssistantRunIds.isEmpty() && sameTurnResolvedPlaceholderIds.isEmpty()) return messages
+
+    return messages.filterNot { message ->
+        message.role == MessageRole.assistant &&
+            message.state == MessageState.streaming &&
+            isTransientAssistantPlaceholder(message) &&
+            (message.runId in terminalAssistantRunIds || message.id in sameTurnResolvedPlaceholderIds)
+    }
+}
+
+private fun sameTurnResolvedTransientAssistantIds(messages: List<ChatMessage>): Set<String> {
+    val ordered = messages.sortedWith(
+        compareBy<ChatMessage> { it.sortTimestamp ?: Double.MAX_VALUE }
+            .thenBy { it.createdAt }
+            .thenBy { it.id }
+    )
+    return ordered.mapIndexedNotNull { index, message ->
+        if (message.role != MessageRole.assistant ||
+            message.state != MessageState.streaming ||
+            !isTransientAssistantPlaceholder(message)
+        ) {
+            return@mapIndexedNotNull null
+        }
+
+        val triggeringUserIndex = ordered
+            .take(index)
+            .indexOfLast { candidate -> candidate.role == MessageRole.user }
+        if (triggeringUserIndex < 0) return@mapIndexedNotNull null
+
+        val nextUserIndex = ordered
+            .drop(index + 1)
+            .indexOfFirst { candidate -> candidate.role == MessageRole.user }
+            .takeIf { it >= 0 }
+            ?.let { relativeIndex -> index + 1 + relativeIndex }
+            ?: ordered.size
+
+        val hasTerminalAssistantInTurn = (triggeringUserIndex + 1 until nextUserIndex).any { candidateIndex ->
+            candidateIndex != index && isTerminalRenderableAssistant(ordered[candidateIndex])
+        }
+        if (hasTerminalAssistantInTurn) message.id else null
+    }.toSet()
+}
+
+private fun isTerminalRenderableAssistant(message: ChatMessage): Boolean {
+    if (message.role != MessageRole.assistant) return false
+    if (message.state != MessageState.completed && message.state != MessageState.failed) return false
+    if (isTransientAssistantPlaceholder(message)) return false
+    return message.plainTextContent.trim().isNotEmpty() || message.contentBlocks.isNotEmpty()
+}
+
+internal fun removeDuplicateCompletedAssistantRepliesInSameTurn(
+    orderedMessages: List<ChatMessage>
+): List<ChatMessage> {
+    val result = mutableListOf<ChatMessage>()
+    val seenAssistantTextInTurn = mutableSetOf<String>()
+    orderedMessages.forEach { message ->
+        if (message.role == MessageRole.user && message.shouldDisplayInChat(showInvocationProcess = true)) {
+            seenAssistantTextInTurn.clear()
+            result += message
+            return@forEach
+        }
+
+        val signature = duplicateAssistantTextSignature(message)
+        if (signature != null && !seenAssistantTextInTurn.add(signature)) {
+            return@forEach
+        }
+        result += message
+    }
+    return result
+}
+
+private fun duplicateAssistantTextSignature(message: ChatMessage): String? {
+    if (message.role != MessageRole.assistant ||
+        message.state != MessageState.completed ||
+        message.hasFileContent ||
+        message.hasVoiceContent ||
+        message.hasToolContent ||
+        isTransientAssistantPlaceholder(message)
+    ) {
+        return null
+    }
+    val text = sanitizeChatMessageText(message.plainTextContent)
+        .trim()
+        .replace(Regex("[\\s\\u2000-\\u200A\\u202F\\u205F\\u3000]+"), " ")
+    if (isProtocolTypingMarkerText(text)) return null
+    return text.takeIf { it.isNotBlank() }
+}
+
 private fun hasRenderableFinalContentBlocks(blocks: List<RelayChatContentBlock>): Boolean {
     return blocks.any { block ->
         block.isToolCallBlock ||
