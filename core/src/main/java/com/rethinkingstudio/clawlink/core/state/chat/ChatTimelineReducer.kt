@@ -135,18 +135,12 @@ internal object ChatTimelineReducer {
     private fun ChatTimelineState.applyMessageCompleted(event: TimelineEvent.MessageCompleted): ChatTimelineState {
         val existing = messages.firstOrNull { it.id == event.messageId }
         val eventRole = event.role.toMessageRole(default = existing?.role ?: MessageRole.assistant)
-        val localPlaceholder = if (eventRole == MessageRole.assistant) {
-            messages.firstOrNull { candidate ->
-                candidate.id != event.messageId &&
-                candidate.role == MessageRole.assistant &&
-                candidate.state == MessageState.streaming &&
-                    completedEventMatchesPlaceholder(candidate, event) &&
-                    isTransientAssistantPlaceholder(candidate)
-            } ?: singleUnresolvedTransientAssistantPlaceholder(turnId = event.turnId, runId = event.runId)
+        val sameRunAssistant = if (eventRole == MessageRole.assistant) {
+            matchingAssistantMessageForCompletedEvent(event)
         } else {
             null
         }
-        val matchedMessage = existing ?: localPlaceholder
+        val matchedMessage = existing ?: sameRunAssistant
         val content = event.content.timelineText().ifBlank { matchedMessage?.content.orEmpty() }
         val role = matchedMessage?.role ?: eventRole
         if (role == MessageRole.assistant &&
@@ -183,14 +177,14 @@ internal object ChatTimelineReducer {
         val nextParts = messagePartsById + (event.messageId to TimelineMessageParts(event.turnId, mapOf("text" to content)))
         val upsertedMessages = upsertMessage(
             message,
-            replaceMessageId = if (existing == null) localPlaceholder?.id else null
+            replaceMessageId = if (existing == null) sameRunAssistant?.id else null
         )
-        val nextMessages = if (existing != null && localPlaceholder != null) {
-            upsertedMessages.filterNot { it.id == localPlaceholder.id }
-        } else {
-            upsertedMessages
+        val nextMessages = upsertedMessages.filterNot { candidate ->
+            candidate.id != message.id &&
+                candidate.role == MessageRole.assistant &&
+                completedEventMatchesPlaceholder(candidate, event)
         }
-        val placeholderRunIdToClear = localPlaceholder?.runId
+        val placeholderRunIdToClear = sameRunAssistant?.runId
             ?.takeIf { it.isNotBlank() && it != completedRunId }
         val runIdsToClear = listOfNotNull(completedRunId, placeholderRunIdToClear).toSet()
         val clearedRunsByTurn = activeRunsByTurnId.filterValues { activeRun -> activeRun !in runIdsToClear }
@@ -201,6 +195,30 @@ internal object ChatTimelineReducer {
             activeTurnByRunId = activeTurnByRunId.filterKeys { activeRun -> activeRun !in runIdsToClear },
             messagePartsById = nextParts
         )
+    }
+
+    private fun ChatTimelineState.matchingAssistantMessageForCompletedEvent(
+        event: TimelineEvent.MessageCompleted
+    ): ChatMessage? {
+        messages.lastOrNull { candidate ->
+            candidate.id != event.messageId &&
+                candidate.role == MessageRole.assistant &&
+                candidate.state == MessageState.streaming &&
+                completedEventMatchesPlaceholder(candidate, event)
+        }?.let { return it }
+
+        messages.lastOrNull { candidate ->
+            candidate.id != event.messageId &&
+                candidate.role == MessageRole.assistant &&
+                candidate.state == MessageState.completed &&
+                completedEventMatchesPlaceholder(candidate, event)
+        }?.let { return it }
+
+        return if (event.content.hasRenderableTimelineCompletedContent()) {
+            singleUnresolvedTransientAssistantPlaceholder(turnId = event.turnId, runId = event.runId)
+        } else {
+            null
+        }
     }
 
     private fun ChatTimelineState.applyRunTerminal(event: TimelineEvent.RunTerminal): ChatTimelineState {
@@ -255,14 +273,124 @@ internal object ChatTimelineReducer {
 
     private fun ChatTimelineState.applyToolInvocation(event: TimelineEvent.ToolInvocationUpdated): ChatTimelineState {
         val existing = toolsById[event.toolCallId]
+        val messageId = toolInvocationMessageId(event, existing)
         val tool = TimelineToolInvocationState(
             toolCallId = event.toolCallId,
-            messageId = event.messageId ?: existing?.messageId,
+            messageId = messageId,
             name = event.name ?: existing?.name,
             state = event.state,
             text = event.text ?: existing?.text
         )
-        return copy(toolsById = toolsById + (event.toolCallId to tool))
+        val existingMessage = messages.firstOrNull { it.id == messageId }
+        if (event.content.isEmpty() && existingMessage == null) {
+            return copy(toolsById = toolsById + (event.toolCallId to tool))
+        }
+
+        val contentBlocks = event.content.ifEmpty { existingMessage?.contentBlocks.orEmpty() }
+        val fallbackName = event.name ?: existing?.name
+        val content = if (event.content.isEmpty()) {
+            existingMessage?.content.orEmpty()
+        } else {
+            toolMessageContent(event, contentBlocks, fallbackName)
+        }
+        val anchorAssistant = matchingAssistantAnchorForTool(event)
+        val anchoredSortTimestamp = anchoredToolSortTimestamp(event, anchorAssistant)
+        val fallbackSortTimestamp = anchoredSortTimestamp
+            ?: event.turnId?.let { turnId ->
+                messages.lastOrNull { candidate ->
+                    candidate.role == MessageRole.user &&
+                        (candidate.runId == "local-user-$turnId" || candidate.id == "user-$turnId")
+                }?.sortTimestamp?.plus(timelineMessageOrderEpsilon)
+            }
+            ?: latestKnownSortTimestamp()?.plus(timelineMessageOrderEpsilon)
+        val message = ChatMessage(
+            id = messageId,
+            role = MessageRole.tool,
+            state = toolMessageState(event),
+            content = content,
+            contentBlocks = contentBlocks,
+            createdAt = event.createdAt.orEmpty().ifBlank { existingMessage?.createdAt.orEmpty() },
+            runId = event.runId.orEmpty().ifBlank { existingMessage?.runId.orEmpty() },
+            sortTimestamp = existingMessage?.sortTimestamp
+                ?: anchoredSortTimestamp
+                ?: timelineSortTimestamp(event.createdAt, fallbackSortTimestamp)
+        )
+        return copy(
+            messages = upsertMessage(message, insertBeforeMessageId = anchorAssistant?.id),
+            activeRunId = event.runId ?: activeRunId,
+            activeRunsByTurnId = if (!event.turnId.isNullOrBlank() && !event.runId.isNullOrBlank()) {
+                activeRunsByTurnId + (event.turnId to event.runId)
+            } else {
+                activeRunsByTurnId
+            },
+            activeTurnByRunId = if (!event.turnId.isNullOrBlank() && !event.runId.isNullOrBlank()) {
+                activeTurnByRunId + (event.runId to event.turnId)
+            } else {
+                activeTurnByRunId
+            },
+            toolsById = toolsById + (event.toolCallId to tool)
+        )
+    }
+
+    private fun ChatTimelineState.toolInvocationMessageId(
+        event: TimelineEvent.ToolInvocationUpdated,
+        existing: TimelineToolInvocationState?
+    ): String {
+        val eventMessageId = event.messageId?.trim()?.takeIf { it.isNotEmpty() }
+        val eventMessage = eventMessageId?.let { messageId -> messages.firstOrNull { it.id == messageId } }
+        if (eventMessageId != null && (eventMessage == null || eventMessage.role == MessageRole.tool || eventMessage.hasToolContent)) {
+            return eventMessageId
+        }
+        return existing?.messageId?.trim()?.takeIf { it.isNotEmpty() }
+            ?: "tool:${event.toolCallId}"
+    }
+
+    private fun ChatTimelineState.matchingAssistantAnchorForTool(event: TimelineEvent.ToolInvocationUpdated): ChatMessage? {
+        return messages.lastOrNull { candidate ->
+            candidate.role == MessageRole.assistant &&
+                toolEventMatchesAssistant(candidate, event)
+        }
+    }
+
+    private fun ChatTimelineState.toolEventMatchesAssistant(
+        message: ChatMessage,
+        event: TimelineEvent.ToolInvocationUpdated
+    ): Boolean {
+        val runId = event.runId?.takeIf { it.isNotBlank() }
+        if (runId != null && message.runId == runId) return true
+
+        val turnId = event.turnId?.takeIf { it.isNotBlank() } ?: return false
+        if (activeRunsByTurnId[turnId] == message.runId) return true
+        return runId != null && activeTurnByRunId[runId] == turnId
+    }
+
+    private fun anchoredToolSortTimestamp(
+        event: TimelineEvent.ToolInvocationUpdated,
+        anchorAssistant: ChatMessage?
+    ): Double? {
+        val anchorTimestamp = anchorAssistant?.sortTimestamp ?: return null
+        val upperBound = anchorTimestamp - (timelineMessageOrderEpsilon / 10.0)
+        val eventTimestamp = timelineSortTimestamp(event.createdAt)
+        return minOf(eventTimestamp ?: upperBound, upperBound)
+    }
+
+    private fun toolMessageState(event: TimelineEvent.ToolInvocationUpdated): MessageState {
+        event.messageState.toMessageState()?.let { return it }
+        return when (event.state.trim().lowercase()) {
+            "success", "completed", "complete", "done", "final", "result" -> MessageState.completed
+            "failed", "fail", "error", "cancelled", "canceled", "denied" -> MessageState.failed
+            else -> MessageState.streaming
+        }
+    }
+
+    private fun toolMessageContent(
+        event: TimelineEvent.ToolInvocationUpdated,
+        contentBlocks: List<RelayChatContentBlock>,
+        fallbackName: String?
+    ): String {
+        event.text?.trim()?.takeIf { it.isNotEmpty() }?.let { return it }
+        contentBlocks.renderToolBlocksDisplayText().trim().takeIf { it.isNotEmpty() }?.let { return it }
+        return fallbackName?.trim().orEmpty()
     }
 
     private fun ChatTimelineState.applyHistorySnapshot(event: TimelineEvent.HistorySnapshotPage): ChatTimelineState {
@@ -353,9 +481,19 @@ internal object ChatTimelineReducer {
         return nextState
     }
 
-    private fun ChatTimelineState.upsertMessage(message: ChatMessage, replaceMessageId: String? = null): List<ChatMessage> {
+    private fun ChatTimelineState.upsertMessage(
+        message: ChatMessage,
+        replaceMessageId: String? = null,
+        insertBeforeMessageId: String? = null
+    ): List<ChatMessage> {
         val index = messages.indexOfFirst { current ->
             current.id == message.id || (replaceMessageId != null && current.id == replaceMessageId)
+        }
+        if (index < 0 && insertBeforeMessageId != null) {
+            val anchorIndex = messages.indexOfFirst { it.id == insertBeforeMessageId }
+            if (anchorIndex >= 0) {
+                return messages.toMutableList().also { it.add(anchorIndex, message) }
+            }
         }
         if (index < 0) return messages + message
         return messages.toMutableList().also { current ->
@@ -644,6 +782,15 @@ private fun String?.toMessageRole(default: MessageRole): MessageRole {
         "system" -> MessageRole.system
         "tool" -> MessageRole.tool
         else -> default
+    }
+}
+
+private fun String?.toMessageState(): MessageState? {
+    return when (this?.trim()?.lowercase()) {
+        "completed", "complete", "done", "success", "final", "result" -> MessageState.completed
+        "streaming", "delta", "in_progress", "running", "active" -> MessageState.streaming
+        "failed", "fail", "error", "cancelled", "canceled", "denied" -> MessageState.failed
+        else -> null
     }
 }
 

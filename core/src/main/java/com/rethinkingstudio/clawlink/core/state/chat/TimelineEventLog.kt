@@ -62,11 +62,17 @@ internal sealed interface TimelineEvent {
 
     data class ToolInvocationUpdated(
         override val eventId: String?,
+        val turnId: String?,
+        val runId: String?,
         val toolCallId: String,
         val messageId: String?,
+        val role: String?,
+        val messageState: String?,
         val name: String?,
         val state: String,
-        val text: String?
+        val text: String?,
+        val content: List<RelayChatContentBlock>,
+        val createdAt: String?
     ) : TimelineEvent
 
     data class HistorySnapshotPage(
@@ -252,15 +258,21 @@ private data class RawTimelineEvent(
             )
             "tool.invocation.updated" -> TimelineEvent.ToolInvocationUpdated(
                 eventId = eventId,
+                turnId = turnId,
+                runId = runId,
                 toolCallId = toolInvocationId?.takeIf { it.isNotBlank() }
                     ?: toolCallId?.takeIf { it.isNotBlank() }
                     ?: return null,
                 messageId = messageId,
+                role = role,
+                messageState = messageState,
                 name = name,
                 state = toolState?.takeIf { it.isNotBlank() }
                     ?: state?.takeIf { it.isNotBlank() }
                     ?: return null,
-                text = text ?: canonicalText()
+                text = text?.takeIf { it.isNotBlank() } ?: canonicalToolText(),
+                content = canonicalToolContent(),
+                createdAt = createdAt
             )
             "history.snapshot.page" -> TimelineEvent.HistorySnapshotPage(
                 eventId = eventId,
@@ -276,6 +288,19 @@ private data class RawTimelineEvent(
 
     private fun canonicalText(): String {
         return canonicalContent().mapNotNull { it.text?.takeIf { value -> value.isNotBlank() } }.joinToString("\n\n")
+    }
+
+    private fun canonicalToolContent(): List<RelayChatContentBlock> {
+        if (content.isNotEmpty()) return content
+        val textValue = text?.takeIf { it.isNotBlank() } ?: return emptyList()
+        return listOf(RelayChatContentBlock(type = "text", text = textValue))
+    }
+
+    private fun canonicalToolText(): String? {
+        return canonicalToolContent()
+            .mapNotNull { it.text?.takeIf { value -> value.isNotBlank() } }
+            .joinToString("\n\n")
+            .takeIf { it.isNotBlank() }
     }
 }
 

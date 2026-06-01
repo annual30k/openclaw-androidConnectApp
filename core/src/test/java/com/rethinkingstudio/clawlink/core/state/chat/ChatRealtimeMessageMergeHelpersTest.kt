@@ -51,6 +51,28 @@ class ChatRealtimeMessageMergeHelpersTest {
     }
 
     @Test
+    fun consumesDuplicateRunlessRemoteVoiceTranscriptAlreadyAttachedToLocalVoiceBubble() {
+        val transcript = "你可以做什么"
+        val localVoice = voiceMessage(
+            runId = "local-user-voice-run-duplicate",
+            sortTimestamp = 100.0,
+            transcript = transcript
+        )
+
+        val merged = mergeRemoteUserMessageIntoCurrentMessages(
+            currentMessages = listOf(localVoice),
+            content = transcript,
+            contentBlocks = emptyList(),
+            runId = "",
+            sortTimestamp = 101.0
+        )
+
+        assertEquals(listOf("local-user-voice-run-duplicate"), merged.map { it.runId })
+        assertEquals(transcript, merged.first().voiceTranscriptText)
+        assertFalse(merged.any { it.role == MessageRole.user && !it.hasVoiceContent && it.content == transcript })
+    }
+
+    @Test
     fun insertsRemoteUserEchoBeforePendingAssistantForSameRun() {
         val pendingAssistant = assistantMessage(
             id = "assistant-1",
@@ -425,6 +447,47 @@ class ChatRealtimeMessageMergeHelpersTest {
     }
 
     @Test
+    fun movesDuplicateCompletedAssistantReplyAfterInterleavedToolMessage() {
+        val messages = listOf(
+            ChatMessage(
+                id = "user-1",
+                role = MessageRole.user,
+                state = MessageState.completed,
+                content = "search then answer"
+            ),
+            ChatMessage(
+                id = "assistant-early",
+                role = MessageRole.assistant,
+                state = MessageState.completed,
+                content = "Final answer",
+                runId = "timeline-run"
+            ),
+            ChatMessage(
+                id = "tool-1",
+                role = MessageRole.tool,
+                state = MessageState.completed,
+                content = "Tool result",
+                contentBlocks = listOf(RelayChatContentBlock(type = "tool_result", text = "Tool result", name = "web_search", toolCallId = "tool-1")),
+                runId = "tool-1"
+            ),
+            ChatMessage(
+                id = "assistant-late",
+                role = MessageRole.assistant,
+                state = MessageState.completed,
+                content = "Final answer",
+                runId = "history-run"
+            )
+        )
+
+        val deduped = removeDuplicateCompletedAssistantRepliesInSameTurn(messages)
+
+        assertEquals(
+            listOf("user-1", "tool-1", "assistant-late"),
+            deduped.map { it.id }
+        )
+    }
+
+    @Test
     fun hiddenUserMessageDoesNotSplitDuplicateAssistantReplies() {
         val messages = listOf(
             ChatMessage(
@@ -463,7 +526,11 @@ class ChatRealtimeMessageMergeHelpersTest {
         )
     }
 
-    private fun voiceMessage(runId: String, sortTimestamp: Double): ChatMessage {
+    private fun voiceMessage(
+        runId: String,
+        sortTimestamp: Double,
+        transcript: String? = null
+    ): ChatMessage {
         return ChatMessage(
             id = runId,
             role = MessageRole.user,
@@ -473,7 +540,8 @@ class ChatRealtimeMessageMergeHelpersTest {
                     type = "voice",
                     fileName = "voice-input.m4a",
                     mimeType = "audio/mp4",
-                    downloadUrl = "file:///tmp/voice-input.m4a"
+                    downloadUrl = "file:///tmp/voice-input.m4a",
+                    transcript = transcript
                 )
             ),
             runId = runId,

@@ -276,10 +276,18 @@ internal fun orderMessagesWithSourceRunAnchors(messages: List<ChatMessage>): Lis
     val anchoredMessages = messages.map { message ->
         anchorAssistantFileMessageToSourceRun(message, messages)
     }
-    val orderedMessages = anchoredMessages.sortedWith(
-        compareBy<ChatMessage> { it.sortTimestamp ?: Double.MAX_VALUE }
-            .thenBy { it.createdAt }
-    )
+    val orderedMessages = anchoredMessages.sortedWith { left, right ->
+        when {
+            isTransientAssistantPlaceholder(left) && right.hasToolContent -> 1
+            left.hasToolContent && isTransientAssistantPlaceholder(right) -> -1
+            else -> compareValuesBy(
+                left,
+                right,
+                { it.sortTimestamp ?: Double.MAX_VALUE },
+                { it.createdAt }
+            )
+        }
+    }
     return normalizeChatTimelineMessages(orderedMessages)
 }
 
@@ -674,7 +682,7 @@ private fun isRenderableAssistantHistoryMessage(message: ChatMessage): Boolean {
 private fun userMessagesMatchForLocalHistoryMerge(left: ChatMessage, right: ChatMessage): Boolean {
     if (left.role != MessageRole.user || right.role != MessageRole.user) return false
     if (left.hasVoiceContent || right.hasVoiceContent) {
-        return false
+        return voiceUserMessageMatchesHistoryText(left, right)
     }
     val leftText = normalizeUserMessageText(left.userPromptContentForMerge())
     val rightText = normalizeUserMessageText(right.userPromptContentForMerge())
@@ -682,6 +690,27 @@ private fun userMessagesMatchForLocalHistoryMerge(left: ChatMessage, right: Chat
         return false
     }
     return leftText.isNotBlank() && leftText == rightText
+}
+
+private fun voiceUserMessageMatchesHistoryText(left: ChatMessage, right: ChatMessage): Boolean {
+    if (left.hasVoiceContent == right.hasVoiceContent) return false
+
+    val voiceMessage = if (left.hasVoiceContent) left else right
+    val textMessage = if (left.hasVoiceContent) right else left
+    if (textMessage.hasFileContent) return false
+
+    val voiceRunId = localVoiceClientRunId(voiceMessage)
+    if (!voiceRunId.isNullOrBlank() && textMessage.runId == voiceRunId) return true
+
+    val text = normalizeUserMessageText(textMessage.userPromptContentForMerge())
+    if (text.isBlank()) return false
+
+    val transcript = voiceMessage.voiceTranscriptText?.let(::normalizeUserMessageText)?.takeIf { it.isNotBlank() }
+    if (transcript != null) {
+        return text == transcript
+    }
+
+    return true
 }
 
 private fun ChatMessage.userPromptContentForMerge(): String {

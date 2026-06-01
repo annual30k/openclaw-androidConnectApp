@@ -70,6 +70,49 @@ class ChatSourceRunOrderingTest {
     }
 
     @Test
+    fun ordersToolBeforeTransientAssistantPlaceholderEvenWhenToolTimestampIsLater() {
+        val user = ChatMessage(
+            id = "user-run-weather",
+            role = MessageRole.user,
+            content = "帮我看看上杭今天的天气",
+            runId = "local-user-run-weather",
+            sortTimestamp = 10.0
+        )
+        val pendingAssistant = ChatMessage(
+            id = "assistant-run-weather",
+            role = MessageRole.assistant,
+            state = MessageState.streaming,
+            content = "正在同步回复...",
+            runId = "run-weather",
+            sortTimestamp = 10.001
+        )
+        val tool = ChatMessage(
+            id = "tool-weather",
+            role = MessageRole.tool,
+            content = "weather result",
+            contentBlocks = listOf(
+                RelayChatContentBlock(
+                    type = "tool_result",
+                    name = "web_search",
+                    toolCallId = "call-weather",
+                    text = "weather result"
+                )
+            ),
+            runId = "call-weather",
+            sortTimestamp = 10.002
+        )
+
+        val ordered = orderMessagesWithSourceRunAnchors(
+            listOf(user, pendingAssistant, tool)
+        )
+
+        assertEquals(
+            listOf("local-user-run-weather", "call-weather", "run-weather"),
+            ordered.map { it.runId }
+        )
+    }
+
+    @Test
     fun anchorsAssistantFileHistoryAfterSourceRun() {
         val localVoice = ChatMessage(
             id = "local-voice",

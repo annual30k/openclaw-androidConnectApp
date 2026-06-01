@@ -511,6 +511,96 @@ class ChatHistoryMergeHelpersTest {
     }
 
     @Test
+    fun loadHistoryTimelineSnapshotPreservesLocalVoiceBubbleOverHistoryTranscript() = runBlocking {
+        val transcript = "The."
+        val wsClient = RelayWebSocketClient()
+        try {
+            val store = ChatStore(
+                apiClient = RelayAPIClient(),
+                wsClient = wsClient,
+                notificationPort = object : NotificationPort {
+                    override fun showReplyNotification(sessionKey: String, title: String, body: String) = Unit
+                    override fun cancelNotification(id: Int) = Unit
+                    override fun cancelAll() = Unit
+                },
+                chatHistoryPageFetcher = { _, _, _, _, _ ->
+                    ChatHistoryResponse(
+                        items = emptyList(),
+                        hasMore = false,
+                        timelineSnapshot = Json.parseToJsonElement(
+                            """
+                            {
+                              "protocolVersion": 2,
+                              "eventType": "history.snapshot.page",
+                              "gatewayId": "gw_1",
+                              "sessionKey": "main",
+                              "source": "history",
+                              "messages": [
+                                {
+                                  "turnId": "voice-run-android",
+                                  "runId": "voice-run-android",
+                                  "messageId": "voice-run-android",
+                                  "role": "user",
+                                  "messageState": "completed",
+                                  "createdAt": "2026-05-29T09:18:00.000Z",
+                                  "content": [{ "type": "text", "text": "$transcript" }]
+                                },
+                                {
+                                  "turnId": "voice-run-android",
+                                  "runId": "voice-run-android",
+                                  "messageId": "assistant-voice-run-android",
+                                  "role": "assistant",
+                                  "messageState": "completed",
+                                  "createdAt": "2026-05-29T09:18:05.000Z",
+                                  "content": [{ "type": "text", "text": "I’m here." }]
+                                }
+                              ],
+                              "attachments": []
+                            }
+                            """.trimIndent()
+                        )
+                    )
+                }
+            )
+            val localVoice = ChatMessage(
+                id = "local-voice",
+                role = MessageRole.user,
+                content = "voice-input.m4a",
+                contentBlocks = listOf(
+                    RelayChatContentBlock(
+                        type = "voice",
+                        fileName = "voice-input.m4a",
+                        mimeType = "audio/mp4",
+                        downloadUrl = "file:///tmp/voice-input.m4a",
+                        transcript = transcript
+                    )
+                ),
+                runId = "local-user-voice-run-android",
+                sortTimestamp = 100.0
+            )
+            store.setStateForTest(
+                ChatState(
+                    messages = listOf(localVoice),
+                    currentGatewayId = "gw_1",
+                    currentSessionKey = "main"
+                )
+            )
+            store.setTimelineStateForTest(ChatTimelineState(messages = listOf(localVoice)))
+
+            store.loadHistory("gw_1", "main", limit = 100)
+
+            val state = store.state.value
+            assertEquals("local-user-voice-run-android", state.messages.first().runId)
+            assertEquals("assistant-voice-run-android", state.messages[1].id)
+            assertTrue(state.messages.first().hasVoiceContent)
+            assertEquals(transcript, state.messages.first().voiceTranscriptText)
+            assertFalse(state.messages.any { it.role == MessageRole.user && !it.hasVoiceContent && it.content == transcript })
+        } finally {
+            wsClient.destroy()
+        }
+    }
+
+    @Test
     fun localTextAssistantPlaceholderUsesProtocolTypingMarker() {
         val assistant = buildLocalTextAssistantPlaceholderMessage(
             id = "assistant-run-1",
@@ -902,6 +992,62 @@ class ChatHistoryMergeHelpersTest {
         assertTrue(merged.first().hasVoiceContent)
         assertEquals("你可以做什么？", merged.first().voiceTranscriptText)
         assertFalse(merged.any { it.id == historyTranscript.id })
+    }
+
+    @Test
+    fun suppressesVoiceStreamingPendingAssistantWhenHistoryContainsTranscriptAndAssistantReply() {
+        val transcript = "你可以做什么"
+        val historyTranscript = ChatMessage(
+            id = "voice-run-1",
+            role = MessageRole.user,
+            content = transcript,
+            runId = "voice-run-1",
+            sortTimestamp = 100.0
+        )
+        val historyAssistant = ChatMessage(
+            id = "history-assistant-voice",
+            role = MessageRole.assistant,
+            content = "我可以帮你处理本机任务。",
+            runId = "history-assistant-voice",
+            sortTimestamp = 104.0
+        )
+        val localVoice = ChatMessage(
+            id = "local-voice",
+            role = MessageRole.user,
+            content = "voice-input.m4a",
+            contentBlocks = listOf(
+                RelayChatContentBlock(
+                    type = "voice",
+                    fileName = "voice-input.m4a",
+                    mimeType = "audio/mp4",
+                    downloadUrl = "file:///tmp/voice-input.m4a",
+                    transcript = transcript
+                )
+            ),
+            runId = "local-user-voice-run-1",
+            sortTimestamp = 99.0
+        )
+        val pendingAssistant = ChatMessage(
+            id = "pending-assistant",
+            role = MessageRole.assistant,
+            state = MessageState.streaming,
+            content = protocolTypingMarkerText,
+            runId = "voice-run-1",
+            sortTimestamp = 101.0
+        )
+
+        val merged = mergeHistoryWithCurrentMessages(
+            historyMessages = listOf(historyTranscript, historyAssistant),
+            currentMessages = listOf(localVoice, pendingAssistant),
+            currentStreamingMessageId = pendingAssistant.id,
+            isTrackedPendingAssistantMessageId = { it == pendingAssistant.id }
+        )
+
+        assertEquals(listOf("local-user-voice-run-1", "history-assistant-voice"), merged.map { it.runId })
+        assertTrue(merged.first().hasVoiceContent)
+        assertEquals(transcript, merged.first().voiceTranscriptText)
+        assertFalse(merged.any { it.id == pendingAssistant.id })
+        assertFalse(merged.any { it.role == MessageRole.user && !it.hasVoiceContent && it.content == transcript })
     }
 
     @Test

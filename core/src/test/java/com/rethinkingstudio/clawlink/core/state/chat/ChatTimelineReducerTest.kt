@@ -934,6 +934,264 @@ class ChatTimelineReducerTest {
     }
 
     @Test
+    fun toolInvocationUpdatedMaterializesToolMessageAndKeepsWaitingBubble() {
+        val user = ChatMessage(
+            id = "user-1",
+            role = MessageRole.user,
+            state = MessageState.completed,
+            content = "Read the file",
+            runId = "local-user-turn-1",
+            sortTimestamp = 200.0
+        )
+        val assistant = ChatMessage(
+            id = "assistant-local",
+            role = MessageRole.assistant,
+            state = MessageState.streaming,
+            content = protocolTypingMarkerText,
+            runId = "run-1",
+            sortTimestamp = 200.001
+        )
+
+        val state = ChatTimelineReducer.reduce(
+            ChatTimelineState(
+                messages = listOf(user, assistant),
+                activeRunId = "run-1",
+                activeRunsByTurnId = mapOf("turn-1" to "run-1"),
+                activeTurnByRunId = mapOf("run-1" to "turn-1")
+            ),
+            event(
+                """
+                {
+                  "protocolVersion": 2,
+                  "eventId": "tool-running",
+                  "eventType": "tool.invocation.updated",
+                  "turnId": "turn-1",
+                  "runId": "run-1",
+                  "messageId": "tool-turn-1",
+                  "role": "tool",
+                  "messageState": "streaming",
+                  "createdAt": "1970-01-01T00:03:20.002Z",
+                  "content": [
+                    { "type": "tool_call", "text": "Reading config", "name": "read_file", "toolCallId": "tool-1" }
+                  ],
+                  "toolInvocationId": "tool-1",
+                  "name": "read_file",
+                  "toolState": "running"
+                }
+                """.trimIndent()
+            )
+        )
+
+        assertEquals(listOf("user-1", "tool-turn-1", "assistant-local"), state.messages.map { it.id })
+        val toolMessage = state.messages.single { it.role == MessageRole.tool }
+        assertEquals("tool-turn-1", toolMessage.id)
+        assertEquals(MessageState.streaming, toolMessage.state)
+        assertEquals("Reading config", toolMessage.content)
+        assertEquals("tool-1", toolMessage.contentBlocks.first().toolCallId)
+        assertTrue(toolMessage.shouldDisplayInChat(showInvocationProcess = true))
+        assertEquals(MessageState.streaming, state.messages.first { it.id == "assistant-local" }.state)
+        assertEquals(protocolTypingMarkerText, state.messages.first { it.id == "assistant-local" }.content)
+        assertTrue(hasActiveVisibleTimelineRun(state, state.messages))
+        assertEquals("running", state.toolsById.getValue("tool-1").state)
+    }
+
+    @Test
+    fun toolInvocationStatusOnlyUpdatePreservesMaterializedToolContent() {
+        val running = ChatTimelineReducer.reduce(
+            ChatTimelineState(),
+            event(
+                """
+                {
+                  "protocolVersion": 2,
+                  "eventId": "tool-running",
+                  "eventType": "tool.invocation.updated",
+                  "turnId": "turn-1",
+                  "runId": "run-1",
+                  "messageId": "tool-turn-1",
+                  "role": "tool",
+                  "messageState": "streaming",
+                  "createdAt": "1970-01-01T00:03:20.002Z",
+                  "content": [
+                    { "type": "tool_call", "text": "Reading config", "name": "read_file", "toolCallId": "tool-1" }
+                  ],
+                  "toolInvocationId": "tool-1",
+                  "name": "read_file",
+                  "toolState": "running"
+                }
+                """.trimIndent()
+            )
+        )
+
+        val completed = ChatTimelineReducer.reduce(
+            running,
+            event(
+                """
+                {
+                  "protocolVersion": 2,
+                  "eventId": "tool-success",
+                  "eventType": "tool.invocation.updated",
+                  "turnId": "turn-1",
+                  "runId": "run-1",
+                  "messageId": "tool-turn-1",
+                  "role": "tool",
+                  "messageState": "completed",
+                  "createdAt": "1970-01-01T00:03:20.003Z",
+                  "toolInvocationId": "tool-1",
+                  "name": "read_file",
+                  "toolState": "success"
+                }
+                """.trimIndent()
+            )
+        )
+
+        val toolMessage = completed.messages.single { it.role == MessageRole.tool }
+        assertEquals(MessageState.completed, toolMessage.state)
+        assertEquals("Reading config", toolMessage.content)
+        assertEquals("tool-1", toolMessage.contentBlocks.first().toolCallId)
+        assertEquals("success", completed.toolsById.getValue("tool-1").state)
+    }
+
+    @Test
+    fun runCompletedAfterToolEventKeepsWaitingBubbleUntilFinalContentArrives() {
+        val user = ChatMessage(
+            id = "user-1",
+            role = MessageRole.user,
+            state = MessageState.completed,
+            content = "Use a tool",
+            runId = "local-user-turn-1",
+            sortTimestamp = 200.0
+        )
+        val assistant = ChatMessage(
+            id = "assistant-local",
+            role = MessageRole.assistant,
+            state = MessageState.streaming,
+            content = "正在同步回复...",
+            runId = "run-1",
+            sortTimestamp = 200.001
+        )
+        val toolRunning = ChatTimelineReducer.reduce(
+            ChatTimelineState(
+                messages = listOf(user, assistant),
+                activeRunId = "run-1",
+                activeRunsByTurnId = mapOf("turn-1" to "run-1"),
+                activeTurnByRunId = mapOf("run-1" to "turn-1")
+            ),
+            event(
+                """
+                {
+                  "protocolVersion": 2,
+                  "eventId": "tool-running",
+                  "eventType": "tool.invocation.updated",
+                  "turnId": "turn-1",
+                  "runId": "run-1",
+                  "messageId": "tool-turn-1",
+                  "role": "tool",
+                  "messageState": "streaming",
+                  "content": [
+                    { "type": "tool_call", "text": "Reading file", "name": "read_file", "toolCallId": "tool-1" }
+                  ],
+                  "toolInvocationId": "tool-1",
+                  "name": "read_file",
+                  "toolState": "running"
+                }
+                """.trimIndent()
+            )
+        )
+
+        val stillWaiting = ChatTimelineReducer.reduce(
+            toolRunning,
+            event("""{"protocolVersion":2,"eventId":"run-done","eventType":"run.completed","turnId":"turn-1","runId":"run-1"}""")
+        )
+
+        assertEquals(MessageState.streaming, stillWaiting.messages.first { it.id == "assistant-local" }.state)
+        assertEquals("正在同步回复...", stillWaiting.messages.first { it.id == "assistant-local" }.content)
+        assertEquals("Reading file", stillWaiting.messages.single { it.role == MessageRole.tool }.content)
+        assertEquals(listOf("user-1", "tool-turn-1", "assistant-local"), stillWaiting.messages.map { it.id })
+        assertTrue(hasActiveVisibleTimelineRun(stillWaiting, stillWaiting.messages))
+
+        val final = ChatTimelineReducer.reduce(
+            stillWaiting,
+            event(
+                """
+                {
+                  "protocolVersion": 2,
+                  "eventId": "final",
+                  "eventType": "message.completed",
+                  "turnId": "turn-1",
+                  "runId": "run-1",
+                  "messageId": "assistant-final",
+                  "role": "assistant",
+                  "content": [{ "type": "text", "text": "Tool result is ready." }]
+                }
+                """.trimIndent()
+            )
+        )
+
+        assertEquals(MessageState.completed, final.messages.first { it.id == "assistant-final" }.state)
+        assertEquals("Tool result is ready.", final.messages.first { it.id == "assistant-final" }.content)
+        assertEquals("Reading file", final.messages.single { it.role == MessageRole.tool }.content)
+        assertEquals(listOf("user-1", "tool-turn-1", "assistant-final"), final.messages.map { it.id })
+        assertFalse(hasActiveVisibleTimelineRun(final, final.messages))
+    }
+
+    @Test
+    fun messageCompletedReplacesStreamingAssistantForSameRunWhenMessageIdChanges() {
+        val user = ChatMessage(
+            id = "user-1",
+            role = MessageRole.user,
+            state = MessageState.completed,
+            content = "Use a tool",
+            runId = "local-user-turn-1",
+            sortTimestamp = 200.0
+        )
+        val tool = ChatMessage(
+            id = "tool-turn-1",
+            role = MessageRole.tool,
+            state = MessageState.streaming,
+            content = "Reading file",
+            contentBlocks = listOf(RelayChatContentBlock(type = "tool_call", text = "Reading file", name = "read_file", toolCallId = "tool-1")),
+            runId = "run-1",
+            sortTimestamp = 200.0009
+        )
+        val streamingAssistant = ChatMessage(
+            id = "assistant-delta",
+            role = MessageRole.assistant,
+            state = MessageState.streaming,
+            content = "Partial answer",
+            runId = "run-1",
+            sortTimestamp = 200.001
+        )
+
+        val state = ChatTimelineReducer.reduce(
+            ChatTimelineState(
+                messages = listOf(user, tool, streamingAssistant),
+                activeRunId = "run-1",
+                activeRunsByTurnId = mapOf("turn-1" to "run-1"),
+                activeTurnByRunId = mapOf("run-1" to "turn-1")
+            ),
+            event(
+                """
+                {
+                  "protocolVersion": 2,
+                  "eventId": "final",
+                  "eventType": "message.completed",
+                  "turnId": "turn-1",
+                  "runId": "run-1",
+                  "messageId": "assistant-final",
+                  "role": "assistant",
+                  "content": [{ "type": "text", "text": "Final answer" }]
+                }
+                """.trimIndent()
+            )
+        )
+
+        assertEquals(listOf("user-1", "tool-turn-1", "assistant-final"), state.messages.map { it.id })
+        assertEquals(1, state.messages.count { it.role == MessageRole.assistant })
+        assertEquals("Final answer", state.messages.last().content)
+        assertFalse(state.hasActiveRun)
+    }
+
+    @Test
     fun historySnapshotPageKeepsDistinctMessagesInSameTurn() {
         val state = ChatTimelineReducer.reduceAll(
             ChatTimelineState(),

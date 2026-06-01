@@ -758,6 +758,13 @@ class ChatStore(
         return hasPendingAssistantPlaceholder(messages)
     }
 
+    private fun hasLocalUserMessagesNeedingHistoryMerge(messages: List<ChatMessage>): Boolean {
+        return messages.any { message ->
+            message.role == MessageRole.user &&
+                message.runId.startsWith("local-user-")
+        }
+    }
+
     private fun clearStreamingPointersIfResolved(messages: List<ChatMessage>) {
         val currentStreamingMessageId = streamingMessageId?.trim()?.takeIf { it.isNotEmpty() } ?: return
         val stillStreaming = messages.any { message ->
@@ -1581,10 +1588,12 @@ class ChatStore(
             ) {
                 fetchChatHistoryPage(normalizedGatewayId, normalizedSessionKey, limit)
             }
-            val shouldReplaceTimelineState = streamingMessageId == null
+            val currentBeforeHistory = _state.value
+            val shouldMergeCurrentLocalUsers = hasLocalUserMessagesNeedingHistoryMerge(currentBeforeHistory.messages)
+            val shouldReplaceTimelineState = streamingMessageId == null && !shouldMergeCurrentLocalUsers
             val rawHistoryMessages = reduceTimelineHistorySnapshot(
                 response = response,
-                currentMessages = _state.value.messages,
+                currentMessages = currentBeforeHistory.messages,
                 replaceExistingTimelineState = shouldReplaceTimelineState
             )
                 ?: buildHistoryMessagesFromItems(response.items)

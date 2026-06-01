@@ -254,17 +254,33 @@ internal fun removeDuplicateCompletedAssistantRepliesInSameTurn(
     orderedMessages: List<ChatMessage>
 ): List<ChatMessage> {
     val result = mutableListOf<ChatMessage>()
-    val seenAssistantTextInTurn = mutableSetOf<String>()
+    val assistantTextIndexInTurn = mutableMapOf<String, Int>()
     orderedMessages.forEach { message ->
         if (message.role == MessageRole.user && message.shouldDisplayInChat(showInvocationProcess = true)) {
-            seenAssistantTextInTurn.clear()
+            assistantTextIndexInTurn.clear()
             result += message
             return@forEach
         }
 
         val signature = duplicateAssistantTextSignature(message)
-        if (signature != null && !seenAssistantTextInTurn.add(signature)) {
-            return@forEach
+        if (signature != null) {
+            val existingIndex = assistantTextIndexInTurn[signature]
+            if (existingIndex != null) {
+                val hasToolBetweenDuplicates = result
+                    .drop(existingIndex + 1)
+                    .any { it.hasToolContent }
+                if (!hasToolBetweenDuplicates) {
+                    return@forEach
+                }
+                result.removeAt(existingIndex)
+                assistantTextIndexInTurn.keys.toList().forEach { key ->
+                    val index = assistantTextIndexInTurn[key] ?: return@forEach
+                    if (index > existingIndex) {
+                        assistantTextIndexInTurn[key] = index - 1
+                    }
+                }
+            }
+            assistantTextIndexInTurn[signature] = result.size
         }
         result += message
     }
@@ -322,8 +338,7 @@ private fun mergeRemoteVoiceTranscriptIntoLocalMessage(
     val fallbackIndex = messages.indexOfLast { message ->
         if (message.role != MessageRole.user ||
             !message.runId.startsWith("local-user-") ||
-            !message.hasVoiceContent ||
-            message.voiceTranscriptText == transcript
+            !message.hasVoiceContent
         ) {
             return@indexOfLast false
         }
