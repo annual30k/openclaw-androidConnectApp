@@ -64,8 +64,8 @@ internal fun composerSendActionPalette(
             content = Color.White.copy(alpha = 0.9f)
         )
         else -> ComposerControlPalette(
-            container = Color.Transparent,
-            content = idleContent
+            container = if (enabled) idleContent else idleContent.copy(alpha = 0.10f),
+            content = if (enabled) Color.White else Color.White.copy(alpha = 0.9f)
         )
     }
 }

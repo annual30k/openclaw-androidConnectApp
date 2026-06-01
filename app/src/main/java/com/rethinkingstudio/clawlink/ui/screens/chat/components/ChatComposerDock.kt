@@ -223,7 +223,7 @@ internal fun ComposerDock(
                         }
                         val inputTextAlignment = if (isMultilineComposer) Alignment.TopStart else Alignment.CenterStart
                         val inputActionAlignment = if (isMultilineComposer) Alignment.BottomEnd else Alignment.CenterEnd
-                        val textTrailingPadding = if (showExpandedComposerButton) 86.dp else 48.dp
+                        val textTrailingPadding = if (showExpandedComposerButton) 86.dp else 44.dp
                         val inputActionEnabled = when {
                             isStoppingRun -> false
                             showRunStop -> true
@@ -257,7 +257,7 @@ internal fun ComposerDock(
                                         Box(
                                             modifier = Modifier
                                                 .fillMaxSize()
-                                                .padding(start = 18.dp, end = 4.dp),
+                                                .padding(start = 18.dp, end = 5.dp),
                                             contentAlignment = inputTextAlignment
                                         ) {
                                             if (messageText.isEmpty()) {
@@ -540,7 +540,7 @@ private fun ComposerInputActionButton(
         shape = CircleShape,
         color = palette.container,
         contentColor = palette.content,
-        modifier = modifier.size(38.dp)
+        modifier = modifier.size(32.dp)
     ) {
         Box(contentAlignment = Alignment.Center) {
             when {
