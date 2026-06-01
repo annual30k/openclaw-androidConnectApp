@@ -145,8 +145,12 @@ internal fun SendButton(enabled: Boolean, isStreaming: Boolean = false, isStoppi
         isStreaming = isStreaming,
         isStoppingRun = isStoppingRun,
         hasDraft = true,
-        lightReadyContainer = ChatColors.linkBlue,
-        idleContent = MaterialTheme.colorScheme.onSurface
+        readyContainer = ChatColors.linkBlue,
+        readyContent = MaterialTheme.colorScheme.onPrimary,
+        idleContainer = ChatColors.dockControl,
+        idleContent = MaterialTheme.colorScheme.onSurface,
+        disabledContainer = ChatColors.disabledAction,
+        disabledContent = MaterialTheme.colorScheme.onSurfaceVariant
     )
     Surface(onClick = onClick, enabled = enabled, shape = CircleShape, color = palette.container, contentColor = palette.content, modifier = Modifier.size(42.dp)) {
         Box(contentAlignment = Alignment.Center) {

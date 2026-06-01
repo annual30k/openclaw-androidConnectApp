@@ -87,6 +87,17 @@ import com.rethinkingstudio.clawlink.ui.screens.chat.VoiceInputPhase
 import com.rethinkingstudio.clawlink.ui.screens.chat.filePath
 import com.rethinkingstudio.clawlink.ui.screens.chat.isImage
 
+private val composerDockHorizontalPadding = 14.dp
+private val composerDockTopPadding = 6.dp
+private val composerDockBottomPadding = 8.dp
+private val composerDockVerticalSpacing = 10.dp
+private val composerControlButtonSize = 42.dp
+private val composerInputActionButtonSize = 32.dp
+private val composerInputActionButtonInset = (composerControlButtonSize - composerInputActionButtonSize) / 2
+private val composerCompactInputHeight = composerControlButtonSize
+private val composerTwoLineInputHeight = 58.dp
+private val composerThreeLineInputHeight = 74.dp
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun ComposerDock(
@@ -146,8 +157,13 @@ internal fun ComposerDock(
             Column(
                 modifier = Modifier
                     .navigationBarsPadding()
-                    .padding(start = 14.dp, top = 8.dp, end = 14.dp, bottom = 10.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
+                    .padding(
+                        start = composerDockHorizontalPadding,
+                        top = composerDockTopPadding,
+                        end = composerDockHorizontalPadding,
+                        bottom = composerDockBottomPadding
+                    ),
+                verticalArrangement = Arrangement.spacedBy(composerDockVerticalSpacing)
             ) {
                 if (showsOpenClawControls || showsModelPicker) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -217,9 +233,9 @@ internal fun ComposerDock(
                         val isMultilineComposer = estimatedLineCount > 1
                         val showExpandedComposerButton = estimatedLineCount > 3
                         val inputHeight = when (visibleLineCount) {
-                            1 -> 42.dp
-                            2 -> 66.dp
-                            else -> 90.dp
+                            1 -> composerCompactInputHeight
+                            2 -> composerTwoLineInputHeight
+                            else -> composerThreeLineInputHeight
                         }
                         val inputTextAlignment = if (isMultilineComposer) Alignment.TopStart else Alignment.CenterStart
                         val inputActionAlignment = if (isMultilineComposer) Alignment.BottomEnd else Alignment.CenterEnd
@@ -257,7 +273,7 @@ internal fun ComposerDock(
                                         Box(
                                             modifier = Modifier
                                                 .fillMaxSize()
-                                                .padding(start = 18.dp, end = 5.dp),
+                                                .padding(start = 18.dp, end = composerInputActionButtonInset),
                                             contentAlignment = inputTextAlignment
                                         ) {
                                             if (messageText.isEmpty()) {
@@ -290,7 +306,9 @@ internal fun ComposerDock(
                                                 onVoice = onToggleVoiceMode,
                                                 onSend = onSend,
                                                 onAbort = onAbort,
-                                                modifier = Modifier.align(inputActionAlignment)
+                                                modifier = Modifier
+                                                    .align(inputActionAlignment)
+                                                    .padding(bottom = if (isMultilineComposer) 2.dp else 0.dp)
                                             )
                                         }
                                     }
@@ -525,8 +543,12 @@ private fun ComposerInputActionButton(
         isStreaming = isStreaming,
         isStoppingRun = isStoppingRun,
         hasDraft = hasDraft,
-        lightReadyContainer = MaterialTheme.colorScheme.onSurface,
-        idleContent = MaterialTheme.colorScheme.onSurface
+        readyContainer = MaterialTheme.colorScheme.onSurface,
+        readyContent = ChatColors.dockSurface,
+        idleContainer = if (isSystemInDarkTheme()) ChatColors.dockControl else MaterialTheme.colorScheme.onSurface,
+        idleContent = if (isSystemInDarkTheme()) MaterialTheme.colorScheme.onSurface else ChatColors.dockSurface,
+        disabledContainer = ChatColors.disabledAction,
+        disabledContent = MaterialTheme.colorScheme.onSurfaceVariant
     )
     Surface(
         onClick = {
@@ -540,7 +562,7 @@ private fun ComposerInputActionButton(
         shape = CircleShape,
         color = palette.container,
         contentColor = palette.content,
-        modifier = modifier.size(32.dp)
+        modifier = modifier.size(composerInputActionButtonSize)
     ) {
         Box(contentAlignment = Alignment.Center) {
             when {

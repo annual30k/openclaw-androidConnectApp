@@ -43,8 +43,12 @@ internal fun composerSendActionPalette(
     isStreaming: Boolean,
     isStoppingRun: Boolean,
     hasDraft: Boolean,
-    lightReadyContainer: Color,
-    idleContent: Color
+    readyContainer: Color,
+    readyContent: Color,
+    idleContainer: Color,
+    idleContent: Color,
+    disabledContainer: Color,
+    disabledContent: Color
 ): ComposerControlPalette {
     return when {
         isStoppingRun -> ComposerControlPalette(
@@ -56,16 +60,16 @@ internal fun composerSendActionPalette(
             content = Color.White
         )
         hasDraft && enabled -> ComposerControlPalette(
-            container = if (darkTheme) Color(0xFF298547) else lightReadyContainer,
-            content = Color.White
+            container = if (darkTheme) Color(0xFF298547) else readyContainer,
+            content = readyContent
         )
         hasDraft -> ComposerControlPalette(
-            container = idleContent.copy(alpha = 0.10f),
-            content = Color.White.copy(alpha = 0.9f)
+            container = disabledContainer,
+            content = disabledContent
         )
         else -> ComposerControlPalette(
-            container = if (enabled) idleContent else idleContent.copy(alpha = 0.10f),
-            content = if (enabled) Color.White else Color.White.copy(alpha = 0.9f)
+            container = if (enabled) idleContainer else disabledContainer,
+            content = if (enabled) idleContent else disabledContent
         )
     }
 }
