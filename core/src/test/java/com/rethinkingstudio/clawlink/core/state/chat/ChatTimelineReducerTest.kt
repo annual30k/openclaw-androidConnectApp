@@ -1040,6 +1040,62 @@ class ChatTimelineReducerTest {
     }
 
     @Test
+    fun statusOnlyToolInvocationMaterializesToolMessageAndKeepsWaitingBubble() {
+        val user = ChatMessage(
+            id = "user-1",
+            role = MessageRole.user,
+            state = MessageState.completed,
+            content = "Search the weather",
+            runId = "local-user-turn-1",
+            sortTimestamp = 200.0
+        )
+        val assistant = ChatMessage(
+            id = "assistant-local",
+            role = MessageRole.assistant,
+            state = MessageState.streaming,
+            content = protocolTypingMarkerText,
+            runId = "run-1",
+            sortTimestamp = 200.001
+        )
+
+        val state = ChatTimelineReducer.reduce(
+            ChatTimelineState(
+                messages = listOf(user, assistant),
+                activeRunId = "run-1",
+                activeRunsByTurnId = mapOf("turn-1" to "run-1"),
+                activeTurnByRunId = mapOf("run-1" to "turn-1")
+            ),
+            event(
+                """
+                {
+                  "protocolVersion": 2,
+                  "eventId": "tool-status",
+                  "eventType": "tool.invocation.updated",
+                  "turnId": "turn-1",
+                  "runId": "run-1",
+                  "messageId": "tool-turn-1",
+                  "role": "tool",
+                  "messageState": "streaming",
+                  "createdAt": "1970-01-01T00:03:20.002Z",
+                  "toolInvocationId": "tool-1",
+                  "name": "web_search",
+                  "toolState": "running"
+                }
+                """.trimIndent()
+            )
+        )
+
+        assertEquals(listOf("user-1", "tool-turn-1", "assistant-local"), state.messages.map { it.id })
+        val toolMessage = state.messages.single { it.role == MessageRole.tool }
+        assertEquals(MessageState.streaming, toolMessage.state)
+        assertEquals("web_search", toolMessage.content)
+        assertTrue(toolMessage.contentBlocks.isEmpty())
+        assertTrue(toolMessage.shouldDisplayInChat(showInvocationProcess = true))
+        assertEquals(protocolTypingMarkerText, state.messages.last().content)
+        assertEquals("running", state.toolsById.getValue("tool-1").state)
+    }
+
+    @Test
     fun toolInvocationStatusOnlyUpdatePreservesMaterializedToolContent() {
         val running = ChatTimelineReducer.reduce(
             ChatTimelineState(),

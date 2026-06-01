@@ -81,4 +81,45 @@ class ChatToolMessagePlannerTest {
         assertEquals("a.txt\nb.txt", plan.content)
         assertEquals(listOf("tool_use", "tool_result"), plan.contentBlocks.map { it.type })
     }
+
+    @Test
+    fun runScopedToolPayloadsWithoutCallIdUseDistinctFallbackIds() {
+        val firstPayload = json.parseToJsonElement(
+            """
+            {
+              "stream": "tool",
+              "runId": "assistant-run-1",
+              "seq": 11,
+              "data": {
+                "phase": "streaming",
+                "tool_name": "web_search",
+                "text": "searching weather"
+              }
+            }
+            """.trimIndent()
+        ) as JsonObject
+        val secondPayload = json.parseToJsonElement(
+            """
+            {
+              "stream": "tool",
+              "runId": "assistant-run-1",
+              "seq": 12,
+              "data": {
+                "phase": "streaming",
+                "tool_name": "web_search",
+                "text": "searching bank news"
+              }
+            }
+            """.trimIndent()
+        ) as JsonObject
+
+        val firstPlan = ChatToolMessagePlanner.plan(requireNotNull(ChatToolPayloadParser.parse(firstPayload)))
+        val secondPlan = ChatToolMessagePlanner.plan(requireNotNull(ChatToolPayloadParser.parse(secondPayload)))
+
+        assertNotNull(firstPlan)
+        assertNotNull(secondPlan)
+        requireNotNull(firstPlan)
+        requireNotNull(secondPlan)
+        assert(firstPlan.toolRunId != secondPlan.toolRunId)
+    }
 }

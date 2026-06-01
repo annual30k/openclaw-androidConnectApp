@@ -302,7 +302,7 @@ class ChatStore(
 
     private fun handleToolPayload(envelope: JsonObject, payload: JsonObject, toolPayload: ChatToolPayload) {
         val plan = ChatToolMessagePlanner.plan(toolPayload) ?: return
-        val scope = resolveChatEventScope(envelope, payload, plan.toolCallId)
+        val scope = resolveChatEventScope(envelope, payload, toolPayload.scopeRunId ?: plan.toolCallId)
         if (!isCurrentChatScope(scope)) {
             noteSessionActivity(scope)
             return

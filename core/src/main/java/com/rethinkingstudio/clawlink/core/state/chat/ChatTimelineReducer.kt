@@ -282,16 +282,16 @@ internal object ChatTimelineReducer {
             text = event.text ?: existing?.text
         )
         val existingMessage = messages.firstOrNull { it.id == messageId }
-        if (event.content.isEmpty() && existingMessage == null) {
-            return copy(toolsById = toolsById + (event.toolCallId to tool))
-        }
-
         val contentBlocks = event.content.ifEmpty { existingMessage?.contentBlocks.orEmpty() }
-        val fallbackName = event.name ?: existing?.name
+        val fallbackName = event.name ?: existing?.name ?: event.toolCallId
         val content = if (event.content.isEmpty()) {
-            existingMessage?.content.orEmpty()
+            existingMessage?.content?.takeIf { it.isNotBlank() }
+                ?: toolMessageContent(event, contentBlocks, fallbackName)
         } else {
             toolMessageContent(event, contentBlocks, fallbackName)
+        }
+        if (existingMessage == null && contentBlocks.isEmpty() && content.isBlank()) {
+            return copy(toolsById = toolsById + (event.toolCallId to tool))
         }
         val anchorAssistant = matchingAssistantAnchorForTool(event)
         val anchoredSortTimestamp = anchoredToolSortTimestamp(event, anchorAssistant)

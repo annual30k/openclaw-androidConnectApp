@@ -7,6 +7,7 @@ import kotlinx.serialization.json.JsonObject
 
 internal data class ChatToolPayload(
     val toolCallId: String?,
+    val scopeRunId: String?,
     val toolName: String,
     val displayText: String,
     val state: MessageState,
@@ -21,21 +22,29 @@ internal object ChatToolPayloadParser {
         val nestedData = obj["data"] as? JsonObject
         val office = obj["office"] as? JsonObject
         val source = nestedData ?: office ?: obj
+        val topLevelRunId = obj.string("runId", "run_id")
 
-        val resolvedSourceToolCallId = source.string(
+        val explicitSourceToolCallId = source.string(
             "toolCallId",
             "tool_call_id",
             "toolUseId",
-            "tool_use_id",
-            "name"
+            "tool_use_id"
         )
-        val toolCallId = resolvedSourceToolCallId
-            ?: obj.string("toolCallId", "tool_call_id", "toolUseId", "tool_use_id", "runId", "run_id")
+        val nameFallbackToolCallId = source.string("name")
+        val explicitEnvelopeToolCallId = obj.string("toolCallId", "tool_call_id", "toolUseId", "tool_use_id")
 
         val toolName = source.string("toolName", "tool_name", "tool")
             ?: source.string("name")
             ?: obj.string("toolName", "tool_name", "tool", "name")
             ?: "tool"
+        val toolCallId = explicitSourceToolCallId
+            ?: nameFallbackToolCallId
+            ?: explicitEnvelopeToolCallId
+            ?: if ((nestedData != null || office != null) && !topLevelRunId.isNullOrBlank()) {
+                fallbackToolCallId(topLevelRunId, toolName, obj, source)
+            } else {
+                topLevelRunId
+            }
 
         val sourceRole = source.string("role")?.lowercase().orEmpty()
         val objRole = obj.string("role")?.lowercase().orEmpty()
@@ -45,7 +54,8 @@ internal object ChatToolPayloadParser {
         val contentBlocks = parseContentBlocks(obj)
         val toolBlocks = contentBlocks.filter { it.isToolCallBlock || it.isToolResultBlock }
         val hasStructuredToolIdentity =
-            !resolvedSourceToolCallId.isNullOrBlank() ||
+            !explicitSourceToolCallId.isNullOrBlank() ||
+                !nameFallbackToolCallId.isNullOrBlank() ||
                 source.string("toolName", "tool_name", "tool", "name") != null
         val hasToolDataFields = source.containsKey("args") ||
             source.containsKey("arguments") ||
@@ -88,6 +98,7 @@ internal object ChatToolPayloadParser {
 
         return ChatToolPayload(
             toolCallId = toolCallId ?: blockToolCallId,
+            scopeRunId = topLevelRunId,
             toolName = blockToolName ?: toolName,
             displayText = displayText,
             state = when {
@@ -105,6 +116,57 @@ internal object ChatToolPayloadParser {
 
     private fun normalizeState(value: String?): String {
         return value?.trim()?.lowercase().orEmpty()
+    }
+
+    private fun fallbackToolCallId(
+        runId: String,
+        toolName: String,
+        envelope: JsonObject,
+        source: JsonObject
+    ): String {
+        val suffix = envelope.string("seq")?.let { "seq-$it" }
+            ?: envelope.string("ts")?.let { "ts-$it" }
+            ?: "h-${fallbackFingerprint(source)}"
+        return listOf(
+            runId.trim(),
+            "tool",
+            toolName.normalizedFallbackComponent(),
+            suffix
+        ).joinToString(":")
+    }
+
+    private fun fallbackFingerprint(source: JsonObject): String {
+        val value = listOf(
+            source.string("phase", "state", "status"),
+            source.string("text"),
+            source.string("delta"),
+            source.string("error"),
+            source["result"]?.toString(),
+            source["partialResult"]?.toString(),
+            source["partial_result"]?.toString(),
+            source["output"]?.toString(),
+            source["content"]?.toString()
+        )
+            .filterNot { it.isNullOrBlank() }
+            .joinToString("|")
+            .ifBlank { "empty" }
+        return value.fnv1a64Hex()
+    }
+
+    private fun String.normalizedFallbackComponent(): String {
+        val normalized = trim()
+            .replace(Regex("""[^A-Za-z0-9_-]+"""), "-")
+            .trim('-')
+        return normalized.ifBlank { "tool" }
+    }
+
+    private fun String.fnv1a64Hex(): String {
+        var hash = -3750763034362895579L
+        for (byte in toByteArray(Charsets.UTF_8)) {
+            hash = hash xor (byte.toLong() and 0xffL)
+            hash *= 1099511628211L
+        }
+        return java.lang.Long.toUnsignedString(hash, 16)
     }
 
     private fun JsonObject.renderToolDisplayText(): String {

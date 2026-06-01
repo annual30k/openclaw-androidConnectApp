@@ -52,7 +52,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -415,7 +414,7 @@ private fun ExpandedComposerSheet(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                TextButton(onClick = onDismiss) { Text(choose("Close", "关闭")) }
+                Box(Modifier.size(44.dp))
                 Spacer(Modifier.weight(1f))
                 Text(
                     text = choose("Message", "消息"),
@@ -424,7 +423,21 @@ private fun ExpandedComposerSheet(
                     color = MaterialTheme.colorScheme.onSurface
                 )
                 Spacer(Modifier.weight(1f))
-                TextButton(onClick = onDismiss) { Text(choose("Done", "完成")) }
+                Surface(
+                    onClick = onDismiss,
+                    shape = CircleShape,
+                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.72f),
+                    contentColor = MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier.size(44.dp)
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Icon(
+                            Icons.Default.Close,
+                            stringResource(R.string.common_action_close),
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+                }
             }
 
             Surface(

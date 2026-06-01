@@ -112,4 +112,11 @@ class MessageBubblePresentationTest {
             )
         )
     }
+
+    @Test
+    fun streamingToolMessagesStartCollapsed() {
+        assertFalse(shouldStartToolMessageExpanded(showInvocationProcess = true, state = MessageState.streaming))
+        assertFalse(shouldStartToolMessageExpanded(showInvocationProcess = false, state = MessageState.streaming))
+        assertFalse(shouldStartToolMessageExpanded(showInvocationProcess = true, state = MessageState.completed))
+    }
 }

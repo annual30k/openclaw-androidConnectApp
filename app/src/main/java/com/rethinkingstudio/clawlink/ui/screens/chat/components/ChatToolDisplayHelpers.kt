@@ -42,6 +42,7 @@ internal sealed class ToolDisplayContent {
 }
 
 private val toolPreferredKeys = listOf("content", "markdown", "text", "body", "message", "value", "result", "output")
+private const val toolPreviewAnalysisPrefixLength = 4_000
 
 internal fun ChatMessage.visibleToolContentBlocks(showInvocationProcess: Boolean): List<RelayChatContentBlock> {
     return if (showInvocationProcess) toolContentBlocks else toolContentBlocks.filter { it.isToolResultBlock }
@@ -75,6 +76,47 @@ internal fun RelayChatContentBlock.toolDisplayContent(associatedToolCallBlock: R
     return ToolDisplayContent.Text(trimmed)
 }
 
+internal fun RelayChatContentBlock.toolPreviewText(associatedToolCallBlock: RelayChatContentBlock? = null): String {
+    val toolName = (associatedToolCallBlock?.resolvedName ?: resolvedName).orEmpty().trim().lowercase()
+    val workdir = toolWorkingDirectory(associatedToolCallBlock)
+
+    if (toolName.isCommandToolName()) {
+        if (isToolCallBlock) {
+            val command = toolCommandText()?.trim().orEmpty()
+            if (command.isNotBlank()) {
+                return listOf(command.toolPreviewSource().condensedToolPreview().ifBlank { "Shell command" }, workdir)
+                    .filter { !it.isNullOrBlank() }
+                    .joinToString(" - ")
+            }
+        }
+        if (isToolResultBlock) {
+            val output = fallbackToolPreviewText().orEmpty()
+            val prefix = if (isError == true) "Shell error" else "Shell output"
+            val preview = output.toolPreviewSource().condensedToolPreview()
+            return listOf(if (preview.isBlank()) prefix else "$prefix: $preview", workdir)
+                .filter { !it.isNullOrBlank() }
+                .joinToString(" - ")
+        }
+    }
+
+    val fallback = fallbackToolPreviewText().orEmpty()
+    val trimmed = fallback.trim()
+    if (trimmed.isBlank()) return choose("Completed", "已完成")
+
+    val previewSource = trimmed.toolPreviewSource()
+    jsonPreviewSummary(previewSource)?.let { summary ->
+        if (summary.isNotBlank()) return "JSON: $summary"
+    }
+
+    if ((isToolCallBlock || toolName == "shell") && previewSource.looksLikeCommandLine()) {
+        return listOf(previewSource.condensedToolPreview().ifBlank { "Shell command" }, workdir)
+            .filter { !it.isNullOrBlank() }
+            .joinToString(" - ")
+    }
+
+    return previewSource.condensedToolPreview().ifBlank { previewSource.trim() }
+}
+
 private fun RelayChatContentBlock.markdownDisplayText(documentPath: String?): String? {
     val candidate = when {
         isToolCallBlock -> resolvedArguments()?.renderedText(listOf("content", "markdown", "text", "body", "message", "value"))
@@ -102,6 +144,10 @@ private fun RelayChatContentBlock.structuredToolSnippet(): ToolDisplayContent? {
 
 private fun RelayChatContentBlock.displayText(): String? {
     return listOfNotNull(text, result?.renderedText(toolPreferredKeys), partialResult?.renderedText(toolPreferredKeys), content?.renderedText(toolPreferredKeys), output?.renderedText(toolPreferredKeys), error?.renderedText(toolPreferredKeys), status).firstOrNull { it.isNotBlank() }?.trim()
+}
+
+private fun RelayChatContentBlock.fallbackToolPreviewText(): String? {
+    return displayText() ?: resolvedPayload()?.renderedText(toolPreferredKeys) ?: resolvedArguments()?.renderedText(toolPreferredKeys)
 }
 
 private fun RelayChatContentBlock.resolvedArguments() = arguments ?: args
@@ -256,6 +302,9 @@ internal fun String.condensedToolPreview(): String {
     val cleaned = firstLine.replace(Regex("""^\s{0,3}(#{1,6}\s+|[-*+]\s+|\d+\.\s+|>\s+)"""), "").trim().ifEmpty { firstLine }
     return if (cleaned.length > 80) cleaned.take(80) + "..." else cleaned
 }
+
+private fun String.toolPreviewSource(): String =
+    if (length > toolPreviewAnalysisPrefixLength) take(toolPreviewAnalysisPrefixLength) else this
 
 private val prettyJson = Json { prettyPrint = true }
 
