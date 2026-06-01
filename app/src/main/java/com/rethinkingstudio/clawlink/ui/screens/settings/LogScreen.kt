@@ -45,6 +45,9 @@ import com.rethinkingstudio.clawlink.core.network.RelayAPIClient
 import com.rethinkingstudio.clawlink.core.network.dto.LogTailResponse
 import com.rethinkingstudio.clawlink.core.state.LocalizedText.choose
 import com.rethinkingstudio.clawlink.core.state.gateway.GatewayStore
+import com.rethinkingstudio.clawlink.core.state.log.LogSeverity
+import com.rethinkingstudio.clawlink.core.state.log.ParsedLogLine
+import com.rethinkingstudio.clawlink.core.state.log.parseLogLine
 import kotlinx.coroutines.launch
 
 @Composable
@@ -149,9 +152,10 @@ fun LogScreen(
     }
 
     val allLines = report?.lines ?: emptyList()
+    val allEntries = allLines.map(::parseLogLine)
     val searchFilter = searchText.trim().lowercase()
-    val visibleLines = if (searchFilter.isEmpty()) allLines
-        else allLines.filter { it.lowercase().contains(searchFilter) }
+    val visibleEntries = if (searchFilter.isEmpty()) allEntries
+        else allEntries.filter { it.searchText.contains(searchFilter) }
 
     suspend fun loadLogs() {
         if (accessHint != null) return
@@ -280,8 +284,8 @@ fun LogScreen(
                                 }
                             }
                         }
-                    } else if (visibleLines.isNotEmpty()) {
-                        items(visibleLines) { line -> LogLineRow(line) }
+                    } else if (visibleEntries.isNotEmpty()) {
+                        items(visibleEntries) { entry -> LogLineRow(entry) }
                     } else if (report != null && searchFilter.isNotEmpty()) {
                         item {
                             LogGlassCard {
@@ -394,17 +398,23 @@ private fun LogMetricCard(title: String, value: String, icon: ImageVector, modif
 }
 
 @Composable
-private fun LogLineRow(line: String) {
-    val isError = line.contains("error", ignoreCase = true) || line.contains("✗") || line.contains("failed", ignoreCase = true)
-    val isSuccess = line.contains("✓")
-    val logType = when {
-        line.contains("[ws]") -> "ws" to Color(0xFFA855F7)
-        line.contains("[http]") -> "http" to Color(0xFF3B82F6)
-        line.contains("[sys]") -> "sys" to Color(0xFFF97316)
+private fun LogLineRow(entry: ParsedLogLine) {
+    val logType = when (entry.sourceText?.lowercase()) {
+        "ws" -> "ws" to Color(0xFFA855F7)
+        "http" -> "http" to Color(0xFF3B82F6)
+        "sys" -> "sys" to Color(0xFFF97316)
         else -> null to MaterialTheme.colorScheme.onSurfaceVariant
     }
-    val contentColor = when { isError -> Color(0xFFEF4444); isSuccess -> Color(0xFF22C55E); else -> MaterialTheme.colorScheme.onSurface }
-    val content = line.split(" ", limit = 2).let { if (it.size > 1 && it[0].matches(Regex("^\\d{4}-\\d{2}-\\d{2}.*"))) it[1] else line }
+    val isError = entry.severity == LogSeverity.Error
+    val contentColor = when {
+        isError -> Color(0xFFEF4444)
+        entry.rawText.contains("✓") -> Color(0xFF22C55E)
+        entry.rawText.contains("✗") -> Color(0xFFEF4444)
+        entry.severity == LogSeverity.Warning -> Color(0xFFF59E0B)
+        entry.severity == LogSeverity.Info -> Color(0xFF3B82F6)
+        entry.severity == LogSeverity.Debug -> MaterialTheme.colorScheme.onSurfaceVariant
+        else -> MaterialTheme.colorScheme.onSurface
+    }
 
     Column(modifier = Modifier.fillMaxWidth().background(if (isError) Color(0xFFEF4444).copy(0.05f) else Color.Transparent, RoundedCornerShape(10.dp)).padding(vertical = 6.dp, horizontal = 10.dp)) {
         Row(verticalAlignment = Alignment.Top, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -412,7 +422,7 @@ private fun LogLineRow(line: String) {
                 Text(logType.first!!.uppercase(), fontSize = 9.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace, color = logType.second,
                     modifier = Modifier.background(logType.second.copy(alpha = 0.15f), RoundedCornerShape(4.dp)).padding(horizontal = 5.dp, vertical = 2.dp))
             }
-            Text(content, fontSize = 12.sp, fontFamily = FontFamily.Monospace, color = contentColor, lineHeight = 16.sp)
+            Text(entry.displayText, fontSize = 12.sp, fontFamily = FontFamily.Monospace, color = contentColor, lineHeight = 16.sp)
         }
     }
 }
