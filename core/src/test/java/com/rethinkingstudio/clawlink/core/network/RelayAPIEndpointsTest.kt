@@ -91,4 +91,25 @@ class RelayAPIEndpointsTest {
             endpoint.queryItems
         )
     }
+
+    @Test
+    fun toolDetailEndpointEncodesIdentityAndPaging() {
+        val endpoint = APIEndpoints.Mobile.Chat.toolDetail(
+            gatewayID = "gw/one",
+            sessionKey = "agent/main 1",
+            toolCallId = "call/one",
+            cursor = "offset:50",
+            limit = 500
+        )
+
+        assertEquals("/api/mobile/gateways/gw%2Fone/chat/tools/call%2Fone/detail", endpoint.path)
+        assertEquals(
+            listOf(
+                "sessionKey" to "agent%2Fmain%201",
+                "limit" to "500",
+                "cursor" to "offset%3A50"
+            ),
+            endpoint.queryItems
+        )
+    }
 }

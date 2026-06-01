@@ -222,10 +222,35 @@ data class RelayChatContentBlock(
     @Serializable(with = RelayJSONValueSerializer::class) val content: RelayJSONValue? = null,
     @Serializable(with = RelayJSONValueSerializer::class) val output: RelayJSONValue? = null,
     @Serializable(with = RelayJSONValueSerializer::class) val error: RelayJSONValue? = null,
+    val preview: String? = null,
+    @OptIn(ExperimentalSerializationApi::class)
+    @JsonNames("tool_call_id")
     val toolCallId: String? = null,
+    @OptIn(ExperimentalSerializationApi::class)
+    @JsonNames("tool_use_id")
     val toolUseId: String? = null,
+    @OptIn(ExperimentalSerializationApi::class)
+    @JsonNames("tool_name")
     val toolName: String? = null,
+    @OptIn(ExperimentalSerializationApi::class)
+    @JsonNames("tool_state")
+    val toolState: String? = null,
     val status: String? = null,
+    @OptIn(ExperimentalSerializationApi::class)
+    @JsonNames("has_full_detail")
+    val hasFullDetail: Boolean? = null,
+    @OptIn(ExperimentalSerializationApi::class)
+    @JsonNames("detail_truncated")
+    val detailTruncated: Boolean? = null,
+    @OptIn(ExperimentalSerializationApi::class)
+    @JsonNames("detail_expired")
+    val detailExpired: Boolean? = null,
+    @OptIn(ExperimentalSerializationApi::class)
+    @JsonNames("detail_expires_at")
+    val detailExpiresAt: String? = null,
+    val chunked: Boolean? = null,
+    @OptIn(ExperimentalSerializationApi::class)
+    @JsonNames("is_error")
     val isError: Boolean? = null
 ) : java.io.Serializable {
 
@@ -499,4 +524,35 @@ data class ChatSessionItem(
     val label: String? = null,
     val derivedTitle: String? = null,
     val kind: String? = null
+)
+
+@Serializable
+data class ToolDetailResponse(
+    val toolCallId: String,
+    val name: String? = null,
+    val state: String? = null,
+    val preview: String? = null,
+    @OptIn(ExperimentalSerializationApi::class)
+    @JsonNames("has_full_detail")
+    val hasFullDetail: Boolean = false,
+    val truncated: Boolean = false,
+    val expired: Boolean = false,
+    @OptIn(ExperimentalSerializationApi::class)
+    @JsonNames("expires_at")
+    val expiresAt: String? = null,
+    val content: String = "",
+    @OptIn(ExperimentalSerializationApi::class)
+    @JsonNames("content_blocks")
+    val contentBlocks: List<RelayChatContentBlock> = emptyList(),
+    val offset: Int = 0,
+    val limit: Int = 0,
+    @OptIn(ExperimentalSerializationApi::class)
+    @JsonNames("has_more")
+    val hasMore: Boolean = false,
+    @OptIn(ExperimentalSerializationApi::class)
+    @JsonNames("next_cursor")
+    val nextCursor: String? = null,
+    @OptIn(ExperimentalSerializationApi::class)
+    @JsonNames("download_url")
+    val downloadUrl: String? = null
 )

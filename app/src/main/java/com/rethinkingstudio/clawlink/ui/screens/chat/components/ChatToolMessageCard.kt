@@ -33,11 +33,13 @@ import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Terminal
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -62,6 +64,8 @@ import com.rethinkingstudio.clawlink.core.models.chat.ChatMessage
 import com.rethinkingstudio.clawlink.core.models.chat.MessageState
 import com.rethinkingstudio.clawlink.core.models.chat.RelayChatContentBlock
 import com.rethinkingstudio.clawlink.core.state.LocalizedText.choose
+import com.rethinkingstudio.clawlink.core.state.chat.ToolDetailCacheEntry
+import com.rethinkingstudio.clawlink.core.state.chat.toolDetailCacheKey
 import com.rethinkingstudio.clawlink.ui.screens.chat.ChatColors
 import com.rethinkingstudio.clawlink.ui.screens.chat.formatChatTimestamp
 
@@ -72,9 +76,48 @@ internal fun ToolMessageCard(
     message: ChatMessage,
     visibleToolBlocks: List<RelayChatContentBlock>,
     showInvocationProcess: Boolean,
+    gatewayId: String? = null,
+    sessionKey: String? = null,
+    toolDetailCacheByKey: Map<String, ToolDetailCacheEntry> = emptyMap(),
+    onLoadToolDetail: (gatewayId: String, sessionKey: String, toolCallId: String) -> Unit = { _, _, _ -> },
     modifier: Modifier = Modifier
 ) {
     var expanded by remember(message.id) { mutableStateOf(shouldStartToolMessageExpanded(showInvocationProcess, message.state)) }
+    val detailSummaryBlock = visibleToolBlocks.firstOrNull { block ->
+        block.isToolResultBlock &&
+            !block.toolCallId.isNullOrBlank() &&
+            (block.hasFullDetail == true || block.detailTruncated == true || block.detailExpired == true)
+    }
+    val detailToolCallId = detailSummaryBlock?.toolCallId?.trim()?.takeIf { it.isNotEmpty() }
+    val detailGatewayId = detailSummaryBlock?.gatewayId?.trim()?.takeIf { it.isNotEmpty() } ?: gatewayId?.trim()?.takeIf { it.isNotEmpty() }
+    val detailSessionKey = detailSummaryBlock?.sessionKey?.trim()?.takeIf { it.isNotEmpty() } ?: sessionKey?.trim()?.takeIf { it.isNotEmpty() }
+    val detailCacheKey = if (detailGatewayId != null && detailSessionKey != null && detailToolCallId != null) {
+        toolDetailCacheKey(detailGatewayId, detailSessionKey, detailToolCallId)
+    } else {
+        null
+    }
+    val detailEntry = detailCacheKey?.let { toolDetailCacheByKey[it] }
+    val loadedDetail = detailEntry?.response
+    val detailUnavailable = detailSummaryBlock?.detailExpired == true ||
+        detailSummaryBlock?.hasFullDetail == false ||
+        loadedDetail?.expired == true ||
+        loadedDetail?.hasFullDetail == false
+    val shouldLoadDetail = expanded &&
+        detailSummaryBlock?.hasFullDetail == true &&
+        !detailUnavailable &&
+        detailGatewayId != null &&
+        detailSessionKey != null &&
+        detailToolCallId != null &&
+        detailEntry?.response == null &&
+        detailEntry?.isLoading != true &&
+        detailEntry?.issueMessage == null
+
+    LaunchedEffect(shouldLoadDetail, detailGatewayId, detailSessionKey, detailToolCallId) {
+        if (shouldLoadDetail) {
+            onLoadToolDetail(detailGatewayId.orEmpty(), detailSessionKey.orEmpty(), detailToolCallId.orEmpty())
+        }
+    }
+
     val cardTitle = if (showInvocationProcess && visibleToolBlocks.any { it.isToolCallBlock }) "Tool output" else "Tool result"
     val toolTitle = visibleToolBlocks.mapNotNull { it.resolvedName?.trim()?.takeIf { name -> name.isNotEmpty() } }.distinct().takeIf { it.isNotEmpty() }?.joinToString(", ")
         ?: message.toolDisplaySummary.trim().takeIf { it.isNotEmpty() }
@@ -120,12 +163,48 @@ internal fun ToolMessageCard(
             }
             AnimatedVisibility(visible = expanded, enter = fadeIn() + expandVertically(), exit = fadeOut() + shrinkVertically()) {
                 Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    if (visibleToolBlocks.isEmpty()) {
-                        ToolTextBlock(text = message.plainTextContent.ifBlank { preview }, toolName = message.toolDisplayName, isError = message.state == MessageState.failed)
-                    } else {
-                        visibleToolBlocks.forEach { block ->
-                            ToolBlockView(block = block, associatedToolCallBlock = message.associatedToolCallBlock(block))
+                    val loadedBlocks = loadedDetail?.contentBlocks.orEmpty()
+                    val expandedBlocks = loadedBlocks.takeIf { it.isNotEmpty() } ?: visibleToolBlocks
+                    val issueMessage = detailEntry?.issueMessage
+                    when {
+                        detailUnavailable || !issueMessage.isNullOrBlank() -> {
+                            ToolTextBlock(
+                                text = issueMessage ?: choose("Full output unavailable", "完整输出不可用"),
+                                toolName = message.toolDisplayName,
+                                isError = false
+                            )
                         }
+                        detailEntry?.isLoading == true || shouldLoadDetail -> {
+                            ToolDetailLoadingRow()
+                        }
+                        loadedDetail != null && loadedBlocks.isEmpty() && loadedDetail.content.isNotBlank() -> {
+                            ToolTextBlock(text = loadedDetail.content, toolName = loadedDetail.name ?: message.toolDisplayName, isError = message.state == MessageState.failed)
+                        }
+                        expandedBlocks.isEmpty() -> {
+                            ToolTextBlock(text = message.plainTextContent.ifBlank { preview }, toolName = message.toolDisplayName, isError = message.state == MessageState.failed)
+                        }
+                        else -> {
+                            expandedBlocks.forEach { block ->
+                                ToolBlockView(
+                                    block = block,
+                                    associatedToolCallBlock = associatedToolCallBlockFor(
+                                        message = message,
+                                        block = block,
+                                        blocks = expandedBlocks
+                                    )
+                                )
+                            }
+                        }
+                    }
+                    if (loadedDetail?.hasMore == true) {
+                        Text(
+                            choose(
+                                "Output is long. Showing the first ${loadedDetail.limit} characters.",
+                                "输出很长，当前只显示前 ${loadedDetail.limit} 字。"
+                            ),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
                     }
                 }
             }
@@ -137,6 +216,47 @@ internal fun ToolMessageCard(
         }
     }
 }
+
+@Composable
+private fun ToolDetailLoadingRow() {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 6.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        CircularProgressIndicator(
+            modifier = Modifier.size(14.dp),
+            strokeWidth = 1.6.dp,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Text(
+            choose("Loading full output...", "正在加载完整输出..."),
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+    }
+}
+
+private fun associatedToolCallBlockFor(
+    message: ChatMessage,
+    block: RelayChatContentBlock,
+    blocks: List<RelayChatContentBlock>
+): RelayChatContentBlock? {
+    if (block.isToolCallBlock) return block
+    val callId = block.toolDetailResolvedCallId()
+    if (!callId.isNullOrBlank()) {
+        blocks.firstOrNull { candidate ->
+            candidate.isToolCallBlock && candidate.toolDetailResolvedCallId() == callId
+        }?.let { return it }
+    }
+    return message.associatedToolCallBlock(block)
+}
+
+private fun RelayChatContentBlock.toolDetailResolvedCallId(): String? =
+    toolCallId?.trim()?.takeIf { it.isNotEmpty() }
+        ?: toolUseId?.trim()?.takeIf { it.isNotEmpty() }
 
 internal fun shouldStartToolMessageExpanded(
     showInvocationProcess: Boolean,

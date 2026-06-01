@@ -128,6 +128,10 @@ LazyColumn(
                 },
                 gatewayId = gatewayId,
                 sessionKey = chatState.currentSessionKey,
+                toolDetailCacheByKey = chatState.toolDetailCacheByKey,
+                onLoadToolDetail = { detailGatewayId, detailSessionKey, toolCallId ->
+                    viewModel.loadToolDetail(detailGatewayId, detailSessionKey, toolCallId)
+                },
                 onImageClick = { block, url, fileName ->
                     onDismissKeyboard()
                     viewModel.imagePreview = ChatImagePreviewState(

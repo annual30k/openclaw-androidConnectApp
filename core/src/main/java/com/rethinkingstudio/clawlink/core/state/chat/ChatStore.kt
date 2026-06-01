@@ -10,6 +10,7 @@ import com.rethinkingstudio.clawlink.core.models.chat.ComposerAttachmentDraft
 import com.rethinkingstudio.clawlink.core.models.chat.ComposerAttachmentUploadItem
 import com.rethinkingstudio.clawlink.core.models.gateway.GatewayType
 import com.rethinkingstudio.clawlink.core.domain.NotificationPort
+import com.rethinkingstudio.clawlink.core.network.RelayAPIError
 import com.rethinkingstudio.clawlink.core.network.RelayAPIClient
 import com.rethinkingstudio.clawlink.core.network.dto.ChatHistoryResponse
 import com.rethinkingstudio.clawlink.core.network.dto.RelayFileTransferItem
@@ -2037,6 +2038,61 @@ class ChatStore(
         RemoteAttachmentCache.clearSession(normalizedGatewayId, normalizedSessionKey)
     }
 
+    suspend fun loadToolDetail(
+        gatewayId: String,
+        sessionKey: String,
+        toolCallId: String,
+        cursor: String? = null,
+        limit: Int = 20_000
+    ): Boolean {
+        val normalizedGatewayId = gatewayId.trim()
+        val normalizedSessionKey = sessionKey.trim().ifBlank { defaultSessionKey }
+        val normalizedToolCallId = toolCallId.trim()
+        if (normalizedGatewayId.isBlank() || normalizedSessionKey.isBlank() || normalizedToolCallId.isBlank()) return false
+
+        val cacheKey = toolDetailCacheKey(normalizedGatewayId, normalizedSessionKey, normalizedToolCallId)
+        val existing = _state.value.toolDetailCacheByKey[cacheKey]
+        if (existing?.isLoading == true || existing?.response != null || existing?.issueMessage != null) {
+            return existing?.response != null
+        }
+
+        _state.value = _state.value.copy(
+            toolDetailCacheByKey = _state.value.toolDetailCacheByKey + (cacheKey to ToolDetailCacheEntry.Loading)
+        )
+
+        return try {
+            val response = apiClient.fetchToolDetail(
+                gatewayId = normalizedGatewayId,
+                sessionKey = normalizedSessionKey,
+                toolCallId = normalizedToolCallId,
+                cursor = cursor,
+                limit = limit
+            )
+            val entry = if (response.expired || !response.hasFullDetail) {
+                ToolDetailCacheEntry.unavailable(fullToolOutputUnavailableMessage)
+            } else {
+                ToolDetailCacheEntry.loaded(response)
+            }
+            _state.value = _state.value.copy(
+                toolDetailCacheByKey = _state.value.toolDetailCacheByKey + (cacheKey to entry)
+            )
+            entry.response != null
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            val unavailable = e is RelayAPIError.ServerError && e.statusCode in listOf(404, 410)
+            val message = if (unavailable) {
+                fullToolOutputUnavailableMessage
+            } else {
+                e.message?.takeIf { it.isNotBlank() } ?: choose("Failed to load tool output.", "加载工具输出失败。")
+            }
+            _state.value = _state.value.copy(
+                toolDetailCacheByKey = _state.value.toolDetailCacheByKey + (cacheKey to ToolDetailCacheEntry.unavailable(message))
+            )
+            false
+        }
+    }
+
     fun markVoicePlaybackIdentifierRead(identifier: String, gatewayId: String?, sessionKey: String?) {
         val storageKey = voicePlaybackReadStorageKey(identifier, gatewayId, sessionKey)
         if (storageKey.isBlank()) return
@@ -2154,6 +2210,9 @@ class ChatStore(
             messages = if (isActiveDeleted) emptyList() else current.messages,
             isSwitchingSession = current.isSwitchingSession || isActiveDeleted,
             historyWindow = if (isActiveDeleted) ChatHistoryWindowState() else current.historyWindow,
+            toolDetailCacheByKey = current.toolDetailCacheByKey.filterKeys { key ->
+                !isToolDetailCacheKeyForSession(key, gatewayId, sessionKey)
+            },
             contextUsageLinesByGatewayAndSession = current.contextUsageLinesByGatewayAndSession.toMutableMap().also { byGateway ->
                 val usageBySession = byGateway[gatewayId]?.toMutableMap() ?: return@also
                 usageBySession.keys
@@ -2167,6 +2226,11 @@ class ChatStore(
         if (isActiveDeleted) {
             persistSelectedSession(gatewayId, nextSessionKey)
         }
+    }
+
+    private fun isToolDetailCacheKeyForSession(key: String, gatewayId: String, sessionKey: String): Boolean {
+        val parts = key.split("||", limit = 3)
+        return parts.size == 3 && parts[0] == gatewayId && sameSessionKey(parts[1], sessionKey)
     }
 
     private fun shouldIgnoreLocallyStoppedEvent(runId: String): Boolean {
@@ -2200,6 +2264,7 @@ class ChatStore(
         const val chatHistoryPageSize = 100
         const val chatHistoryWindowMaxMessages = 500
         const val chatHistoryPendingResolveMaxPages = 5
+        const val fullToolOutputUnavailableMessage = "完整输出不可用"
     }
 }
 

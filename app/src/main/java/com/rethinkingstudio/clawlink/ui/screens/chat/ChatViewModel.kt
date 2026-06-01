@@ -81,6 +81,16 @@ internal class ChatViewModel(
         composerNotice = null
     }
 
+    fun loadToolDetail(gatewayId: String, sessionKey: String, toolCallId: String) {
+        scope.launch {
+            chatStore.loadToolDetail(
+                gatewayId = gatewayId,
+                sessionKey = sessionKey,
+                toolCallId = toolCallId
+            )
+        }
+    }
+
     fun removeAttachment(attachment: ComposerAttachmentDraft) {
         composerAttachments = composerAttachments.filterNot { it.filePath == attachment.filePath }
         runCatching { File(attachment.filePath).delete() }

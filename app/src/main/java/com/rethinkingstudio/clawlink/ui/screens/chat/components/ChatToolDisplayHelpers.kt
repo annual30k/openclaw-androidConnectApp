@@ -143,7 +143,7 @@ private fun RelayChatContentBlock.structuredToolSnippet(): ToolDisplayContent? {
 }
 
 private fun RelayChatContentBlock.displayText(): String? {
-    return listOfNotNull(text, result?.renderedText(toolPreferredKeys), partialResult?.renderedText(toolPreferredKeys), content?.renderedText(toolPreferredKeys), output?.renderedText(toolPreferredKeys), error?.renderedText(toolPreferredKeys), status).firstOrNull { it.isNotBlank() }?.trim()
+    return listOfNotNull(text, preview, result?.renderedText(toolPreferredKeys), partialResult?.renderedText(toolPreferredKeys), content?.renderedText(toolPreferredKeys), output?.renderedText(toolPreferredKeys), error?.renderedText(toolPreferredKeys), status).firstOrNull { it.isNotBlank() }?.trim()
 }
 
 private fun RelayChatContentBlock.fallbackToolPreviewText(): String? {

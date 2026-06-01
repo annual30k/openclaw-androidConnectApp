@@ -77,6 +77,26 @@ object APIEndpoints {
                 )
             }
             fun ready(gatewayID: String) = APIEndpoint(HTTPMethod.GET, "/api/mobile/gateways/${pathSegment(gatewayID)}/chat/ready")
+            fun toolDetail(
+                gatewayID: String,
+                sessionKey: String,
+                toolCallId: String,
+                cursor: String? = null,
+                limit: Int = 20_000
+            ): APIEndpoint {
+                val queries = mutableListOf(
+                    "sessionKey" to queryValue(sessionKey),
+                    "limit" to limit.toString()
+                )
+                cursor?.trim()?.takeIf { it.isNotEmpty() }?.let {
+                    queries.add("cursor" to queryValue(it))
+                }
+                return APIEndpoint(
+                    HTTPMethod.GET,
+                    "/api/mobile/gateways/${pathSegment(gatewayID)}/chat/tools/${pathSegment(toolCallId)}/detail",
+                    queries
+                )
+            }
             fun sessions(gatewayID: String, limit: Int = 50, activeMinutes: Int? = null, includeGlobal: Boolean = true, includeUnknown: Boolean = false): APIEndpoint {
                 val queries = mutableListOf("limit" to limit.toString(), "includeGlobal" to includeGlobal.toString(), "includeUnknown" to includeUnknown.toString())
                 if (activeMinutes != null) queries.add("activeMinutes" to activeMinutes.toString())

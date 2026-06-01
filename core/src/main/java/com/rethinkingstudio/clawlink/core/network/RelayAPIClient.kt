@@ -5,6 +5,7 @@ import com.rethinkingstudio.clawlink.core.models.backups.BackupDraft
 import com.rethinkingstudio.clawlink.core.models.backups.BackupItem
 import com.rethinkingstudio.clawlink.core.models.catalog.ModelItem
 import com.rethinkingstudio.clawlink.core.models.chat.ChatSessionItem
+import com.rethinkingstudio.clawlink.core.models.chat.ToolDetailResponse
 import com.rethinkingstudio.clawlink.core.models.gateway.GatewaySummary
 import com.rethinkingstudio.clawlink.core.models.skills.SkillItem
 import com.rethinkingstudio.clawlink.core.models.tasks.TaskDraft
@@ -283,6 +284,19 @@ class RelayAPIClient(
     suspend fun checkChatReady(gatewayId: String): Boolean {
         val response: GatewayChatReadyResponse = request(APIEndpoints.Mobile.Chat.ready(gatewayId))
         return response.ready
+    }
+
+    suspend fun fetchToolDetail(
+        gatewayId: String,
+        sessionKey: String,
+        toolCallId: String,
+        cursor: String? = null,
+        limit: Int = 20_000
+    ): ToolDetailResponse {
+        return request(
+            endpoint = APIEndpoints.Mobile.Chat.toolDetail(gatewayId, sessionKey, toolCallId, cursor, limit),
+            extraHeaders = gatewayLoadHeaders
+        )
     }
 
     suspend fun fetchChatSessions(gatewayId: String, limit: Int = 50, activeMinutes: Int? = null): List<ChatSessionItem> {

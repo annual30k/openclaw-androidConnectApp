@@ -44,4 +44,16 @@ class ChatSessionDeleteHelpersTest {
             )
         )
     }
+
+    @Test
+    fun toolDetailCacheKeyUsesSessionScope() {
+        assertEquals(
+            "gw-1||main||call-1",
+            toolDetailCacheKey(" gw-1 ", " ", " call-1 ")
+        )
+        assertEquals(
+            "gw-1||agent/main||call-2",
+            toolDetailCacheKey("gw-1", "agent/main", "call-2")
+        )
+    }
 }

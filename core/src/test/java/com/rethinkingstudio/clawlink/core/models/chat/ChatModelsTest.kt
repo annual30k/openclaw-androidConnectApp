@@ -220,4 +220,73 @@ class ChatModelsTest {
         assertTrue(message.toolContentBlocks[1].isToolResultBlock)
         assertTrue(message.toolContentBlocks[2].isToolResultBlock)
     }
+
+    @Test
+    fun toolSummaryBlocksDecodeDetailMetadata() {
+        val block = Json.decodeFromString<RelayChatContentBlock>(
+            """
+            {
+              "type": "tool_result",
+              "name": "exec",
+              "tool_call_id": "call-1",
+              "preview": "short output",
+              "tool_state": "completed",
+              "has_full_detail": true,
+              "detail_truncated": true,
+              "detail_expired": false,
+              "detail_expires_at": "2026-06-08T00:00:00.000Z",
+              "chunked": true
+            }
+            """.trimIndent()
+        )
+
+        assertTrue(block.isToolResultBlock)
+        assertEquals("call-1", block.toolCallId)
+        assertEquals("short output", block.preview)
+        assertEquals("completed", block.toolState)
+        assertEquals(true, block.hasFullDetail)
+        assertEquals(true, block.detailTruncated)
+        assertEquals(false, block.detailExpired)
+        assertEquals("2026-06-08T00:00:00.000Z", block.detailExpiresAt)
+        assertEquals(true, block.chunked)
+    }
+
+    @Test
+    fun toolDetailResponseDecodesContentBlocksAndPaging() {
+        val response = Json.decodeFromString<ToolDetailResponse>(
+            """
+            {
+              "toolCallId": "call-1",
+              "name": "exec",
+              "state": "completed",
+              "preview": "hello",
+              "hasFullDetail": true,
+              "truncated": true,
+              "expired": false,
+              "expiresAt": "2026-06-08T00:00:00.000Z",
+              "content": "hello world",
+              "contentBlocks": [
+                {
+                  "type": "tool_result",
+                  "tool_call_id": "call-1",
+                  "text": "hello world"
+                }
+              ],
+              "offset": 0,
+              "limit": 20,
+              "hasMore": true,
+              "nextCursor": "offset:20",
+              "downloadUrl": "/api/mobile/gateways/gw/chat/tools/call-1/detail/download"
+            }
+            """.trimIndent()
+        )
+
+        assertEquals("call-1", response.toolCallId)
+        assertTrue(response.hasFullDetail)
+        assertTrue(response.truncated)
+        assertTrue(response.hasMore)
+        assertEquals("offset:20", response.nextCursor)
+        assertEquals("hello world", response.contentBlocks.single().text)
+        assertEquals("call-1", response.contentBlocks.single().toolCallId)
+    }
 }

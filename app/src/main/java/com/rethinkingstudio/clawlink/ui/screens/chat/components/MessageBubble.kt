@@ -71,6 +71,7 @@ import com.rethinkingstudio.clawlink.core.models.chat.MessageState
 import com.rethinkingstudio.clawlink.core.models.chat.RelayChatContentBlock
 import com.rethinkingstudio.clawlink.core.state.LocalizedText.choose
 import com.rethinkingstudio.clawlink.core.state.chat.RemoteAttachmentCache
+import com.rethinkingstudio.clawlink.core.state.chat.ToolDetailCacheEntry
 import com.rethinkingstudio.clawlink.core.state.chat.chatAttachmentCacheKey
 import com.rethinkingstudio.clawlink.core.state.chat.chatImageCacheKey
 import com.rethinkingstudio.clawlink.ui.screens.chat.ChatColors
@@ -92,6 +93,8 @@ internal fun MessageBubble(
     onVoicePlaybackStart: (identifier: String) -> Unit = {},
     gatewayId: String? = null,
     sessionKey: String? = null,
+    toolDetailCacheByKey: Map<String, ToolDetailCacheEntry> = emptyMap(),
+    onLoadToolDetail: (gatewayId: String, sessionKey: String, toolCallId: String) -> Unit = { _, _, _ -> },
     onImageClick: (block: RelayChatContentBlock, url: String, fileName: String?) -> Unit = { _, _, _ -> },
     onFileClick: (block: RelayChatContentBlock, url: String, fileName: String?) -> Unit = { _, _, _ -> }
 ) {
@@ -128,7 +131,16 @@ internal fun MessageBubble(
 
     Column(modifier = Modifier.fillMaxWidth(), horizontalAlignment = if (isUser) Alignment.End else Alignment.Start) {
         if (isTool) {
-            ToolMessageCard(message = message, visibleToolBlocks = visibleToolBlocks, showInvocationProcess = showInvocationProcess, modifier = Modifier.padding(vertical = 2.dp))
+            ToolMessageCard(
+                message = message,
+                visibleToolBlocks = visibleToolBlocks,
+                showInvocationProcess = showInvocationProcess,
+                gatewayId = gatewayId,
+                sessionKey = sessionKey,
+                toolDetailCacheByKey = toolDetailCacheByKey,
+                onLoadToolDetail = onLoadToolDetail,
+                modifier = Modifier.padding(vertical = 2.dp)
+            )
             return@Column
         }
         if (isStandaloneVoiceMessage) {

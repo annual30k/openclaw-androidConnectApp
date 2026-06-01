@@ -49,7 +49,10 @@ class ChatHistoryItemSerializerTest {
                     {
                       "type": "tool_result",
                       "tool_call_id": "call-1",
-                      "text": "ok"
+                      "text": "ok",
+                      "preview": "ok",
+                      "has_full_detail": true,
+                      "detail_truncated": false
                     }
                   ]
                 }
@@ -61,6 +64,9 @@ class ChatHistoryItemSerializerTest {
         val block = response.items.single().contentBlocks?.single()
         assertTrue(block?.isToolResultBlock == true)
         assertEquals("call-1", block?.toolCallId)
+        assertEquals("ok", block?.preview)
+        assertEquals(true, block?.hasFullDetail)
+        assertEquals(false, block?.detailTruncated)
     }
 
     @Test
