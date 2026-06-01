@@ -134,13 +134,8 @@ fun HelpScreen(
             ) {
                 Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
                     CodeBlock(
-                        label = stringResource(R.string.usage_guide_step_3_label_openclaw),
-                        code = "clawconnect restart-openclaw",
-                        onCopy = { clipboardManager.setText(AnnotatedString(it)) }
-                    )
-                    CodeBlock(
-                        label = stringResource(R.string.usage_guide_step_3_label_hermes),
-                        code = "clawconnect restart-hermes",
+                        label = stringResource(R.string.usage_guide_step_3_label),
+                        code = "clawconnect install",
                         onCopy = { clipboardManager.setText(AnnotatedString(it)) }
                     )
                     CodeBlock(
