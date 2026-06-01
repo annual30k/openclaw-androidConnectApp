@@ -233,7 +233,7 @@ class ChatStore(
             payload = payloadObj,
             currentGatewayId = _state.value.currentGatewayId,
             currentSessionKey = _state.value.currentSessionKey
-        )
+        ).withTrackedTimelineRunScope(events)
         if (!isCurrentChatScope(scope)) {
             noteSessionActivity(scope)
             return true
@@ -257,6 +257,33 @@ class ChatStore(
             TimelinePersistenceMiddleware.clearSnapshot()
         } else {
             TimelinePersistenceMiddleware.persistSnapshot(timelineState.copy(messages = ordered))
+        }
+    }
+
+    private fun ChatEventScope.withTrackedTimelineRunScope(events: List<TimelineEvent>): ChatEventScope {
+        if (hasSessionKey) return this
+        val runScope = events.firstNotNullOfOrNull { event ->
+            event.timelineRunId()?.trim()?.takeIf { it.isNotEmpty() }?.let { chatRunScopes[it] }
+        } ?: return this
+        return ChatEventScope(
+            gatewayId = runScope.gatewayId,
+            sessionKey = normalizeSessionKey(runScope.sessionKey),
+            hasSessionKey = true,
+            runScope = runScope
+        )
+    }
+
+    private fun TimelineEvent.timelineRunId(): String? {
+        return when (this) {
+            is TimelineEvent.MessagePartDelta -> runId
+            is TimelineEvent.MessageCompleted -> runId
+            is TimelineEvent.RunTerminal -> runId
+            is TimelineEvent.ToolInvocationUpdated -> runId
+            is TimelineEvent.HistorySnapshotPage -> items.firstNotNullOfOrNull { item ->
+                item.runId?.trim()?.takeIf { it.isNotEmpty() }
+            }
+            is TimelineEvent.TurnUserCreated,
+            is TimelineEvent.AttachmentStateChanged -> null
         }
     }
 
@@ -756,6 +783,11 @@ class ChatStore(
 
     private fun hasActiveStreamingMessage(messages: List<ChatMessage>): Boolean {
         return hasPendingAssistantPlaceholder(messages)
+    }
+
+    private fun resetCurrentTimelineScope() {
+        timelineState = ChatTimelineState()
+        TimelinePersistenceMiddleware.clearSnapshot()
     }
 
     private fun hasLocalUserMessagesNeedingHistoryMerge(messages: List<ChatMessage>): Boolean {
@@ -1574,13 +1606,18 @@ class ChatStore(
             _state.value = _state.value.copy(isLoading = false, isSwitchingSession = false)
             return
         }
-            _state.value = _state.value.copy(
+        val initialState = _state.value
+        val hasActiveScope = !initialState.currentGatewayId.isNullOrBlank()
+        if (hasActiveScope && !matchesRequestedChatScope(initialState, normalizedGatewayId, normalizedSessionKey)) {
+            return
+        }
+        _state.value = initialState.copy(
                 currentGatewayId = normalizedGatewayId,
                 currentSessionKey = normalizedSessionKey,
                 isLoading = true,
                 errorMessage = null,
                 historyWindow = ChatHistoryWindowState()
-            )
+        )
         persistSelectedSession(normalizedGatewayId, normalizedSessionKey)
         try {
             val response = retryOnceOnTransientFailure(
@@ -1901,6 +1938,7 @@ class ChatStore(
         )
         streamingMessageId = null
         streamingContent.clear()
+        resetCurrentTimelineScope()
         abortRequestIds.clear()
         locallyStoppedRunIds.clear()
         chatRunScopes.clear()
@@ -1924,6 +1962,7 @@ class ChatStore(
         )
         streamingMessageId = null
         streamingContent.clear()
+        resetCurrentTimelineScope()
     }
 
     fun newSession(sessionKey: String? = null): String {
@@ -1952,6 +1991,7 @@ class ChatStore(
         }
         streamingMessageId = null
         streamingContent.clear()
+        resetCurrentTimelineScope()
         return key
     }
 

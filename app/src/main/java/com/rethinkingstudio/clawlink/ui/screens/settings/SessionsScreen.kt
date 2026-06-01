@@ -114,7 +114,12 @@ fun SessionsScreen(
     var confirmDelete by remember { mutableStateOf<ChatSessionItem?>(null) }
 
     val operationsLocked = gatewayState.restartingGatewayId != null || !gatewayState.isSelectedGatewayChatChainReady
-    val canSwitchSessions = gatewayId != null && !operationsLocked && !chatState.isStreaming && !chatState.isStoppingRun
+    val canSwitchSessions = canSwitchSession(
+        gatewayId = gatewayId,
+        operationsLocked = operationsLocked,
+        isStreaming = chatState.isStreaming,
+        isStoppingRun = chatState.isStoppingRun
+    )
     val currentSessionKey = chatState.currentSessionKey.ifBlank { "main" }
     val sessions = remember(chatState.sessions, currentSessionKey) {
         SessionPresentation.visibleSessions(chatState.sessions, currentSessionKey)

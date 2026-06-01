@@ -569,9 +569,14 @@ internal object ChatTimelineReducer {
             val message = messages[index]
             if (message.role != MessageRole.user ||
                 message.id == excludingMessageId ||
-                !message.runId.startsWith("local-user-") ||
-                normalizeTimelineUserText(message.content) != normalizeTimelineUserText(incomingUserText)
+                !message.runId.startsWith("local-user-")
             ) {
+                return@filter false
+            }
+            if (localVoiceMessageMatchesIncomingTranscript(message, incomingUserText, incomingTimestamp)) {
+                return@filter true
+            }
+            if (normalizeTimelineUserText(message.content) != normalizeTimelineUserText(incomingUserText)) {
                 return@filter false
             }
             if (fileContentBlocksOverlap(message.contentBlocks, contentBlocks)) {
@@ -706,6 +711,14 @@ private fun mergeLocalUserMessage(local: ChatMessage, incoming: ChatMessage): Ch
 }
 
 private fun mergedLocalUserContentBlocks(local: ChatMessage, incoming: ChatMessage): List<RelayChatContentBlock> {
+    if (local.hasVoiceContent) {
+        val transcript = userPromptText(content = incoming.content, contentBlocks = incoming.contentBlocks).trim()
+        if (transcript.isNotBlank()) {
+            return local.contentBlocks.map { block ->
+                if (block.isVoiceMessageBlock) block.copy(transcript = transcript) else block
+            }
+        }
+    }
     if (local.contentBlocks.isEmpty()) return incoming.contentBlocks
     if (incoming.contentBlocks.isEmpty()) return local.contentBlocks
     if (local.hasFileContent && incoming.hasFileContent) {
@@ -719,6 +732,23 @@ private fun normalizeTimelineUserText(value: String): String {
         .trim()
         .replace(Regex("[\\s\\u2000-\\u200A\\u202F\\u205F\\u3000]+"), " ")
         .lowercase()
+}
+
+private fun localVoiceMessageMatchesIncomingTranscript(
+    message: ChatMessage,
+    incomingUserText: String,
+    incomingTimestamp: Double?
+): Boolean {
+    if (!message.hasVoiceContent) return false
+    val transcript = incomingUserText.trim()
+    if (transcript.isBlank()) return false
+    val existingTranscript = message.voiceTranscriptText?.trim()?.takeIf { it.isNotBlank() }
+    if (existingTranscript != null) {
+        return normalizeTimelineUserText(existingTranscript) == normalizeTimelineUserText(transcript)
+    }
+    val localTimestamp = message.sortTimestamp ?: timelineSortTimestamp(message.createdAt)
+    if (incomingTimestamp == null || localTimestamp == null) return true
+    return kotlin.math.abs(incomingTimestamp - localTimestamp) < 180.0
 }
 
 private fun userPromptText(content: String, contentBlocks: List<RelayChatContentBlock>): String {

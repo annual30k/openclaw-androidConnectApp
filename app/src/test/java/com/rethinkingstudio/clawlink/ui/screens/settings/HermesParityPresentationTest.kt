@@ -50,6 +50,18 @@ class HermesParityPresentationTest {
     }
 
     @Test
+    fun sessionSwitchingRemainsAvailableWhileCurrentSessionIsStreaming() {
+        assertTrue(
+            canSwitchSession(
+                gatewayId = "gateway-1",
+                operationsLocked = false,
+                isStreaming = true,
+                isStoppingRun = false
+            )
+        )
+    }
+
+    @Test
     fun hermesBackupDraftUsesZipArchiveName() {
         val draft = createInitialDraft(isHermesGateway = true)
 

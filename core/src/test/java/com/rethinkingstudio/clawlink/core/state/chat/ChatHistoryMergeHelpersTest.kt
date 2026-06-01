@@ -1,6 +1,7 @@
 package com.rethinkingstudio.clawlink.core.state.chat
 
 import com.rethinkingstudio.clawlink.core.models.chat.ChatMessage
+import com.rethinkingstudio.clawlink.core.models.chat.ChatSessionItem
 import com.rethinkingstudio.clawlink.core.models.chat.MessageRole
 import com.rethinkingstudio.clawlink.core.models.chat.MessageState
 import com.rethinkingstudio.clawlink.core.models.chat.RelayChatContentBlock
@@ -408,6 +409,47 @@ class ChatHistoryMergeHelpersTest {
             assertFalse(state.isLoading)
             assertFalse(state.isSwitchingSession)
             assertTrue(state.errorMessage?.isNotBlank() == true)
+        } finally {
+            wsClient.destroy()
+        }
+    }
+
+    @Test
+    fun staleHistoryLoadDoesNotSwitchBackAfterSessionSelection() = runBlocking {
+        val requests = mutableListOf<HistoryPageRequest>()
+        val wsClient = RelayWebSocketClient()
+        try {
+            val store = ChatStore(
+                apiClient = RelayAPIClient(),
+                wsClient = wsClient,
+                notificationPort = object : NotificationPort {
+                    override fun showReplyNotification(sessionKey: String, title: String, body: String) = Unit
+                    override fun cancelNotification(id: Int) = Unit
+                    override fun cancelAll() = Unit
+                },
+                chatHistoryPageFetcher = { gatewayId, sessionKey, limit, cursor, direction ->
+                    requests += HistoryPageRequest(gatewayId, sessionKey, limit, cursor, direction)
+                    ChatHistoryResponse(items = emptyList())
+                }
+            )
+            store.setStateForTest(
+                ChatState(
+                    currentGatewayId = "gw_1",
+                    currentSessionKey = "session-b",
+                    sessions = listOf(
+                        ChatSessionItem(sessionKey = "session-a", lastActivityAt = null),
+                        ChatSessionItem(sessionKey = "session-b", lastActivityAt = null)
+                    ),
+                    isSwitchingSession = true
+                )
+            )
+
+            store.loadHistory("gw_1", "session-a", limit = 100)
+
+            val state = store.state.value
+            assertEquals("session-b", state.currentSessionKey)
+            assertTrue(state.isSwitchingSession)
+            assertTrue(requests.isEmpty())
         } finally {
             wsClient.destroy()
         }

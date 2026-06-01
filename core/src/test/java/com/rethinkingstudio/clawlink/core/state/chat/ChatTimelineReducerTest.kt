@@ -128,6 +128,50 @@ class ChatTimelineReducerTest {
     }
 
     @Test
+    fun turnUserCreatedMergesTranscriptIntoLocalVoiceUserMessage() {
+        val localVoice = ChatMessage(
+            id = "local-user-message",
+            role = MessageRole.user,
+            state = MessageState.completed,
+            content = "voice-input.m4a",
+            contentBlocks = listOf(
+                RelayChatContentBlock(
+                    type = "voice",
+                    fileName = "voice-input.m4a",
+                    mimeType = "audio/mp4",
+                    downloadUrl = "file:///tmp/voice-input.m4a"
+                )
+            ),
+            createdAt = "1970-01-01T00:03:20.000Z",
+            runId = "local-user-client-run-voice",
+            sortTimestamp = 200.0
+        )
+
+        val state = ChatTimelineReducer.reduce(
+            ChatTimelineState(messages = listOf(localVoice)),
+            event(
+                """
+                {
+                  "protocolVersion": 2,
+                  "eventId": "user-voice-transcript",
+                  "eventType": "turn.user.created",
+                  "turnId": "server-turn-voice",
+                  "runId": "server-run-voice",
+                  "messageId": "server-user-voice",
+                  "createdAt": "1970-01-01T00:03:20.500Z",
+                  "content": [{ "type": "text", "text": "我。" }]
+                }
+                """.trimIndent()
+            )
+        )
+
+        assertEquals(listOf("server-user-voice"), state.messages.map { it.id })
+        assertEquals("local-user-client-run-voice", state.messages.single().runId)
+        assertEquals("voice-input.m4a", state.messages.single().content)
+        assertEquals("我。", state.messages.single().voiceTranscriptText)
+    }
+
+    @Test
     fun messagePartDeltaIsAbsoluteAndOlderSeqIsIgnored() {
         val state = ChatTimelineReducer.reduceAll(
             ChatTimelineState(),

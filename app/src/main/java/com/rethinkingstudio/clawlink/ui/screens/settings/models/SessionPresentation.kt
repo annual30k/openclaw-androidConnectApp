@@ -207,6 +207,18 @@ internal fun isProtectedSession(session: ChatSessionItem): Boolean {
     return normalized == "main" || normalized.endsWith(":main") || isDedicatedSession(normalized)
 }
 
+@Suppress("UNUSED_PARAMETER")
+internal fun canSwitchSession(
+    gatewayId: String?,
+    operationsLocked: Boolean,
+    isStreaming: Boolean,
+    isStoppingRun: Boolean
+): Boolean {
+    if (gatewayId == null) return false
+    if (operationsLocked || isStoppingRun) return false
+    return true
+}
+
 internal fun canDeleteSession(
     session: ChatSessionItem,
     gatewayId: String?,
@@ -228,11 +240,11 @@ internal fun canDeleteSession(
     return true
 }
 
+@Suppress("UNUSED_PARAMETER")
 internal fun lockMessage(gatewayId: String?, operationsLocked: Boolean, isStreaming: Boolean, isStoppingRun: Boolean): String {
     return when {
         gatewayId == null -> choose("Pair a gateway before switching sessions.", "请先完成配对后再切换会话。")
         operationsLocked -> choose("The current gateway is recovering from restart. Session switching is temporarily unavailable.", "当前网关正在重启恢复中，暂不能切换会话。")
-        isStreaming -> choose("The current session still has an unfinished reply. Wait or stop it before switching.", "当前会话还有未完成回复，请先等待或停止后再切换。")
         isStoppingRun -> choose("The message is still stopping. Switch sessions later.", "消息正在停止中，请稍后再切换会话。")
         else -> choose("Session switching is currently unavailable.", "当前不可切换会话。")
     }
