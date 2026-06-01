@@ -222,12 +222,19 @@ fun ChatScreen(
         }
     }
 
-    suspend fun loadAutoHistoryOnce(request: GatewayHistoryRequest) {
+    suspend fun loadAutoHistoryOnce(
+        request: GatewayHistoryRequest,
+        keepSwitchingOverlay: Boolean = true
+    ) {
         val requestKey = gatewayHistoryRequestKey(request)
         if (lastAutoHistoryRequestKey == requestKey) return
         lastAutoHistoryRequestKey = requestKey
         try {
-            chatStore.loadHistory(request.gatewayId, request.sessionKey)
+            chatStore.loadHistory(
+                request.gatewayId,
+                request.sessionKey,
+                keepSwitchingOverlay = keepSwitchingOverlay
+            )
         } catch (e: CancellationException) {
             if (lastAutoHistoryRequestKey == requestKey) {
                 lastAutoHistoryRequestKey = null
@@ -439,13 +446,14 @@ fun ChatScreen(
                 val sessionsLoaded = chatStore.loadSessions(gatewayId)
                 if (sessionsLoaded) {
                     val stateAfterSessionLoad = chatStore.state.value
+                    val keepSwitchingOverlay = gatewaySwitchHistoryBlocksOverlay(selectedGatewayType)
                     gatewaySwitchHistoryRequest(
                         selectedGatewayId = gatewayId,
                         currentGatewayId = stateAfterSessionLoad.currentGatewayId,
                         currentSessionKey = stateAfterSessionLoad.currentSessionKey,
                         isGatewaySwitchInProgress = false
                     )?.let { request ->
-                        loadAutoHistoryOnce(request)
+                        loadAutoHistoryOnce(request, keepSwitchingOverlay = keepSwitchingOverlay)
                     }
                 }
                 modelStore.loadModels(gatewayId)

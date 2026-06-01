@@ -1,5 +1,7 @@
 package com.rethinkingstudio.clawlink.ui.screens.chat
 
+import com.rethinkingstudio.clawlink.core.models.gateway.GatewayType
+
 internal data class GatewayHistoryRequest(
     val gatewayId: String,
     val sessionKey: String
@@ -21,4 +23,8 @@ internal fun gatewaySwitchHistoryRequest(
 
 internal fun gatewayHistoryRequestKey(request: GatewayHistoryRequest): String {
     return "${request.gatewayId.trim()}\u001F${request.sessionKey.trim()}"
+}
+
+internal fun gatewaySwitchHistoryBlocksOverlay(gatewayType: GatewayType): Boolean {
+    return gatewayType != GatewayType.hermes
 }

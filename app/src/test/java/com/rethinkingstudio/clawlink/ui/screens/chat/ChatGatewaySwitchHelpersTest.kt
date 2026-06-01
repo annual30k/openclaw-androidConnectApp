@@ -1,7 +1,10 @@
 package com.rethinkingstudio.clawlink.ui.screens.chat
 
+import com.rethinkingstudio.clawlink.core.models.gateway.GatewayType
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class ChatGatewaySwitchHelpersTest {
@@ -52,5 +55,11 @@ class ChatGatewaySwitchHelpersTest {
         )
 
         assertNull(request)
+    }
+
+    @Test
+    fun hermesHistoryDoesNotBlockGatewaySwitchOverlay() {
+        assertFalse(gatewaySwitchHistoryBlocksOverlay(GatewayType.hermes))
+        assertTrue(gatewaySwitchHistoryBlocksOverlay(GatewayType.openclaw))
     }
 }

@@ -1600,7 +1600,12 @@ class ChatStore(
         completeCurrentRun(runId.orEmpty(), runScope)
     }
 
-    suspend fun loadHistory(gatewayId: String, sessionKey: String, limit: Int = chatHistoryPageSize) {
+    suspend fun loadHistory(
+        gatewayId: String,
+        sessionKey: String,
+        limit: Int = chatHistoryPageSize,
+        keepSwitchingOverlay: Boolean = true
+    ) {
         val normalizedGatewayId = gatewayId.trim()
         val normalizedSessionKey = normalizeSessionKey(sessionKey)
         if (normalizedGatewayId.isBlank()) {
@@ -1616,6 +1621,7 @@ class ChatStore(
                 currentGatewayId = normalizedGatewayId,
                 currentSessionKey = normalizedSessionKey,
                 isLoading = true,
+                isSwitchingSession = initialState.isSwitchingSession && keepSwitchingOverlay,
                 errorMessage = null,
                 historyWindow = ChatHistoryWindowState()
         )

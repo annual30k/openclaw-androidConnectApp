@@ -11,8 +11,11 @@ import com.rethinkingstudio.clawlink.core.network.dto.ChatHistoryResponse
 import com.rethinkingstudio.clawlink.core.network.dto.ChatHistoryItem
 import com.rethinkingstudio.clawlink.core.network.transport.RelayWebSocketClient
 import java.time.Instant
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.yield
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
@@ -450,6 +453,48 @@ class ChatHistoryMergeHelpersTest {
             assertEquals("session-b", state.currentSessionKey)
             assertTrue(state.isSwitchingSession)
             assertTrue(requests.isEmpty())
+        } finally {
+            wsClient.destroy()
+        }
+    }
+
+    @Test
+    fun loadHistoryCanReleaseGatewaySwitchOverlayBeforeSlowHistoryCompletes() = runBlocking {
+        val allowHistoryResponse = CompletableDeferred<Unit>()
+        val wsClient = RelayWebSocketClient()
+        try {
+            val store = ChatStore(
+                apiClient = RelayAPIClient(),
+                wsClient = wsClient,
+                notificationPort = object : NotificationPort {
+                    override fun showReplyNotification(sessionKey: String, title: String, body: String) = Unit
+                    override fun cancelNotification(id: Int) = Unit
+                    override fun cancelAll() = Unit
+                },
+                chatHistoryPageFetcher = { _, _, _, _, _ ->
+                    allowHistoryResponse.await()
+                    ChatHistoryResponse(items = emptyList())
+                }
+            )
+            store.setStateForTest(
+                ChatState(
+                    currentGatewayId = "gw_1",
+                    currentSessionKey = "main",
+                    isSwitchingSession = true
+                )
+            )
+
+            val loadJob = async {
+                store.loadHistory("gw_1", "main", limit = 100, keepSwitchingOverlay = false)
+            }
+            yield()
+
+            val loadingState = store.state.value
+            assertTrue(loadingState.isLoading)
+            assertFalse(loadingState.isSwitchingSession)
+
+            allowHistoryResponse.complete(Unit)
+            loadJob.await()
         } finally {
             wsClient.destroy()
         }
