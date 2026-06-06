@@ -637,7 +637,94 @@ class ChatStore(
 
     private fun orderedMessages(messages: List<ChatMessage>): List<ChatMessage> {
         return removeDuplicateCompletedAssistantRepliesInSameTurn(
-            orderMessagesWithSourceRunAnchors(removeResolvedTransientAssistantPlaceholders(messages))
+            orderMessagesWithSourceRunAnchors(removeResolvedTransientAssistantPlaceholders(coalesceMessageSlots(messages)))
+        )
+    }
+
+    private fun coalesceMessageSlots(messages: List<ChatMessage>): List<ChatMessage> {
+        val merged = mutableListOf<ChatMessage>()
+        messages.forEach { message ->
+            val normalizedId = message.id.trim()
+            if (normalizedId.isBlank()) {
+                val fileSlotIndex = merged.indexOfFirst { existing -> sameTransferMessageSlot(existing, message) }
+                if (fileSlotIndex >= 0) {
+                    merged[fileSlotIndex] = mergeDuplicateMessageSlot(merged[fileSlotIndex], message)
+                } else {
+                    merged.add(message)
+                }
+                return@forEach
+            }
+            val existingIndex = merged.indexOfFirst { existing ->
+                existing.id.trim() == normalizedId || sameTransferMessageSlot(existing, message)
+            }
+            if (existingIndex >= 0) {
+                merged[existingIndex] = mergeDuplicateMessageSlot(merged[existingIndex], message)
+            } else {
+                merged.add(message)
+            }
+        }
+        return merged
+    }
+
+    private fun sameTransferMessageSlot(existing: ChatMessage, incoming: ChatMessage): Boolean {
+        if (existing.role != incoming.role) return false
+        val existingBlocks = existing.transferContentBlocks()
+        val incomingBlocks = incoming.transferContentBlocks()
+        if (existingBlocks.isEmpty() || incomingBlocks.isEmpty()) return false
+
+        val existingFileIds = existingBlocks.mapNotNull { it.fileId?.trim()?.takeIf { id -> id.isNotEmpty() } }.toSet()
+        val incomingFileIds = incomingBlocks.mapNotNull { it.fileId?.trim()?.takeIf { id -> id.isNotEmpty() } }.toSet()
+        if (existingFileIds.isNotEmpty() &&
+            incomingFileIds.isNotEmpty() &&
+            existingFileIds.intersect(incomingFileIds).isNotEmpty()
+        ) {
+            return true
+        }
+
+        val existingFileRunId = exactFileMessageRunId(existing)
+        val incomingFileRunId = exactFileMessageRunId(incoming)
+        if (!existingFileRunId.isNullOrBlank() && existingFileRunId == incomingFileRunId) {
+            return true
+        }
+
+        return samePendingUploadMessage(existing, incoming) || samePendingUploadMessage(incoming, existing)
+    }
+
+    private fun exactFileMessageRunId(message: ChatMessage): String? {
+        message.transferContentBlocks().firstNotNullOfOrNull { block ->
+            block.fileId?.trim()?.takeIf { it.isNotEmpty() }
+        }?.let { return fileMessageRunId(it) }
+        return message.runId.trim().takeIf { it.startsWith("file-") }
+    }
+
+    private fun mergeDuplicateMessageSlot(existing: ChatMessage, incoming: ChatMessage): ChatMessage {
+        if (sameTransferMessageSlot(existing, incoming)) {
+            return mergeCompletedFileMessage(
+                existing = existing,
+                completed = incoming.copy(
+                    id = existing.id,
+                    sortTimestamp = existing.sortTimestamp ?: incoming.sortTimestamp
+                )
+            )
+        }
+        return mergeDuplicateMessageById(existing, incoming)
+    }
+
+    private fun mergeDuplicateMessageById(existing: ChatMessage, incoming: ChatMessage): ChatMessage {
+        val content = existing.content.trim().takeIf { it.isNotEmpty() }?.let { existing.content } ?: incoming.content
+        val contentBlocks = existing.contentBlocks.ifEmpty { incoming.contentBlocks }
+        val state = when {
+            incoming.state == MessageState.failed -> MessageState.failed
+            existing.state == MessageState.completed || incoming.state == MessageState.completed -> MessageState.completed
+            else -> incoming.state
+        }
+        return existing.copy(
+            state = state,
+            content = content,
+            contentBlocks = contentBlocks,
+            createdAt = existing.createdAt.ifBlank { incoming.createdAt },
+            runId = existing.runId.ifBlank { incoming.runId },
+            sortTimestamp = existing.sortTimestamp ?: incoming.sortTimestamp
         )
     }
 
@@ -1379,6 +1466,29 @@ class ChatStore(
 
         val clientRunId = UUID.randomUUID().toString()
         val requestId = UUID.randomUUID().toString()
+        val currentMessages = _state.value.messages
+        val attachmentIdSet = attachmentIds
+            .map { it.trim() }
+            .filter { it.isNotEmpty() }
+            .toSet()
+        val replacedUploadSortTimestamp = if (attachmentIdSet.isEmpty()) {
+            null
+        } else {
+            currentMessages
+                .filter { message ->
+                    message.id in attachmentIdSet || attachmentIdSet.any { attachmentId -> message.runId == "upload-$attachmentId" }
+                }
+                .mapNotNull { it.sortTimestamp }
+                .minOrNull()
+        }
+        val baseMessages = if (attachmentIdSet.isEmpty()) {
+            currentMessages
+        } else {
+            currentMessages.filterNot { message ->
+                message.id in attachmentIdSet || attachmentIdSet.any { attachmentId -> message.runId == "upload-$attachmentId" }
+            }
+        }
+        val userSortTimestamp = replacedUploadSortTimestamp ?: (System.currentTimeMillis() / 1000.0)
         val userMsg = ChatMessage(
             id = "user-$clientRunId",
             role = MessageRole.user,
@@ -1387,14 +1497,14 @@ class ChatStore(
             contentBlocks = attachmentBlocks,
             createdAt = "",
             runId = "local-user-$clientRunId",
-            sortTimestamp = System.currentTimeMillis() / 1000.0
+            sortTimestamp = userSortTimestamp
         )
         
         val assistantMsgId = "assistant-$clientRunId"
         val assistantMsg = buildLocalTextAssistantPlaceholderMessage(
             id = assistantMsgId,
             clientRunId = clientRunId,
-            sortTimestamp = System.currentTimeMillis() / 1000.0 + 0.001
+            sortTimestamp = userSortTimestamp + 0.001
         )
         
         streamingMessageId = assistantMsgId
@@ -1411,7 +1521,7 @@ class ChatStore(
         persistSelectedSession(gatewayId, sessionKey)
 
         _state.value = _state.value.copy(
-            messages = orderedMessages(_state.value.messages + userMsg + assistantMsg),
+            messages = orderedMessages(baseMessages + userMsg + assistantMsg),
             isStreaming = true
         )
         timelineState = timelineState.copy(
@@ -1593,7 +1703,7 @@ class ChatStore(
         streamingMessageId = null
         streamingContent.clear()
         _state.value = _state.value.copy(
-            messages = result.messages,
+            messages = orderedMessages(result.messages),
             isStreaming = false,
             isStoppingRun = false
         )

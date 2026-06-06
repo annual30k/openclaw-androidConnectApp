@@ -18,6 +18,7 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.double
 import kotlinx.serialization.json.long
+import java.io.File
 
 // ── MessageRole ──────────────────────────────────────────────────────────
 @Serializable
@@ -315,6 +316,23 @@ data class RelayChatContentBlock(
             return resolvedPayload?.numberValue(keys)?.toInt()
         }
     val fileDownloadURLString: String? get() = downloadUrl ?: downloadPath
+    val fileThumbnailURLString: String? get() = thumbnailUrl?.trim()?.takeIf { it.isNotEmpty() }
+    val preferredImagePreviewURLString: String?
+        get() {
+            if (!isImageFileBlock) return null
+            return listOf(fileThumbnailURLString, preferredImageDownloadURLString)
+                .firstOrNull { candidate ->
+                    !candidate.isNullOrBlank() && !isMissingLocalImagePreviewReference(candidate)
+                }
+        }
+    private val preferredImageDownloadURLString: String?
+        get() {
+            val primary = downloadUrl?.trim()?.takeIf { it.isNotEmpty() }
+            val fallback = downloadPath?.trim()?.takeIf { it.isNotEmpty() }
+                ?: fileId?.trim()?.takeIf { it.isNotEmpty() }?.let { "/api/mobile/files/$it" }
+            if (primary == null) return fallback
+            return if (isMissingLocalImagePreviewReference(primary) && fallback != null) fallback else primary
+        }
     val fileStatusText: String?
         get() {
             val size = sizeBytes?.takeIf { it > 0 }?.let { ComposerAttachmentDraft.formatByteCount(it.toLong()) }
@@ -362,6 +380,20 @@ data class RelayChatContentBlock(
                 .mapNotNull { it?.trim()?.takeIf { value -> value.isNotEmpty() } }
             return if (fallback.isEmpty()) "voice-unknown" else "voice:${fallback.joinToString("|")}"
         }
+
+    private fun isMissingLocalImagePreviewReference(value: String): Boolean {
+        val trimmed = value.trim()
+        if (trimmed.startsWith("file://", ignoreCase = true)) {
+            return !File(trimmed.substringAfter("://", missingDelimiterValue = trimmed)).exists()
+        }
+        if (trimmed.startsWith("content://", ignoreCase = true)) {
+            return false
+        }
+        if (trimmed.startsWith("/") && !trimmed.startsWith("/api/")) {
+            return !File(trimmed).exists()
+        }
+        return false
+    }
 }
 
 // ── ChatMessage ──────────────────────────────────────────────────────────

@@ -46,12 +46,10 @@ internal fun ChatConversationList(
         chatState.messages,
         chatState.showInvocationProcess
     ) {
-        chatState.messages.filter { message ->
-            message.shouldDisplayInChat(
-                showInvocationProcess = chatState.showInvocationProcess
-            ) ||
-                message.state == MessageState.streaming && message.role == MessageRole.assistant
-        }
+        conversationDisplayMessages(
+            messages = chatState.messages,
+            showInvocationProcess = chatState.showInvocationProcess
+        )
     }
 
     val hasStreamingAssistantMessage = displayMessages.any {

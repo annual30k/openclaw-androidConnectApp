@@ -81,4 +81,23 @@ class MessageAttachmentHelpersTest {
 
         assertEquals("http://10.0.2.2:8080/api/mobile/files/file_image_4", url)
     }
+
+    @Test
+    fun resolvesExplicitPreviewFallbackAgainstRelayBaseUrl() {
+        val block = RelayChatContentBlock(
+            type = "image",
+            fileName = "photo.jpg",
+            mimeType = "image/jpeg",
+            downloadUrl = "/tmp/missing-photo.jpg",
+            downloadPath = "/api/mobile/files/file_image_5"
+        )
+
+        val url = resolveFileDownloadUrl(
+            block,
+            relayBaseUrl = "http://10.0.2.2:8080",
+            rawOverride = block.preferredImagePreviewURLString
+        )
+
+        assertEquals("http://10.0.2.2:8080/api/mobile/files/file_image_5", url)
+    }
 }

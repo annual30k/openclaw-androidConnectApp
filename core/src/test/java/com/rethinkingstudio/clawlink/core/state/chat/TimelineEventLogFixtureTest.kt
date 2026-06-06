@@ -18,7 +18,7 @@ class TimelineEventLogFixtureTest {
     fun sharedFixturesReduceToExpectedState() {
         val fixtureDir = fixtureDirectory()
         val fixtures = fixtureDir.listFiles { file -> file.extension == "json" }?.sortedBy { it.name }.orEmpty()
-        assertEquals(24, fixtures.size)
+        assertEquals(25, fixtures.size)
 
         fixtures.forEach { file ->
             val fixture = json.decodeFromString(Fixture.serializer(), file.readText())
@@ -31,6 +31,9 @@ class TimelineEventLogFixtureTest {
             val state = ChatTimelineReducer.reduceAll(ChatTimelineState(), events)
             assertEquals(file.name, fixture.expectedActiveRun, state.hasActiveRun)
             assertEquals(file.name, fixture.expectedMessages.size, state.messages.size)
+            if (fixture.expectedMessageOrder.isNotEmpty()) {
+                assertEquals(file.name, fixture.expectedMessageOrder, state.messages.map { it.id })
+            }
             fixture.expectedMessages.forEach { expected ->
                 val actual = state.messages.firstOrNull { it.id == expected.id }
                 assertNotNull(file.name, actual)
@@ -64,6 +67,7 @@ class TimelineEventLogFixtureTest {
         val events: List<JsonElement>,
         val expectedDecodeCount: Int? = null,
         val expectedMessages: List<ExpectedMessage> = emptyList(),
+        val expectedMessageOrder: List<String> = emptyList(),
         val expectedAttachments: List<ExpectedState> = emptyList(),
         val expectedTools: List<ExpectedState> = emptyList(),
         val expectedActiveRun: Boolean = false

@@ -8,6 +8,9 @@ import java.time.Instant
 import java.time.format.DateTimeParseException
 
 private const val timelineMessageOrderEpsilon = 0.001
+private const val timelineSameTurnWindowSeconds = 180.0
+private const val delayedPlainEchoWindowSeconds = 3_600.0
+private const val timelineClockSkewToleranceSeconds = 15.0
 
 internal object ChatTimelineReducer {
     fun reduceAll(state: ChatTimelineState, events: List<TimelineEvent>): ChatTimelineState {
@@ -174,13 +177,17 @@ internal object ChatTimelineReducer {
             runId = event.runId.orEmpty().ifBlank { matchedMessage?.runId.orEmpty() },
             sortTimestamp = matchedMessage?.sortTimestamp ?: timelineSortTimestamp(event.createdAt, fallbackSortTimestamp)
         )
+        val messageForUpsert = stableCompletedMessageSlot(
+            matchedMessage = matchedMessage,
+            incoming = message
+        )
         val nextParts = messagePartsById + (event.messageId to TimelineMessageParts(event.turnId, mapOf("text" to content)))
         val upsertedMessages = upsertMessage(
-            message,
-            replaceMessageId = if (existing == null) sameRunAssistant?.id else null
+            messageForUpsert,
+            replaceMessageId = if (existing == null && sameRunAssistant?.id != messageForUpsert.id) sameRunAssistant?.id else null
         )
         val nextMessages = upsertedMessages.filterNot { candidate ->
-            candidate.id != message.id &&
+            candidate.id != messageForUpsert.id &&
                 candidate.role == MessageRole.assistant &&
                 completedEventMatchesPlaceholder(candidate, event)
         }
@@ -194,6 +201,26 @@ internal object ChatTimelineReducer {
             activeRunsByTurnId = completedTurnId?.let { clearedRunsByTurn - it } ?: clearedRunsByTurn,
             activeTurnByRunId = activeTurnByRunId.filterKeys { activeRun -> activeRun !in runIdsToClear },
             messagePartsById = nextParts
+        )
+    }
+
+    private fun stableCompletedMessageSlot(
+        matchedMessage: ChatMessage?,
+        incoming: ChatMessage
+    ): ChatMessage {
+        if (matchedMessage == null ||
+            matchedMessage.id == incoming.id ||
+            matchedMessage.state != MessageState.completed ||
+            !sameFileMessage(matchedMessage, incoming)
+        ) {
+            return incoming
+        }
+        return mergeCompletedFileMessage(
+            existing = matchedMessage,
+            completed = incoming.copy(
+                id = matchedMessage.id,
+                sortTimestamp = matchedMessage.sortTimestamp ?: incoming.sortTimestamp
+            )
         )
     }
 
@@ -582,10 +609,37 @@ internal object ChatTimelineReducer {
             if (fileContentBlocksOverlap(message.contentBlocks, contentBlocks)) {
                 return@filter true
             }
-            val localTimestamp = message.sortTimestamp
-            incomingTimestamp != null && localTimestamp != null && kotlin.math.abs(incomingTimestamp - localTimestamp) < 180.0
+            delayedPlainLocalEchoHasResolvedAssistant(message, incomingTimestamp)
         }
         return candidates.singleOrNull()
+    }
+
+    private fun ChatTimelineState.delayedPlainLocalEchoHasResolvedAssistant(
+        localUser: ChatMessage,
+        historyUserTimestamp: Double?
+    ): Boolean {
+        if (localUser.hasFileContent || localUser.hasVoiceContent) return false
+        val localTimestamp = localUser.sortTimestamp ?: timelineSortTimestamp(localUser.createdAt) ?: return false
+        if (!timestampsCanRepresentDelayedPlainEcho(historyUserTimestamp, localTimestamp)) {
+            return false
+        }
+
+        val localTurnId = localUser.runId
+            .removePrefix("local-user-")
+            .trim()
+            .takeIf { it.isNotEmpty() && it != localUser.runId }
+            ?: return false
+        val historyTimestamp = historyUserTimestamp ?: return false
+        return messages.any { message ->
+            val assistantTimestamp = message.sortTimestamp ?: timelineSortTimestamp(message.createdAt)
+            message.role == MessageRole.assistant &&
+                message.state == MessageState.completed &&
+                !isTransientAssistantPlaceholder(message) &&
+                messagePartsById[message.id]?.turnId == localTurnId &&
+                assistantTimestamp != null &&
+                assistantTimestamp >= historyTimestamp - timelineClockSkewToleranceSeconds &&
+                assistantTimestamp - localTimestamp <= delayedPlainEchoWindowSeconds
+        }
     }
 
     private fun ChatTimelineState.matchesTerminalRun(message: ChatMessage, turnId: String?, runId: String?): Boolean {
@@ -748,7 +802,13 @@ private fun localVoiceMessageMatchesIncomingTranscript(
     }
     val localTimestamp = message.sortTimestamp ?: timelineSortTimestamp(message.createdAt)
     if (incomingTimestamp == null || localTimestamp == null) return true
-    return kotlin.math.abs(incomingTimestamp - localTimestamp) < 180.0
+    return kotlin.math.abs(incomingTimestamp - localTimestamp) < timelineSameTurnWindowSeconds
+}
+
+private fun timestampsCanRepresentDelayedPlainEcho(historyTimestamp: Double?, localTimestamp: Double?): Boolean {
+    if (historyTimestamp == null || localTimestamp == null) return false
+    val delta = historyTimestamp - localTimestamp
+    return delta >= -timelineClockSkewToleranceSeconds && delta <= delayedPlainEchoWindowSeconds
 }
 
 private fun userPromptText(content: String, contentBlocks: List<RelayChatContentBlock>): String {

@@ -16,8 +16,7 @@ internal fun mergeCompletedFileMessage(existing: ChatMessage, completed: ChatMes
 
     val mergedBlocks = completed.contentBlocks.map { completedBlock ->
         val localBlock = existingLocalBlocks.firstOrNull { existingBlock ->
-            existingBlock.fileId.isNullOrBlank() &&
-                existingBlock.isImageFileBlock &&
+            existingBlock.isImageFileBlock &&
                 completedBlock.isImageFileBlock &&
                 sameTransferIdentity(existingBlock, completedBlock)
         }
@@ -40,6 +39,7 @@ internal fun mergeCompletedFileMessage(existing: ChatMessage, completed: ChatMes
 private fun isLocalPreviewReference(value: String): Boolean {
     return value.startsWith("file://", ignoreCase = true) ||
         value.startsWith("content://", ignoreCase = true) ||
+        (value.startsWith("/") && !value.startsWith("/api/", ignoreCase = true)) ||
         File(value).exists()
 }
 
@@ -123,6 +123,21 @@ internal fun makeFileContentBlock(record: RelayFileTransferItem): RelayChatConte
         gatewayId = record.gatewayId,
         sessionKey = record.sessionKey,
         status = record.status
+    )
+}
+
+fun makeUploadedAttachmentContentBlock(
+    record: RelayFileTransferItem,
+    localDownloadUrlString: String? = null
+): RelayChatContentBlock {
+    val block = makeFileContentBlock(record)
+    val localPreviewPath = localDownloadUrlString
+        ?.trim()
+        ?.takeIf { it.isNotEmpty() && isLocalPreviewReference(it) }
+        ?: return block
+    return block.copy(
+        downloadUrl = localPreviewPath,
+        downloadPath = block.fileDownloadURLString
     )
 }
 

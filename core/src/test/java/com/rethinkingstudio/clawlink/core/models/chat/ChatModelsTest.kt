@@ -7,6 +7,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import java.io.File
 
 class ChatModelsTest {
     @Test
@@ -28,6 +29,40 @@ class ChatModelsTest {
 
         assertEquals(1, message.fileContentBlocks.size)
         assertTrue(message.fileContentBlocks.single().isImageFileBlock)
+    }
+
+    @Test
+    fun imagePreviewPrefersExistingLocalPathBeforeRelayFallback() {
+        val localFile = File.createTempFile("clawlink-image-preview", ".jpg")
+        try {
+            val block = RelayChatContentBlock(
+                type = "image",
+                fileId = "file-local-present",
+                fileName = "photo.jpg",
+                mimeType = "image/jpeg",
+                downloadUrl = localFile.absolutePath,
+                downloadPath = "/api/mobile/files/file-local-present"
+            )
+
+            assertEquals(localFile.absolutePath, block.preferredImagePreviewURLString)
+        } finally {
+            localFile.delete()
+        }
+    }
+
+    @Test
+    fun imagePreviewFallsBackWhenLocalPathIsMissing() {
+        val missingFile = File(System.getProperty("java.io.tmpdir"), "clawlink-missing-${System.nanoTime()}.jpg")
+        val block = RelayChatContentBlock(
+            type = "image",
+            fileId = "file-local-missing",
+            fileName = "photo.jpg",
+            mimeType = "image/jpeg",
+            downloadUrl = missingFile.absolutePath,
+            downloadPath = "/api/mobile/files/file-local-missing"
+        )
+
+        assertEquals("/api/mobile/files/file-local-missing", block.preferredImagePreviewURLString)
     }
 
     @Test

@@ -93,7 +93,11 @@ internal fun StandaloneFileMessage(blocks: List<RelayChatContentBlock>, isUser: 
 
 @Composable
 internal fun FileBlock(block: RelayChatContentBlock, isUser: Boolean, messageState: MessageState, standalone: Boolean = false, relayBaseUrl: String, accessToken: String, imageMaxWidth: Dp = 290.dp, onImageClick: (block: RelayChatContentBlock, url: String, fileName: String?) -> Unit = { _, _, _ -> }, onFileClick: (block: RelayChatContentBlock, url: String, fileName: String?) -> Unit = { _, _, _ -> }) {
-    val rawDownloadUrl = block.fileDownloadURLString?.trim()?.takeIf { it.isNotEmpty() }
+    val rawDownloadUrl = if (block.isImageFileBlock) {
+        block.preferredImagePreviewURLString?.trim()?.takeIf { it.isNotEmpty() }
+    } else {
+        block.fileDownloadURLString?.trim()?.takeIf { it.isNotEmpty() }
+    }
     val isUploadingState = messageState == MessageState.streaming
     val localFilePath = rawDownloadUrl?.let { raw ->
         when {
@@ -103,7 +107,7 @@ internal fun FileBlock(block: RelayChatContentBlock, isUser: Boolean, messageSta
             else -> null
         }
     }
-    val downloadUrl = if (localFilePath == null) resolveFileDownloadUrl(block, relayBaseUrl) else null
+    val downloadUrl = if (localFilePath == null) resolveFileDownloadUrl(block, relayBaseUrl, rawDownloadUrl) else null
     val isStandaloneUserFile = isUser && standalone
     val isUploadCard = isUploadingState || block.status?.contains("上传中") == true || block.status?.contains("uploading", ignoreCase = true) == true
     val primaryText = when {

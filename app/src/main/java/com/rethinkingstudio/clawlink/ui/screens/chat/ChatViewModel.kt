@@ -11,6 +11,7 @@ import androidx.compose.ui.unit.dp
 import com.rethinkingstudio.clawlink.R
 import com.rethinkingstudio.clawlink.core.models.chat.ComposerAttachmentUploadItem
 import com.rethinkingstudio.clawlink.core.models.chat.AttachmentUploadPhase
+import com.rethinkingstudio.clawlink.core.models.chat.RelayChatContentBlock
 import com.rethinkingstudio.clawlink.core.network.dto.RelayFileTransferItem
 import com.rethinkingstudio.clawlink.core.network.transport.RelayChatSendAttachmentPayload
 import com.rethinkingstudio.clawlink.core.network.transport.VoiceSendAudioPayload
@@ -18,6 +19,7 @@ import com.rethinkingstudio.clawlink.core.models.gateway.AggregateStatus
 import com.rethinkingstudio.clawlink.core.models.gateway.GatewayType
 import com.rethinkingstudio.clawlink.core.state.LocalizedText.choose
 import com.rethinkingstudio.clawlink.core.state.chat.ChatStore
+import com.rethinkingstudio.clawlink.core.state.chat.makeUploadedAttachmentContentBlock
 import com.rethinkingstudio.clawlink.core.state.gateway.GatewayStore
 import com.rethinkingstudio.clawlink.core.state.model.ModelStore
 import kotlinx.coroutines.CoroutineScope
@@ -475,6 +477,7 @@ internal class ChatViewModel(
             composerAttachments = emptyList()
 
             val commandAttachments = mutableListOf<RelayChatSendAttachmentPayload>()
+            val uploadedAttachmentBlocks = mutableListOf<RelayChatContentBlock>()
             attachments.forEachIndexed { index, attachment ->
                 val record = withContext(Dispatchers.IO) {
                     uploadComposerAttachment(
@@ -498,6 +501,10 @@ internal class ChatViewModel(
                         }
                     )
                 }
+                uploadedAttachmentBlocks += makeUploadedAttachmentContentBlock(
+                    record = record,
+                    localDownloadUrlString = attachment.fileUri
+                )
                 makeRelayCommandAttachment(attachment)?.let { commandAttachments += it }
                 chatStore.completeComposerAttachmentUploadMessage(
                     attachment = attachment,
@@ -514,8 +521,8 @@ internal class ChatViewModel(
                 chatStore.sendMessage(
                     content = trimmed,
                     gatewayId = gatewayId,
-                    attachmentIds = emptyList(),
-                    attachmentBlocks = emptyList(),
+                    attachmentIds = attachments.map { it.id },
+                    attachmentBlocks = uploadedAttachmentBlocks,
                     commandAttachments = commandAttachments
                 )
             }

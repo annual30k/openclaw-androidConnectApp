@@ -17,6 +17,7 @@ private const val messageOrderEpsilon = 0.001
 private const val historyTranscriptOrderWindowSeconds = 900.0
 private const val sameTurnWindowSeconds = 180.0
 private const val sameTurnClockSkewToleranceSeconds = 15.0
+private const val delayedMediaEchoWindowSeconds = 3_600.0
 internal const val protocolTypingMarkerText = "[[clawlink:typing]]"
 private val protocolTypingMarkerRegex = Regex("^(?:\\[\\[clawlink:typing]]\\s*)+$")
 
@@ -372,6 +373,10 @@ private fun historyUserIndexMatchingLocalUserEcho(messages: List<ChatMessage>, l
             )
     }?.let { return it }
 
+    delayedMediaHistoryUserEchoIndex(messages, localUserMessage).takeIf { it >= 0 }?.let {
+        return it
+    }
+
     val contentMatchedIndices = messages.indices.filter { index ->
         val candidate = messages[index]
         candidate.role == MessageRole.user &&
@@ -528,13 +533,26 @@ private fun historyResolvesPendingAssistant(
         val historyAssistantIndex = nextRenderableAssistantIndexAfter(historyUserIndex, historyMessages)
         if (historyAssistantIndex < 0) return@any false
         val historyAssistant = historyMessages[historyAssistantIndex]
-        timestampsCanRepresentSameTurn(
+        val allowsDelayedMediaEcho = delayedMediaHistoryUserCanRepresentLocalUser(
+            historyUser = historyUser,
+            localUser = triggeringUser,
+            messages = historyMessages
+        )
+        val userTimestampMatches = timestampsCanRepresentSameTurn(
             historyTimestamp = historyUser.sortTimestamp,
             localTimestamp = triggeringUser.sortTimestamp
-        ) && timestampsCanRepresentSameTurn(
+        ) || allowsDelayedMediaEcho
+        val assistantTimestampMatches = timestampsCanRepresentSameTurn(
             historyTimestamp = historyAssistant.sortTimestamp,
             localTimestamp = pendingAssistant.sortTimestamp
-        )
+        ) || (
+            allowsDelayedMediaEcho &&
+                timestampsCanRepresentDelayedMediaEcho(
+                    historyTimestamp = historyAssistant.sortTimestamp,
+                    localTimestamp = pendingAssistant.sortTimestamp
+                )
+            )
+        userTimestampMatches && assistantTimestampMatches
     }
     if (hasMatchingHistoryTurn) return true
 
@@ -602,15 +620,28 @@ private fun List<ChatMessage>.countHistoryTurnResolutions(
         val historyAssistantIndex = nextRenderableAssistantIndexAfter(historyUserIndex, this)
         if (historyAssistantIndex < 0) return@count false
         val historyAssistant = this[historyAssistantIndex]
-        assistantMessagesMatchForHistoryMerge(historyAssistant, completedAssistant) &&
-            timestampsCanRepresentSameTurn(
-                historyTimestamp = historyUser.sortTimestamp,
-                localTimestamp = triggeringUser.sortTimestamp
-            ) &&
-            timestampsCanRepresentSameTurn(
-                historyTimestamp = historyAssistant.sortTimestamp,
-                localTimestamp = completedAssistant.sortTimestamp
+        val allowsDelayedMediaEcho = delayedMediaHistoryUserCanRepresentLocalUser(
+            historyUser = historyUser,
+            localUser = triggeringUser,
+            messages = this
+        )
+        val userTimestampMatches = timestampsCanRepresentSameTurn(
+            historyTimestamp = historyUser.sortTimestamp,
+            localTimestamp = triggeringUser.sortTimestamp
+        ) || allowsDelayedMediaEcho
+        val assistantTimestampMatches = timestampsCanRepresentSameTurn(
+            historyTimestamp = historyAssistant.sortTimestamp,
+            localTimestamp = completedAssistant.sortTimestamp
+        ) || (
+            allowsDelayedMediaEcho &&
+                timestampsCanRepresentDelayedMediaEcho(
+                    historyTimestamp = historyAssistant.sortTimestamp,
+                    localTimestamp = completedAssistant.sortTimestamp
+                )
             )
+        assistantMessagesMatchForHistoryMerge(historyAssistant, completedAssistant) &&
+            userTimestampMatches &&
+            assistantTimestampMatches
     }
 }
 
@@ -737,6 +768,58 @@ private fun timestampsCanRepresentSameTurn(
     if (historyTimestamp == null || localTimestamp == null) return false
     val delta = historyTimestamp - localTimestamp
     return delta >= -sameTurnClockSkewToleranceSeconds && delta <= sameTurnWindowSeconds
+}
+
+private fun delayedMediaHistoryUserEchoIndex(messages: List<ChatMessage>, localUser: ChatMessage): Int {
+    return delayedMediaHistoryUserEchoIndices(messages, localUser).singleOrNull() ?: -1
+}
+
+private fun delayedMediaHistoryUserCanRepresentLocalUser(
+    historyUser: ChatMessage,
+    localUser: ChatMessage,
+    messages: List<ChatMessage>
+): Boolean {
+    if (historyUser.role != MessageRole.user ||
+        !userMessagesMatchForLocalHistoryMerge(historyUser, localUser) ||
+        !timestampsCanRepresentDelayedMediaEcho(
+            historyTimestamp = historyUser.sortTimestamp,
+            localTimestamp = localUser.sortTimestamp
+        )
+    ) {
+        return false
+    }
+    val matchingIndices = delayedMediaHistoryUserEchoIndices(messages, localUser)
+    return matchingIndices.singleOrNull()?.let { messages[it].id == historyUser.id } == true
+}
+
+private fun delayedMediaHistoryUserEchoIndices(
+    messages: List<ChatMessage>,
+    localUser: ChatMessage
+): List<Int> {
+    if (localUser.role != MessageRole.user ||
+        !localUser.hasFileContent ||
+        localUser.hasVoiceContent
+    ) {
+        return emptyList()
+    }
+    return messages.indices.filter { index ->
+        val candidate = messages[index]
+        candidate.role == MessageRole.user &&
+            userMessagesMatchForLocalHistoryMerge(candidate, localUser) &&
+            timestampsCanRepresentDelayedMediaEcho(
+                historyTimestamp = candidate.sortTimestamp,
+                localTimestamp = localUser.sortTimestamp
+            )
+    }
+}
+
+private fun timestampsCanRepresentDelayedMediaEcho(
+    historyTimestamp: Double?,
+    localTimestamp: Double?
+): Boolean {
+    if (historyTimestamp == null || localTimestamp == null) return false
+    val delta = historyTimestamp - localTimestamp
+    return delta >= -sameTurnClockSkewToleranceSeconds && delta <= delayedMediaEchoWindowSeconds
 }
 
 private fun isSameChatMessageInstance(existing: ChatMessage, candidate: ChatMessage): Boolean {

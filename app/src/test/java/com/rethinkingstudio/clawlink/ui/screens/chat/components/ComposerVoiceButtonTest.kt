@@ -38,8 +38,12 @@ class ComposerVoiceButtonTest {
             isStreaming = false,
             isStoppingRun = false,
             hasDraft = true,
-            lightReadyContainer = Color.White,
-            idleContent = Color.White
+            readyContainer = Color.White,
+            readyContent = Color.White,
+            idleContainer = Color.Transparent,
+            idleContent = Color.White,
+            disabledContainer = Color.Transparent,
+            disabledContent = Color.Gray
         )
 
         assertEquals(Color(0xFF298547), palette.container)

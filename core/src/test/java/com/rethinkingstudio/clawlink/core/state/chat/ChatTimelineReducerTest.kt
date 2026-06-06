@@ -172,6 +172,74 @@ class ChatTimelineReducerTest {
     }
 
     @Test
+    fun messageCompletedCoalescesDuplicateAssistantImageFileIdIntoOneMessageSlot() {
+        val state = ChatTimelineReducer.reduceAll(
+            ChatTimelineState(),
+            listOf(
+                event(
+                    """
+                    {
+                      "protocolVersion": 2,
+                      "eventId": "assistant-final",
+                      "eventType": "message.completed",
+                      "messageId": "assistant-run-1",
+                      "turnId": "turn-1",
+                      "runId": "run-1",
+                      "role": "assistant",
+                      "createdAt": "1970-01-01T00:03:20.000Z",
+                      "content": [
+                        {
+                          "type": "image",
+                          "text": "chatgpt image.png",
+                          "fileId": "file-img-1",
+                          "fileName": "chatgpt image.png",
+                          "mimeType": "image/png",
+                          "sizeBytes": 2048,
+                          "imageWidth": 1024,
+                          "imageHeight": 1024,
+                          "downloadUrl": "/api/mobile/files/file-img-1"
+                        }
+                      ]
+                    }
+                    """.trimIndent()
+                ),
+                event(
+                    """
+                    {
+                      "protocolVersion": 2,
+                      "eventId": "assistant-file-echo",
+                      "eventType": "message.completed",
+                      "messageId": "file-file-img-1",
+                      "turnId": "turn-1",
+                      "runId": "run-1",
+                      "role": "assistant",
+                      "createdAt": "1970-01-01T00:03:21.000Z",
+                      "content": [
+                        {
+                          "type": "image",
+                          "text": "chatgpt image.png",
+                          "fileId": "file-img-1",
+                          "fileName": "chatgpt image.png",
+                          "mimeType": "image/png",
+                          "sizeBytes": 2048,
+                          "imageWidth": 1024,
+                          "imageHeight": 1024,
+                          "downloadUrl": "/api/mobile/files/file-img-1"
+                        }
+                      ]
+                    }
+                    """.trimIndent()
+                )
+            )
+        )
+
+        assertEquals(1, state.messages.size)
+        assertEquals("assistant-run-1", state.messages.single().id)
+        assertEquals("file-img-1", state.messages.single().fileContentBlocks.single().fileId)
+        assertEquals(200.0, state.messages.single().sortTimestamp ?: 0.0, 0.0001)
+    }
+
+    @Test
     fun messagePartDeltaIsAbsoluteAndOlderSeqIsIgnored() {
         val state = ChatTimelineReducer.reduceAll(
             ChatTimelineState(),
@@ -735,6 +803,133 @@ class ChatTimelineReducerTest {
         assertEquals("local-user-client-run-1", state.messages.single().runId)
         assertEquals("file-photo-1", state.messages.single().fileContentBlocks.first().fileId)
         assertEquals("file:///tmp/album-D1.jpeg", state.messages.single().fileContentBlocks.first().downloadUrl)
+    }
+
+    @Test
+    fun historySnapshotCoalescesDelayedHermesPlainUserEchoWhenAssistantResolvesSameTurn() {
+        val state = ChatTimelineReducer.reduceAll(
+            ChatTimelineState(),
+            listOf(
+                TimelineEvent.TurnUserCreated(
+                    eventId = "plain-user-local",
+                    turnId = "turn-hermes-plain",
+                    messageId = "local-user-plain",
+                    content = listOf(
+                        RelayChatContentBlock(
+                            type = "text",
+                            text = "帮我查看一下 codex 的任务完成了吗，结论是什么"
+                        )
+                    ),
+                    createdAt = "2026-05-31T08:08:37.000Z"
+                ),
+                TimelineEvent.MessageCompleted(
+                    eventId = "plain-assistant-local",
+                    turnId = "turn-hermes-plain",
+                    runId = "run-hermes-plain",
+                    messageId = "assistant-hermes-plain",
+                    role = "assistant",
+                    content = listOf(
+                        RelayChatContentBlock(
+                            type = "text",
+                            text = "我看了 Codex 的任务日志和当前仓库状态，结论是："
+                        )
+                    ),
+                    createdAt = "2026-05-31T08:12:03.000Z"
+                ),
+                TimelineEvent.HistorySnapshotPage(
+                    eventId = "plain-history-page",
+                    items = listOf(
+                        HistorySnapshotItem(
+                            turnId = "",
+                            runId = "history-hermes-plain-user",
+                            messageId = "history-hermes-plain-user",
+                            role = "user",
+                            content = listOf(
+                                RelayChatContentBlock(
+                                    type = "text",
+                                    text = "帮我查看一下 codex 的任务完成了吗，结论是什么"
+                                )
+                            ),
+                            createdAt = "2026-05-31T08:12:00.000Z"
+                        ),
+                        HistorySnapshotItem(
+                            turnId = "",
+                            runId = "run-hermes-plain",
+                            messageId = "assistant-hermes-plain",
+                            role = "assistant",
+                            content = listOf(
+                                RelayChatContentBlock(
+                                    type = "text",
+                                    text = "我看了 Codex 的任务日志和当前仓库状态，结论是："
+                                )
+                            ),
+                            createdAt = "2026-05-31T08:12:03.000Z"
+                        )
+                    )
+                )
+            )
+        )
+
+        assertEquals(
+            listOf("history-hermes-plain-user", "assistant-hermes-plain"),
+            state.messages.map { it.id }
+        )
+        assertEquals(listOf(MessageRole.user, MessageRole.assistant), state.messages.map { it.role })
+    }
+
+    @Test
+    fun historySnapshotKeepsRepeatedPlainPromptInsideEchoWindowWhenRunsDiffer() {
+        val state = ChatTimelineReducer.reduceAll(
+            ChatTimelineState(),
+            listOf(
+                TimelineEvent.TurnUserCreated(
+                    eventId = "first-user-local",
+                    turnId = "turn-first",
+                    messageId = "local-user-first",
+                    content = listOf(RelayChatContentBlock(type = "text", text = "重新总结一下")),
+                    createdAt = "2026-05-31T08:08:37.000Z"
+                ),
+                TimelineEvent.MessageCompleted(
+                    eventId = "first-assistant-local",
+                    turnId = "turn-first",
+                    runId = "run-first",
+                    messageId = "assistant-first",
+                    role = "assistant",
+                    content = listOf(RelayChatContentBlock(type = "text", text = "第一次总结。")),
+                    createdAt = "2026-05-31T08:08:40.000Z"
+                ),
+                TimelineEvent.HistorySnapshotPage(
+                    eventId = "second-history-page",
+                    items = listOf(
+                        HistorySnapshotItem(
+                            turnId = "",
+                            runId = "history-second-user",
+                            messageId = "history-second-user",
+                            role = "user",
+                            content = listOf(RelayChatContentBlock(type = "text", text = "重新总结一下")),
+                            createdAt = "2026-05-31T08:09:57.000Z"
+                        ),
+                        HistorySnapshotItem(
+                            turnId = "",
+                            runId = "run-second",
+                            messageId = "assistant-second",
+                            role = "assistant",
+                            content = listOf(RelayChatContentBlock(type = "text", text = "第二次总结。")),
+                            createdAt = "2026-05-31T08:10:00.000Z"
+                        )
+                    )
+                )
+            )
+        )
+
+        assertEquals(
+            listOf("local-user-first", "assistant-first", "history-second-user", "assistant-second"),
+            state.messages.map { it.id }
+        )
+        assertEquals(
+            listOf(MessageRole.user, MessageRole.assistant, MessageRole.user, MessageRole.assistant),
+            state.messages.map { it.role }
+        )
     }
 
     @Test

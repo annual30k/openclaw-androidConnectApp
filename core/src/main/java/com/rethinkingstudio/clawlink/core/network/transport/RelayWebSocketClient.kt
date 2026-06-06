@@ -233,7 +233,7 @@ class RelayWebSocketClient {
     }
 
     private fun send(text: String) {
-        android.util.Log.d("RelayWS", "WS SEND: $text")
+        logDebug("WS SEND: $text")
         val socket = webSocket
         if (socket != null && isConnected.get()) {
             socket.send(text)
@@ -241,7 +241,7 @@ class RelayWebSocketClient {
         }
 
         queuePendingOutbound(text)
-        android.util.Log.w("RelayWS", "WS not connected; queued outbound message")
+        logWarning("WS not connected; queued outbound message")
         if (
             baseUrl.isNotBlank()
             && accessToken.isNotBlank()
@@ -269,9 +269,17 @@ class RelayWebSocketClient {
             queued
         }
         for (message in messages) {
-            android.util.Log.d("RelayWS", "WS FLUSH: $message")
+            logDebug("WS FLUSH: $message")
             socket.send(message)
         }
+    }
+
+    private fun logDebug(message: String) {
+        runCatching { android.util.Log.d("RelayWS", message) }
+    }
+
+    private fun logWarning(message: String) {
+        runCatching { android.util.Log.w("RelayWS", message) }
     }
 
     private val reconnectDelays = listOf(1_000L, 2_000L, 4_000L, 8_000L, 15_000L)

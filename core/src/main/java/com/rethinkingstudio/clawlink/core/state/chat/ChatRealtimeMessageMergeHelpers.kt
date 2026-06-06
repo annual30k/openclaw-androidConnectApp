@@ -37,7 +37,6 @@ internal fun mergeRemoteUserMessageIntoCurrentMessages(
     val localTextIndex = messages.indexOfLast { message ->
         message.role == MessageRole.user &&
             message.runId.startsWith("local-user-") &&
-            !message.hasFileContent &&
             !message.hasVoiceContent &&
             ((localUserRunId != null && message.runId == localUserRunId) ||
                 userTextMatchesForRealtimeMerge(message.content, trimmed))

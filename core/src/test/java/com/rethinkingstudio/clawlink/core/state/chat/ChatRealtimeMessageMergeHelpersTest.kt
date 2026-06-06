@@ -128,6 +128,44 @@ class ChatRealtimeMessageMergeHelpersTest {
     }
 
     @Test
+    fun mergesRemoteTextEchoIntoMatchingLocalImageUserBubble() {
+        val imageBlock = RelayChatContentBlock(
+            type = "image",
+            fileId = "file-1",
+            fileName = "photo.png",
+            mimeType = "image/png",
+            downloadUrl = "content://local/photo.png"
+        )
+        val localUser = ChatMessage(
+            id = "local-user",
+            role = MessageRole.user,
+            state = MessageState.completed,
+            content = "20260608",
+            contentBlocks = listOf(imageBlock),
+            runId = "local-user-run-1",
+            sortTimestamp = 50.0
+        )
+        val pendingAssistant = assistantMessage(
+            id = "assistant-1",
+            runId = "run-1",
+            content = "正在连接...",
+            sortTimestamp = 50.001
+        )
+
+        val merged = mergeRemoteUserMessageIntoCurrentMessages(
+            currentMessages = listOf(localUser, pendingAssistant),
+            content = "20260608",
+            contentBlocks = emptyList(),
+            runId = "run-1",
+            sortTimestamp = 51.0
+        )
+
+        assertEquals(listOf("local-user-run-1", "run-1"), merged.map { it.runId })
+        assertEquals(1, merged.count { it.role == MessageRole.user && it.content == "20260608" })
+        assertEquals(listOf(imageBlock), merged.first().contentBlocks)
+    }
+
+    @Test
     fun appliesAssistantErrorToPendingAssistantMessage() {
         val localVoice = voiceMessage(runId = "local-user-client-run-1", sortTimestamp = 30.0)
         val pendingAssistant = assistantMessage(

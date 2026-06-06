@@ -1181,6 +1181,64 @@ class ChatHistoryMergeHelpersTest {
     }
 
     @Test
+    fun coalescesDelayedHermesImagePromptEcho() {
+        val historyUser = ChatMessage(
+            id = "history-hermes-delayed-image-user",
+            role = MessageRole.user,
+            content = "帮我分析一下这张图片",
+            runId = "history-hermes-delayed-image-user",
+            sortTimestamp = 1_780_215_120.0
+        )
+        val historyAssistant = ChatMessage(
+            id = "history-hermes-delayed-image-answer",
+            role = MessageRole.assistant,
+            content = "这是一张城市夜景。",
+            runId = "history-hermes-delayed-image-answer",
+            sortTimestamp = 1_780_215_123.0
+        )
+        val localUser = ChatMessage(
+            id = "local-user",
+            role = MessageRole.user,
+            content = "帮我分析一下这张图片",
+            contentBlocks = listOf(
+                RelayChatContentBlock(
+                    type = "file",
+                    text = "album.jpeg",
+                    fileName = "album.jpeg",
+                    mimeType = "image/jpeg",
+                    downloadUrl = "file:///tmp/album.jpeg"
+                )
+            ),
+            runId = "local-user-hermes-delayed-image",
+            sortTimestamp = 1_780_214_917.0
+        )
+        val pendingAssistant = ChatMessage(
+            id = "pending-assistant",
+            role = MessageRole.assistant,
+            state = MessageState.streaming,
+            content = protocolTypingMarkerText,
+            runId = "client-run-hermes-delayed-image",
+            sortTimestamp = 1_780_214_917.001
+        )
+
+        val merged = mergeHistoryWithCurrentMessages(
+            historyMessages = listOf(historyUser, historyAssistant),
+            currentMessages = listOf(localUser, pendingAssistant),
+            currentStreamingMessageId = pendingAssistant.id,
+            isTrackedPendingAssistantMessageId = { it == pendingAssistant.id }
+        )
+
+        assertEquals(
+            listOf("local-user", "history-hermes-delayed-image-answer"),
+            merged.map { it.id }
+        )
+        assertEquals("帮我分析一下这张图片", merged.first().content)
+        assertEquals("file:///tmp/album.jpeg", merged.first().fileContentBlocks.first().downloadUrl)
+        assertFalse(merged.any { it.id == pendingAssistant.id })
+        assertFalse(merged.any { it.id == historyUser.id })
+    }
+
+    @Test
     fun keepsCompletedLiveAssistantWhenOnlyContentMatchesOldSyntheticHistory() {
         val historyUser = ChatMessage(
             id = "history-user",

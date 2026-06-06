@@ -2,8 +2,10 @@ package com.rethinkingstudio.clawlink.core.state.chat
 
 import com.rethinkingstudio.clawlink.core.domain.NotificationPort
 import com.rethinkingstudio.clawlink.core.models.chat.ChatMessage
+import com.rethinkingstudio.clawlink.core.models.chat.ComposerAttachmentDraft
 import com.rethinkingstudio.clawlink.core.models.chat.MessageRole
 import com.rethinkingstudio.clawlink.core.models.chat.MessageState
+import com.rethinkingstudio.clawlink.core.models.chat.RelayChatContentBlock
 import com.rethinkingstudio.clawlink.core.network.RelayAPIClient
 import com.rethinkingstudio.clawlink.core.network.transport.RelayWebSocketClient
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -199,6 +201,170 @@ class ChatStoreSessionTest {
         }
     }
 
+    @Test
+    fun sendMessageReplacesAttachmentUploadPlaceholderWithCombinedPrompt() {
+        val wsClient = RelayWebSocketClient()
+        try {
+            val store = ChatStore(
+                apiClient = RelayAPIClient(),
+                wsClient = wsClient,
+                notificationPort = object : NotificationPort {
+                    override fun showReplyNotification(sessionKey: String, title: String, body: String) = Unit
+                    override fun cancelNotification(id: Int) = Unit
+                    override fun cancelAll() = Unit
+                }
+            )
+            store.beginGatewaySwitch("gateway-1")
+            store.newSession("main")
+            val attachment = ComposerAttachmentDraft(
+                id = "attachment-1",
+                fileUri = "/tmp/photo.png",
+                fileName = "photo.png",
+                mimeType = "image/png",
+                sizeBytes = 42,
+                imageWidth = 320,
+                imageHeight = 240
+            )
+            val imageBlock = RelayChatContentBlock(
+                type = "image",
+                fileId = "file-1",
+                fileName = "photo.png",
+                mimeType = "image/png",
+                sizeBytes = 42,
+                imageWidth = 320,
+                imageHeight = 240,
+                downloadUrl = "/tmp/photo.png",
+                downloadPath = "/api/mobile/files/file-1"
+            )
+
+            store.beginComposerAttachmentUploadMessages(
+                attachments = listOf(attachment),
+                gatewayId = "gateway-1",
+                sessionKey = "main",
+                senderDisplayName = "Mac",
+                messageSortBaseTimestamp = 100.0
+            )
+            store.sendMessage(
+                content = "分析一下这张图",
+                gatewayId = "gateway-1",
+                attachmentIds = listOf(attachment.id),
+                attachmentBlocks = listOf(imageBlock)
+            )
+
+            val userMessages = store.state.value.messages.filter { it.role == MessageRole.user }
+            assertEquals(1, userMessages.size)
+            assertEquals("分析一下这张图", userMessages.single().content)
+            assertEquals(listOf(imageBlock), userMessages.single().contentBlocks)
+            assertEquals(100.0, userMessages.single().sortTimestamp ?: 0.0, 0.0001)
+            assertTrue(store.state.value.messages.none { it.id == attachment.id || it.runId == "upload-${attachment.id}" })
+            assertEquals(1, store.state.value.messages.count { it.role == MessageRole.assistant && it.state == MessageState.streaming })
+        } finally {
+            wsClient.destroy()
+        }
+    }
+
+    @Test
+    fun orderedMessagesCoalescesDuplicateMessageIdsBeforeRendering() {
+        val wsClient = RelayWebSocketClient()
+        try {
+            val store = ChatStore(
+                apiClient = RelayAPIClient(),
+                wsClient = wsClient,
+                notificationPort = object : NotificationPort {
+                    override fun showReplyNotification(sessionKey: String, title: String, body: String) = Unit
+                    override fun cancelNotification(id: Int) = Unit
+                    override fun cancelAll() = Unit
+                }
+            )
+            val localBlock = RelayChatContentBlock(
+                type = "image",
+                fileId = "file-1",
+                fileName = "photo.png",
+                mimeType = "image/png",
+                downloadUrl = "/tmp/photo.png",
+                downloadPath = "/api/mobile/files/file-1"
+            )
+            val remoteBlock = localBlock.copy(downloadUrl = "/api/mobile/files/file-1")
+            val localMessage = ChatMessage(
+                id = "user-duplicate",
+                role = MessageRole.user,
+                state = MessageState.completed,
+                content = "20260606",
+                contentBlocks = listOf(localBlock),
+                runId = "local-user-duplicate",
+                sortTimestamp = 100.0
+            )
+            val echoedMessage = localMessage.copy(
+                contentBlocks = listOf(remoteBlock),
+                createdAt = "2030-01-01T00:00:00.000Z",
+                sortTimestamp = 101.0
+            )
+
+            val ordered = invokeOrderedMessages(store, listOf(localMessage, echoedMessage))
+
+            assertEquals(1, ordered.size)
+            assertEquals("user-duplicate", ordered.single().id)
+            assertEquals("20260606", ordered.single().content)
+            assertEquals(listOf(localBlock), ordered.single().contentBlocks)
+            assertEquals(100.0, ordered.single().sortTimestamp ?: 0.0, 0.0001)
+        } finally {
+            wsClient.destroy()
+        }
+    }
+
+    @Test
+    fun orderedMessagesCoalescesDuplicateFileIdentitiesBeforeRendering() {
+        val wsClient = RelayWebSocketClient()
+        try {
+            val store = ChatStore(
+                apiClient = RelayAPIClient(),
+                wsClient = wsClient,
+                notificationPort = object : NotificationPort {
+                    override fun showReplyNotification(sessionKey: String, title: String, body: String) = Unit
+                    override fun cancelNotification(id: Int) = Unit
+                    override fun cancelAll() = Unit
+                }
+            )
+            val imageBlock = RelayChatContentBlock(
+                type = "image",
+                fileId = "file-img-1",
+                fileName = "chatgpt image.png",
+                mimeType = "image/png",
+                sizeBytes = 2048,
+                imageWidth = 1024,
+                imageHeight = 1024,
+                downloadUrl = "/api/mobile/files/file-img-1"
+            )
+            val assistantImage = ChatMessage(
+                id = "assistant-run-1",
+                role = MessageRole.assistant,
+                state = MessageState.completed,
+                content = "chatgpt image.png",
+                contentBlocks = listOf(imageBlock),
+                runId = "run-1",
+                sortTimestamp = 100.0
+            )
+            val fileEcho = ChatMessage(
+                id = "file-file-img-1",
+                role = MessageRole.assistant,
+                state = MessageState.completed,
+                content = "chatgpt image.png",
+                contentBlocks = listOf(imageBlock),
+                runId = "file-file-img-1",
+                sortTimestamp = 101.0
+            )
+
+            val ordered = invokeOrderedMessages(store, listOf(assistantImage, fileEcho))
+
+            assertEquals(1, ordered.size)
+            assertEquals("assistant-run-1", ordered.single().id)
+            assertEquals("file-img-1", ordered.single().fileContentBlocks.single().fileId)
+            assertEquals(100.0, ordered.single().sortTimestamp ?: 0.0, 0.0001)
+        } finally {
+            wsClient.destroy()
+        }
+    }
+
     private fun currentTimelineState(store: ChatStore): ChatTimelineState {
         val field = ChatStore::class.java.getDeclaredField("timelineState")
         field.isAccessible = true
@@ -223,6 +389,13 @@ class ChatStoreSessionTest {
         @Suppress("UNCHECKED_CAST")
         val stateFlow = field.get(store) as MutableStateFlow<ChatState>
         stateFlow.value = state
+    }
+
+    private fun invokeOrderedMessages(store: ChatStore, messages: List<ChatMessage>): List<ChatMessage> {
+        val method = ChatStore::class.java.getDeclaredMethod("orderedMessages", List::class.java)
+        method.isAccessible = true
+        @Suppress("UNCHECKED_CAST")
+        return method.invoke(store, messages) as List<ChatMessage>
     }
 
     private fun rememberRunScope(store: ChatStore, runId: String, scope: ChatRunScope) {

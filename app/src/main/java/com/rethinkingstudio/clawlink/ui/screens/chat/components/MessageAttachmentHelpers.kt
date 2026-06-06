@@ -108,8 +108,13 @@ internal fun resolveFileUrl(raw: String, relayBaseUrl: String): String {
     return "$base/${trimmed.trimStart('/')}"
 }
 
-internal fun resolveFileDownloadUrl(block: RelayChatContentBlock, relayBaseUrl: String): String? {
-    val raw = block.fileDownloadURLString?.trim()?.takeIf { it.isNotEmpty() }
+internal fun resolveFileDownloadUrl(
+    block: RelayChatContentBlock,
+    relayBaseUrl: String,
+    rawOverride: String? = null
+): String? {
+    val raw = rawOverride?.trim()?.takeIf { it.isNotEmpty() }
+        ?: block.fileDownloadURLString?.trim()?.takeIf { it.isNotEmpty() }
     val fileId = block.fileId?.trim()?.takeIf { it.isNotEmpty() }
         ?: raw?.mediaUriFileId()
     val shouldPreferFileEndpoint = fileId != null && raw?.let(::isDeviceLocalOrOpaqueFileReference) == true
