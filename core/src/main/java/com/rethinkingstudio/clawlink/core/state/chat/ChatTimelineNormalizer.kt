@@ -169,8 +169,10 @@ private fun nearbyUserPromptForStandaloneMedia(message: ChatMessage, messages: L
     return messages.indices.reversed().firstOrNull { index ->
         val existing = messages[index]
         existing.role == MessageRole.user &&
+            !existing.hasFileContent &&
+            !existing.hasVoiceContent &&
             timestampsAreClose(existing, message, mediaPromptMergeWindowSeconds) &&
-            (isUserMediaPrompt(existing) || promptMentionsMedia(existing.content))
+            promptMentionsMedia(existing.content)
     } ?: -1
 }
 
@@ -352,9 +354,9 @@ private fun mediaBlocksReferToSameFile(
     lhs: RelayChatContentBlock,
     rhs: RelayChatContentBlock
 ): Boolean {
-    val leftId = lhs.fileId?.trim().orEmpty()
-    val rightId = rhs.fileId?.trim().orEmpty()
-    if (leftId.isNotBlank() && leftId == rightId) return true
+    val leftId = lhs.fileId?.trim()?.takeIf { it.isNotEmpty() }
+    val rightId = rhs.fileId?.trim()?.takeIf { it.isNotEmpty() }
+    if (leftId != null && rightId != null) return leftId == rightId
 
     val leftName = lhs.fileDisplayName?.trim()?.lowercase().orEmpty()
     val rightName = rhs.fileDisplayName?.trim()?.lowercase().orEmpty()

@@ -156,4 +156,57 @@ class ChatConversationPresentationTest {
         assertEquals("chatgpt image.png", displayMessages.single().contentBlocks.single().fileName)
         assertEquals(1.0, displayMessages.single().sortTimestamp)
     }
+
+    @Test
+    fun displayMessagesKeepsDistinctImagesWhenOnlyNamesMatch() {
+        val firstImage = ChatMessage(
+            id = "assistant-run-1",
+            role = MessageRole.assistant,
+            state = MessageState.completed,
+            content = "/Users/test/Downloads/chatgpt image.png",
+            contentBlocks = listOf(
+                RelayChatContentBlock(
+                    type = "image",
+                    fileId = "file-img-1",
+                    fileName = "chatgpt image.png",
+                    mimeType = "image/png",
+                    downloadUrl = "/api/mobile/files/file-img-1",
+                    imageWidth = 1024,
+                    imageHeight = 1024,
+                    sizeBytes = 2048
+                )
+            ),
+            createdAt = "2026-06-06T12:00:00Z",
+            runId = "run-1",
+            sortTimestamp = 1.0
+        )
+        val secondImage = ChatMessage(
+            id = "assistant-run-2",
+            role = MessageRole.assistant,
+            state = MessageState.completed,
+            content = "/Users/test/Downloads/chatgpt image.png",
+            contentBlocks = listOf(
+                RelayChatContentBlock(
+                    type = "image",
+                    fileId = "file-img-2",
+                    fileName = "chatgpt image.png",
+                    mimeType = "image/png",
+                    downloadUrl = "/api/mobile/files/file-img-2",
+                    imageWidth = 1024,
+                    imageHeight = 1024,
+                    sizeBytes = 2048
+                )
+            ),
+            createdAt = "2026-06-06T12:00:01Z",
+            runId = "run-2",
+            sortTimestamp = 2.0
+        )
+
+        val displayMessages = conversationDisplayMessages(
+            messages = listOf(firstImage, secondImage),
+            showInvocationProcess = false
+        )
+
+        assertEquals(listOf("assistant-run-1", "assistant-run-2"), displayMessages.map { it.id })
+    }
 }

@@ -50,8 +50,17 @@ private fun displayFileMessagesMatch(existing: ChatMessage, incoming: ChatMessag
     val existingBlocks = existing.displayTransferBlocks()
     val incomingBlocks = incoming.displayTransferBlocks()
     if (existingBlocks.isEmpty() || incomingBlocks.isEmpty()) return false
+    val existingRunId = existing.runId.trim()
+    val incomingRunId = incoming.runId.trim()
+    val allowMetadataFallback = existingRunId.isNotEmpty() && existingRunId == incomingRunId
     return existingBlocks.any { existingBlock ->
-        incomingBlocks.any { incomingBlock -> displayTransferBlocksMatch(existingBlock, incomingBlock) }
+        incomingBlocks.any { incomingBlock ->
+            displayTransferBlocksMatch(
+                existing = existingBlock,
+                incoming = incomingBlock,
+                allowMetadataFallback = allowMetadataFallback
+            )
+        }
     }
 }
 
@@ -61,13 +70,15 @@ private fun ChatMessage.displayTransferBlocks(): List<RelayChatContentBlock> {
 
 private fun displayTransferBlocksMatch(
     existing: RelayChatContentBlock,
-    incoming: RelayChatContentBlock
+    incoming: RelayChatContentBlock,
+    allowMetadataFallback: Boolean
 ): Boolean {
     val existingFileId = existing.fileId?.trim()?.takeIf { it.isNotEmpty() }
     val incomingFileId = incoming.fileId?.trim()?.takeIf { it.isNotEmpty() }
-    if (existingFileId != null && incomingFileId != null && existingFileId == incomingFileId) {
-        return true
+    if (existingFileId != null && incomingFileId != null) {
+        return existingFileId == incomingFileId
     }
+    if (!allowMetadataFallback) return false
 
     val existingName = displayFileName(existing)
     val incomingName = displayFileName(incoming)

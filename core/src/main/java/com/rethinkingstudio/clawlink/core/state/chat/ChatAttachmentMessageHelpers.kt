@@ -44,6 +44,12 @@ private fun isLocalPreviewReference(value: String): Boolean {
 }
 
 private fun sameTransferIdentity(left: RelayChatContentBlock, right: RelayChatContentBlock): Boolean {
+    val leftFileId = left.fileId?.trim()?.takeIf { it.isNotEmpty() }
+    val rightFileId = right.fileId?.trim()?.takeIf { it.isNotEmpty() }
+    if (leftFileId != null && rightFileId != null) {
+        return leftFileId == rightFileId
+    }
+
     val leftName = left.fileDisplayName?.trim().orEmpty()
     val rightName = right.fileDisplayName?.trim().orEmpty()
     if (leftName.isBlank() || !leftName.equals(rightName, ignoreCase = true)) return false

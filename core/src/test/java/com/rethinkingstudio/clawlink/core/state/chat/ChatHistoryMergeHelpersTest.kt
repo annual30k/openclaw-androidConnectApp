@@ -1739,6 +1739,54 @@ class ChatHistoryMergeHelpersTest {
     }
 
     @Test
+    fun keepsDistinctStandaloneMediaMessagesWithDifferentFileIds() {
+        val firstFileBlock = RelayChatContentBlock(
+            type = "image",
+            fileId = "photo-1",
+            fileName = "photo.jpg",
+            mimeType = "image/jpeg",
+            downloadUrl = "/api/mobile/files/photo-1",
+            imageWidth = 1024,
+            imageHeight = 1024,
+            sizeBytes = 2048
+        )
+        val secondFileBlock = RelayChatContentBlock(
+            type = "image",
+            fileId = "photo-2",
+            fileName = "photo.jpg",
+            mimeType = "image/jpeg",
+            downloadUrl = "/api/mobile/files/photo-2",
+            imageWidth = 1024,
+            imageHeight = 1024,
+            sizeBytes = 2048
+        )
+
+        val messages = orderMessagesWithSourceRunAnchors(
+            listOf(
+                ChatMessage(
+                    id = "history-file-1",
+                    role = MessageRole.user,
+                    content = "photo.jpg",
+                    contentBlocks = listOf(firstFileBlock),
+                    runId = "file-photo-1",
+                    sortTimestamp = 100.0
+                ),
+                ChatMessage(
+                    id = "history-file-2",
+                    role = MessageRole.user,
+                    content = "photo.jpg",
+                    contentBlocks = listOf(secondFileBlock),
+                    runId = "file-photo-2",
+                    sortTimestamp = 101.0
+                )
+            )
+        )
+
+        assertEquals(listOf("file-photo-1", "file-photo-2"), messages.map { it.runId })
+        assertEquals(listOf("photo-1", "photo-2"), messages.map { it.fileContentBlocks.single().fileId })
+    }
+
+    @Test
     fun mergesLatePlainImagePromptBackIntoEarlierStandaloneFileMessage() {
         val fileBlock = RelayChatContentBlock(
             type = "image",

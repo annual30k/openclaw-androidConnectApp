@@ -837,7 +837,7 @@ private fun fileContentBlocksOverlap(
 private fun fileContentBlockMatches(left: RelayChatContentBlock, right: RelayChatContentBlock): Boolean {
     val leftFileId = left.fileId?.trim()?.takeIf { it.isNotEmpty() }
     val rightFileId = right.fileId?.trim()?.takeIf { it.isNotEmpty() }
-    if (leftFileId != null && rightFileId != null && leftFileId == rightFileId) return true
+    if (leftFileId != null && rightFileId != null) return leftFileId == rightFileId
 
     val leftName = normalizedFileName(left)
     val rightName = normalizedFileName(right)
