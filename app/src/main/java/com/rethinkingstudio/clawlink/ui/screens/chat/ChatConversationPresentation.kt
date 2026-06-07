@@ -4,6 +4,7 @@ import com.rethinkingstudio.clawlink.core.models.chat.ChatMessage
 import com.rethinkingstudio.clawlink.core.models.chat.MessageRole
 import com.rethinkingstudio.clawlink.core.models.chat.MessageState
 import com.rethinkingstudio.clawlink.core.models.chat.RelayChatContentBlock
+import com.rethinkingstudio.clawlink.core.state.chat.ChatState
 
 internal fun conversationDisplayMessages(
     messages: List<ChatMessage>,
@@ -15,6 +16,54 @@ internal fun conversationDisplayMessages(
             message.shouldDisplayInChat(showInvocationProcess = showInvocationProcess) ||
                 message.state == MessageState.streaming && message.role == MessageRole.assistant
         }
+}
+
+internal fun conversationStructureSignature(messages: List<ChatMessage>): String {
+    return messages.joinToString(separator = "\u001F") { message ->
+        listOf(
+            message.id,
+            message.role.name,
+            message.state.name,
+            message.runId,
+            message.contentBlocks.hashCode().toString()
+        ).joinToString(separator = "\u001E")
+    }
+}
+
+internal fun conversationStreamingTailSignature(messages: List<ChatMessage>): String {
+    val message = messages.lastOrNull {
+        it.role == MessageRole.assistant && it.state == MessageState.streaming
+    } ?: return ""
+    return listOf(
+        message.id,
+        message.content.length.toString(),
+        message.content.hashCode().toString(),
+        message.contentBlocks.hashCode().toString()
+    ).joinToString(separator = "\u001E")
+}
+
+internal fun shouldCoalesceChatDisplayUpdate(
+    current: ChatState,
+    incoming: ChatState
+): Boolean {
+    if (current.copy(messages = emptyList()) != incoming.copy(messages = emptyList())) {
+        return false
+    }
+    if (current.messages.size != incoming.messages.size || incoming.messages.isEmpty()) {
+        return false
+    }
+
+    val lastIndex = incoming.messages.lastIndex
+    for (index in 0 until lastIndex) {
+        if (current.messages[index] != incoming.messages[index]) return false
+    }
+
+    val currentTail = current.messages[lastIndex]
+    val incomingTail = incoming.messages[lastIndex]
+    if (incomingTail.role != MessageRole.assistant || incomingTail.state != MessageState.streaming) {
+        return false
+    }
+    return currentTail.copy(content = incomingTail.content) == incomingTail
 }
 
 private fun List<ChatMessage>.coalescedByMessageId(): List<ChatMessage> {

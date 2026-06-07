@@ -4,6 +4,7 @@ import com.rethinkingstudio.clawlink.core.models.chat.ChatMessage
 import com.rethinkingstudio.clawlink.core.models.chat.MessageRole
 import com.rethinkingstudio.clawlink.core.models.chat.MessageState
 import com.rethinkingstudio.clawlink.core.models.chat.RelayChatContentBlock
+import com.rethinkingstudio.clawlink.core.state.chat.ChatState
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
@@ -208,5 +209,82 @@ class ChatConversationPresentationTest {
         )
 
         assertEquals(listOf("assistant-run-1", "assistant-run-2"), displayMessages.map { it.id })
+    }
+
+    @Test
+    fun structureSignatureIgnoresStreamingTextProgress() {
+        val streaming = ChatMessage(
+            id = "assistant-streaming",
+            role = MessageRole.assistant,
+            state = MessageState.streaming,
+            content = "Hel",
+            runId = "run-1",
+            sortTimestamp = 2.0
+        )
+        val updatedStreaming = streaming.copy(content = "Hello world")
+
+        assertEquals(
+            conversationStructureSignature(listOf(streaming)),
+            conversationStructureSignature(listOf(updatedStreaming))
+        )
+    }
+
+    @Test
+    fun streamingTailSignatureTracksStreamingTextProgress() {
+        val streaming = ChatMessage(
+            id = "assistant-streaming",
+            role = MessageRole.assistant,
+            state = MessageState.streaming,
+            content = "Hel",
+            runId = "run-1",
+            sortTimestamp = 2.0
+        )
+        val updatedStreaming = streaming.copy(content = "Hello world")
+
+        assert(conversationStreamingTailSignature(listOf(streaming)).isNotBlank())
+        assert(
+            conversationStreamingTailSignature(listOf(streaming)) !=
+            conversationStreamingTailSignature(listOf(updatedStreaming))
+        )
+    }
+
+    @Test
+    fun displayUpdateCoalescingOnlyAllowsTailStreamingTextProgress() {
+        val user = ChatMessage(
+            id = "user-1",
+            role = MessageRole.user,
+            state = MessageState.completed,
+            content = "Say hello",
+            runId = "local-user-1",
+            sortTimestamp = 1.0
+        )
+        val streaming = ChatMessage(
+            id = "assistant-streaming",
+            role = MessageRole.assistant,
+            state = MessageState.streaming,
+            content = "Hel",
+            runId = "run-1",
+            sortTimestamp = 2.0
+        )
+        val current = ChatState(messages = listOf(user, streaming), isStreaming = true)
+
+        assert(
+            shouldCoalesceChatDisplayUpdate(
+                current,
+                current.copy(messages = listOf(user, streaming.copy(content = "Hello")))
+            )
+        )
+        assert(
+            !shouldCoalesceChatDisplayUpdate(
+                current,
+                current.copy(messages = listOf(user, streaming.copy(content = "Hello", state = MessageState.completed)))
+            )
+        )
+        assert(
+            !shouldCoalesceChatDisplayUpdate(
+                current,
+                current.copy(messages = listOf(user, streaming, streaming.copy(id = "assistant-2", content = "Next")))
+            )
+        )
     }
 }

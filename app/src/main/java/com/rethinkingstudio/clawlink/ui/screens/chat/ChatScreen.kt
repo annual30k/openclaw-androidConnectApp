@@ -66,6 +66,7 @@ import com.rethinkingstudio.clawlink.core.models.chat.MessageState
 import com.rethinkingstudio.clawlink.core.models.gateway.AggregateStatus
 import com.rethinkingstudio.clawlink.core.models.gateway.GatewayType
 import com.rethinkingstudio.clawlink.core.state.LocalizedText.choose
+import com.rethinkingstudio.clawlink.core.state.chat.ChatState
 import com.rethinkingstudio.clawlink.core.state.chat.ChatStore
 import com.rethinkingstudio.clawlink.core.state.chat.RemoteAttachmentCache
 import com.rethinkingstudio.clawlink.core.state.chat.RemoteImageCache
@@ -107,7 +108,26 @@ fun ChatScreen(
         ChatViewModel(chatStore, gatewayStore, modelStore, scope)
     }
 
-    val chatState by chatStore.state.collectAsState()
+    val rawChatState by chatStore.state.collectAsState()
+    var chatState by remember { mutableStateOf(rawChatState) }
+    var pendingCoalescedChatState by remember { mutableStateOf<ChatState?>(null) }
+    LaunchedEffect(rawChatState) {
+        if (shouldCoalesceChatDisplayUpdate(chatState, rawChatState)) {
+            pendingCoalescedChatState = rawChatState
+        } else {
+            pendingCoalescedChatState = null
+            chatState = rawChatState
+        }
+    }
+    LaunchedEffect(Unit) {
+        while (true) {
+            delay(50)
+            pendingCoalescedChatState?.let { pending ->
+                chatState = pending
+                pendingCoalescedChatState = null
+            }
+        }
+    }
     val gatewayState by gatewayStore.state.collectAsState()
     val modelState by modelStore.state.collectAsState()
     val listState = rememberLazyListState()
@@ -176,17 +196,11 @@ fun ChatScreen(
                 message.state == MessageState.streaming && message.role == MessageRole.assistant
         }
     }
-    val messageUpdateSignature = remember(visibleMessagesForScroll) {
-        visibleMessagesForScroll.joinToString(separator = "\u001F") { message ->
-            listOf(
-                message.id,
-                message.role.name,
-                message.state.name,
-                message.runId,
-                message.content,
-                message.contentBlocks.hashCode().toString()
-            ).joinToString(separator = "\u001E")
-        }
+    val messageStructureSignature = remember(visibleMessagesForScroll) {
+        conversationStructureSignature(visibleMessagesForScroll)
+    }
+    val streamingTailSignature = remember(visibleMessagesForScroll) {
+        conversationStreamingTailSignature(visibleMessagesForScroll)
     }
     val isNearListBottom by remember {
         derivedStateOf {
@@ -479,9 +493,9 @@ fun ChatScreen(
         }
     }
 
-    LaunchedEffect(messageUpdateSignature) {
+    LaunchedEffect(messageStructureSignature) {
         val messageCount = visibleMessagesForScroll.size
-        if (messageUpdateSignature.isEmpty() || messageCount == 0) {
+        if (messageStructureSignature.isEmpty() || messageCount == 0) {
             lastObservedVisibleMessageCount = 0
             lastObservedMessageSignature = ""
             lastObservedFirstVisibleMessageId = null
@@ -514,7 +528,7 @@ fun ChatScreen(
         val hasNewUserMessage = !isInitialLoad && currentUserMessageIds.any { it !in lastObservedUserMessageIds }
         val isOwnNewMessage = newTailMessages.any { it.role == MessageRole.user } || hasNewUserMessage
         lastObservedVisibleMessageCount = messageCount
-        lastObservedMessageSignature = messageUpdateSignature
+        lastObservedMessageSignature = messageStructureSignature
         lastObservedFirstVisibleMessageId = currentFirstMessageId
         lastObservedUserMessageIds = currentUserMessageIds
 
@@ -527,6 +541,12 @@ fun ChatScreen(
         } else {
             hasPendingMessagesBelow = true
         }
+    }
+
+    LaunchedEffect(streamingTailSignature, isNearListBottom) {
+        if (streamingTailSignature.isBlank() || !isNearListBottom) return@LaunchedEffect
+        delay(50)
+        scrollChatToBottom(animated = false)
     }
 
     LaunchedEffect(imeBottomPx) {
