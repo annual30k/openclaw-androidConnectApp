@@ -1739,6 +1739,53 @@ class ChatHistoryMergeHelpersTest {
     }
 
     @Test
+    fun keepsAssistantFileBelowTriggeringUserWhenFileTimestampIsEarlier() {
+        val messages = orderMessagesWithSourceRunAnchors(
+            listOf(
+                ChatMessage(
+                    id = "history-user-send-file",
+                    role = MessageRole.user,
+                    content = "你好，把桌面蜘蛛侠的照片发给我",
+                    runId = "history-user-send-file",
+                    sortTimestamp = 200.0
+                ),
+                ChatMessage(
+                    id = "file-file-spiderman",
+                    role = MessageRole.assistant,
+                    state = MessageState.completed,
+                    content = "spiderman.jpg",
+                    contentBlocks = listOf(
+                        RelayChatContentBlock(
+                            type = "image",
+                            fileId = "file-spiderman",
+                            fileName = "spiderman.jpg",
+                            mimeType = "image/jpeg",
+                            downloadUrl = "/api/mobile/files/file-spiderman"
+                        )
+                    ),
+                    runId = "file-file-spiderman",
+                    sortTimestamp = 100.0
+                ),
+                ChatMessage(
+                    id = "history-assistant-send-file",
+                    role = MessageRole.assistant,
+                    state = MessageState.completed,
+                    content = "发给你了：\n/Users/qiuqiquan/Desktop/spiderman.jpg",
+                    runId = "history-assistant-send-file",
+                    sortTimestamp = 201.0
+                )
+            )
+        )
+
+        assertEquals(
+            listOf("history-user-send-file", "file-file-spiderman", "history-assistant-send-file"),
+            messages.map { it.id }
+        )
+        assertTrue((messages[1].sortTimestamp ?: 0.0) > (messages[0].sortTimestamp ?: 0.0))
+        assertTrue((messages[1].sortTimestamp ?: 0.0) < (messages[2].sortTimestamp ?: Double.MAX_VALUE))
+    }
+
+    @Test
     fun keepsDistinctStandaloneMediaMessagesWithDifferentFileIds() {
         val firstFileBlock = RelayChatContentBlock(
             type = "image",

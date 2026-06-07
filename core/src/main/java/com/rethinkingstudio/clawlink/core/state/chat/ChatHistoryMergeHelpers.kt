@@ -274,9 +274,10 @@ internal fun mergeHistoryWithCurrentMessages(
 }
 
 internal fun orderMessagesWithSourceRunAnchors(messages: List<ChatMessage>): List<ChatMessage> {
-    val anchoredMessages = messages.map { message ->
+    val sourceAnchoredMessages = messages.map { message ->
         anchorAssistantFileMessageToSourceRun(message, messages)
     }
+    val anchoredMessages = anchorAssistantFileMessagesToTranscriptOrder(sourceAnchoredMessages)
     val orderedMessages = anchoredMessages.sortedWith { left, right ->
         when {
             isTransientAssistantPlaceholder(left) && right.hasToolContent -> 1
@@ -290,6 +291,40 @@ internal fun orderMessagesWithSourceRunAnchors(messages: List<ChatMessage>): Lis
         }
     }
     return normalizeChatTimelineMessages(orderedMessages)
+}
+
+private fun anchorAssistantFileMessagesToTranscriptOrder(messages: List<ChatMessage>): List<ChatMessage> {
+    var latestTranscriptSortTimestamp: Double? = null
+    return messages.map { message ->
+        val anchorTimestamp = latestTranscriptSortTimestamp
+        val anchored = if (shouldAnchorAssistantFileToTranscript(message) && anchorTimestamp != null) {
+            val minimumSortTimestamp = anchorTimestamp + messageOrderEpsilon
+            val messageSortTimestamp = message.sortTimestamp
+            if (
+                (messageSortTimestamp == null || anchorTimestamp - messageSortTimestamp <= historyTranscriptOrderWindowSeconds) &&
+                (messageSortTimestamp == null || messageSortTimestamp < minimumSortTimestamp)
+            ) {
+                message.copy(
+                    createdAt = Instant.ofEpochMilli((minimumSortTimestamp * 1000).toLong()).toString(),
+                    sortTimestamp = minimumSortTimestamp
+                )
+            } else {
+                message
+            }
+        } else {
+            message
+        }
+        anchored.sortTimestamp?.let { sortTimestamp ->
+            latestTranscriptSortTimestamp = maxOf(latestTranscriptSortTimestamp ?: sortTimestamp, sortTimestamp)
+        }
+        anchored
+    }
+}
+
+private fun shouldAnchorAssistantFileToTranscript(message: ChatMessage): Boolean {
+    return message.role == MessageRole.assistant &&
+        message.state == MessageState.completed &&
+        message.hasFileContent
 }
 
 internal fun anchorAssistantFileMessageToSourceRun(

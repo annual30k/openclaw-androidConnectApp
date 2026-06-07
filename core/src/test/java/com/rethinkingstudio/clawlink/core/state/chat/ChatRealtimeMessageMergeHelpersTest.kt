@@ -316,6 +316,43 @@ class ChatRealtimeMessageMergeHelpersTest {
     }
 
     @Test
+    fun mergesLegacyFinalIntoSameTurnStreamingAssistantTextWhenRunIdIsMissing() {
+        val current = listOf(
+            ChatMessage(
+                id = "user-1",
+                role = MessageRole.user,
+                state = MessageState.completed,
+                content = "Reply only OK",
+                runId = "local-user-run-1",
+                sortTimestamp = 60.0
+            ),
+            ChatMessage(
+                id = "assistant-streaming",
+                role = MessageRole.assistant,
+                state = MessageState.streaming,
+                content = "OK",
+                runId = "timeline-run-1",
+                sortTimestamp = 60.001
+            )
+        )
+        val legacyFinal = ChatMessage(
+            id = "assistant-legacy-final",
+            role = MessageRole.assistant,
+            state = MessageState.completed,
+            content = "OK",
+            runId = "",
+            sortTimestamp = 62.0
+        )
+
+        val merged = mergeCompletedAssistantFinalIntoCurrentMessages(current, legacyFinal)
+
+        requireNotNull(merged)
+        assertEquals(listOf("user-1", "assistant-streaming"), merged.map { it.id })
+        assertEquals(listOf(MessageState.completed), merged.filter { it.role == MessageRole.assistant }.map { it.state })
+        assertEquals(1, merged.count { it.role == MessageRole.assistant && it.content == "OK" })
+    }
+
+    @Test
     fun removesTransientPlaceholderWhenSameRunFails() {
         val current = listOf(
             ChatMessage(

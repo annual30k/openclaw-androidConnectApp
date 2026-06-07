@@ -151,7 +151,6 @@ internal fun mergeCompletedAssistantFinalIntoCurrentMessages(
 ): List<ChatMessage>? {
     if (candidate.role != MessageRole.assistant ||
         candidate.state != MessageState.completed ||
-        candidate.runId.isBlank() ||
         candidate.hasFileContent ||
         candidate.hasVoiceContent ||
         candidate.hasToolContent
@@ -162,26 +161,77 @@ internal fun mergeCompletedAssistantFinalIntoCurrentMessages(
     if (candidateText.isBlank()) return null
 
     val messages = currentMessages.toMutableList()
-    val existingIndex = messages.indexOfFirst { existing ->
-        existing.id != candidate.id &&
-            existing.role == MessageRole.assistant &&
-            existing.state == MessageState.completed &&
-            existing.runId == candidate.runId &&
-            !existing.hasFileContent &&
-            !existing.hasVoiceContent &&
-            !existing.hasToolContent &&
-            sanitizeChatMessageText(existing.plainTextContent).trim() == candidateText
-    }
+    val existingIndex = sameRunCompletedAssistantFinalIndex(messages, candidate, candidateText)
+        .takeIf { it >= 0 }
+        ?: sameTurnAssistantTextFinalIndex(messages, candidate, candidateText)
     if (existingIndex < 0) return null
 
     val existing = messages[existingIndex]
     messages[existingIndex] = existing.copy(
+        state = MessageState.completed,
         content = existing.content.ifBlank { candidate.content },
         contentBlocks = if (existing.contentBlocks.isEmpty()) candidate.contentBlocks else existing.contentBlocks,
         createdAt = existing.createdAt.ifBlank { candidate.createdAt },
+        runId = existing.runId.ifBlank { candidate.runId },
         sortTimestamp = existing.sortTimestamp ?: candidate.sortTimestamp
     )
     return orderMessagesWithSourceRunAnchors(messages)
+}
+
+private fun sameRunCompletedAssistantFinalIndex(
+    messages: List<ChatMessage>,
+    candidate: ChatMessage,
+    candidateText: String
+): Int {
+    if (candidate.runId.isBlank()) return -1
+    return messages.indexOfFirst { existing ->
+        existing.id != candidate.id &&
+            existing.role == MessageRole.assistant &&
+            existing.state == MessageState.completed &&
+            existing.runId == candidate.runId &&
+            isPlainAssistantTextMessage(existing) &&
+            sanitizeChatMessageText(existing.plainTextContent).trim() == candidateText
+    }
+}
+
+private fun sameTurnAssistantTextFinalIndex(
+    messages: List<ChatMessage>,
+    candidate: ChatMessage,
+    candidateText: String
+): Int {
+    val ordered = orderMessagesWithSourceRunAnchors(messages)
+    val candidateTimestamp = candidate.sortTimestamp
+    return ordered.indices.lastOrNull { index ->
+        val existing = ordered[index]
+        if (existing.id == candidate.id ||
+            existing.role != MessageRole.assistant ||
+            existing.state != MessageState.streaming ||
+            !isPlainAssistantTextMessage(existing) ||
+            isTransientAssistantPlaceholder(existing) ||
+            sanitizeChatMessageText(existing.plainTextContent).trim() != candidateText
+        ) {
+            return@lastOrNull false
+        }
+        val triggeringUserIndex = ordered
+            .take(index)
+            .indexOfLast { message -> message.role == MessageRole.user && message.shouldDisplayInChat(showInvocationProcess = true) }
+        if (triggeringUserIndex < 0) return@lastOrNull false
+        val nextUser = ordered
+            .drop(index + 1)
+            .firstOrNull { message -> message.role == MessageRole.user && message.shouldDisplayInChat(showInvocationProcess = true) }
+        if (candidateTimestamp != null && nextUser?.sortTimestamp != null && candidateTimestamp >= nextUser.sortTimestamp) {
+            return@lastOrNull false
+        }
+        true
+    }?.let { orderedIndex ->
+        messages.indexOfFirst { message -> message.id == ordered[orderedIndex].id }
+    } ?: -1
+}
+
+private fun isPlainAssistantTextMessage(message: ChatMessage): Boolean {
+    return !message.hasFileContent &&
+        !message.hasVoiceContent &&
+        !message.hasToolContent
 }
 
 internal fun removeResolvedTransientAssistantPlaceholders(
