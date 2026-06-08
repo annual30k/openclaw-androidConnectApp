@@ -11,6 +11,7 @@ private const val timelineMessageOrderEpsilon = 0.001
 private const val timelineSameTurnWindowSeconds = 180.0
 private const val delayedPlainEchoWindowSeconds = 3_600.0
 private const val timelineClockSkewToleranceSeconds = 15.0
+private const val nearbyPlainEchoWindowSeconds = 15.0
 
 internal object ChatTimelineReducer {
     fun reduceAll(state: ChatTimelineState, events: List<TimelineEvent>): ChatTimelineState {
@@ -38,12 +39,18 @@ internal object ChatTimelineReducer {
 
     private fun ChatTimelineState.applyUserTurn(event: TimelineEvent.TurnUserCreated): ChatTimelineState {
         if (messages.any { it.id == event.messageId }) return this
-        val localIndex = messages.indexOfFirst { it.runId == "local-user-${event.turnId}" }
+        val localRunIds = listOfNotNull(
+            event.turnId.takeIf { it.isNotBlank() },
+            event.runId?.takeIf { it.isNotBlank() }
+        ).map { "local-user-$it" }.toSet()
+        val localIndex = messages.indexOfFirst { message ->
+            message.role == MessageRole.user && message.runId in localRunIds
+        }
             .takeIf { it >= 0 }
             ?: matchingLocalUserIndex(
                 excludingMessageId = event.messageId,
                 turnId = event.turnId,
-                runId = null,
+                runId = event.runId,
                 content = event.content.timelineText(),
                 contentBlocks = event.content,
                 createdAt = event.createdAt
@@ -505,7 +512,7 @@ internal object ChatTimelineReducer {
                 )
             }
         }
-        return nextState
+        return nextState.copy(messages = orderMessagesWithSourceRunAnchors(nextState.messages))
     }
 
     private fun ChatTimelineState.upsertMessage(
@@ -609,9 +616,24 @@ internal object ChatTimelineReducer {
             if (fileContentBlocksOverlap(message.contentBlocks, contentBlocks)) {
                 return@filter true
             }
+            if (nearbyPlainLocalEchoMatchesHistoryUser(message, contentBlocks, incomingTimestamp)) {
+                return@filter true
+            }
             delayedPlainLocalEchoHasResolvedAssistant(message, incomingTimestamp)
         }
         return candidates.singleOrNull()
+    }
+
+    private fun nearbyPlainLocalEchoMatchesHistoryUser(
+        localUser: ChatMessage,
+        incomingBlocks: List<RelayChatContentBlock>,
+        historyUserTimestamp: Double?
+    ): Boolean {
+        if (localUser.hasFileContent || localUser.hasVoiceContent) return false
+        if (incomingBlocks.any { it.isFileBlock || it.isVoiceMessageBlock }) return false
+        val localTimestamp = localUser.sortTimestamp ?: timelineSortTimestamp(localUser.createdAt) ?: return false
+        val incomingTimestamp = historyUserTimestamp ?: return false
+        return kotlin.math.abs(incomingTimestamp - localTimestamp) <= nearbyPlainEchoWindowSeconds
     }
 
     private fun ChatTimelineState.delayedPlainLocalEchoHasResolvedAssistant(

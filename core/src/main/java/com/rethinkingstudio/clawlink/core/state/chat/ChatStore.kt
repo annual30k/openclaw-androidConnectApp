@@ -646,16 +646,20 @@ class ChatStore(
         messages.forEach { message ->
             val normalizedId = message.id.trim()
             if (normalizedId.isBlank()) {
-                val fileSlotIndex = merged.indexOfFirst { existing -> sameTransferMessageSlot(existing, message) }
-                if (fileSlotIndex >= 0) {
-                    merged[fileSlotIndex] = mergeDuplicateMessageSlot(merged[fileSlotIndex], message)
+                val matchingSlotIndex = merged.indexOfFirst { existing ->
+                    sameTransferMessageSlot(existing, message) || sameLocalUserEchoMessageSlot(existing, message)
+                }
+                if (matchingSlotIndex >= 0) {
+                    merged[matchingSlotIndex] = mergeDuplicateMessageSlot(merged[matchingSlotIndex], message)
                 } else {
                     merged.add(message)
                 }
                 return@forEach
             }
             val existingIndex = merged.indexOfFirst { existing ->
-                existing.id.trim() == normalizedId || sameTransferMessageSlot(existing, message)
+                existing.id.trim() == normalizedId ||
+                    sameTransferMessageSlot(existing, message) ||
+                    sameLocalUserEchoMessageSlot(existing, message)
             }
             if (existingIndex >= 0) {
                 merged[existingIndex] = mergeDuplicateMessageSlot(merged[existingIndex], message)
@@ -690,6 +694,56 @@ class ChatStore(
         return samePendingUploadMessage(existing, incoming) || samePendingUploadMessage(incoming, existing)
     }
 
+    private fun sameLocalUserEchoMessageSlot(existing: ChatMessage, incoming: ChatMessage): Boolean {
+        if (existing.role != MessageRole.user || incoming.role != MessageRole.user) return false
+        val existingIsLocal = existing.runId.startsWith("local-user-")
+        val incomingIsLocal = incoming.runId.startsWith("local-user-")
+        if (existingIsLocal == incomingIsLocal) return false
+        if (!stableLocalUserEchoRunMatches(existing, incoming)) return false
+
+        val existingText = normalizedUserEchoText(existing)
+        val incomingText = normalizedUserEchoText(incoming)
+        if (existingText.isBlank() || existingText != incomingText) return false
+        if (!userEchoContentBlocksCanMerge(existing, incoming)) return false
+
+        val existingTimestamp = existing.sortTimestamp
+        val incomingTimestamp = incoming.sortTimestamp
+        if (existingTimestamp == null || incomingTimestamp == null) return true
+        return kotlin.math.abs(incomingTimestamp - existingTimestamp) <= localUserEchoMergeWindowSeconds
+    }
+
+    private fun stableLocalUserEchoRunMatches(existing: ChatMessage, incoming: ChatMessage): Boolean {
+        val local = if (existing.runId.startsWith("local-user-")) existing else incoming
+        val remote = if (local === existing) incoming else existing
+        val clientRunId = local.runId
+            .removePrefix("local-user-")
+            .trim()
+            .takeIf { it.isNotEmpty() && it != local.runId }
+            ?: return false
+        return remote.runId.trim() == clientRunId || remote.id.trim() == "user-$clientRunId"
+    }
+
+    private fun normalizedUserEchoText(message: ChatMessage): String {
+        val blockText = message.contentBlocks.mapNotNull { block ->
+            if (block.isFileBlock || block.isVoiceMessageBlock || block.isToolCallBlock || block.isToolResultBlock) {
+                null
+            } else {
+                block.text?.trim()?.takeIf { it.isNotEmpty() }
+            }
+        }.joinToString("\n\n")
+        return sanitizeChatMessageText(blockText.ifBlank { message.content })
+            .trim()
+            .replace(Regex("[\\s\\u2000-\\u200A\\u202F\\u205F\\u3000]+"), " ")
+    }
+
+    private fun userEchoContentBlocksCanMerge(existing: ChatMessage, incoming: ChatMessage): Boolean {
+        val existingTransferBlocks = existing.transferContentBlocks()
+        val incomingTransferBlocks = incoming.transferContentBlocks()
+        if (existingTransferBlocks.isEmpty() && incomingTransferBlocks.isEmpty()) return true
+        if (existingTransferBlocks.isEmpty() || incomingTransferBlocks.isEmpty()) return true
+        return sameTransferMessageSlot(existing, incoming)
+    }
+
     private fun exactFileMessageRunId(message: ChatMessage): String? {
         message.transferContentBlocks().firstNotNullOfOrNull { block ->
             block.fileId?.trim()?.takeIf { it.isNotEmpty() }
@@ -707,7 +761,30 @@ class ChatStore(
                 )
             )
         }
+        if (sameLocalUserEchoMessageSlot(existing, incoming)) {
+            return mergeDuplicateUserEchoMessage(existing, incoming)
+        }
         return mergeDuplicateMessageById(existing, incoming)
+    }
+
+    private fun mergeDuplicateUserEchoMessage(existing: ChatMessage, incoming: ChatMessage): ChatMessage {
+        val local = if (existing.runId.startsWith("local-user-")) existing else incoming
+        val remote = if (local === existing) incoming else existing
+        return local.copy(
+            state = when {
+                remote.state == MessageState.failed -> MessageState.failed
+                else -> MessageState.completed
+            },
+            content = local.content.trim().takeIf { it.isNotEmpty() }?.let { local.content } ?: remote.content,
+            contentBlocks = mergeLocalUserEchoContentBlocks(local, remote),
+            createdAt = local.createdAt.ifBlank { remote.createdAt },
+            sortTimestamp = local.sortTimestamp ?: remote.sortTimestamp
+        )
+    }
+
+    private fun mergeLocalUserEchoContentBlocks(local: ChatMessage, remote: ChatMessage): List<RelayChatContentBlock> {
+        if (local.contentBlocks.isNotEmpty()) return local.contentBlocks
+        return remote.contentBlocks
     }
 
     private fun mergeDuplicateMessageById(existing: ChatMessage, incoming: ChatMessage): ChatMessage {
@@ -2380,6 +2457,7 @@ class ChatStore(
         const val chatHistoryPageSize = 100
         const val chatHistoryWindowMaxMessages = 500
         const val chatHistoryPendingResolveMaxPages = 5
+        const val localUserEchoMergeWindowSeconds = 600.0
         const val fullToolOutputUnavailableMessage = "完整输出不可用"
     }
 }

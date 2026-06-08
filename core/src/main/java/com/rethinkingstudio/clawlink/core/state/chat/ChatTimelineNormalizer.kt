@@ -7,8 +7,14 @@ import com.rethinkingstudio.clawlink.core.models.chat.RelayChatContentBlock
 
 private const val mediaPromptMergeWindowSeconds = 600.0
 private const val plainDuplicateWindowSeconds = 180.0
+private const val containedAssistantFragmentMinChars = 12
+private const val containedAssistantFragmentGrowthMinChars = 12
 private const val internalContinuationMarker =
     "The previous attempt did not produce a user-visible answer. Continue from the current state and produce the visible answer now. Do not restart from scratch."
+private val userShadowTimestampPrefixRegex = Regex(
+    "^\\s*\\[(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun)\\s+\\d{4}-\\d{2}-\\d{2}\\s+\\d{1,2}:\\d{2}(?::\\d{2})?\\s+(?:GMT|UTC)(?:[+-]\\d{1,2}(?::?\\d{2})?)?]\\s*",
+    RegexOption.IGNORE_CASE
+)
 
 internal fun normalizeChatTimelineMessages(messages: List<ChatMessage>): List<ChatMessage> {
     val materialized = messages.map(::materializedMediaReferences)
@@ -89,11 +95,64 @@ private fun coalescedMediaMessages(messages: List<ChatMessage>): List<ChatMessag
         if (isInternalContinuationDuplicateOfNearbyPrompt(message, coalesced)) return@forEach
         if (isDuplicateFileTransferStatusText(message, coalesced)) return@forEach
         if (isDuplicateUserMessageInSameTurn(message, coalesced)) return@forEach
+        val containedAssistantIndex = containedAssistantTextFragmentIndex(message, coalesced)
+        if (containedAssistantIndex >= 0) {
+            coalesced[containedAssistantIndex] = moreCompleteAssistantTextMessage(
+                coalesced[containedAssistantIndex],
+                message
+            )
+            return@forEach
+        }
 
         coalesced += message
     }
 
     return coalesced
+}
+
+private fun containedAssistantTextFragmentIndex(message: ChatMessage, messages: List<ChatMessage>): Int {
+    if (!isPlainCompletedAssistantText(message)) return -1
+    val previousAssistantIndex = messages.indices.reversed().firstOrNull { index ->
+        val candidate = messages[index]
+        candidate.role == MessageRole.user || isRenderableAssistantBoundary(candidate)
+    } ?: return -1
+    val previousAssistant = messages[previousAssistantIndex]
+    if (!isPlainCompletedAssistantText(previousAssistant)) return -1
+    if (!timestampsAreClose(previousAssistant, message, plainDuplicateWindowSeconds)) return -1
+    return if (assistantTextLooksLikeContainedFragment(previousAssistant, message)) {
+        previousAssistantIndex
+    } else {
+        -1
+    }
+}
+
+private fun isPlainCompletedAssistantText(message: ChatMessage): Boolean {
+    return message.role == MessageRole.assistant &&
+        message.state == MessageState.completed &&
+        !message.hasFileContent &&
+        !message.hasVoiceContent &&
+        !message.hasToolContent &&
+        !isTransientAssistantPlaceholder(message) &&
+        normalizedPromptText(message.plainTextContent).isNotBlank()
+}
+
+private fun assistantTextLooksLikeContainedFragment(left: ChatMessage, right: ChatMessage): Boolean {
+    val leftText = normalizedPromptText(left.plainTextContent)
+    val rightText = normalizedPromptText(right.plainTextContent)
+    if (leftText == rightText) return false
+    val shorter = if (leftText.length <= rightText.length) leftText else rightText
+    val longer = if (leftText.length <= rightText.length) rightText else leftText
+    if (shorter.length < containedAssistantFragmentMinChars) return false
+    if (longer.length - shorter.length < containedAssistantFragmentGrowthMinChars) return false
+    return longer.startsWith(shorter) || longer.contains(shorter)
+}
+
+private fun moreCompleteAssistantTextMessage(left: ChatMessage, right: ChatMessage): ChatMessage {
+    val leftText = normalizedPromptText(left.plainTextContent)
+    val rightText = normalizedPromptText(right.plainTextContent)
+    val longer = if (rightText.length > leftText.length) right else left
+    val earlierTimestamp = listOfNotNull(left.sortTimestamp, right.sortTimestamp).minOrNull()
+    return longer.copy(sortTimestamp = earlierTimestamp ?: longer.sortTimestamp)
 }
 
 private fun isDuplicateUserMessageInSameTurn(message: ChatMessage, messages: List<ChatMessage>): Boolean {
@@ -116,7 +175,40 @@ private fun isDuplicateUserMessageInSameTurn(message: ChatMessage, messages: Lis
     ) {
         return false
     }
-    return normalizedPromptText(previousUser.content) == normalized
+    return normalizedPromptText(previousUser.content) == normalized &&
+        (stableDuplicateUserIdentityMatches(previousUser, message) ||
+            timestampPrefixedUserShadowMatches(previousUser, message))
+}
+
+private fun stableDuplicateUserIdentityMatches(left: ChatMessage, right: ChatMessage): Boolean {
+    val leftId = left.id.trim()
+    val rightId = right.id.trim()
+    if (leftId.isNotEmpty() && leftId == rightId) return true
+
+    val leftRunId = left.runId.trim()
+    val rightRunId = right.runId.trim()
+    if (leftRunId.isNotEmpty() && leftRunId == rightRunId) return true
+
+    localUserClientRunId(left)?.let { clientRunId ->
+        if (rightRunId == clientRunId || rightId == "user-$clientRunId") return true
+    }
+    localUserClientRunId(right)?.let { clientRunId ->
+        if (leftRunId == clientRunId || leftId == "user-$clientRunId") return true
+    }
+    return false
+}
+
+private fun localUserClientRunId(message: ChatMessage): String? {
+    val runId = message.runId.trim()
+    if (!runId.startsWith("local-user-")) return null
+    return runId.removePrefix("local-user-").trim().takeIf { it.isNotEmpty() }
+}
+
+private fun timestampPrefixedUserShadowMatches(left: ChatMessage, right: ChatMessage): Boolean {
+    return (userShadowTimestampPrefixRegex.containsMatchIn(left.content) ||
+        userShadowTimestampPrefixRegex.containsMatchIn(right.content) ||
+        (!left.runId.startsWith("local-user-") && !right.runId.startsWith("local-user-"))) &&
+        timestampsAreClose(left, right, plainDuplicateWindowSeconds)
 }
 
 private fun isRenderableAssistantBoundary(message: ChatMessage): Boolean {

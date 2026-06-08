@@ -18,6 +18,7 @@ internal sealed interface TimelineEvent {
     data class TurnUserCreated(
         override val eventId: String?,
         val turnId: String,
+        val runId: String?,
         val messageId: String,
         val content: List<RelayChatContentBlock>,
         val createdAt: String?
@@ -215,6 +216,7 @@ private data class RawTimelineEvent(
             "turn.user.created" -> TimelineEvent.TurnUserCreated(
                 eventId = eventId,
                 turnId = turnId?.takeIf { it.isNotBlank() } ?: return null,
+                runId = runId,
                 messageId = messageId?.takeIf { it.isNotBlank() } ?: return null,
                 content = canonicalContent(),
                 createdAt = createdAt

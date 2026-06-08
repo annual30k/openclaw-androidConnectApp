@@ -476,6 +476,116 @@ class ChatRealtimeMessageMergeHelpersTest {
     }
 
     @Test
+    fun removesResolvedStreamingAssistantWhenSameRunTerminalAssistantExists() {
+        val messages = listOf(
+            ChatMessage(
+                id = "user-1",
+                role = MessageRole.user,
+                state = MessageState.completed,
+                content = "write a short reply",
+                runId = "local-user-run-1",
+                sortTimestamp = 90.0
+            ),
+            ChatMessage(
+                id = "assistant-streaming",
+                role = MessageRole.assistant,
+                state = MessageState.streaming,
+                content = "Short",
+                runId = "run-1",
+                sortTimestamp = 90.001
+            ),
+            ChatMessage(
+                id = "assistant-final",
+                role = MessageRole.assistant,
+                state = MessageState.completed,
+                content = "Short final reply",
+                runId = "run-1",
+                sortTimestamp = 91.0
+            )
+        )
+
+        val resolved = removeResolvedTransientAssistantPlaceholders(messages)
+
+        assertEquals(listOf("user-1", "assistant-final"), resolved.map { it.id })
+    }
+
+    @Test
+    fun removesRunlessResolvedStreamingAssistantWhenSameTurnTextMatches() {
+        val messages = listOf(
+            ChatMessage(
+                id = "user-1",
+                role = MessageRole.user,
+                state = MessageState.completed,
+                content = "reply OK",
+                sortTimestamp = 100.0
+            ),
+            ChatMessage(
+                id = "assistant-streaming",
+                role = MessageRole.assistant,
+                state = MessageState.streaming,
+                content = "OK",
+                runId = "",
+                sortTimestamp = 100.001
+            ),
+            ChatMessage(
+                id = "assistant-final",
+                role = MessageRole.assistant,
+                state = MessageState.completed,
+                content = "OK",
+                runId = "server-run",
+                sortTimestamp = 101.0
+            )
+        )
+
+        val resolved = removeResolvedTransientAssistantPlaceholders(messages)
+
+        assertEquals(listOf("user-1", "assistant-final"), resolved.map { it.id })
+    }
+
+    @Test
+    fun keepsSameAssistantTextInDifferentUserTurns() {
+        val messages = listOf(
+            ChatMessage(
+                id = "user-1",
+                role = MessageRole.user,
+                state = MessageState.completed,
+                content = "first",
+                sortTimestamp = 110.0
+            ),
+            ChatMessage(
+                id = "assistant-streaming",
+                role = MessageRole.assistant,
+                state = MessageState.streaming,
+                content = "OK",
+                runId = "",
+                sortTimestamp = 110.001
+            ),
+            ChatMessage(
+                id = "user-2",
+                role = MessageRole.user,
+                state = MessageState.completed,
+                content = "second",
+                sortTimestamp = 111.0
+            ),
+            ChatMessage(
+                id = "assistant-final",
+                role = MessageRole.assistant,
+                state = MessageState.completed,
+                content = "OK",
+                runId = "server-run",
+                sortTimestamp = 112.0
+            )
+        )
+
+        val resolved = removeResolvedTransientAssistantPlaceholders(messages)
+
+        assertEquals(
+            listOf("user-1", "assistant-streaming", "user-2", "assistant-final"),
+            resolved.map { it.id }
+        )
+    }
+
+    @Test
     fun removesDuplicateCompletedAssistantRepliesWithinSameUserTurn() {
         val messages = listOf(
             ChatMessage(

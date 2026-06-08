@@ -313,6 +313,142 @@ class ChatStoreSessionTest {
     }
 
     @Test
+    fun orderedMessagesCoalescesLocalUserMessageWithServerEchoBeforeRendering() {
+        val wsClient = RelayWebSocketClient()
+        try {
+            val store = ChatStore(
+                apiClient = RelayAPIClient(),
+                wsClient = wsClient,
+                notificationPort = object : NotificationPort {
+                    override fun showReplyNotification(sessionKey: String, title: String, body: String) = Unit
+                    override fun cancelNotification(id: Int) = Unit
+                    override fun cancelAll() = Unit
+                }
+            )
+            val localUser = ChatMessage(
+                id = "user-client-run",
+                role = MessageRole.user,
+                state = MessageState.completed,
+                content = "你好",
+                runId = "local-user-client-run",
+                sortTimestamp = 100.0
+            )
+            val assistantPlaceholder = ChatMessage(
+                id = "assistant-client-run",
+                role = MessageRole.assistant,
+                state = MessageState.streaming,
+                content = protocolTypingMarkerText,
+                runId = "client-run",
+                sortTimestamp = 100.001
+            )
+            val serverEcho = ChatMessage(
+                id = "user-client-run",
+                role = MessageRole.user,
+                state = MessageState.completed,
+                content = "你好",
+                runId = "client-run",
+                createdAt = "2030-01-01T00:00:00.000Z",
+                sortTimestamp = 100.002
+            )
+
+            val ordered = invokeOrderedMessages(store, listOf(localUser, assistantPlaceholder, serverEcho))
+
+            assertEquals(1, ordered.count { it.role == MessageRole.user && it.content == "你好" })
+            assertEquals("user-client-run", ordered.first { it.role == MessageRole.user }.id)
+            assertEquals("local-user-client-run", ordered.first { it.role == MessageRole.user }.runId)
+        } finally {
+            wsClient.destroy()
+        }
+    }
+
+    @Test
+    fun orderedMessagesKeepsSameLocalUserTextAcrossAssistantBoundary() {
+        val wsClient = RelayWebSocketClient()
+        try {
+            val store = ChatStore(
+                apiClient = RelayAPIClient(),
+                wsClient = wsClient,
+                notificationPort = object : NotificationPort {
+                    override fun showReplyNotification(sessionKey: String, title: String, body: String) = Unit
+                    override fun cancelNotification(id: Int) = Unit
+                    override fun cancelAll() = Unit
+                }
+            )
+            val firstLocalUser = ChatMessage(
+                id = "user-client-run-1",
+                role = MessageRole.user,
+                state = MessageState.completed,
+                content = "你好",
+                runId = "local-user-client-run-1",
+                sortTimestamp = 100.0
+            )
+            val secondLocalUser = ChatMessage(
+                id = "user-client-run-2",
+                role = MessageRole.user,
+                state = MessageState.completed,
+                content = "你好",
+                runId = "local-user-client-run-2",
+                sortTimestamp = 101.0
+            )
+            val assistantReply = ChatMessage(
+                id = "assistant-client-run-1",
+                role = MessageRole.assistant,
+                state = MessageState.completed,
+                content = "你好，有什么可以帮你？",
+                runId = "client-run-1",
+                sortTimestamp = 100.5
+            )
+
+            val ordered = invokeOrderedMessages(store, listOf(firstLocalUser, assistantReply, secondLocalUser))
+
+            assertEquals(
+                listOf("user-client-run-1", "user-client-run-2"),
+                ordered.filter { it.role == MessageRole.user }.map { it.id }
+            )
+        } finally {
+            wsClient.destroy()
+        }
+    }
+
+    @Test
+    fun orderedMessagesKeepsRemoteUserEchoWhenStableRunDoesNotMatchLocalUser() {
+        val wsClient = RelayWebSocketClient()
+        try {
+            val store = ChatStore(
+                apiClient = RelayAPIClient(),
+                wsClient = wsClient,
+                notificationPort = object : NotificationPort {
+                    override fun showReplyNotification(sessionKey: String, title: String, body: String) = Unit
+                    override fun cancelNotification(id: Int) = Unit
+                    override fun cancelAll() = Unit
+                }
+            )
+            val localUser = ChatMessage(
+                id = "user-client-run",
+                role = MessageRole.user,
+                state = MessageState.completed,
+                content = "你好",
+                runId = "local-user-client-run",
+                sortTimestamp = 100.0
+            )
+            val serverEcho = ChatMessage(
+                id = "server-user-message",
+                role = MessageRole.user,
+                state = MessageState.completed,
+                content = "你好",
+                runId = "server-run",
+                sortTimestamp = 100.1
+            )
+
+            val ordered = invokeOrderedMessages(store, listOf(localUser, serverEcho))
+
+            assertEquals(listOf("user-client-run", "server-user-message"), ordered.map { it.id })
+        } finally {
+            wsClient.destroy()
+        }
+    }
+
+    @Test
     fun orderedMessagesCoalescesDuplicateFileIdentitiesBeforeRendering() {
         val wsClient = RelayWebSocketClient()
         try {

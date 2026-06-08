@@ -249,13 +249,23 @@ internal fun removeResolvedTransientAssistantPlaceholders(
         .map { it.runId }
         .toSet()
     val sameTurnResolvedPlaceholderIds = sameTurnResolvedTransientAssistantIds(messages)
-    if (terminalAssistantRunIds.isEmpty() && sameTurnResolvedPlaceholderIds.isEmpty()) return messages
+    val sameTurnResolvedStreamingAssistantIds = sameTurnResolvedStreamingAssistantIds(messages)
+    if (
+        terminalAssistantRunIds.isEmpty() &&
+        sameTurnResolvedPlaceholderIds.isEmpty() &&
+        sameTurnResolvedStreamingAssistantIds.isEmpty()
+    ) {
+        return messages
+    }
 
     return messages.filterNot { message ->
         message.role == MessageRole.assistant &&
             message.state == MessageState.streaming &&
-            isTransientAssistantPlaceholder(message) &&
-            (message.runId in terminalAssistantRunIds || message.id in sameTurnResolvedPlaceholderIds)
+            (
+                isTransientAssistantPlaceholder(message) &&
+                    (message.runId in terminalAssistantRunIds || message.id in sameTurnResolvedPlaceholderIds) ||
+                    message.id in sameTurnResolvedStreamingAssistantIds
+                )
     }
 }
 
@@ -289,6 +299,49 @@ private fun sameTurnResolvedTransientAssistantIds(messages: List<ChatMessage>): 
             candidateIndex != index && isTerminalRenderableAssistant(ordered[candidateIndex])
         }
         if (hasTerminalAssistantInTurn) message.id else null
+    }.toSet()
+}
+
+private fun sameTurnResolvedStreamingAssistantIds(messages: List<ChatMessage>): Set<String> {
+    val ordered = messages.sortedWith(
+        compareBy<ChatMessage> { it.sortTimestamp ?: Double.MAX_VALUE }
+            .thenBy { it.createdAt }
+            .thenBy { it.id }
+    )
+    return ordered.mapIndexedNotNull { index, message ->
+        if (message.role != MessageRole.assistant ||
+            message.state != MessageState.streaming ||
+            message.hasFileContent ||
+            message.hasVoiceContent ||
+            message.hasToolContent ||
+            isTransientAssistantPlaceholder(message)
+        ) {
+            return@mapIndexedNotNull null
+        }
+
+        val triggeringUserIndex = ordered
+            .take(index)
+            .indexOfLast { candidate -> candidate.role == MessageRole.user && candidate.shouldDisplayInChat(showInvocationProcess = true) }
+        if (triggeringUserIndex < 0) return@mapIndexedNotNull null
+
+        val nextUserIndex = ordered
+            .drop(index + 1)
+            .indexOfFirst { candidate -> candidate.role == MessageRole.user && candidate.shouldDisplayInChat(showInvocationProcess = true) }
+            .takeIf { it >= 0 }
+            ?.let { relativeIndex -> index + 1 + relativeIndex }
+            ?: ordered.size
+
+        val streamingSignature = assistantPlainTextSignature(message)
+        val resolvedInSameTurn = (triggeringUserIndex + 1 until nextUserIndex).any { candidateIndex ->
+            val candidate = ordered[candidateIndex]
+            if (candidate.id == message.id || !isTerminalRenderableAssistant(candidate)) {
+                return@any false
+            }
+            val sameRun = message.runId.isNotBlank() && message.runId == candidate.runId
+            val sameText = streamingSignature != null && streamingSignature == assistantPlainTextSignature(candidate)
+            sameRun || sameText
+        }
+        if (resolvedInSameTurn) message.id else null
     }.toSet()
 }
 
@@ -339,6 +392,18 @@ internal fun removeDuplicateCompletedAssistantRepliesInSameTurn(
 private fun duplicateAssistantTextSignature(message: ChatMessage): String? {
     if (message.role != MessageRole.assistant ||
         message.state != MessageState.completed ||
+        message.hasFileContent ||
+        message.hasVoiceContent ||
+        message.hasToolContent ||
+        isTransientAssistantPlaceholder(message)
+    ) {
+        return null
+    }
+    return assistantPlainTextSignature(message)
+}
+
+private fun assistantPlainTextSignature(message: ChatMessage): String? {
+    if (message.role != MessageRole.assistant ||
         message.hasFileContent ||
         message.hasVoiceContent ||
         message.hasToolContent ||

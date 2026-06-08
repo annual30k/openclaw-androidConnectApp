@@ -20,6 +20,7 @@ class ChatTimelineReducerTest {
               "eventId": "event-1",
               "eventType": "turn.user.created",
               "turnId": "turn-1",
+              "runId": "run-1",
               "messageId": "message-1",
               "content": [{ "type": "text", "text": "hello" }],
               "createdAt": null,
@@ -31,6 +32,7 @@ class ChatTimelineReducerTest {
         val created = event as TimelineEvent.TurnUserCreated
         assertEquals("event-1", created.eventId)
         assertEquals("turn-1", created.turnId)
+        assertEquals("run-1", created.runId)
         assertEquals("message-1", created.messageId)
         assertEquals("hello", created.content.first().text)
         assertNull(created.createdAt)
@@ -125,6 +127,40 @@ class ChatTimelineReducerTest {
         assertEquals("local-user-client-run-1", state.messages.single().runId)
         assertEquals("file-photo-1", state.messages.single().fileContentBlocks.first().fileId)
         assertEquals("file:///tmp/album-D1.jpeg", state.messages.single().fileContentBlocks.first().downloadUrl)
+    }
+
+    @Test
+    fun turnUserCreatedReplacesLocalUserMessageWhenRunIdMatchesClientRun() {
+        val localUser = ChatMessage(
+            id = "user-client-run-1",
+            role = MessageRole.user,
+            state = MessageState.completed,
+            content = "本地原始提示",
+            runId = "local-user-client-run-1",
+            sortTimestamp = 200.0
+        )
+
+        val state = ChatTimelineReducer.reduce(
+            ChatTimelineState(messages = listOf(localUser)),
+            event(
+                """
+                {
+                  "protocolVersion": 2,
+                  "eventId": "user-server",
+                  "eventType": "turn.user.created",
+                  "turnId": "relay-request-1",
+                  "runId": "client-run-1",
+                  "messageId": "server-user-message",
+                  "createdAt": "1970-01-01T00:03:20.500Z",
+                  "content": [{ "type": "text", "text": "服务端规范提示" }]
+                }
+                """.trimIndent()
+            )
+        )
+
+        assertEquals(listOf("server-user-message"), state.messages.map { it.id })
+        assertEquals("local-user-client-run-1", state.messages.single().runId)
+        assertEquals("本地原始提示", state.messages.single().content)
     }
 
     @Test
@@ -813,6 +849,7 @@ class ChatTimelineReducerTest {
                 TimelineEvent.TurnUserCreated(
                     eventId = "plain-user-local",
                     turnId = "turn-hermes-plain",
+                    runId = null,
                     messageId = "local-user-plain",
                     content = listOf(
                         RelayChatContentBlock(
@@ -878,6 +915,39 @@ class ChatTimelineReducerTest {
     }
 
     @Test
+    fun historySnapshotCoalescesNearbyRunlessPlainUserEcho() {
+        val localUser = ChatMessage(
+            id = "local-user-screenshot",
+            role = MessageRole.user,
+            state = MessageState.completed,
+            content = "再发一个当前屏幕截图",
+            runId = "local-user-client-screenshot-run",
+            createdAt = "2026-06-07T12:26:00.000Z",
+            sortTimestamp = 1_780_835_160.0
+        )
+
+        val state = ChatTimelineReducer.reduce(
+            ChatTimelineState(messages = listOf(localUser)),
+            TimelineEvent.HistorySnapshotPage(
+                eventId = "nearby-runless-user-history",
+                items = listOf(
+                    HistorySnapshotItem(
+                        turnId = "",
+                        runId = "history-user-screenshot",
+                        messageId = "history-user-screenshot",
+                        role = "user",
+                        content = listOf(RelayChatContentBlock(type = "text", text = "再发一个当前屏幕截图")),
+                        createdAt = "2026-06-07T12:26:00.500Z"
+                    )
+                )
+            )
+        )
+
+        assertEquals(listOf("history-user-screenshot"), state.messages.map { it.id })
+        assertEquals("local-user-client-screenshot-run", state.messages.single().runId)
+    }
+
+    @Test
     fun historySnapshotKeepsRepeatedPlainPromptInsideEchoWindowWhenRunsDiffer() {
         val state = ChatTimelineReducer.reduceAll(
             ChatTimelineState(),
@@ -885,6 +955,7 @@ class ChatTimelineReducerTest {
                 TimelineEvent.TurnUserCreated(
                     eventId = "first-user-local",
                     turnId = "turn-first",
+                    runId = null,
                     messageId = "local-user-first",
                     content = listOf(RelayChatContentBlock(type = "text", text = "重新总结一下")),
                     createdAt = "2026-05-31T08:08:37.000Z"
@@ -1500,6 +1571,43 @@ class ChatTimelineReducerTest {
         assertEquals(listOf("hello", "reply"), state.messages.map { it.content })
         assertEquals(setOf("turn-1"), state.historySnapshotTurnIds)
         assertEquals(setOf("user-1", "assistant-1"), state.historySnapshotMessageIds)
+    }
+
+    @Test
+    fun historySnapshotPageCollapsesContainedAssistantTextFragments() {
+        val state = ChatTimelineReducer.reduceAll(
+            ChatTimelineState(),
+            listOf(
+                event(
+                    """
+                    {
+                      "protocolVersion": 2,
+                      "eventId": "history-page",
+                      "eventType": "history.snapshot.page",
+                      "messages": [
+                        {
+                          "turnId": "turn-1",
+                          "messageId": "assistant-fragment",
+                          "role": "assistant",
+                          "createdAt": "1970-01-01T00:03:20.000Z",
+                          "content": [{ "type": "text", "text": "我可以帮你直接动手做事，不只是聊天。" }]
+                        },
+                        {
+                          "turnId": "turn-1",
+                          "messageId": "assistant-full",
+                          "role": "assistant",
+                          "createdAt": "1970-01-01T00:03:20.500Z",
+                          "content": [{ "type": "text", "text": "我可以帮你直接动手做事，不只是聊天。主要能做这些：\n\n1. 操作你的 Mac" }]
+                        }
+                      ]
+                    }
+                    """.trimIndent()
+                )
+            )
+        )
+        assertEquals(listOf("assistant-full"), state.messages.map { it.id })
+        assertEquals("我可以帮你直接动手做事，不只是聊天。主要能做这些：\n\n1. 操作你的 Mac", state.messages.single().content)
+        assertEquals(setOf("assistant-fragment", "assistant-full"), state.historySnapshotMessageIds)
     }
 
     @Test
