@@ -72,6 +72,40 @@ class ChatTimelineReducerTest {
     }
 
     @Test
+    fun turnUserCreatedDoesNotReplaceDifferentLocalRunWithSameText() {
+        val initial = ChatTimelineState(
+            messages = listOf(
+                ChatMessage(
+                    id = "local-user-a",
+                    role = MessageRole.user,
+                    state = MessageState.completed,
+                    content = "Hi",
+                    contentBlocks = listOf(RelayChatContentBlock(type = "text", text = "Hi")),
+                    runId = "local-user-run-a",
+                    sortTimestamp = 100.0
+                ),
+                ChatMessage(
+                    id = "assistant-a",
+                    role = MessageRole.assistant,
+                    state = MessageState.streaming,
+                    content = "[[clawlink:typing]]",
+                    contentBlocks = listOf(RelayChatContentBlock(type = "text", text = "[[clawlink:typing]]")),
+                    runId = "run-a",
+                    sortTimestamp = 100.001
+                )
+            )
+        )
+
+        val state = ChatTimelineReducer.reduce(
+            initial,
+            event("""{"protocolVersion":2,"eventId":"server-user-b","eventType":"turn.user.created","turnId":"run-b","runId":"run-b","messageId":"server-user-b","createdAt":"2026-06-09T17:00:05.000Z","content":[{"type":"text","text":"Hi"}]}""")
+        )
+
+        assertEquals(listOf("local-user-a", "assistant-a", "server-user-b"), state.messages.map { it.id })
+        assertEquals(listOf("local-user-run-a", "run-a", "local-user-run-b"), state.messages.map { it.runId })
+    }
+
+    @Test
     fun turnUserCreatedReplacesLocalImageUserMessageForSameTurn() {
         val localImageBlock = RelayChatContentBlock(
             type = "file",
@@ -191,8 +225,8 @@ class ChatTimelineReducerTest {
                   "protocolVersion": 2,
                   "eventId": "user-voice-transcript",
                   "eventType": "turn.user.created",
-                  "turnId": "server-turn-voice",
-                  "runId": "server-run-voice",
+                  "turnId": "client-run-voice",
+                  "runId": "client-run-voice",
                   "messageId": "server-user-voice",
                   "createdAt": "1970-01-01T00:03:20.500Z",
                   "content": [{ "type": "text", "text": "我。" }]
@@ -878,7 +912,7 @@ class ChatTimelineReducerTest {
                     items = listOf(
                         HistorySnapshotItem(
                             turnId = "",
-                            runId = "history-hermes-plain-user",
+                            runId = "turn-hermes-plain",
                             messageId = "history-hermes-plain-user",
                             role = "user",
                             content = listOf(
@@ -933,7 +967,7 @@ class ChatTimelineReducerTest {
                 items = listOf(
                     HistorySnapshotItem(
                         turnId = "",
-                        runId = "history-user-screenshot",
+                        runId = "client-screenshot-run",
                         messageId = "history-user-screenshot",
                         role = "user",
                         content = listOf(RelayChatContentBlock(type = "text", text = "再发一个当前屏幕截图")),
@@ -1159,7 +1193,7 @@ class ChatTimelineReducerTest {
     }
 
     @Test
-    fun runAbortedRemovesEmptyAssistantCompletionForStoppedRun() {
+    fun runAbortedKeepsWaitingAssistantPlaceholderForRemoteTerminalEvent() {
         val user = ChatMessage(
             id = "user-stop",
             role = MessageRole.user,
@@ -1171,9 +1205,9 @@ class ChatTimelineReducerTest {
         val emptyAssistant = ChatMessage(
             id = "assistant-stop",
             role = MessageRole.assistant,
-            state = MessageState.completed,
-            content = "",
-            contentBlocks = listOf(com.rethinkingstudio.clawlink.core.models.chat.RelayChatContentBlock(type = "text", text = "")),
+            state = MessageState.streaming,
+            content = "正在同步回复...",
+            contentBlocks = listOf(com.rethinkingstudio.clawlink.core.models.chat.RelayChatContentBlock(type = "text", text = "正在同步回复...")),
             runId = "run-stop",
             sortTimestamp = 500.001
         )
@@ -1188,8 +1222,9 @@ class ChatTimelineReducerTest {
             event("""{"protocolVersion":2,"eventId":"abort-stop","eventType":"run.aborted","turnId":"turn-stop","runId":"run-stop"}""")
         )
 
-        assertEquals(listOf("user-stop"), state.messages.map { it.id })
-        assertFalse(state.hasActiveRun)
+        assertEquals(listOf("user-stop", "assistant-stop"), state.messages.map { it.id })
+        assertEquals(MessageState.streaming, state.messages.last().state)
+        assertTrue(state.hasActiveRun)
     }
 
     @Test

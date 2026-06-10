@@ -70,6 +70,35 @@ class ChatHistoryItemSerializerTest {
     }
 
     @Test
+    fun decodesStructuredTimelineFieldsForDisplayOnlyHistoryTimes() {
+        val response = Json.decodeFromString<ChatHistoryResponse>(
+            """
+            {
+              "items": [
+                {
+                  "id": "msg-3",
+                  "role": "assistant",
+                  "text": "done",
+                  "createdAt": "14:37",
+                  "sort_timestamp": 1780987074.952,
+                  "sort_timestamp_ms": 1780987074952,
+                  "seq": 6,
+                  "conversation_seq": 12
+                }
+              ]
+            }
+            """.trimIndent()
+        )
+
+        val item = response.items.single()
+        assertEquals("14:37", item.createdAt)
+        assertEquals(1780987074.952, item.sortTimestamp ?: 0.0, 0.0001)
+        assertEquals(1780987074952.0, item.sortTimestampMs ?: 0.0, 0.0001)
+        assertEquals(6L, item.seq)
+        assertEquals(12L, item.conversationSeq)
+    }
+
+    @Test
     fun decodesSnakeCaseHistoryPageMetadata() {
         val response = Json.decodeFromString<ChatHistoryResponse>(
             """

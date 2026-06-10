@@ -21,7 +21,9 @@ internal sealed interface TimelineEvent {
         val runId: String?,
         val messageId: String,
         val content: List<RelayChatContentBlock>,
-        val createdAt: String?
+        val createdAt: String?,
+        val seq: Long? = null,
+        val turnSeq: Long? = null
     ) : TimelineEvent
 
     data class MessagePartDelta(
@@ -33,7 +35,8 @@ internal sealed interface TimelineEvent {
         val seq: Long,
         val content: List<RelayChatContentBlock>,
         val runId: String?,
-        val createdAt: String?
+        val createdAt: String?,
+        val turnSeq: Long? = null
     ) : TimelineEvent
 
     data class MessageCompleted(
@@ -43,7 +46,9 @@ internal sealed interface TimelineEvent {
         val role: String?,
         val runId: String?,
         val content: List<RelayChatContentBlock>,
-        val createdAt: String?
+        val createdAt: String?,
+        val seq: Long? = null,
+        val turnSeq: Long? = null
     ) : TimelineEvent
 
     data class RunTerminal(
@@ -73,7 +78,9 @@ internal sealed interface TimelineEvent {
         val state: String,
         val text: String?,
         val content: List<RelayChatContentBlock>,
-        val createdAt: String?
+        val createdAt: String?,
+        val seq: Long? = null,
+        val turnSeq: Long? = null
     ) : TimelineEvent
 
     data class HistorySnapshotPage(
@@ -133,7 +140,9 @@ internal data class HistorySnapshotItem(
     val text: String = "",
     val content: List<RelayChatContentBlock> = emptyList(),
     val createdAt: String? = null,
-    val runId: String? = null
+    val runId: String? = null,
+    val seq: Long? = null,
+    val turnSeq: Long? = null
 ) {
     val displayText: String
         get() = if (content.isNotEmpty()) {
@@ -194,6 +203,7 @@ private data class RawTimelineEvent(
     val role: String? = null,
     val partId: String? = null,
     val seq: Long? = null,
+    val turnSeq: Long? = null,
     val messageState: String? = null,
     val runState: String? = null,
     val status: String? = null,
@@ -219,7 +229,9 @@ private data class RawTimelineEvent(
                 runId = runId,
                 messageId = messageId?.takeIf { it.isNotBlank() } ?: return null,
                 content = canonicalContent(),
-                createdAt = createdAt
+                createdAt = createdAt,
+                seq = seq,
+                turnSeq = turnSeq
             )
             "message.part.delta" -> TimelineEvent.MessagePartDelta(
                 eventId = eventId,
@@ -230,7 +242,8 @@ private data class RawTimelineEvent(
                 seq = seq ?: return null,
                 content = canonicalContent(),
                 runId = runId,
-                createdAt = createdAt
+                createdAt = createdAt,
+                turnSeq = turnSeq
             )
             "message.completed" -> TimelineEvent.MessageCompleted(
                 eventId = eventId,
@@ -239,7 +252,9 @@ private data class RawTimelineEvent(
                 role = role,
                 runId = runId,
                 content = canonicalContent(),
-                createdAt = createdAt
+                createdAt = createdAt,
+                seq = seq,
+                turnSeq = turnSeq
             )
             "run.completed", "run.failed", "run.aborted" -> TimelineEvent.RunTerminal(
                 eventId = eventId,
@@ -274,7 +289,9 @@ private data class RawTimelineEvent(
                     ?: return null,
                 text = text?.takeIf { it.isNotBlank() } ?: canonicalToolText(),
                 content = canonicalToolContent(),
-                createdAt = createdAt
+                createdAt = createdAt,
+                seq = seq,
+                turnSeq = turnSeq
             )
             "history.snapshot.page" -> TimelineEvent.HistorySnapshotPage(
                 eventId = eventId,

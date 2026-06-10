@@ -36,6 +36,7 @@ internal fun ChatConversationList(
     chatStore: ChatStore,
     gatewayId: String?,
     hasSelectedGateway: Boolean,
+    canAutoLoadOlderHistory: Boolean,
     onOpenUsageGuide: (() -> Unit)?,
     onOpenSettings: (() -> Unit)?,
     onLoadOlderHistory: () -> Unit,
@@ -62,11 +63,13 @@ internal fun ChatConversationList(
         chatState.isSwitchingSession,
         chatState.currentSessionKey,
         hasSelectedGateway,
+        canAutoLoadOlderHistory,
         gatewayId,
         listState
     ) {
         derivedStateOf {
             hasSelectedGateway &&
+                canAutoLoadOlderHistory &&
                 !gatewayId.isNullOrBlank() &&
                 chatState.currentSessionKey.isNotBlank() &&
                 chatState.historyWindow.hasOlder &&

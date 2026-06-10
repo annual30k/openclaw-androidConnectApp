@@ -182,6 +182,7 @@ fun ChatScreen(
     var lastObservedMessageSignature by remember { mutableStateOf("") }
     var lastObservedFirstVisibleMessageId by remember { mutableStateOf<String?>(null) }
     var lastObservedUserMessageIds by remember { mutableStateOf<Set<String>>(emptySet()) }
+    var hasCompletedInitialAutoScroll by remember { mutableStateOf(false) }
     var hasPendingMessagesBelow by remember { mutableStateOf(false) }
     var activeGatewaySwitchId by remember { mutableStateOf<String?>(null) }
     var lastAutoHistoryRequestKey by remember { mutableStateOf<String?>(null) }
@@ -500,6 +501,7 @@ fun ChatScreen(
             lastObservedMessageSignature = ""
             lastObservedFirstVisibleMessageId = null
             lastObservedUserMessageIds = emptySet()
+            hasCompletedInitialAutoScroll = false
             hasPendingMessagesBelow = false
             return@LaunchedEffect
         }
@@ -538,6 +540,9 @@ fun ChatScreen(
 
         if (isInitialLoad || isOwnNewMessage || isNearListBottom) {
             scrollChatToBottom(animated = !isInitialLoad)
+            if (isInitialLoad) {
+                hasCompletedInitialAutoScroll = true
+            }
         } else {
             hasPendingMessagesBelow = true
         }
@@ -615,6 +620,7 @@ fun ChatScreen(
                         chatStore = chatStore,
                         gatewayId = gatewayId,
                         hasSelectedGateway = hasSelectedGateway,
+                        canAutoLoadOlderHistory = hasCompletedInitialAutoScroll,
                         onOpenUsageGuide = onOpenUsageGuide,
                         onOpenSettings = onOpenSettings,
                         onLoadOlderHistory = {

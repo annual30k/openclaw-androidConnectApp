@@ -29,7 +29,7 @@ enum class MessageRole {
 // ── MessageState ─────────────────────────────────────────────────────────
 @Serializable
 enum class MessageState {
-    completed, streaming, failed
+    pending, completed, streaming, failed, deleted, recalled
 }
 
 // ── RelayJSONValue ───────────────────────────────────────────────────────
@@ -171,6 +171,9 @@ data class RelayChatContentBlock(
     val text: String? = null,
     val name: String? = null,
     @OptIn(ExperimentalSerializationApi::class)
+    @JsonNames("attachment_id")
+    val attachmentId: String? = null,
+    @OptIn(ExperimentalSerializationApi::class)
     @JsonNames("file_id")
     val fileId: String? = null,
     @OptIn(ExperimentalSerializationApi::class)
@@ -180,16 +183,16 @@ data class RelayChatContentBlock(
     @JsonNames("mime_type")
     val mimeType: String? = null,
     @OptIn(ExperimentalSerializationApi::class)
-    @JsonNames("size_bytes")
+    @JsonNames("size_bytes", "byte_size", "byteSize")
     val sizeBytes: Int? = null,
     @OptIn(ExperimentalSerializationApi::class)
     @JsonNames("duration_ms")
     val durationMs: Int? = null,
     @OptIn(ExperimentalSerializationApi::class)
-    @JsonNames("image_width")
+    @JsonNames("image_width", "width")
     val imageWidth: Int? = null,
     @OptIn(ExperimentalSerializationApi::class)
-    @JsonNames("image_height")
+    @JsonNames("image_height", "height")
     val imageHeight: Int? = null,
     @OptIn(ExperimentalSerializationApi::class)
     @JsonNames("download_url", "url")
@@ -210,6 +213,9 @@ data class RelayChatContentBlock(
     @OptIn(ExperimentalSerializationApi::class)
     @JsonNames("source_run_id")
     val sourceRunId: String? = null,
+    @OptIn(ExperimentalSerializationApi::class)
+    @JsonNames("transfer_state", "transferState")
+    val transferState: String? = null,
     @OptIn(ExperimentalSerializationApi::class)
     @JsonNames("gateway_id")
     val gatewayId: String? = null,
@@ -371,6 +377,10 @@ data class RelayChatContentBlock(
                 .ifBlank { status?.trim()?.takeIf { it.isNotEmpty() } }
         }
     val voiceDownloadURLString: String? get() = fileDownloadURLString
+    val stableAttachmentId: String?
+        get() = attachmentId?.trim()?.takeIf { it.isNotEmpty() }
+            ?: fileId?.trim()?.takeIf { it.isNotEmpty() }
+
     val voicePlaybackIdentifier: String
         get() {
             val stable = listOf(fileId, voiceDownloadURLString, fileName, text)
@@ -406,7 +416,12 @@ data class ChatMessage(
     val contentBlocks: List<RelayChatContentBlock> = emptyList(),
     val createdAt: String = "",
     val runId: String = "",
-    val sortTimestamp: Double? = null
+    val sortTimestamp: Double? = null,
+    val seq: Long? = null,
+    val turnSeq: Long? = null,
+    val timelineStableKey: String = "",
+    val timelineMessageId: String = "",
+    val timelinePartId: String = ""
 ) {
     val plainTextContent: String
         get() {

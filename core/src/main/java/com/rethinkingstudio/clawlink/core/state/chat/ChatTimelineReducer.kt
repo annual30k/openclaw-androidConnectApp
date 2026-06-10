@@ -64,7 +64,9 @@ internal object ChatTimelineReducer {
             contentBlocks = event.content,
             createdAt = event.createdAt.orEmpty().ifBlank { existing?.createdAt.orEmpty() },
             runId = existing?.runId?.takeIf { it.startsWith("local-user-") } ?: "local-user-${event.turnId}",
-            sortTimestamp = existing?.sortTimestamp ?: timelineSortTimestamp(event.createdAt)
+            sortTimestamp = existing?.sortTimestamp ?: timelineSortTimestamp(event.createdAt),
+            seq = event.seq,
+            turnSeq = event.turnSeq
         )
         if (localIndex == null || localIndex < 0) return copy(messages = messages + message)
         val mergedMessage = existing?.let { mergeLocalUserMessage(local = it, incoming = message) } ?: message
@@ -115,7 +117,9 @@ internal object ChatTimelineReducer {
                 contentBlocks = event.content,
                 createdAt = event.createdAt.orEmpty().ifBlank { matchedMessage?.createdAt.orEmpty() },
                 runId = event.runId.orEmpty(),
-                sortTimestamp = timelineSortTimestamp(event.createdAt, fallbackSortTimestamp)
+                sortTimestamp = timelineSortTimestamp(event.createdAt, fallbackSortTimestamp),
+                seq = maxTimelineSeq(matchedMessage?.seq, event.seq),
+                turnSeq = matchedMessage?.turnSeq ?: event.turnSeq
             ),
             replaceMessageId = localPlaceholder?.id
         )
@@ -182,7 +186,9 @@ internal object ChatTimelineReducer {
             contentBlocks = event.content.ifEmpty { matchedMessage?.contentBlocks.orEmpty() },
             createdAt = event.createdAt.orEmpty().ifBlank { matchedMessage?.createdAt.orEmpty() },
             runId = event.runId.orEmpty().ifBlank { matchedMessage?.runId.orEmpty() },
-            sortTimestamp = matchedMessage?.sortTimestamp ?: timelineSortTimestamp(event.createdAt, fallbackSortTimestamp)
+            sortTimestamp = matchedMessage?.sortTimestamp ?: timelineSortTimestamp(event.createdAt, fallbackSortTimestamp),
+            seq = maxTimelineSeq(matchedMessage?.seq, event.seq),
+            turnSeq = matchedMessage?.turnSeq ?: event.turnSeq
         )
         val messageForUpsert = stableCompletedMessageSlot(
             matchedMessage = matchedMessage,
@@ -259,7 +265,7 @@ internal object ChatTimelineReducer {
         val turnId = event.turnId ?: event.runId?.let { activeTurnByRunId[it] }
         val runId = event.runId ?: turnId?.let { activeRunsByTurnId[it] }
         val hasExplicitScope = !turnId.isNullOrBlank() || !runId.isNullOrBlank()
-        if (event.status == "completed" && messages.any { message ->
+        if ((event.status == "completed" || event.status == "aborted") && messages.any { message ->
                 message.state == MessageState.streaming &&
                     matchesTerminalEvent(message, turnId, runId, hasExplicitScope) &&
                     isWaitingOnlyStreamingContent(message.content)
@@ -288,17 +294,8 @@ internal object ChatTimelineReducer {
                 message
             }
         }
-        val nextMessages = if (event.status == "aborted") {
-            terminalMessages.filterNot { message ->
-                message.role == MessageRole.assistant &&
-                    matchesTerminalEvent(message, turnId, runId, hasExplicitScope) &&
-                    isTransientAssistantPlaceholder(message)
-            }
-        } else {
-            terminalMessages
-        }
         return copy(
-            messages = nextMessages,
+            messages = terminalMessages,
             activeRunId = if (shouldClearActiveRunId) null else activeRunId,
             activeRunsByTurnId = nextRunsByTurn,
             activeTurnByRunId = nextTurnByRun
@@ -347,7 +344,9 @@ internal object ChatTimelineReducer {
             runId = event.runId.orEmpty().ifBlank { existingMessage?.runId.orEmpty() },
             sortTimestamp = existingMessage?.sortTimestamp
                 ?: anchoredSortTimestamp
-                ?: timelineSortTimestamp(event.createdAt, fallbackSortTimestamp)
+                ?: timelineSortTimestamp(event.createdAt, fallbackSortTimestamp),
+            seq = event.seq ?: existingMessage?.seq,
+            turnSeq = event.turnSeq ?: existingMessage?.turnSeq
         )
         return copy(
             messages = upsertMessage(message, insertBeforeMessageId = anchorAssistant?.id),
@@ -445,7 +444,9 @@ internal object ChatTimelineReducer {
                     contentBlocks = item.content,
                     createdAt = item.createdAt.orEmpty(),
                     runId = item.runId?.takeIf { it.isNotBlank() } ?: item.messageId,
-                    sortTimestamp = sortTimestamp
+                    sortTimestamp = sortTimestamp,
+                    seq = item.seq,
+                    turnSeq = item.turnSeq
                 )
                 val localUser = if (message.role == MessageRole.user) {
                     nextState.matchingLocalUser(
@@ -535,7 +536,12 @@ internal object ChatTimelineReducer {
             current[index] = message.copy(
                 createdAt = message.createdAt.ifBlank { existing.createdAt },
                 runId = message.runId.ifBlank { existing.runId },
-                sortTimestamp = message.sortTimestamp ?: existing.sortTimestamp
+                sortTimestamp = message.sortTimestamp ?: existing.sortTimestamp,
+                seq = message.seq ?: existing.seq,
+                turnSeq = message.turnSeq ?: existing.turnSeq,
+                timelineStableKey = message.timelineStableKey.ifBlank { existing.timelineStableKey },
+                timelineMessageId = message.timelineMessageId.ifBlank { existing.timelineMessageId },
+                timelinePartId = message.timelinePartId.ifBlank { existing.timelinePartId }
             )
         }
     }
@@ -596,6 +602,10 @@ internal object ChatTimelineReducer {
             }
             if (explicitIndex >= 0) return explicitIndex
         }
+        val incomingHasTransferContent = contentBlocks.any {
+            it.isFileBlock || it.isVoiceMessageBlock || it.isToolCallBlock || it.isToolResultBlock
+        }
+        if (localRunIds.isNotEmpty() && !incomingHasTransferContent) return null
 
         val incomingTimestamp = timelineSortTimestamp(createdAt)
         val incomingUserText = userPromptText(content = content, contentBlocks = contentBlocks)
@@ -782,8 +792,21 @@ private fun mergeLocalUserMessage(local: ChatMessage, incoming: ChatMessage): Ch
         contentBlocks = mergedBlocks,
         createdAt = incoming.createdAt.ifBlank { local.createdAt },
         runId = local.runId.takeIf { it.startsWith("local-user-") } ?: incoming.runId,
-        sortTimestamp = local.sortTimestamp ?: incoming.sortTimestamp
+        sortTimestamp = local.sortTimestamp ?: incoming.sortTimestamp,
+        seq = incoming.seq ?: local.seq,
+        turnSeq = incoming.turnSeq ?: local.turnSeq,
+        timelineStableKey = incoming.timelineStableKey.ifBlank { local.timelineStableKey },
+        timelineMessageId = incoming.timelineMessageId.ifBlank { local.timelineMessageId },
+        timelinePartId = incoming.timelinePartId.ifBlank { local.timelinePartId }
     )
+}
+
+private fun maxTimelineSeq(left: Long?, right: Long?): Long? {
+    return when {
+        left != null && right != null -> maxOf(left, right)
+        left != null -> left
+        else -> right
+    }
 }
 
 private fun mergedLocalUserContentBlocks(local: ChatMessage, incoming: ChatMessage): List<RelayChatContentBlock> {

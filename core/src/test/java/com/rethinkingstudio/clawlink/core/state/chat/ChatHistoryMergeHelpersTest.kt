@@ -688,6 +688,205 @@ class ChatHistoryMergeHelpersTest {
     }
 
     @Test
+    fun loadHistoryCanonicalTimelineSnapshotKeepsInterleavedOrderAndAttachmentSlot() = runBlocking {
+        val wsClient = RelayWebSocketClient()
+        try {
+            val store = ChatStore(
+                apiClient = RelayAPIClient(),
+                wsClient = wsClient,
+                notificationPort = object : NotificationPort {
+                    override fun showReplyNotification(sessionKey: String, title: String, body: String) = Unit
+                    override fun cancelNotification(id: Int) = Unit
+                    override fun cancelAll() = Unit
+                },
+                chatHistoryPageFetcher = { _, _, _, _, _ ->
+                    ChatHistoryResponse(
+                        items = emptyList(),
+                        hasMore = false,
+                        timelineSnapshot = Json.parseToJsonElement(
+                            """
+                            {
+                              "timelineProtocolVersion": 3,
+                              "sessionKey": "main",
+                              "messages": [
+                                {
+                                  "messageId": "user-1",
+                                  "seq": 1,
+                                  "turnSeq": 1,
+                                  "role": "user",
+                                  "messageState": "completed",
+                                  "runId": "turn-1",
+                                  "turnId": "turn-1",
+                                  "createdAt": "2026-06-08T12:00:00.000Z",
+                                  "content": [{ "type": "text", "text": "第一问" }]
+                                },
+                                {
+                                  "messageId": "assistant-1",
+                                  "seq": 2,
+                                  "turnSeq": 2,
+                                  "role": "assistant",
+                                  "messageState": "completed",
+                                  "runId": "turn-1",
+                                  "turnId": "turn-1",
+                                  "createdAt": "2026-06-08T12:00:00.000Z",
+                                  "content": [{ "type": "text", "text": "第一答" }]
+                                },
+                                {
+                                  "messageId": "user-2",
+                                  "seq": 3,
+                                  "turnSeq": 3,
+                                  "role": "user",
+                                  "messageState": "completed",
+                                  "runId": "turn-2",
+                                  "turnId": "turn-2",
+                                  "createdAt": "2026-06-08T12:00:00.000Z",
+                                  "content": [
+                                    {
+                                      "type": "image",
+                                      "text": "photo.jpg",
+                                      "fileId": "file-photo-1",
+                                      "fileName": "photo.jpg",
+                                      "mimeType": "image/jpeg",
+                                      "downloadUrl": "/api/mobile/files/file-photo-1"
+                                    }
+                                  ],
+                                  "attachmentIds": ["file-photo-1"]
+                                },
+                                {
+                                  "messageId": "assistant-2",
+                                  "seq": 4,
+                                  "turnSeq": 4,
+                                  "role": "assistant",
+                                  "messageState": "completed",
+                                  "runId": "turn-2",
+                                  "turnId": "turn-2",
+                                  "createdAt": "2026-06-08T12:00:00.000Z",
+                                  "content": [{ "type": "text", "text": "第二答" }]
+                                }
+                              ],
+                              "deletedMessageIds": []
+                            }
+                            """.trimIndent()
+                        )
+                    )
+                }
+            )
+
+            store.loadHistory("gw_1", "main", limit = 100)
+
+            val messages = store.state.value.messages
+            assertEquals(listOf("user-1", "assistant-1", "user-2", "assistant-2"), messages.map { it.id })
+            assertEquals(listOf(MessageRole.user, MessageRole.assistant, MessageRole.user, MessageRole.assistant), messages.map { it.role })
+            assertEquals(messages.map { it.id }.distinct(), messages.map { it.id })
+            assertEquals("file-photo-1", messages[2].contentBlocks.single().fileId)
+            assertTrue(messages[3].contentBlocks.none { it.fileId == "file-photo-1" })
+        } finally {
+            wsClient.destroy()
+        }
+    }
+
+    @Test
+    fun loadHistoryCanonicalTimelineSnapshotDropsStaleCompletedCacheWhenLocalUserExists() = runBlocking {
+        val wsClient = RelayWebSocketClient()
+        try {
+            val staleSortTimestamp = Instant.parse("2026-06-09T01:35:15.000Z").toEpochMilli() / 1000.0
+            val store = ChatStore(
+                apiClient = RelayAPIClient(),
+                wsClient = wsClient,
+                notificationPort = object : NotificationPort {
+                    override fun showReplyNotification(sessionKey: String, title: String, body: String) = Unit
+                    override fun cancelNotification(id: Int) = Unit
+                    override fun cancelAll() = Unit
+                },
+                chatHistoryPageFetcher = { _, _, _, _, _ ->
+                    ChatHistoryResponse(
+                        items = emptyList(),
+                        hasMore = false,
+                        timelineSnapshot = Json.parseToJsonElement(
+                            """
+                            {
+                              "timelineProtocolVersion": 3,
+                              "sessionKey": "main",
+                              "rangeStartCursor": "seq:1",
+                              "rangeEndCursor": "seq:3",
+                              "messages": [
+                                {
+                                  "messageId": "user-canonical",
+                                  "seq": 1,
+                                  "turnSeq": 1,
+                                  "role": "user",
+                                  "messageState": "completed",
+                                  "runId": "client-run",
+                                  "turnId": "client-run",
+                                  "partId": "user",
+                                  "clientMessageId": "client-run",
+                                  "createdAt": "2026-06-08T00:36:34.684Z",
+                                  "content": [{ "type": "text", "text": "你好阿" }]
+                                },
+                                {
+                                  "messageId": "assistant-canonical",
+                                  "seq": 2,
+                                  "turnSeq": 2,
+                                  "role": "assistant",
+                                  "messageState": "completed",
+                                  "runId": "client-run",
+                                  "turnId": "client-run",
+                                  "partId": "assistant",
+                                  "createdAt": "2026-06-08T00:36:55.548Z",
+                                  "content": [{ "type": "text", "text": "你好，我在。" }]
+                                }
+                              ],
+                              "deletedMessageIds": []
+                            }
+                            """.trimIndent()
+                        )
+                    )
+                }
+            )
+            val localUser = ChatMessage(
+                id = "local-user",
+                role = MessageRole.user,
+                state = MessageState.completed,
+                content = "你好阿",
+                runId = "local-user-client-run",
+                sortTimestamp = Instant.parse("2026-06-09T01:35:10.000Z").toEpochMilli() / 1000.0
+            )
+            val staleAssistant = ChatMessage(
+                id = "stale-assistant",
+                role = MessageRole.assistant,
+                state = MessageState.completed,
+                content = "你好，我在。",
+                createdAt = "01:35",
+                runId = "client-run",
+                sortTimestamp = staleSortTimestamp
+            )
+            store.setStateForTest(
+                ChatState(
+                    messages = listOf(localUser, staleAssistant),
+                    currentGatewayId = "gw_1",
+                    currentSessionKey = "main"
+                )
+            )
+            store.setTimelineStateForTest(ChatTimelineState(messages = listOf(localUser, staleAssistant)))
+
+            store.loadHistory("gw_1", "main", limit = 100)
+
+            val messages = store.state.value.messages
+            assertEquals(listOf("user-canonical", "assistant-canonical"), messages.map { it.id })
+            assertEquals(
+                listOf(
+                    Instant.parse("2026-06-08T00:36:34.684Z").toEpochMilli() / 1000.0,
+                    Instant.parse("2026-06-08T00:36:55.548Z").toEpochMilli() / 1000.0
+                ),
+                messages.map { it.sortTimestamp }
+            )
+            assertFalse(messages.any { it.sortTimestamp == staleSortTimestamp })
+        } finally {
+            wsClient.destroy()
+        }
+    }
+
+    @Test
     fun localTextAssistantPlaceholderUsesProtocolTypingMarker() {
         val assistant = buildLocalTextAssistantPlaceholderMessage(
             id = "assistant-run-1",
@@ -979,6 +1178,104 @@ class ChatHistoryMergeHelpersTest {
 
         assertEquals(listOf("old-image", "today-user", "today-assistant"), ordered.map { it.runId })
         assertTrue((messages[2].sortTimestamp ?: 0.0) < (messages[0].sortTimestamp ?: 0.0))
+    }
+
+    @Test
+    fun usesStructuredSortTimestampWhenHistoryCreatedAtIsDisplayOnly() {
+        val messages = buildHistoryMessagesFromItems(
+            listOf(
+                ChatHistoryItem(
+                    id = "assistant-current",
+                    role = "assistant",
+                    content = JsonPrimitive("我能做很多事情。"),
+                    createdAt = "刚刚",
+                    sortTimestamp = 1_780_996_300.0,
+                    seq = 10
+                ),
+                ChatHistoryItem(
+                    id = "file-file_afcb5884fb474b4bb7c64e44ad545af8",
+                    role = "assistant",
+                    content = JsonPrimitive("截图好了，发给你：\n/Users/qiuqiquan/.clawconnect/hermes/outbox/desktop_screenshot_20260609_143747.png"),
+                    contentBlocks = listOf(
+                        RelayChatContentBlock(
+                            type = "image",
+                            fileId = "file_afcb5884fb474b4bb7c64e44ad545af8",
+                            fileName = "desktop_screenshot_20260609_143747.png",
+                            mimeType = "image/png"
+                        )
+                    ),
+                    createdAt = "14:37",
+                    sortTimestamp = 1_780_987_074.952,
+                    seq = 6
+                ),
+                ChatHistoryItem(
+                    id = "user-local",
+                    role = "user",
+                    content = JsonPrimitive("你可以做什么"),
+                    createdAt = "刚刚",
+                    sortTimestamp = 1_780_996_299.522,
+                    seq = 9
+                )
+            )
+        )
+
+        val ordered = orderMessagesWithSourceRunAnchors(messages)
+
+        assertEquals(
+            listOf(
+                "file-file_afcb5884fb474b4bb7c64e44ad545af8",
+                "user-local",
+                "assistant-current"
+            ),
+            ordered.map { it.runId }
+        )
+        assertEquals("14:37", messages[1].createdAt)
+        assertEquals(1_780_987_074.952, messages[1].sortTimestamp ?: 0.0, 0.0001)
+    }
+
+    @Test
+    fun doesNotLetWrappedOrdinalTimelineSeqMoveNewerRealtimeTurnAboveHistory() {
+        val ordered = orderMessagesWithSourceRunAnchors(
+            listOf(
+                ChatMessage(
+                    id = "newest-ping",
+                    role = MessageRole.user,
+                    content = "Ping",
+                    runId = "local-user-ping",
+                    sortTimestamp = 1_781_013_969.0,
+                    seq = 3
+                ),
+                ChatMessage(
+                    id = "newer-user",
+                    role = MessageRole.user,
+                    content = "iOS森的什么科001",
+                    runId = "local-user-new",
+                    sortTimestamp = 1_780_999_296.0,
+                    seq = 1
+                ),
+                ChatMessage(
+                    id = "earlier-user",
+                    role = MessageRole.user,
+                    content = "你好啊",
+                    runId = "history-61",
+                    sortTimestamp = 1_780_990_339.0,
+                    seq = 61
+                ),
+                ChatMessage(
+                    id = "previous-assistant",
+                    role = MessageRole.assistant,
+                    content = "找到图片了",
+                    runId = "history-60",
+                    sortTimestamp = 1_780_990_000.0,
+                    seq = 60
+                )
+            )
+        )
+
+        assertEquals(
+            listOf("previous-assistant", "earlier-user", "newer-user", "newest-ping"),
+            ordered.map { it.id }
+        )
     }
 
     @Test
@@ -1646,6 +1943,32 @@ class ChatHistoryMergeHelpersTest {
         assertEquals(listOf("history-voice-prompt", "history-answer"), messages.map { it.runId })
         assertEquals("测试语音功能不需要回复。", messages.first().content)
         assertFalse(messages.any { it.content.contains("previous attempt", ignoreCase = true) })
+    }
+
+    @Test
+    fun orderMessagesKeepsLocalUserBeforeMatchingPendingAssistantWhenUserTimestampMovesLater() {
+        val messages = orderMessagesWithSourceRunAnchors(
+            listOf(
+                ChatMessage(
+                    id = "assistant-pending",
+                    role = MessageRole.assistant,
+                    state = MessageState.streaming,
+                    content = "正在连接 Relay...",
+                    runId = "client-run-1",
+                    sortTimestamp = 100.0
+                ),
+                ChatMessage(
+                    id = "local-user",
+                    role = MessageRole.user,
+                    state = MessageState.completed,
+                    content = "你好啊",
+                    runId = "local-user-client-run-1",
+                    sortTimestamp = 110.0
+                )
+            )
+        )
+
+        assertEquals(listOf("local-user", "assistant-pending"), messages.map { it.id })
     }
 
     @Test

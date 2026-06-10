@@ -130,10 +130,23 @@ internal fun ToolMessageCard(
             MessageState.completed -> "Completed"
             MessageState.failed -> "Failed"
             MessageState.streaming -> "Running"
+            MessageState.pending -> "Pending"
+            MessageState.deleted -> "Deleted"
+            MessageState.recalled -> "Recalled"
         }
     }
-    val statusColor = when (message.state) { MessageState.completed -> Color(0xFF5DCF7A); MessageState.failed -> Color(0xFFF24E3E); MessageState.streaming -> Color(0xFFF4A100) }
-    val statusIcon = when (message.state) { MessageState.completed -> Icons.Default.CheckCircle; MessageState.failed -> Icons.Default.Close; MessageState.streaming -> Icons.Default.Refresh }
+    val statusColor = when (message.state) {
+        MessageState.completed -> Color(0xFF5DCF7A)
+        MessageState.failed -> Color(0xFFF24E3E)
+        MessageState.streaming -> Color(0xFFF4A100)
+        else -> Color(0xFF8B8F98)
+    }
+    val statusIcon = when (message.state) {
+        MessageState.completed -> Icons.Default.CheckCircle
+        MessageState.failed -> Icons.Default.Close
+        MessageState.streaming -> Icons.Default.Refresh
+        else -> Icons.Default.Refresh
+    }
 
     Surface(
         modifier = modifier.widthIn(max = 326.dp),

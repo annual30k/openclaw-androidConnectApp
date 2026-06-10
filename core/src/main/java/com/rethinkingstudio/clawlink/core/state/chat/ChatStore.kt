@@ -133,6 +133,7 @@ class ChatStore(
     private val chatFinalSyncJobs = mutableMapOf<String, Job>()
     private var ignoreRunlessStoppedEventsUntilMs: Long = 0
     private var timelineState = ChatTimelineState()
+    private val v3Sessions = mutableSetOf<String>()
 
     init {
         _state.value = _state.value.copy(
@@ -636,6 +637,10 @@ class ChatStore(
     }
 
     private fun orderedMessages(messages: List<ChatMessage>): List<ChatMessage> {
+        val sessionKey = _state.value.currentSessionKey
+        if (v3Sessions.any { sameSessionKey(it, sessionKey) } || messages.any { it.seq != null }) {
+            return sortTimelineMessagesV3(messages, sessionKey)
+        }
         return removeDuplicateCompletedAssistantRepliesInSameTurn(
             orderMessagesWithSourceRunAnchors(removeResolvedTransientAssistantPlaceholders(coalesceMessageSlots(messages)))
         )
@@ -974,6 +979,10 @@ class ChatStore(
     }
 
     private fun trimToNewestHistoryWindow(messages: List<ChatMessage>): List<ChatMessage> {
+        val sessionKey = _state.value.currentSessionKey
+        if (v3Sessions.any { sameSessionKey(it, sessionKey) }) {
+            return sortTimelineMessagesV3(messages, sessionKey).takeLast(chatHistoryWindowMaxMessages)
+        }
         return newestBoundedHistoryWindowMessages(
             messages = messages,
             maxMessages = chatHistoryWindowMaxMessages
@@ -981,6 +990,23 @@ class ChatStore(
     }
 
     private fun trimToOlderHistoryWindow(messages: List<ChatMessage>): List<ChatMessage> {
+        val sessionKey = _state.value.currentSessionKey
+        if (v3Sessions.any { sameSessionKey(it, sessionKey) }) {
+            val ordered = sortTimelineMessagesV3(messages, sessionKey)
+            if (ordered.size <= chatHistoryWindowMaxMessages) return ordered
+            val oldestWindow = ordered.take(chatHistoryWindowMaxMessages)
+            val oldestWindowIds = oldestWindow.mapTo(mutableSetOf()) { it.id }
+            val activeMessagesOutsideOldestWindow = ordered.filter { message ->
+                message.id !in oldestWindowIds && shouldPreserveDuringOlderWindowTrim(message)
+            }
+            if (activeMessagesOutsideOldestWindow.isEmpty()) {
+                return oldestWindow
+            }
+            val retainedOldestCount = (chatHistoryWindowMaxMessages - activeMessagesOutsideOldestWindow.size).coerceAtLeast(0)
+            val retainedOldestWindow = oldestWindow.take(retainedOldestCount)
+            return sortTimelineMessagesV3(retainedOldestWindow + activeMessagesOutsideOldestWindow, sessionKey)
+                .take(chatHistoryWindowMaxMessages)
+        }
         return olderBoundedHistoryWindowMessages(
             messages = messages,
             maxMessages = chatHistoryWindowMaxMessages,
@@ -1023,6 +1049,40 @@ class ChatStore(
         replaceExistingTimelineState: Boolean = false
     ): List<ChatMessage>? {
         val snapshot = response.timelineSnapshot ?: return null
+        val snapshotObject = snapshot as? JsonObject
+        val isCanonicalTimelineV3 = snapshotObject?.let { obj ->
+            obj["timelineProtocolVersion"]?.jsonPrimitive?.content == "3" ||
+                obj.containsKey("snapshotRevision") ||
+                obj.containsKey("rangeStartCursor") ||
+                obj.containsKey("rangeEndCursor") ||
+                obj.containsKey("deletedMessageIds")
+        } == true
+        if (isCanonicalTimelineV3) {
+            val sessionKeyFromSnapshot = snapshotObject?.get("sessionKey")?.jsonPrimitive?.content ?: "main"
+            v3Sessions.add(normalizeSessionKey(sessionKeyFromSnapshot))
+            // Also add the current state session key so hermes:/agent: prefix variants also match
+            v3Sessions.add(normalizeSessionKey(_state.value.currentSessionKey))
+            TimelineSnapshotPage.fromJsonElement(snapshot)
+                ?.takeIf { it.messages.isNotEmpty() || it.deletedMessageIds.isNotEmpty() }
+                ?.let { page ->
+                    val baseMessages = if (replaceExistingTimelineState) {
+                        currentMessages.filter {
+                            it.state == MessageState.pending ||
+                                it.state == MessageState.streaming ||
+                                it.runId.startsWith("local-user-")
+                        }
+                    } else {
+                        currentMessages
+                    }
+                    val result = reconcileTimeline(
+                        existing = baseMessages,
+                        snapshot = page
+                    )
+                    val reconciled = result.messages + result.pending
+                    timelineState = timelineState.copy(messages = reconciled)
+                    return reconciled
+                }
+        }
         val events = TimelineEventLog.decodePayload(JsonObject(mapOf("timelineSnapshot" to snapshot)))
         if (events.isEmpty()) return null
         val baseState = if (replaceExistingTimelineState) {
@@ -1032,6 +1092,15 @@ class ChatStore(
         }
         timelineState = ChatTimelineReducer.reduceAll(baseState, events)
         return timelineState.messages
+    }
+
+    private fun isCanonicalTimelineV3(snapshot: JsonElement?): Boolean {
+        val obj = snapshot as? JsonObject ?: return false
+        return obj["timelineProtocolVersion"]?.jsonPrimitive?.content == "3" ||
+            obj.containsKey("snapshotRevision") ||
+            obj.containsKey("rangeStartCursor") ||
+            obj.containsKey("rangeEndCursor") ||
+            obj.containsKey("deletedMessageIds")
     }
 
     private suspend fun resolvePendingFinalFromHistory(
@@ -1074,13 +1143,17 @@ class ChatStore(
                     return
                 }
                 val historyMessages = reduceTimelineHistorySnapshot(response, current.messages)
-                    ?: buildHistoryMessagesFromItems(response.items)
-                val messages = mergeHistoryWithCurrentMessages(
-                    historyMessages = historyMessages,
-                    currentMessages = current.messages,
-                    currentStreamingMessageId = streamingMessageId,
-                    isTrackedPendingAssistantMessageId = ::isTrackedPendingAssistantMessageId
-                )
+                val messages = if (historyMessages != null && isCanonicalTimelineV3(response.timelineSnapshot)) {
+                    historyMessages
+                } else {
+                    val baseHistory = historyMessages ?: buildHistoryMessagesFromItems(response.items)
+                    mergeHistoryWithCurrentMessages(
+                        historyMessages = baseHistory,
+                        currentMessages = current.messages,
+                        currentStreamingMessageId = streamingMessageId,
+                        isTrackedPendingAssistantMessageId = ::isTrackedPendingAssistantMessageId
+                    )
+                }
                 val ordered = trimToNewestHistoryWindow(messages)
                 _state.value = current.copy(
                     messages = ordered,
@@ -1820,8 +1893,10 @@ class ChatStore(
                 fetchChatHistoryPage(normalizedGatewayId, normalizedSessionKey, limit)
             }
             val currentBeforeHistory = _state.value
+            val isCanonicalTimelineSnapshot = isCanonicalTimelineV3(response.timelineSnapshot)
             val shouldMergeCurrentLocalUsers = hasLocalUserMessagesNeedingHistoryMerge(currentBeforeHistory.messages)
-            val shouldReplaceTimelineState = streamingMessageId == null && !shouldMergeCurrentLocalUsers
+            val shouldReplaceTimelineState = isCanonicalTimelineSnapshot ||
+                (streamingMessageId == null && !shouldMergeCurrentLocalUsers)
             val rawHistoryMessages = reduceTimelineHistorySnapshot(
                 response = response,
                 currentMessages = currentBeforeHistory.messages,
@@ -1830,7 +1905,8 @@ class ChatStore(
                 ?: buildHistoryMessagesFromItems(response.items)
             val historyMessages = rawHistoryMessages
             val current = _state.value
-            val shouldUseAuthoritativeSnapshot = shouldReplaceTimelineState && response.timelineSnapshot != null
+            val shouldUseAuthoritativeSnapshot = (shouldReplaceTimelineState && response.timelineSnapshot != null) ||
+                isCanonicalTimelineV3(response.timelineSnapshot)
             val messages = if (shouldUseAuthoritativeSnapshot) {
                 historyMessages
             } else if (matchesRequestedChatScope(current, normalizedGatewayId, normalizedSessionKey)) {
@@ -1938,13 +2014,17 @@ class ChatStore(
                 return
             }
             val historyMessages = reduceTimelineHistorySnapshot(response, latest.messages)
-                ?: buildHistoryMessagesFromItems(response.items)
-            val messages = mergeHistoryWithCurrentMessages(
-                historyMessages = historyMessages,
-                currentMessages = latest.messages,
-                currentStreamingMessageId = streamingMessageId,
-                isTrackedPendingAssistantMessageId = ::isTrackedPendingAssistantMessageId
-            )
+            val messages = if (historyMessages != null && isCanonicalTimelineV3(response.timelineSnapshot)) {
+                historyMessages
+            } else {
+                val baseHistory = historyMessages ?: buildHistoryMessagesFromItems(response.items)
+                mergeHistoryWithCurrentMessages(
+                    historyMessages = baseHistory,
+                    currentMessages = latest.messages,
+                    currentStreamingMessageId = streamingMessageId,
+                    isTrackedPendingAssistantMessageId = ::isTrackedPendingAssistantMessageId
+                )
+            }
             val ordered = trimToOlderHistoryWindow(messages)
             _state.value = latest.copy(
                 messages = ordered,

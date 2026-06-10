@@ -119,14 +119,15 @@ internal fun buildHistoryMessagesFromItems(items: List<ChatHistoryItem>): List<C
             }.orEmpty()
             else -> extractedContent
         }
-        val rawSortTimestamp = parseHistoryTimestamp(item.createdAt)
+        val structuredSortTimestamp = historyItemStructuredSortTimestamp(item)
+        val rawSortTimestamp = structuredSortTimestamp ?: parseHistoryTimestamp(item.createdAt)
         val syntheticFloor = previousSortTimestamp?.plus(messageOrderEpsilon)
             ?: (index * messageOrderEpsilon)
-        val baseSortTimestamp = historySortTimestamp(
-            rawSortTimestamp = rawSortTimestamp,
-            previousSortTimestamp = previousSortTimestamp,
-            syntheticFloor = syntheticFloor
-        )
+        val baseSortTimestamp = structuredSortTimestamp ?: historySortTimestamp(
+                rawSortTimestamp = rawSortTimestamp,
+                previousSortTimestamp = previousSortTimestamp,
+                syntheticFloor = syntheticFloor
+            )
         val sortTimestamp = mediaReferenceFileSortAnchor(
             role = role,
             sourceBlocks = sourceBlocks,
@@ -149,9 +150,16 @@ internal fun buildHistoryMessagesFromItems(items: List<ChatHistoryItem>): List<C
             contentBlocks = sourceBlocks,
             createdAt = item.createdAt ?: "",
             runId = item.id,
-            sortTimestamp = sortTimestamp
+            sortTimestamp = sortTimestamp,
+            seq = item.conversationSeq ?: item.seq
         )
     }
+}
+
+private fun historyItemStructuredSortTimestamp(item: ChatHistoryItem): Double? {
+    item.sortTimestamp?.let { return it }
+    item.sortTimestampMs?.let { return it / 1000.0 }
+    return null
 }
 
 private fun mediaReferenceFileSortAnchor(
@@ -280,6 +288,8 @@ internal fun orderMessagesWithSourceRunAnchors(messages: List<ChatMessage>): Lis
     val anchoredMessages = anchorAssistantFileMessagesToTranscriptOrder(sourceAnchoredMessages)
     val orderedMessages = anchoredMessages.sortedWith { left, right ->
         when {
+            localPendingTurnOrder(left, right) -> -1
+            localPendingTurnOrder(right, left) -> 1
             isTransientAssistantPlaceholder(left) && right.hasToolContent -> 1
             left.hasToolContent && isTransientAssistantPlaceholder(right) -> -1
             else -> compareValuesBy(
@@ -291,6 +301,13 @@ internal fun orderMessagesWithSourceRunAnchors(messages: List<ChatMessage>): Lis
         }
     }
     return normalizeChatTimelineMessages(orderedMessages)
+}
+
+private fun localPendingTurnOrder(left: ChatMessage, right: ChatMessage): Boolean {
+    if (left.role != MessageRole.user) return false
+    if (!isTransientAssistantPlaceholder(right)) return false
+    val clientRunId = left.runId.removePrefix("local-user-").trim()
+    return clientRunId.isNotEmpty() && right.runId.trim() == clientRunId
 }
 
 private fun anchorAssistantFileMessagesToTranscriptOrder(messages: List<ChatMessage>): List<ChatMessage> {

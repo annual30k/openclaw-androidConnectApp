@@ -212,6 +212,36 @@ class ChatConversationPresentationTest {
     }
 
     @Test
+    fun displayMessagesCoalescesLiveAndHistoryAssistantDuplicate() {
+        val liveAssistant = ChatMessage(
+            id = "assistant-DA69CD14-756A-4114-9B81-E43686555BD4",
+            role = MessageRole.assistant,
+            state = MessageState.completed,
+            content = "pong 1407",
+            contentBlocks = listOf(RelayChatContentBlock(type = "text", text = "pong 1407")),
+            createdAt = "2026-06-09T08:00:00Z",
+            sortTimestamp = 1780992000.0
+        )
+        val historyAssistant = ChatMessage(
+            id = "history:assistant-1407",
+            role = MessageRole.assistant,
+            state = MessageState.completed,
+            content = "pong 1407",
+            contentBlocks = listOf(RelayChatContentBlock(type = "text", text = "pong 1407")),
+            createdAt = "2026-06-09T08:00:02Z",
+            sortTimestamp = 1780992002.0
+        )
+
+        val displayMessages = conversationDisplayMessages(
+            messages = listOf(liveAssistant, historyAssistant),
+            showInvocationProcess = false
+        )
+
+        assertEquals(1, displayMessages.size)
+        assertEquals("history:assistant-1407", displayMessages.single().id)
+    }
+
+    @Test
     fun structureSignatureIgnoresStreamingTextProgress() {
         val streaming = ChatMessage(
             id = "assistant-streaming",

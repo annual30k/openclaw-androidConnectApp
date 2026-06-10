@@ -27,6 +27,7 @@ import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.decodeFromJsonElement
+import kotlinx.serialization.json.doubleOrNull
 import kotlinx.serialization.json.encodeToJsonElement
 import kotlinx.serialization.json.intOrNull
 import kotlinx.serialization.json.jsonPrimitive
@@ -93,7 +94,11 @@ data class ChatHistoryItem(
     val role: String,
     val content: JsonElement? = null,
     val contentBlocks: List<com.rethinkingstudio.clawlink.core.models.chat.RelayChatContentBlock>? = null,
-    val createdAt: String? = null
+    val createdAt: String? = null,
+    val sortTimestamp: Double? = null,
+    val sortTimestampMs: Double? = null,
+    val seq: Long? = null,
+    val conversationSeq: Long? = null
 )
 
 object ChatHistoryItemSerializer : KSerializer<ChatHistoryItem> {
@@ -112,6 +117,10 @@ object ChatHistoryItemSerializer : KSerializer<ChatHistoryItem> {
                 )
             }
             value.createdAt?.let { put("createdAt", JsonPrimitive(it)) }
+            value.sortTimestamp?.let { put("sortTimestamp", JsonPrimitive(it)) }
+            value.sortTimestampMs?.let { put("sortTimestampMs", JsonPrimitive(it)) }
+            value.seq?.let { put("seq", JsonPrimitive(it)) }
+            value.conversationSeq?.let { put("conversationSeq", JsonPrimitive(it)) }
         }
         encoder.encodeSerializableValue(JsonElement.serializer(), obj)
     }
@@ -127,12 +136,20 @@ object ChatHistoryItemSerializer : KSerializer<ChatHistoryItem> {
             ?: (obj["message"] as? JsonObject)?.get("text")
         val contentBlocks = extractContentBlocks(obj)
         val createdAt = obj.string("createdAt", "created_at")
+        val sortTimestamp = obj.double("sortTimestamp", "sort_timestamp")
+        val sortTimestampMs = obj.double("sortTimestampMs", "sort_timestamp_ms")
+        val seq = obj.long("seq")
+        val conversationSeq = obj.long("conversationSeq", "conversation_seq")
         return ChatHistoryItem(
             id = id,
             role = role,
             content = content,
             contentBlocks = contentBlocks,
-            createdAt = createdAt
+            createdAt = createdAt,
+            sortTimestamp = sortTimestamp,
+            sortTimestampMs = sortTimestampMs,
+            seq = seq,
+            conversationSeq = conversationSeq
         )
     }
 
@@ -238,6 +255,18 @@ private fun JsonObject.string(vararg keys: String): String? {
             ?.contentOrNull
             ?.trim()
             ?.takeIf { it.isNotEmpty() }
+    }
+}
+
+private fun JsonObject.long(vararg keys: String): Long? {
+    return keys.firstNotNullOfOrNull { key ->
+        (this[key] as? JsonPrimitive)?.longOrNull
+    }
+}
+
+private fun JsonObject.double(vararg keys: String): Double? {
+    return keys.firstNotNullOfOrNull { key ->
+        (this[key] as? JsonPrimitive)?.doubleOrNull
     }
 }
 

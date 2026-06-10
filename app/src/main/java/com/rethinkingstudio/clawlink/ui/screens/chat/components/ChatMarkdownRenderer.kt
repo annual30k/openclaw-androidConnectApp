@@ -112,6 +112,8 @@ private fun MarkdownInlineText(
 ) {
     val context = LocalContext.current
     val markwon = remember(context) { Markwon.create(context) }
+    val decodedText = remember(text) { text.decodeEscapedMarkdownText() }
+    val renderedText = remember(markwon, decodedText) { markwon.toMarkdown(decodedText) }
     AndroidView(
         factory = {
             TextView(it).apply {
@@ -126,7 +128,10 @@ private fun MarkdownInlineText(
             view.textSize = textSizeSp
             view.setTypeface(null, if (bold) android.graphics.Typeface.BOLD else android.graphics.Typeface.NORMAL)
             view.setLineSpacing(0f, lineSpacingMultiplier)
-            markwon.setMarkdown(view, text.decodeEscapedMarkdownText())
+            if (view.tag != decodedText) {
+                view.text = renderedText
+                view.tag = decodedText
+            }
         }
     )
 }
