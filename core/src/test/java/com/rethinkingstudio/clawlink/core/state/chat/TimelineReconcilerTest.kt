@@ -156,6 +156,53 @@ class TimelineReconcilerTest {
     }
 
     @Test
+    fun mixedConversationSeqDomainsUseCreatedAtOrder() {
+        val result = reconcileTimeline(
+            existing = emptyList(),
+            snapshot = TimelineSnapshotPage(
+                sessionKey = "main",
+                messages = listOf(
+                    TimelineSnapshotMessage(
+                        messageId = "history-screenshot",
+                        conversationSeq = 8,
+                        seq = 8,
+                        turnSeq = 8,
+                        role = "assistant",
+                        messageState = "completed",
+                        createdAt = "2026-06-07T12:18:34.773Z",
+                        content = listOf(RelayChatContentBlock(type = "text", text = "截图好了，发给你"))
+                    ),
+                    TimelineSnapshotMessage(
+                        messageId = "user-capabilities",
+                        conversationSeq = 1_780_834_382_099_000,
+                        seq = 1_780_834_382_099_000,
+                        turnSeq = 1_780_834_382_099_000,
+                        role = "user",
+                        messageState = "completed",
+                        createdAt = "2026-06-07T12:13:02.099Z",
+                        content = listOf(RelayChatContentBlock(type = "text", text = "你可以做什么"))
+                    ),
+                    TimelineSnapshotMessage(
+                        messageId = "assistant-capabilities",
+                        conversationSeq = 1_780_834_382_107_001,
+                        seq = 1_780_834_382_107_001,
+                        turnSeq = 1_780_834_382_107_001,
+                        role = "assistant",
+                        messageState = "completed",
+                        createdAt = "2026-06-07T12:13:02.107Z",
+                        content = listOf(RelayChatContentBlock(type = "text", text = "我可以帮你做很多实际操作型任务。"))
+                    )
+                )
+            )
+        )
+
+        assertEquals(
+            listOf("user-capabilities", "assistant-capabilities", "history-screenshot"),
+            result.messages.map { it.id }
+        )
+    }
+
+    @Test
     fun serverMessageIdAndConversationSeqAreAuthoritative() {
         val result = reconcileTimeline(
             existing = emptyList(),

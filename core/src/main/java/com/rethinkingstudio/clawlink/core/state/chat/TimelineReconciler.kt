@@ -378,15 +378,26 @@ private fun compareEntries(left: CanonicalTimelineEntry, right: CanonicalTimelin
         rightSortTimestamp = right.sortTimestamp
     )
     if (sameRunOrder != 0) return sameRunOrder
-    if (left.conversationSeq != null && right.conversationSeq != null && left.conversationSeq != right.conversationSeq) {
-        return left.conversationSeq.compareTo(right.conversationSeq)
+    val leftTime = left.sortTimestamp ?: left.createdAt.toEpochSeconds()
+    val rightTime = right.sortTimestamp ?: right.createdAt.toEpochSeconds()
+    val leftConversationDomain = timelineSeqDomain(left.conversationSeq)
+    val rightConversationDomain = timelineSeqDomain(right.conversationSeq)
+    val sameConversationSeqDomain = leftConversationDomain != null && leftConversationDomain == rightConversationDomain
+    if (shouldPreferSeqOrder(
+            leftConversationDomain,
+            sameConversationSeqDomain,
+            left.conversationSeq,
+            right.conversationSeq,
+            leftTime,
+            rightTime
+        )
+    ) {
+        return left.conversationSeq!!.compareTo(right.conversationSeq!!)
     }
 
     val leftSeqDomain = timelineSeqDomain(left.seq)
     val rightSeqDomain = timelineSeqDomain(right.seq)
     val sameSeqDomain = leftSeqDomain != null && leftSeqDomain == rightSeqDomain
-    val leftTime = left.sortTimestamp ?: left.createdAt.toEpochSeconds()
-    val rightTime = right.sortTimestamp ?: right.createdAt.toEpochSeconds()
     if (shouldPreferSeqOrder(leftSeqDomain, sameSeqDomain, left.seq, right.seq, leftTime, rightTime)) {
         return left.seq!!.compareTo(right.seq!!)
     }
