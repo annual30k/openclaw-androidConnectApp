@@ -86,7 +86,7 @@ internal fun ToolMessageCard(
     val detailSummaryBlock = visibleToolBlocks.firstOrNull { block ->
         block.isToolResultBlock &&
             !block.toolCallId.isNullOrBlank() &&
-            (block.hasFullDetail == true || block.detailTruncated == true || block.detailExpired == true)
+            (block.hasFullDetail != null || block.detailTruncated == true || block.detailExpired == true)
     }
     val detailToolCallId = detailSummaryBlock?.toolCallId?.trim()?.takeIf { it.isNotEmpty() }
     val detailGatewayId = detailSummaryBlock?.gatewayId?.trim()?.takeIf { it.isNotEmpty() } ?: gatewayId?.trim()?.takeIf { it.isNotEmpty() }
@@ -99,11 +99,10 @@ internal fun ToolMessageCard(
     val detailEntry = detailCacheKey?.let { toolDetailCacheByKey[it] }
     val loadedDetail = detailEntry?.response
     val detailUnavailable = detailSummaryBlock?.detailExpired == true ||
-        detailSummaryBlock?.hasFullDetail == false ||
         loadedDetail?.expired == true ||
         loadedDetail?.hasFullDetail == false
     val shouldLoadDetail = expanded &&
-        detailSummaryBlock?.hasFullDetail == true &&
+        detailSummaryBlock != null &&
         !detailUnavailable &&
         detailGatewayId != null &&
         detailSessionKey != null &&

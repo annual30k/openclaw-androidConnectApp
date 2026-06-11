@@ -1279,6 +1279,50 @@ class ChatHistoryMergeHelpersTest {
     }
 
     @Test
+    fun collapsesPersistedOpenClawAssistantEchoWithHiddenThinkingBlock() {
+        val ordered = orderMessagesWithSourceRunAnchors(
+            listOf(
+                ChatMessage(
+                    id = "user-hello",
+                    role = MessageRole.user,
+                    content = "你好",
+                    runId = "local-user-9C4578F2-F0E5-4EC1-B8E7-3ADFBE921FF4",
+                    sortTimestamp = 1_781_081_389.366
+                ),
+                ChatMessage(
+                    id = "live-echo",
+                    role = MessageRole.assistant,
+                    state = MessageState.completed,
+                    content = "你好 Alex！有什么需要帮忙的吗？🦞",
+                    contentBlocks = listOf(
+                        RelayChatContentBlock(type = "thinking"),
+                        RelayChatContentBlock(type = "text", text = "你好 Alex！有什么需要帮忙的吗？🦞")
+                    ),
+                    runId = "11f35508",
+                    sortTimestamp = 1_781_081_396.934,
+                    timelineMessageId = "11f35508"
+                ),
+                ChatMessage(
+                    id = "canonical-echo",
+                    role = MessageRole.assistant,
+                    state = MessageState.completed,
+                    content = "你好 Alex！有什么需要帮忙的吗？🦞",
+                    contentBlocks = listOf(
+                        RelayChatContentBlock(type = "text", text = "你好 Alex！有什么需要帮忙的吗？🦞")
+                    ),
+                    runId = "9C4578F2-F0E5-4EC1-B8E7-3ADFBE921FF4",
+                    sortTimestamp = 1_781_081_397.018,
+                    timelineMessageId = "srv_b7b2af701cf776a7894e6f78f4f55f47",
+                    timelineStableKey = "ios-9268c88d-31f3-45c2-a1ff-71ae3585960f:server:srv_b7b2af701cf776a7894e6f78f4f55f47"
+                )
+            )
+        )
+
+        assertEquals(listOf("user-hello", "canonical-echo"), ordered.map { it.id })
+        assertEquals(1, ordered.count { it.content == "你好 Alex！有什么需要帮忙的吗？🦞" })
+    }
+
+    @Test
     fun filtersProtocolTypingMarkersFromHistoryMessages() {
         val messages = buildHistoryMessagesFromItems(
             listOf(

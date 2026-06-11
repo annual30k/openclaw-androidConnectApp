@@ -7,6 +7,7 @@ import com.rethinkingstudio.clawlink.core.models.chat.RelayChatContentBlock
 
 private const val mediaPromptMergeWindowSeconds = 600.0
 private const val plainDuplicateWindowSeconds = 180.0
+private const val assistantHiddenBlockEchoWindowSeconds = 180.0
 private const val containedAssistantFragmentMinChars = 12
 private const val containedAssistantFragmentGrowthMinChars = 12
 private const val internalContinuationMarker =
@@ -95,6 +96,14 @@ private fun coalescedMediaMessages(messages: List<ChatMessage>): List<ChatMessag
         if (isInternalContinuationDuplicateOfNearbyPrompt(message, coalesced)) return@forEach
         if (isDuplicateFileTransferStatusText(message, coalesced)) return@forEach
         if (isDuplicateUserMessageInSameTurn(message, coalesced)) return@forEach
+        val assistantHiddenBlockEchoIndex = assistantHiddenBlockEchoIndex(message, coalesced)
+        if (assistantHiddenBlockEchoIndex >= 0) {
+            coalesced[assistantHiddenBlockEchoIndex] = preferredAssistantHiddenBlockEcho(
+                existing = coalesced[assistantHiddenBlockEchoIndex],
+                candidate = message
+            )
+            return@forEach
+        }
         val containedAssistantIndex = containedAssistantTextFragmentIndex(message, coalesced)
         if (containedAssistantIndex >= 0) {
             coalesced[containedAssistantIndex] = moreCompleteAssistantTextMessage(
@@ -108,6 +117,80 @@ private fun coalescedMediaMessages(messages: List<ChatMessage>): List<ChatMessag
     }
 
     return coalesced
+}
+
+private fun assistantHiddenBlockEchoIndex(message: ChatMessage, messages: List<ChatMessage>): Int {
+    if (!isPlainOrHiddenOnlyAssistantEcho(message)) return -1
+    val normalized = normalizedPromptText(message.plainTextContent)
+    if (normalized.isBlank()) return -1
+
+    for (index in messages.indices.reversed()) {
+        val existing = messages[index]
+        if (existing.role == MessageRole.user || existing.role == MessageRole.tool || existing.role == MessageRole.system) {
+            return -1
+        }
+        if (!isPlainOrHiddenOnlyAssistantEcho(existing)) continue
+        if (normalizedPromptText(existing.plainTextContent) != normalized) continue
+        if (!timestampsAreClose(existing, message, assistantHiddenBlockEchoWindowSeconds)) return -1
+        if (!assistantHiddenBlockEchoPairLooksSynthetic(existing, message)) continue
+        return index
+    }
+
+    return -1
+}
+
+private fun isPlainOrHiddenOnlyAssistantEcho(message: ChatMessage): Boolean {
+    return message.role == MessageRole.assistant &&
+        message.state == MessageState.completed &&
+        !message.hasFileContent &&
+        !message.hasVoiceContent &&
+        !message.hasToolContent &&
+        !isTransientAssistantPlaceholder(message) &&
+        normalizedPromptText(message.plainTextContent).isNotBlank() &&
+        message.contentBlocks.all { block -> block.isTextBlock || isHiddenAssistantMetadataBlock(block) }
+}
+
+private fun assistantHiddenBlockEchoPairLooksSynthetic(left: ChatMessage, right: ChatMessage): Boolean {
+    if (hasHiddenAssistantMetadataBlock(left) != hasHiddenAssistantMetadataBlock(right)) return true
+    if (left.timelineStableKey.isBlank() != right.timelineStableKey.isBlank()) return true
+    if (left.timelineMessageId.isNotBlank() && left.timelineMessageId == right.timelineMessageId) return true
+    if (left.runId.isNotBlank() && left.runId == right.runId) return true
+    val leftTimestamp = left.sortTimestamp ?: return false
+    val rightTimestamp = right.sortTimestamp ?: return false
+    return kotlin.math.abs(leftTimestamp - rightTimestamp) <= 1.0
+}
+
+private fun preferredAssistantHiddenBlockEcho(existing: ChatMessage, candidate: ChatMessage): ChatMessage {
+    val existingPriority = assistantHiddenBlockEchoPriority(existing)
+    val candidatePriority = assistantHiddenBlockEchoPriority(candidate)
+    if (existingPriority != candidatePriority) {
+        return if (candidatePriority > existingPriority) candidate else existing
+    }
+    return if (candidate.contentBlocks.size > existing.contentBlocks.size) candidate else existing
+}
+
+private fun assistantHiddenBlockEchoPriority(message: ChatMessage): Int {
+    var priority = 0
+    if (message.timelineStableKey.isNotBlank()) priority += 50
+    if (message.timelineMessageId.startsWith("srv_")) priority += 20
+    if (!hasHiddenAssistantMetadataBlock(message)) priority += 5
+    return priority
+}
+
+private fun hasHiddenAssistantMetadataBlock(message: ChatMessage): Boolean {
+    return message.contentBlocks.any(::isHiddenAssistantMetadataBlock)
+}
+
+private fun isHiddenAssistantMetadataBlock(block: RelayChatContentBlock): Boolean {
+    val normalizedType = block.type
+        .trim()
+        .lowercase()
+        .replace("_", "")
+        .replace("-", "")
+        .replace(" ", "")
+    return normalizedType == "thinking" ||
+        normalizedType == "reasoning" ||
+        normalizedType == "reasoningcontent"
 }
 
 private fun containedAssistantTextFragmentIndex(message: ChatMessage, messages: List<ChatMessage>): Int {

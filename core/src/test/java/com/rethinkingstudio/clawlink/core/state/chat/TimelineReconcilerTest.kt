@@ -201,6 +201,51 @@ class TimelineReconcilerTest {
     }
 
     @Test
+    fun sameRunUserToolAssistantOrderWinsOverRegressedConversationSeq() {
+        val runId = "23F791B4-97CF-4CF5-BD00-21D947671505"
+        val result = reconcileTimeline(
+            existing = emptyList(),
+            snapshot = TimelineSnapshotPage(
+                sessionKey = "main",
+                messages = listOf(
+                    TimelineSnapshotMessage(
+                        messageId = "user-run",
+                        conversationSeq = 6,
+                        role = "user",
+                        messageState = "completed",
+                        runId = runId,
+                        turnId = runId,
+                        createdAt = "2026-06-11T06:45:18.574Z",
+                        content = listOf(RelayChatContentBlock(type = "text", text = "你好啊"))
+                    ),
+                    TimelineSnapshotMessage(
+                        messageId = "tool-run",
+                        conversationSeq = 4,
+                        role = "tool",
+                        messageState = "completed",
+                        runId = runId,
+                        turnId = runId,
+                        createdAt = "2026-06-11T06:45:32.709Z",
+                        content = listOf(RelayChatContentBlock(type = "tool_result", text = "memory_search", name = "memory_search", toolCallId = "call_1"))
+                    ),
+                    TimelineSnapshotMessage(
+                        messageId = "assistant-run",
+                        conversationSeq = 5,
+                        role = "assistant",
+                        messageState = "completed",
+                        runId = runId,
+                        turnId = runId,
+                        createdAt = "2026-06-11T06:45:39.080Z",
+                        content = listOf(RelayChatContentBlock(type = "text", text = "你好 Alex！👋 有什么需要帮忙的吗？"))
+                    )
+                )
+            )
+        )
+
+        assertEquals(listOf("user-run", "tool-run", "assistant-run"), result.messages.map { it.id })
+    }
+
+    @Test
     fun resetOrdinalSeqAcrossDistantTimestampsUsesCreatedAtOrder() {
         val result = reconcileTimeline(
             existing = emptyList(),

@@ -287,9 +287,18 @@ internal fun orderMessagesWithSourceRunAnchors(messages: List<ChatMessage>): Lis
     }
     val anchoredMessages = anchorAssistantFileMessagesToTranscriptOrder(sourceAnchoredMessages)
     val orderedMessages = anchoredMessages.sortedWith { left, right ->
+        val sameRunOrder = compareSameRunTranscriptOrderFields(
+            leftRunId = left.runId,
+            rightRunId = right.runId,
+            leftRole = left.role,
+            rightRole = right.role,
+            leftSortTimestamp = left.sortTimestamp,
+            rightSortTimestamp = right.sortTimestamp
+        )
         when {
             localPendingTurnOrder(left, right) -> -1
             localPendingTurnOrder(right, left) -> 1
+            sameRunOrder != 0 -> sameRunOrder
             isTransientAssistantPlaceholder(left) && right.hasToolContent -> 1
             left.hasToolContent && isTransientAssistantPlaceholder(right) -> -1
             else -> compareValuesBy(

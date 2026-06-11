@@ -15,6 +15,7 @@ import kotlin.math.abs
 
 private const val ordinalSeqTrustWindowSeconds = 10 * 60.0
 private const val assistantDuplicateWindowSeconds = 15.0
+private const val sameRunTranscriptOrderWindowSeconds = 15 * 60.0
 
 @Serializable
 internal data class TimelineSnapshotPage(
@@ -322,9 +323,61 @@ private fun collapseAssistantFragments(entries: List<CanonicalTimelineEntry>): L
     return result
 }
 
+internal fun compareSameRunTranscriptOrderFields(
+    leftRunId: String?,
+    rightRunId: String?,
+    leftRole: MessageRole,
+    rightRole: MessageRole,
+    leftSortTimestamp: Double?,
+    rightSortTimestamp: Double?
+): Int {
+    val leftNormalizedRunId = normalizedTranscriptRunId(leftRunId) ?: return 0
+    val rightNormalizedRunId = normalizedTranscriptRunId(rightRunId) ?: return 0
+    if (leftNormalizedRunId != rightNormalizedRunId) return 0
+    if (leftSortTimestamp != null &&
+        rightSortTimestamp != null &&
+        abs(leftSortTimestamp - rightSortTimestamp) > sameRunTranscriptOrderWindowSeconds
+    ) {
+        return 0
+    }
+
+    val leftRank = sameRunTranscriptRoleRank(leftRole) ?: return 0
+    val rightRank = sameRunTranscriptRoleRank(rightRole) ?: return 0
+    if (leftRank == rightRank) return 0
+    return leftRank.compareTo(rightRank)
+}
+
+private fun normalizedTranscriptRunId(rawRunId: String?): String? {
+    val trimmed = rawRunId?.trim().orEmpty()
+    if (trimmed.isEmpty()) return null
+    return if (trimmed.startsWith("local-user-")) {
+        trimmed.removePrefix("local-user-").trim().takeIf { it.isNotEmpty() }
+    } else {
+        trimmed
+    }
+}
+
+private fun sameRunTranscriptRoleRank(role: MessageRole): Int? {
+    return when (role) {
+        MessageRole.user -> 0
+        MessageRole.tool -> 1
+        MessageRole.assistant -> 2
+        MessageRole.system -> null
+    }
+}
+
 private fun compareEntries(left: CanonicalTimelineEntry, right: CanonicalTimelineEntry): Int {
     if (localPendingTimelineOrder(left, right)) return -1
     if (localPendingTimelineOrder(right, left)) return 1
+    val sameRunOrder = compareSameRunTranscriptOrderFields(
+        leftRunId = left.runId,
+        rightRunId = right.runId,
+        leftRole = left.role,
+        rightRole = right.role,
+        leftSortTimestamp = left.sortTimestamp,
+        rightSortTimestamp = right.sortTimestamp
+    )
+    if (sameRunOrder != 0) return sameRunOrder
     if (left.conversationSeq != null && right.conversationSeq != null && left.conversationSeq != right.conversationSeq) {
         return left.conversationSeq.compareTo(right.conversationSeq)
     }
