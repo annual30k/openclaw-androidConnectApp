@@ -161,7 +161,7 @@ internal fun composerAttachmentUploadRunId(attachment: ComposerAttachmentDraft):
 
 private val ansiEscapeRegex = Regex("\u001B\\[[0-?]*[ -/]*[@-~]")
 private val hermesRuntimeContextRegex = Regex(
-    "(^|\\n)[ \\t]*\\[Hermes runtime context][ \\t]*(?:\\n[ \\t]*Current runtime:[^\\n]*)?(?:\\n[ \\t]*If the user asks which model or provider is currently being used, answer from this runtime context\\.)?"
+    "(^|\\n)[ \\t]*\\[Hermes runtime context][\\s\\S]*?(?=\\n[ \\t]*\\[ClawConnect mobile bridge]|$)"
 )
 private val mediaAttachmentReferenceRegex = Regex(
     "(?m)[ \\t]*\\[media attached:\\s*(.+?)\\s*\\((.+?)\\)\\s*\\|\\s*(.+?)][ \\t]*"
@@ -182,7 +182,7 @@ internal fun sanitizeChatMessageText(text: String): String {
     val normalized = text
         .replace("\r\n", "\n")
         .replace("\r", "\n")
-    return normalized
+    val withoutInternalHints = normalized
         .replace(ansiEscapeRegex, "")
         .replace(hermesRuntimeContextRegex, "$1")
         .replace(mediaAttachmentReferenceRegex, "")
@@ -190,8 +190,17 @@ internal fun sanitizeChatMessageText(text: String): String {
         .replace(fileAttachmentReferenceRegex, "")
         .replace(mobileBridgeTimestampPrefixRegex, "")
         .replace("\u001B", "")
+    val bridgeIndex = withoutInternalHints.indexOf("[ClawConnect mobile bridge]")
+    return (if (bridgeIndex >= 0) withoutInternalHints.take(bridgeIndex) else withoutInternalHints)
         .replace(excessiveBlankLinesRegex, "\n\n")
         .trim()
+}
+
+internal fun sanitizeChatContentBlocks(blocks: List<RelayChatContentBlock>): List<RelayChatContentBlock> {
+    return blocks.map { block ->
+        val text = block.text ?: return@map block
+        block.copy(text = sanitizeChatMessageText(text))
+    }
 }
 
 internal fun chatMediaAttachmentReferenceFileNames(text: String): List<String> {

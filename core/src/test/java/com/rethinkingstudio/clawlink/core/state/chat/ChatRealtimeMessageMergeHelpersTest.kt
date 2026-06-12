@@ -35,7 +35,7 @@ class ChatRealtimeMessageMergeHelpersTest {
     }
 
     @Test
-    fun mergesRunlessRemoteVoiceTranscriptIntoRecentLocalVoiceBubble() {
+    fun keepsRunlessRemoteVoiceTranscriptSeparateFromLocalVoiceBubble() {
         val localVoice = voiceMessage(runId = "local-user-voice-run-fallback", sortTimestamp = 100.0)
 
         val merged = mergeRemoteUserMessageIntoCurrentMessages(
@@ -46,12 +46,14 @@ class ChatRealtimeMessageMergeHelpersTest {
             sortTimestamp = 101.0
         )
 
-        assertEquals(listOf("local-user-voice-run-fallback"), merged.map { it.runId })
-        assertEquals("你可以做什么", merged.first().voiceTranscriptText)
+        assertEquals(2, merged.size)
+        assertEquals("local-user-voice-run-fallback", merged.first().runId)
+        assertEquals(null, merged.first().voiceTranscriptText)
+        assertTrue(merged.any { it.role == MessageRole.user && !it.hasVoiceContent && it.content == "你可以做什么" })
     }
 
     @Test
-    fun consumesDuplicateRunlessRemoteVoiceTranscriptAlreadyAttachedToLocalVoiceBubble() {
+    fun keepsRunlessDuplicateRemoteVoiceTranscriptSeparateFromLocalVoiceBubble() {
         val transcript = "你可以做什么"
         val localVoice = voiceMessage(
             runId = "local-user-voice-run-duplicate",
@@ -67,9 +69,10 @@ class ChatRealtimeMessageMergeHelpersTest {
             sortTimestamp = 101.0
         )
 
-        assertEquals(listOf("local-user-voice-run-duplicate"), merged.map { it.runId })
+        assertEquals(2, merged.size)
+        assertEquals("local-user-voice-run-duplicate", merged.first().runId)
         assertEquals(transcript, merged.first().voiceTranscriptText)
-        assertFalse(merged.any { it.role == MessageRole.user && !it.hasVoiceContent && it.content == transcript })
+        assertTrue(merged.any { it.role == MessageRole.user && !it.hasVoiceContent && it.content == transcript })
     }
 
     @Test
@@ -125,44 +128,6 @@ class ChatRealtimeMessageMergeHelpersTest {
         assertEquals(listOf("local-user-run-1", "run-1"), merged.map { it.runId })
         assertEquals("分析一下这张照片", merged.first().content)
         assertFalse(merged.any { it.content.contains("[media attached:") })
-    }
-
-    @Test
-    fun mergesRemoteTextEchoIntoMatchingLocalImageUserBubble() {
-        val imageBlock = RelayChatContentBlock(
-            type = "image",
-            fileId = "file-1",
-            fileName = "photo.png",
-            mimeType = "image/png",
-            downloadUrl = "content://local/photo.png"
-        )
-        val localUser = ChatMessage(
-            id = "local-user",
-            role = MessageRole.user,
-            state = MessageState.completed,
-            content = "20260608",
-            contentBlocks = listOf(imageBlock),
-            runId = "local-user-run-1",
-            sortTimestamp = 50.0
-        )
-        val pendingAssistant = assistantMessage(
-            id = "assistant-1",
-            runId = "run-1",
-            content = "正在连接...",
-            sortTimestamp = 50.001
-        )
-
-        val merged = mergeRemoteUserMessageIntoCurrentMessages(
-            currentMessages = listOf(localUser, pendingAssistant),
-            content = "20260608",
-            contentBlocks = emptyList(),
-            runId = "run-1",
-            sortTimestamp = 51.0
-        )
-
-        assertEquals(listOf("local-user-run-1", "run-1"), merged.map { it.runId })
-        assertEquals(1, merged.count { it.role == MessageRole.user && it.content == "20260608" })
-        assertEquals(listOf(imageBlock), merged.first().contentBlocks)
     }
 
     @Test
@@ -316,7 +281,7 @@ class ChatRealtimeMessageMergeHelpersTest {
     }
 
     @Test
-    fun mergesLegacyFinalIntoSameTurnStreamingAssistantTextWhenRunIdIsMissing() {
+    fun doesNotMergeLegacyFinalIntoStreamingAssistantTextWhenRunIdIsMissing() {
         val current = listOf(
             ChatMessage(
                 id = "user-1",
@@ -346,10 +311,7 @@ class ChatRealtimeMessageMergeHelpersTest {
 
         val merged = mergeCompletedAssistantFinalIntoCurrentMessages(current, legacyFinal)
 
-        requireNotNull(merged)
-        assertEquals(listOf("user-1", "assistant-streaming"), merged.map { it.id })
-        assertEquals(listOf(MessageState.completed), merged.filter { it.role == MessageRole.assistant }.map { it.state })
-        assertEquals(1, merged.count { it.role == MessageRole.assistant && it.content == "OK" })
+        assertEquals(null, merged)
     }
 
     @Test
@@ -510,7 +472,7 @@ class ChatRealtimeMessageMergeHelpersTest {
     }
 
     @Test
-    fun removesRunlessResolvedStreamingAssistantWhenSameTurnTextMatches() {
+    fun keepsRunlessStreamingAssistantWhenOnlySameTurnTextMatches() {
         val messages = listOf(
             ChatMessage(
                 id = "user-1",
@@ -539,7 +501,7 @@ class ChatRealtimeMessageMergeHelpersTest {
 
         val resolved = removeResolvedTransientAssistantPlaceholders(messages)
 
-        assertEquals(listOf("user-1", "assistant-final"), resolved.map { it.id })
+        assertEquals(listOf("user-1", "assistant-streaming", "assistant-final"), resolved.map { it.id })
     }
 
     @Test
@@ -582,132 +544,6 @@ class ChatRealtimeMessageMergeHelpersTest {
         assertEquals(
             listOf("user-1", "assistant-streaming", "user-2", "assistant-final"),
             resolved.map { it.id }
-        )
-    }
-
-    @Test
-    fun removesDuplicateCompletedAssistantRepliesWithinSameUserTurn() {
-        val messages = listOf(
-            ChatMessage(
-                id = "user-1",
-                role = MessageRole.user,
-                state = MessageState.completed,
-                content = "garbled marker802"
-            ),
-            ChatMessage(
-                id = "assistant-timeline",
-                role = MessageRole.assistant,
-                state = MessageState.completed,
-                content = "Please send that again.",
-                runId = "timeline-run"
-            ),
-            ChatMessage(
-                id = "assistant-legacy",
-                role = MessageRole.assistant,
-                state = MessageState.completed,
-                content = "Please send that again.",
-                runId = "legacy-run"
-            ),
-            ChatMessage(
-                id = "user-2",
-                role = MessageRole.user,
-                state = MessageState.completed,
-                content = "same answer is valid for a new turn"
-            ),
-            ChatMessage(
-                id = "assistant-new-turn",
-                role = MessageRole.assistant,
-                state = MessageState.completed,
-                content = "Please send that again.",
-                runId = "new-turn-run"
-            )
-        )
-
-        val deduped = removeDuplicateCompletedAssistantRepliesInSameTurn(messages)
-
-        assertEquals(
-            listOf("user-1", "assistant-timeline", "user-2", "assistant-new-turn"),
-            deduped.map { it.id }
-        )
-    }
-
-    @Test
-    fun movesDuplicateCompletedAssistantReplyAfterInterleavedToolMessage() {
-        val messages = listOf(
-            ChatMessage(
-                id = "user-1",
-                role = MessageRole.user,
-                state = MessageState.completed,
-                content = "search then answer"
-            ),
-            ChatMessage(
-                id = "assistant-early",
-                role = MessageRole.assistant,
-                state = MessageState.completed,
-                content = "Final answer",
-                runId = "timeline-run"
-            ),
-            ChatMessage(
-                id = "tool-1",
-                role = MessageRole.tool,
-                state = MessageState.completed,
-                content = "Tool result",
-                contentBlocks = listOf(RelayChatContentBlock(type = "tool_result", text = "Tool result", name = "web_search", toolCallId = "tool-1")),
-                runId = "tool-1"
-            ),
-            ChatMessage(
-                id = "assistant-late",
-                role = MessageRole.assistant,
-                state = MessageState.completed,
-                content = "Final answer",
-                runId = "history-run"
-            )
-        )
-
-        val deduped = removeDuplicateCompletedAssistantRepliesInSameTurn(messages)
-
-        assertEquals(
-            listOf("user-1", "tool-1", "assistant-late"),
-            deduped.map { it.id }
-        )
-    }
-
-    @Test
-    fun hiddenUserMessageDoesNotSplitDuplicateAssistantReplies() {
-        val messages = listOf(
-            ChatMessage(
-                id = "user-1",
-                role = MessageRole.user,
-                state = MessageState.completed,
-                content = "reply only OK"
-            ),
-            ChatMessage(
-                id = "assistant-timeline",
-                role = MessageRole.assistant,
-                state = MessageState.completed,
-                content = "OK805",
-                runId = "timeline-run"
-            ),
-            ChatMessage(
-                id = "hidden-user",
-                role = MessageRole.user,
-                state = MessageState.completed,
-                content = ""
-            ),
-            ChatMessage(
-                id = "assistant-legacy",
-                role = MessageRole.assistant,
-                state = MessageState.completed,
-                content = "OK805",
-                runId = "legacy-run"
-            )
-        )
-
-        val deduped = removeDuplicateCompletedAssistantRepliesInSameTurn(messages)
-
-        assertEquals(
-            listOf("user-1", "assistant-timeline", "hidden-user"),
-            deduped.map { it.id }
         )
     }
 

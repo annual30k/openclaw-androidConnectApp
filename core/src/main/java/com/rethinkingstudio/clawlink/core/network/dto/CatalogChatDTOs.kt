@@ -98,7 +98,11 @@ data class ChatHistoryItem(
     val sortTimestamp: Double? = null,
     val sortTimestampMs: Double? = null,
     val seq: Long? = null,
-    val conversationSeq: Long? = null
+    val conversationSeq: Long? = null,
+    val timelineOrderKey: String? = null,
+    val timelineIdentityKey: String? = null,
+    val timelineItemKind: String? = null,
+    val timelineResolvesWaiting: Boolean? = null
 )
 
 object ChatHistoryItemSerializer : KSerializer<ChatHistoryItem> {
@@ -121,6 +125,10 @@ object ChatHistoryItemSerializer : KSerializer<ChatHistoryItem> {
             value.sortTimestampMs?.let { put("sortTimestampMs", JsonPrimitive(it)) }
             value.seq?.let { put("seq", JsonPrimitive(it)) }
             value.conversationSeq?.let { put("conversationSeq", JsonPrimitive(it)) }
+            value.timelineOrderKey?.let { put("timelineOrderKey", JsonPrimitive(it)) }
+            value.timelineIdentityKey?.let { put("timelineIdentityKey", JsonPrimitive(it)) }
+            value.timelineItemKind?.let { put("timelineItemKind", JsonPrimitive(it)) }
+            value.timelineResolvesWaiting?.let { put("timelineResolvesWaiting", JsonPrimitive(it)) }
         }
         encoder.encodeSerializableValue(JsonElement.serializer(), obj)
     }
@@ -140,6 +148,10 @@ object ChatHistoryItemSerializer : KSerializer<ChatHistoryItem> {
         val sortTimestampMs = obj.double("sortTimestampMs", "sort_timestamp_ms")
         val seq = obj.long("seq")
         val conversationSeq = obj.long("conversationSeq", "conversation_seq")
+        val timelineOrderKey = obj.string("timelineOrderKey", "timeline_order_key")
+        val timelineIdentityKey = obj.string("timelineIdentityKey", "timeline_identity_key")
+        val timelineItemKind = obj.string("timelineItemKind", "timeline_item_kind")
+        val timelineResolvesWaiting = obj.boolean("timelineResolvesWaiting", "timeline_resolves_waiting")
         return ChatHistoryItem(
             id = id,
             role = role,
@@ -149,7 +161,11 @@ object ChatHistoryItemSerializer : KSerializer<ChatHistoryItem> {
             sortTimestamp = sortTimestamp,
             sortTimestampMs = sortTimestampMs,
             seq = seq,
-            conversationSeq = conversationSeq
+            conversationSeq = conversationSeq,
+            timelineOrderKey = timelineOrderKey,
+            timelineIdentityKey = timelineIdentityKey,
+            timelineItemKind = timelineItemKind,
+            timelineResolvesWaiting = timelineResolvesWaiting
         )
     }
 

@@ -23,7 +23,11 @@ internal sealed interface TimelineEvent {
         val content: List<RelayChatContentBlock>,
         val createdAt: String?,
         val seq: Long? = null,
-        val turnSeq: Long? = null
+        val turnSeq: Long? = null,
+        val timelineOrderKey: String? = null,
+        val timelineIdentityKey: String? = null,
+        val timelineItemKind: String? = null,
+        val timelineResolvesWaiting: Boolean? = null
     ) : TimelineEvent
 
     data class MessagePartDelta(
@@ -36,7 +40,11 @@ internal sealed interface TimelineEvent {
         val content: List<RelayChatContentBlock>,
         val runId: String?,
         val createdAt: String?,
-        val turnSeq: Long? = null
+        val turnSeq: Long? = null,
+        val timelineOrderKey: String? = null,
+        val timelineIdentityKey: String? = null,
+        val timelineItemKind: String? = null,
+        val timelineResolvesWaiting: Boolean? = null
     ) : TimelineEvent
 
     data class MessageCompleted(
@@ -48,7 +56,11 @@ internal sealed interface TimelineEvent {
         val content: List<RelayChatContentBlock>,
         val createdAt: String?,
         val seq: Long? = null,
-        val turnSeq: Long? = null
+        val turnSeq: Long? = null,
+        val timelineOrderKey: String? = null,
+        val timelineIdentityKey: String? = null,
+        val timelineItemKind: String? = null,
+        val timelineResolvesWaiting: Boolean? = null
     ) : TimelineEvent
 
     data class RunTerminal(
@@ -80,7 +92,11 @@ internal sealed interface TimelineEvent {
         val content: List<RelayChatContentBlock>,
         val createdAt: String?,
         val seq: Long? = null,
-        val turnSeq: Long? = null
+        val turnSeq: Long? = null,
+        val timelineOrderKey: String? = null,
+        val timelineIdentityKey: String? = null,
+        val timelineItemKind: String? = null,
+        val timelineResolvesWaiting: Boolean? = null
     ) : TimelineEvent
 
     data class HistorySnapshotPage(
@@ -142,7 +158,11 @@ internal data class HistorySnapshotItem(
     val createdAt: String? = null,
     val runId: String? = null,
     val seq: Long? = null,
-    val turnSeq: Long? = null
+    val turnSeq: Long? = null,
+    val timelineOrderKey: String? = null,
+    val timelineIdentityKey: String? = null,
+    val timelineItemKind: String? = null,
+    val timelineResolvesWaiting: Boolean? = null
 ) {
     val displayText: String
         get() = if (content.isNotEmpty()) {
@@ -204,6 +224,10 @@ private data class RawTimelineEvent(
     val partId: String? = null,
     val seq: Long? = null,
     val turnSeq: Long? = null,
+    val timelineItemKind: String? = null,
+    val timelineOrderKey: String? = null,
+    val timelineIdentityKey: String? = null,
+    val timelineResolvesWaiting: Boolean? = null,
     val messageState: String? = null,
     val runState: String? = null,
     val status: String? = null,
@@ -231,7 +255,11 @@ private data class RawTimelineEvent(
                 content = canonicalContent(),
                 createdAt = createdAt,
                 seq = seq,
-                turnSeq = turnSeq
+                turnSeq = turnSeq,
+                timelineOrderKey = timelineOrderKey,
+                timelineIdentityKey = timelineIdentityKey,
+                timelineItemKind = timelineItemKind,
+                timelineResolvesWaiting = timelineResolvesWaiting
             )
             "message.part.delta" -> TimelineEvent.MessagePartDelta(
                 eventId = eventId,
@@ -243,7 +271,11 @@ private data class RawTimelineEvent(
                 content = canonicalContent(),
                 runId = runId,
                 createdAt = createdAt,
-                turnSeq = turnSeq
+                turnSeq = turnSeq,
+                timelineOrderKey = timelineOrderKey,
+                timelineIdentityKey = timelineIdentityKey,
+                timelineItemKind = timelineItemKind,
+                timelineResolvesWaiting = timelineResolvesWaiting
             )
             "message.completed" -> TimelineEvent.MessageCompleted(
                 eventId = eventId,
@@ -254,7 +286,11 @@ private data class RawTimelineEvent(
                 content = canonicalContent(),
                 createdAt = createdAt,
                 seq = seq,
-                turnSeq = turnSeq
+                turnSeq = turnSeq,
+                timelineOrderKey = timelineOrderKey,
+                timelineIdentityKey = timelineIdentityKey,
+                timelineItemKind = timelineItemKind,
+                timelineResolvesWaiting = timelineResolvesWaiting
             )
             "run.completed", "run.failed", "run.aborted" -> TimelineEvent.RunTerminal(
                 eventId = eventId,
@@ -291,7 +327,11 @@ private data class RawTimelineEvent(
                 content = canonicalToolContent(),
                 createdAt = createdAt,
                 seq = seq,
-                turnSeq = turnSeq
+                turnSeq = turnSeq,
+                timelineOrderKey = timelineOrderKey,
+                timelineIdentityKey = timelineIdentityKey,
+                timelineItemKind = timelineItemKind,
+                timelineResolvesWaiting = timelineResolvesWaiting
             )
             "history.snapshot.page" -> TimelineEvent.HistorySnapshotPage(
                 eventId = eventId,

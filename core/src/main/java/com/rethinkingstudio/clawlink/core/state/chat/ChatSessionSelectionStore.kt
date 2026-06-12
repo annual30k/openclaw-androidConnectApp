@@ -35,7 +35,7 @@ class ChatSessionSelectionStore(context: Context) {
     }
 
     private companion object {
-        const val PREFS_NAME = "clawlink_chat_session_selection"
+        const val PREFS_NAME = "clawlink_chat_session_selection_v2"
         const val KEY_PREFIX = "last_session:"
         const val DEFAULT_SESSION_KEY = "main"
     }

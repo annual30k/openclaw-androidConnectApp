@@ -6,8 +6,10 @@ import com.rethinkingstudio.clawlink.core.models.chat.MessageState
 import com.rethinkingstudio.clawlink.core.models.chat.RelayChatContentBlock
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
+import org.junit.Ignore
 import org.junit.Test
 
+@Ignore("Legacy sourceRun/timestamp anchoring was removed; relay canonical timeline owns tool and attachment order.")
 class ChatSourceRunOrderingTest {
     @Test
     fun ordersMixedToolAssistantTextAndImageAroundSourceRun() {

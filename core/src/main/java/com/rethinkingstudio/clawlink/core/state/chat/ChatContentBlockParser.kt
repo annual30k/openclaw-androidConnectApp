@@ -19,9 +19,9 @@ internal fun parseContentBlocks(root: JsonObject): List<RelayChatContentBlock> {
     if (arrays.isEmpty()) return emptyList()
 
     val seen = linkedSetOf<String>()
-    return arrays.flatMap { array ->
+    return sanitizeChatContentBlocks(arrays.flatMap { array ->
         array.mapNotNull { element -> parseContentBlock(element) }
-    }.filter { block -> seen.add(block.signature()) }
+    }.filter { block -> seen.add(block.signature()) })
 }
 
 private fun parseContentBlock(element: JsonElement): RelayChatContentBlock? {

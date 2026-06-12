@@ -421,7 +421,11 @@ data class ChatMessage(
     val turnSeq: Long? = null,
     val timelineStableKey: String = "",
     val timelineMessageId: String = "",
-    val timelinePartId: String = ""
+    val timelinePartId: String = "",
+    val timelineOrderKey: String = "",
+    val timelineIdentityKey: String = "",
+    val timelineItemKind: String = "",
+    val timelineResolvesWaiting: Boolean? = null
 ) {
     val plainTextContent: String
         get() {

@@ -8,7 +8,6 @@ import java.time.Instant
 import java.util.UUID
 
 private const val realtimeMessageOrderEpsilon = 0.001
-private const val recentVoiceTranscriptWindowSeconds = 180.0
 
 internal fun mergeRemoteUserMessageIntoCurrentMessages(
     currentMessages: List<ChatMessage>,
@@ -38,8 +37,8 @@ internal fun mergeRemoteUserMessageIntoCurrentMessages(
         message.role == MessageRole.user &&
             message.runId.startsWith("local-user-") &&
             !message.hasVoiceContent &&
-            ((localUserRunId != null && message.runId == localUserRunId) ||
-                userTextMatchesForRealtimeMerge(message.content, trimmed))
+            localUserRunId != null &&
+            message.runId == localUserRunId
     }
     if (localTextIndex >= 0) {
         val existing = messages[localTextIndex]
@@ -53,8 +52,8 @@ internal fun mergeRemoteUserMessageIntoCurrentMessages(
     val last = messages.lastOrNull()
     if (last != null &&
         last.role == MessageRole.user &&
-        userTextMatchesForRealtimeMerge(last.content, trimmed) &&
-        (normalizedRunId == null || last.runId == normalizedRunId)
+        normalizedRunId != null &&
+        last.runId == normalizedRunId
     ) {
         return currentMessages
     }
@@ -162,8 +161,6 @@ internal fun mergeCompletedAssistantFinalIntoCurrentMessages(
 
     val messages = currentMessages.toMutableList()
     val existingIndex = sameRunCompletedAssistantFinalIndex(messages, candidate, candidateText)
-        .takeIf { it >= 0 }
-        ?: sameTurnAssistantTextFinalIndex(messages, candidate, candidateText)
     if (existingIndex < 0) return null
 
     val existing = messages[existingIndex]
@@ -194,40 +191,6 @@ private fun sameRunCompletedAssistantFinalIndex(
     }
 }
 
-private fun sameTurnAssistantTextFinalIndex(
-    messages: List<ChatMessage>,
-    candidate: ChatMessage,
-    candidateText: String
-): Int {
-    val ordered = orderMessagesWithSourceRunAnchors(messages)
-    val candidateTimestamp = candidate.sortTimestamp
-    return ordered.indices.lastOrNull { index ->
-        val existing = ordered[index]
-        if (existing.id == candidate.id ||
-            existing.role != MessageRole.assistant ||
-            existing.state != MessageState.streaming ||
-            !isPlainAssistantTextMessage(existing) ||
-            isTransientAssistantPlaceholder(existing) ||
-            sanitizeChatMessageText(existing.plainTextContent).trim() != candidateText
-        ) {
-            return@lastOrNull false
-        }
-        val triggeringUserIndex = ordered
-            .take(index)
-            .indexOfLast { message -> message.role == MessageRole.user && message.shouldDisplayInChat(showInvocationProcess = true) }
-        if (triggeringUserIndex < 0) return@lastOrNull false
-        val nextUser = ordered
-            .drop(index + 1)
-            .firstOrNull { message -> message.role == MessageRole.user && message.shouldDisplayInChat(showInvocationProcess = true) }
-        if (candidateTimestamp != null && nextUser?.sortTimestamp != null && candidateTimestamp >= nextUser.sortTimestamp) {
-            return@lastOrNull false
-        }
-        true
-    }?.let { orderedIndex ->
-        messages.indexOfFirst { message -> message.id == ordered[orderedIndex].id }
-    } ?: -1
-}
-
 private fun isPlainAssistantTextMessage(message: ChatMessage): Boolean {
     return !message.hasFileContent &&
         !message.hasVoiceContent &&
@@ -249,11 +212,9 @@ internal fun removeResolvedTransientAssistantPlaceholders(
         .map { it.runId }
         .toSet()
     val sameTurnResolvedPlaceholderIds = sameTurnResolvedTransientAssistantIds(messages)
-    val sameTurnResolvedStreamingAssistantIds = sameTurnResolvedStreamingAssistantIds(messages)
     if (
         terminalAssistantRunIds.isEmpty() &&
-        sameTurnResolvedPlaceholderIds.isEmpty() &&
-        sameTurnResolvedStreamingAssistantIds.isEmpty()
+        sameTurnResolvedPlaceholderIds.isEmpty()
     ) {
         return messages
     }
@@ -262,9 +223,8 @@ internal fun removeResolvedTransientAssistantPlaceholders(
         message.role == MessageRole.assistant &&
             message.state == MessageState.streaming &&
             (
-                isTransientAssistantPlaceholder(message) &&
-                    (message.runId in terminalAssistantRunIds || message.id in sameTurnResolvedPlaceholderIds) ||
-                    message.id in sameTurnResolvedStreamingAssistantIds
+                message.runId in terminalAssistantRunIds ||
+                    (isTransientAssistantPlaceholder(message) && message.id in sameTurnResolvedPlaceholderIds)
                 )
     }
 }
@@ -302,120 +262,11 @@ private fun sameTurnResolvedTransientAssistantIds(messages: List<ChatMessage>): 
     }.toSet()
 }
 
-private fun sameTurnResolvedStreamingAssistantIds(messages: List<ChatMessage>): Set<String> {
-    val ordered = messages.sortedWith(
-        compareBy<ChatMessage> { it.sortTimestamp ?: Double.MAX_VALUE }
-            .thenBy { it.createdAt }
-            .thenBy { it.id }
-    )
-    return ordered.mapIndexedNotNull { index, message ->
-        if (message.role != MessageRole.assistant ||
-            message.state != MessageState.streaming ||
-            message.hasFileContent ||
-            message.hasVoiceContent ||
-            message.hasToolContent ||
-            isTransientAssistantPlaceholder(message)
-        ) {
-            return@mapIndexedNotNull null
-        }
-
-        val triggeringUserIndex = ordered
-            .take(index)
-            .indexOfLast { candidate -> candidate.role == MessageRole.user && candidate.shouldDisplayInChat(showInvocationProcess = true) }
-        if (triggeringUserIndex < 0) return@mapIndexedNotNull null
-
-        val nextUserIndex = ordered
-            .drop(index + 1)
-            .indexOfFirst { candidate -> candidate.role == MessageRole.user && candidate.shouldDisplayInChat(showInvocationProcess = true) }
-            .takeIf { it >= 0 }
-            ?.let { relativeIndex -> index + 1 + relativeIndex }
-            ?: ordered.size
-
-        val streamingSignature = assistantPlainTextSignature(message)
-        val resolvedInSameTurn = (triggeringUserIndex + 1 until nextUserIndex).any { candidateIndex ->
-            val candidate = ordered[candidateIndex]
-            if (candidate.id == message.id || !isTerminalRenderableAssistant(candidate)) {
-                return@any false
-            }
-            val sameRun = message.runId.isNotBlank() && message.runId == candidate.runId
-            val sameText = streamingSignature != null && streamingSignature == assistantPlainTextSignature(candidate)
-            sameRun || sameText
-        }
-        if (resolvedInSameTurn) message.id else null
-    }.toSet()
-}
-
 private fun isTerminalRenderableAssistant(message: ChatMessage): Boolean {
     if (message.role != MessageRole.assistant) return false
     if (message.state != MessageState.completed && message.state != MessageState.failed) return false
     if (isTransientAssistantPlaceholder(message)) return false
     return message.plainTextContent.trim().isNotEmpty() || message.contentBlocks.isNotEmpty()
-}
-
-internal fun removeDuplicateCompletedAssistantRepliesInSameTurn(
-    orderedMessages: List<ChatMessage>
-): List<ChatMessage> {
-    val result = mutableListOf<ChatMessage>()
-    val assistantTextIndexInTurn = mutableMapOf<String, Int>()
-    orderedMessages.forEach { message ->
-        if (message.role == MessageRole.user && message.shouldDisplayInChat(showInvocationProcess = true)) {
-            assistantTextIndexInTurn.clear()
-            result += message
-            return@forEach
-        }
-
-        val signature = duplicateAssistantTextSignature(message)
-        if (signature != null) {
-            val existingIndex = assistantTextIndexInTurn[signature]
-            if (existingIndex != null) {
-                val hasToolBetweenDuplicates = result
-                    .drop(existingIndex + 1)
-                    .any { it.hasToolContent }
-                if (!hasToolBetweenDuplicates) {
-                    return@forEach
-                }
-                result.removeAt(existingIndex)
-                assistantTextIndexInTurn.keys.toList().forEach { key ->
-                    val index = assistantTextIndexInTurn[key] ?: return@forEach
-                    if (index > existingIndex) {
-                        assistantTextIndexInTurn[key] = index - 1
-                    }
-                }
-            }
-            assistantTextIndexInTurn[signature] = result.size
-        }
-        result += message
-    }
-    return result
-}
-
-private fun duplicateAssistantTextSignature(message: ChatMessage): String? {
-    if (message.role != MessageRole.assistant ||
-        message.state != MessageState.completed ||
-        message.hasFileContent ||
-        message.hasVoiceContent ||
-        message.hasToolContent ||
-        isTransientAssistantPlaceholder(message)
-    ) {
-        return null
-    }
-    return assistantPlainTextSignature(message)
-}
-
-private fun assistantPlainTextSignature(message: ChatMessage): String? {
-    if (message.role != MessageRole.assistant ||
-        message.hasFileContent ||
-        message.hasVoiceContent ||
-        message.hasToolContent ||
-        isTransientAssistantPlaceholder(message)
-    ) {
-        return null
-    }
-    val text = sanitizeChatMessageText(message.plainTextContent)
-        .trim()
-        .replace(Regex("[\\s\\u2000-\\u200A\\u202F\\u205F\\u3000]+"), " ")
-    if (isProtocolTypingMarkerText(text)) return null
-    return text.takeIf { it.isNotBlank() }
 }
 
 private fun hasRenderableFinalContentBlocks(blocks: List<RelayChatContentBlock>): Boolean {
@@ -448,19 +299,7 @@ private fun mergeRemoteVoiceTranscriptIntoLocalMessage(
         }
     } ?: -1
 
-    val eventTimestamp = eventSortTimestamp ?: (System.currentTimeMillis() / 1000.0)
-    val fallbackIndex = messages.indexOfLast { message ->
-        if (message.role != MessageRole.user ||
-            !message.runId.startsWith("local-user-") ||
-            !message.hasVoiceContent
-        ) {
-            return@indexOfLast false
-        }
-        val voiceTimestamp = message.sortTimestamp ?: return@indexOfLast true
-        kotlin.math.abs(eventTimestamp - voiceTimestamp) < recentVoiceTranscriptWindowSeconds
-    }
-
-    val index = runMatchedIndex.takeIf { it >= 0 } ?: fallbackIndex
+    val index = runMatchedIndex
     if (index < 0) return false
 
     val existing = messages[index]
@@ -486,14 +325,4 @@ private fun pendingAssistantForRemoteUserEcho(
         messages.firstOrNull { it.role == MessageRole.assistant && it.runId == runId }?.let { return it }
     }
     return null
-}
-
-private fun userTextMatchesForRealtimeMerge(left: String, right: String): Boolean {
-    return normalizeRealtimeUserText(left) == normalizeRealtimeUserText(right)
-}
-
-private fun normalizeRealtimeUserText(value: String): String {
-    return sanitizeChatMessageText(value)
-        .trim()
-        .replace(Regex("[\\s\\u2000-\\u200A\\u202F\\u205F\\u3000]+"), " ")
 }

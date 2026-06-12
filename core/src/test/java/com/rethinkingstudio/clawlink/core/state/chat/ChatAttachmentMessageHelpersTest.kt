@@ -1,5 +1,6 @@
 package com.rethinkingstudio.clawlink.core.state.chat
 
+import com.rethinkingstudio.clawlink.core.models.chat.RelayChatContentBlock
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
@@ -50,5 +51,22 @@ class ChatAttachmentMessageHelpersTest {
         """.trimIndent()
 
         assertEquals("请看看这个文件", sanitizeChatMessageText(text))
+    }
+
+    @Test
+    fun sanitizesHermesRuntimeContextFromTextBlocks() {
+        val text = """
+            昨天打完篮球小腿的前侧很痛这是怎么回事
+
+            [Hermes runtime context]
+            Current runtime: model=mimo-v2.5-pro, provider=Xiaomi MiMo.
+            If the user asks which model or provider is currently being used, answer from this runtime context.
+
+            [ClawConnect mobile bridge] You are connected to a mobile chat client through ClawConnect.
+        """.trimIndent()
+
+        val blocks = sanitizeChatContentBlocks(listOf(RelayChatContentBlock(type = "text", text = text)))
+
+        assertEquals("昨天打完篮球小腿的前侧很痛这是怎么回事", blocks.single().text)
     }
 }

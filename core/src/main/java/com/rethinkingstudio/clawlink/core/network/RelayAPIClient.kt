@@ -267,7 +267,7 @@ class RelayAPIClient(
     suspend fun fetchChatHistoryPage(
         gatewayId: String,
         sessionKey: String,
-        limit: Int = 100,
+        limit: Int = 500,
         cursor: String? = null,
         direction: String = "older"
     ): ChatHistoryResponse {
@@ -277,7 +277,7 @@ class RelayAPIClient(
         )
     }
 
-    suspend fun fetchChatHistory(gatewayId: String, sessionKey: String, limit: Int = 100): List<ChatHistoryItem> {
+    suspend fun fetchChatHistory(gatewayId: String, sessionKey: String, limit: Int = 500): List<ChatHistoryItem> {
         return fetchChatHistoryPage(gatewayId, sessionKey, limit).items
     }
 

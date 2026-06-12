@@ -8,6 +8,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
+import org.junit.Ignore
 import org.junit.Test
 
 class ChatTimelineReducerTest {
@@ -135,7 +136,8 @@ class ChatTimelineReducerTest {
                   "protocolVersion": 2,
                   "eventId": "user-server",
                   "eventType": "turn.user.created",
-                  "turnId": "relay-turn-1",
+                  "turnId": "client-run-1",
+                  "runId": "client-run-1",
                   "messageId": "server-user-message",
                   "createdAt": "1970-01-01T00:03:20.500Z",
                   "content": [
@@ -242,7 +244,7 @@ class ChatTimelineReducerTest {
     }
 
     @Test
-    fun messageCompletedCoalescesDuplicateAssistantImageFileIdIntoOneMessageSlot() {
+    fun messageCompletedKeepsDistinctCanonicalImageItemsEvenWhenFileIdMatches() {
         val state = ChatTimelineReducer.reduceAll(
             ChatTimelineState(),
             listOf(
@@ -303,10 +305,9 @@ class ChatTimelineReducerTest {
             )
         )
 
-        assertEquals(1, state.messages.size)
-        assertEquals("assistant-run-1", state.messages.single().id)
-        assertEquals("file-img-1", state.messages.single().fileContentBlocks.single().fileId)
-        assertEquals(200.0, state.messages.single().sortTimestamp ?: 0.0, 0.0001)
+        assertEquals(2, state.messages.size)
+        assertEquals(listOf("assistant-run-1", "file-file-img-1"), state.messages.map { it.id })
+        assertEquals(listOf("file-img-1", "file-img-1"), state.messages.map { it.fileContentBlocks.single().fileId })
     }
 
     @Test
@@ -391,7 +392,7 @@ class ChatTimelineReducerTest {
             role = MessageRole.user,
             state = MessageState.completed,
             content = "Reply QA907 only",
-            runId = "local-user-mobile-run",
+            runId = "local-user-relay-request-run",
             sortTimestamp = 210.0
         )
         val localAssistant = ChatMessage(
@@ -399,16 +400,16 @@ class ChatTimelineReducerTest {
             role = MessageRole.assistant,
             state = MessageState.streaming,
             content = protocolTypingMarkerText,
-            runId = "mobile-run",
+            runId = "relay-request-run",
             sortTimestamp = 210.001
         )
 
         val state = ChatTimelineReducer.reduce(
             ChatTimelineState(
                 messages = listOf(localUser, localAssistant),
-                activeRunId = "mobile-run",
-                activeRunsByTurnId = mapOf("mobile-run" to "mobile-run"),
-                activeTurnByRunId = mapOf("mobile-run" to "mobile-run")
+                activeRunId = "relay-request-run",
+                activeRunsByTurnId = mapOf("relay-request-run" to "relay-request-run"),
+                activeTurnByRunId = mapOf("relay-request-run" to "relay-request-run")
             ),
             event(
                 """
@@ -489,7 +490,7 @@ class ChatTimelineReducerTest {
     }
 
     @Test
-    fun emptyMessageCompletedKeepsOptimisticAssistantPlaceholderWaitingForFirstReplyText() {
+    fun emptyAssistantMessageCompletedClearsOptimisticAssistantPlaceholder() {
         val localUser = ChatMessage(
             id = "local-user-new",
             role = MessageRole.user,
@@ -532,11 +533,11 @@ class ChatTimelineReducerTest {
         )
         val ordered = orderMessagesWithSourceRunAnchors(state.messages)
 
-        assertEquals(listOf("local-user-new", "assistant-local"), ordered.map { it.id })
-        assertEquals(protocolTypingMarkerText, ordered.last().content)
-        assertEquals(MessageState.streaming, ordered.last().state)
-        assertTrue(hasActiveVisibleTimelineRun(state, ordered))
-        assertTrue(state.hasActiveRun)
+        assertEquals(listOf("local-user-new", "assistant-server"), ordered.map { it.id })
+        assertEquals("", ordered.last().content)
+        assertEquals(MessageState.completed, ordered.last().state)
+        assertFalse(hasActiveVisibleTimelineRun(state, ordered))
+        assertFalse(state.hasActiveRun)
         assertTrue("final-empty" in state.seenEventIds)
     }
 
@@ -547,7 +548,7 @@ class ChatTimelineReducerTest {
             role = MessageRole.user,
             state = MessageState.completed,
             content = "Reply QA908 only",
-            runId = "local-user-mobile-run",
+            runId = "local-user-relay-request-run",
             sortTimestamp = 220.0
         )
         val localAssistant = ChatMessage(
@@ -555,16 +556,16 @@ class ChatTimelineReducerTest {
             role = MessageRole.assistant,
             state = MessageState.streaming,
             content = protocolTypingMarkerText,
-            runId = "mobile-run",
+            runId = "relay-request-run",
             sortTimestamp = 220.001
         )
 
         val state = ChatTimelineReducer.reduce(
             ChatTimelineState(
                 messages = listOf(localUser, localAssistant),
-                activeRunId = "mobile-run",
-                activeRunsByTurnId = mapOf("mobile-run" to "mobile-run"),
-                activeTurnByRunId = mapOf("mobile-run" to "mobile-run")
+                activeRunId = "relay-request-run",
+                activeRunsByTurnId = mapOf("relay-request-run" to "relay-request-run"),
+                activeTurnByRunId = mapOf("relay-request-run" to "relay-request-run")
             ),
             event(
                 """
@@ -593,6 +594,7 @@ class ChatTimelineReducerTest {
         assertFalse(state.hasActiveRun)
     }
 
+    @Ignore("Legacy placeholder stealing guard without canonical order was removed.")
     @Test
     fun messageCompletedDoesNotStealLaterOptimisticPlaceholderForEarlierCommandTurn() {
         val commandUser = ChatMessage(
@@ -680,7 +682,10 @@ class ChatTimelineReducerTest {
             state = MessageState.completed,
             content = "OK",
             runId = "run-new",
-            sortTimestamp = 200.001
+            sortTimestamp = 200.001,
+            timelineOrderKey = "v1|00000000000000000001|50|000000|assistant-server",
+            timelineIdentityKey = "message:assistant:assistant-server",
+            timelineItemKind = "message:assistant"
         )
         val finalEvent = event(
             """
@@ -738,7 +743,7 @@ class ChatTimelineReducerTest {
     @Test
     fun historySnapshotReplacesOldWaitingPlaceholderWithoutStealingNewPlaceholder() {
         val oldUser = ChatMessage(
-            id = "user-old",
+            id = "local-user-old",
             role = MessageRole.user,
             state = MessageState.completed,
             content = "old prompt",
@@ -786,11 +791,25 @@ class ChatTimelineReducerTest {
                   "messages": [
                     {
                       "turnId": "turn-old",
+                      "runId": "turn-old",
+                      "messageId": "user-old",
+                      "role": "user",
+                      "messageState": "completed",
+                      "timelineOrderKey": "v1|00000000000000000001|10|000000|user-old",
+                      "timelineIdentityKey": "message:user:user-old",
+                      "timelineItemKind": "message:user",
+                      "content": [{ "type": "text", "text": "old prompt" }]
+                    },
+                    {
+                      "turnId": "turn-old",
                       "runId": "run-old",
-	                      "messageId": "assistant-old-server",
-	                      "role": "assistant",
-	                      "messageState": "completed",
-	                      "content": [{ "type": "text", "text": "old reply" }]
+                      "messageId": "assistant-old-server",
+                      "role": "assistant",
+                      "messageState": "completed",
+                      "timelineOrderKey": "v1|00000000000000000001|50|000000|assistant-old-server",
+                      "timelineIdentityKey": "message:assistant:assistant-old-server",
+                      "timelineItemKind": "message:assistant",
+                      "content": [{ "type": "text", "text": "old reply" }]
 	                    }
 	                  ]
                 }
@@ -842,11 +861,13 @@ class ChatTimelineReducerTest {
                   "eventType": "history.snapshot.page",
                   "messages": [
                     {
-                      "turnId": "relay-turn-1",
-                      "runId": "history-user-message",
+                      "turnId": "client-run-1",
+                      "runId": "client-run-1",
                       "messageId": "server-user-message",
                       "role": "user",
                       "messageState": "completed",
+                      "timelineOrderKey": "v1|00000000000000000001|10|000000|server-user-message",
+                      "timelineIdentityKey": "message:user:server-user-message",
                       "createdAt": "1970-01-01T00:03:20.500Z",
                       "content": [
                         { "type": "text", "text": "帮我分析一下这个图片" },
@@ -876,7 +897,7 @@ class ChatTimelineReducerTest {
     }
 
     @Test
-    fun historySnapshotCoalescesDelayedHermesPlainUserEchoWhenAssistantResolvesSameTurn() {
+    fun historySnapshotReplacesPlainUserEchoWhenRunIdentityMatches() {
         val state = ChatTimelineReducer.reduceAll(
             ChatTimelineState(),
             listOf(
@@ -890,9 +911,12 @@ class ChatTimelineReducerTest {
                             type = "text",
                             text = "帮我查看一下 codex 的任务完成了吗，结论是什么"
                         )
-                    ),
-                    createdAt = "2026-05-31T08:08:37.000Z"
-                ),
+	                    ),
+	                    createdAt = "2026-05-31T08:08:37.000Z",
+                        timelineOrderKey = "v1|00000000000000000001|10|000000|local-user-plain",
+                        timelineIdentityKey = "message:user:local-user-plain",
+                        timelineItemKind = "message:user"
+	                ),
                 TimelineEvent.MessageCompleted(
                     eventId = "plain-assistant-local",
                     turnId = "turn-hermes-plain",
@@ -905,8 +929,11 @@ class ChatTimelineReducerTest {
                             text = "我看了 Codex 的任务日志和当前仓库状态，结论是："
                         )
                     ),
-                    createdAt = "2026-05-31T08:12:03.000Z"
-                ),
+	                    createdAt = "2026-05-31T08:12:03.000Z",
+                        timelineOrderKey = "v1|00000000000000000001|50|000000|assistant-hermes-plain",
+                        timelineIdentityKey = "message:assistant:assistant-hermes-plain",
+                        timelineItemKind = "message:assistant"
+	                ),
                 TimelineEvent.HistorySnapshotPage(
                     eventId = "plain-history-page",
                     items = listOf(
@@ -921,8 +948,11 @@ class ChatTimelineReducerTest {
                                     text = "帮我查看一下 codex 的任务完成了吗，结论是什么"
                                 )
                             ),
-                            createdAt = "2026-05-31T08:12:00.000Z"
-                        ),
+                            createdAt = "2026-05-31T08:12:00.000Z",
+	                            timelineOrderKey = "v1|00000000000000000001|10|000000|history-hermes-plain-user",
+	                            timelineIdentityKey = "message:user:history-hermes-plain-user",
+                                timelineItemKind = "message:user"
+	                        ),
                         HistorySnapshotItem(
                             turnId = "",
                             runId = "run-hermes-plain",
@@ -934,8 +964,11 @@ class ChatTimelineReducerTest {
                                     text = "我看了 Codex 的任务日志和当前仓库状态，结论是："
                                 )
                             ),
-                            createdAt = "2026-05-31T08:12:03.000Z"
-                        )
+                            createdAt = "2026-05-31T08:12:03.000Z",
+	                            timelineOrderKey = "v1|00000000000000000001|50|000000|assistant-hermes-plain",
+	                            timelineIdentityKey = "message:assistant:assistant-hermes-plain",
+                                timelineItemKind = "message:assistant"
+	                        )
                     )
                 )
             )
@@ -949,7 +982,7 @@ class ChatTimelineReducerTest {
     }
 
     @Test
-    fun historySnapshotCoalescesNearbyRunlessPlainUserEcho() {
+    fun historySnapshotReplacesPlainUserEchoWhenRunIdentityMatchesWithoutTextGuessing() {
         val localUser = ChatMessage(
             id = "local-user-screenshot",
             role = MessageRole.user,
@@ -971,7 +1004,10 @@ class ChatTimelineReducerTest {
                         messageId = "history-user-screenshot",
                         role = "user",
                         content = listOf(RelayChatContentBlock(type = "text", text = "再发一个当前屏幕截图")),
-                        createdAt = "2026-06-07T12:26:00.500Z"
+                        createdAt = "2026-06-07T12:26:00.500Z",
+                        timelineOrderKey = "v1|00000000000000000001|10|000000|history-user-screenshot",
+                        timelineIdentityKey = "message:user:history-user-screenshot",
+                        timelineItemKind = "message:user"
                     )
                 )
             )
@@ -992,7 +1028,10 @@ class ChatTimelineReducerTest {
                     runId = null,
                     messageId = "local-user-first",
                     content = listOf(RelayChatContentBlock(type = "text", text = "重新总结一下")),
-                    createdAt = "2026-05-31T08:08:37.000Z"
+                    createdAt = "2026-05-31T08:08:37.000Z",
+                    timelineOrderKey = "v1|00000000000000000001|10|000000|local-user-first",
+                    timelineIdentityKey = "message:user:local-user-first",
+                    timelineItemKind = "message:user"
                 ),
                 TimelineEvent.MessageCompleted(
                     eventId = "first-assistant-local",
@@ -1001,7 +1040,10 @@ class ChatTimelineReducerTest {
                     messageId = "assistant-first",
                     role = "assistant",
                     content = listOf(RelayChatContentBlock(type = "text", text = "第一次总结。")),
-                    createdAt = "2026-05-31T08:08:40.000Z"
+                    createdAt = "2026-05-31T08:08:40.000Z",
+                    timelineOrderKey = "v1|00000000000000000001|50|000000|assistant-first",
+                    timelineIdentityKey = "message:assistant:assistant-first",
+                    timelineItemKind = "message:assistant"
                 ),
                 TimelineEvent.HistorySnapshotPage(
                     eventId = "second-history-page",
@@ -1012,7 +1054,10 @@ class ChatTimelineReducerTest {
                             messageId = "history-second-user",
                             role = "user",
                             content = listOf(RelayChatContentBlock(type = "text", text = "重新总结一下")),
-                            createdAt = "2026-05-31T08:09:57.000Z"
+                            createdAt = "2026-05-31T08:09:57.000Z",
+                            timelineOrderKey = "v1|00000000000000000002|10|000000|history-second-user",
+                            timelineIdentityKey = "message:user:history-second-user",
+                            timelineItemKind = "message:user"
                         ),
                         HistorySnapshotItem(
                             turnId = "",
@@ -1020,7 +1065,10 @@ class ChatTimelineReducerTest {
                             messageId = "assistant-second",
                             role = "assistant",
                             content = listOf(RelayChatContentBlock(type = "text", text = "第二次总结。")),
-                            createdAt = "2026-05-31T08:10:00.000Z"
+                            createdAt = "2026-05-31T08:10:00.000Z",
+                            timelineOrderKey = "v1|00000000000000000002|50|000000|assistant-second",
+                            timelineIdentityKey = "message:assistant:assistant-second",
+                            timelineItemKind = "message:assistant"
                         )
                     )
                 )
@@ -1327,7 +1375,7 @@ class ChatTimelineReducerTest {
             )
         )
 
-        assertEquals(listOf("user-1", "tool-turn-1", "assistant-local"), state.messages.map { it.id })
+        assertEquals(listOf("user-1", "assistant-local", "tool-turn-1"), state.messages.map { it.id })
         val toolMessage = state.messages.single { it.role == MessageRole.tool }
         assertEquals("tool-turn-1", toolMessage.id)
         assertEquals(MessageState.streaming, toolMessage.state)
@@ -1386,13 +1434,13 @@ class ChatTimelineReducerTest {
             )
         )
 
-        assertEquals(listOf("user-1", "tool-turn-1", "assistant-local"), state.messages.map { it.id })
+        assertEquals(listOf("user-1", "assistant-local", "tool-turn-1"), state.messages.map { it.id })
         val toolMessage = state.messages.single { it.role == MessageRole.tool }
         assertEquals(MessageState.streaming, toolMessage.state)
         assertEquals("web_search", toolMessage.content)
         assertTrue(toolMessage.contentBlocks.isEmpty())
         assertTrue(toolMessage.shouldDisplayInChat(showInvocationProcess = true))
-        assertEquals(protocolTypingMarkerText, state.messages.last().content)
+        assertEquals(protocolTypingMarkerText, state.messages.first { it.id == "assistant-local" }.content)
         assertEquals("running", state.toolsById.getValue("tool-1").state)
     }
 
@@ -1507,7 +1555,7 @@ class ChatTimelineReducerTest {
         assertEquals(MessageState.streaming, stillWaiting.messages.first { it.id == "assistant-local" }.state)
         assertEquals("正在同步回复...", stillWaiting.messages.first { it.id == "assistant-local" }.content)
         assertEquals("Reading file", stillWaiting.messages.single { it.role == MessageRole.tool }.content)
-        assertEquals(listOf("user-1", "tool-turn-1", "assistant-local"), stillWaiting.messages.map { it.id })
+        assertEquals(listOf("user-1", "assistant-local", "tool-turn-1"), stillWaiting.messages.map { it.id })
         assertTrue(hasActiveVisibleTimelineRun(stillWaiting, stillWaiting.messages))
 
         val final = ChatTimelineReducer.reduce(
@@ -1531,8 +1579,96 @@ class ChatTimelineReducerTest {
         assertEquals(MessageState.completed, final.messages.first { it.id == "assistant-final" }.state)
         assertEquals("Tool result is ready.", final.messages.first { it.id == "assistant-final" }.content)
         assertEquals("Reading file", final.messages.single { it.role == MessageRole.tool }.content)
-        assertEquals(listOf("user-1", "tool-turn-1", "assistant-final"), final.messages.map { it.id })
+        assertEquals(listOf("user-1", "assistant-final", "tool-turn-1"), final.messages.map { it.id })
         assertFalse(hasActiveVisibleTimelineRun(final, final.messages))
+    }
+
+    @Test
+    fun assistantAttachmentCompletedReplacesWaitingBubble() {
+        val waitingAssistant = ChatMessage(
+            id = "assistant-local",
+            role = MessageRole.assistant,
+            state = MessageState.streaming,
+            content = "正在同步回复...",
+            runId = "run-1",
+            sortTimestamp = 200.001
+        )
+
+        val state = ChatTimelineReducer.reduce(
+            ChatTimelineState(
+                messages = listOf(waitingAssistant),
+                activeRunId = "run-1",
+                activeRunsByTurnId = mapOf("turn-1" to "run-1"),
+                activeTurnByRunId = mapOf("run-1" to "turn-1")
+            ),
+            event(
+                """
+                {
+                  "protocolVersion": 2,
+                  "eventId": "image-result",
+                  "eventType": "message.completed",
+                  "turnId": "turn-1",
+                  "runId": "run-1",
+                  "messageId": "assistant-image",
+                  "role": "assistant",
+                  "timelineItemKind": "attachment",
+                  "content": [
+                    {
+                      "type": "image",
+                      "attachmentId": "att-image-1",
+                      "fileName": "result.png",
+                      "mimeType": "image/png",
+                      "downloadUrl": "https://relay.example/files/att-image-1"
+                    }
+                  ]
+                }
+                """.trimIndent()
+            )
+        )
+
+        assertEquals(listOf("assistant-image"), state.messages.map { it.id })
+        assertEquals(MessageState.completed, state.messages.first { it.id == "assistant-image" }.state)
+        assertFalse(state.hasActiveRun)
+        assertFalse(hasActiveVisibleTimelineRun(state, state.messages))
+    }
+
+    @Test
+    fun attachmentStateChangedDoesNotReplaceWaitingBubble() {
+        val waitingAssistant = ChatMessage(
+            id = "assistant-local",
+            role = MessageRole.assistant,
+            state = MessageState.streaming,
+            content = "正在同步回复...",
+            runId = "run-1",
+            sortTimestamp = 200.001
+        )
+
+        val state = ChatTimelineReducer.reduce(
+            ChatTimelineState(
+                messages = listOf(waitingAssistant),
+                activeRunId = "run-1",
+                activeRunsByTurnId = mapOf("turn-1" to "run-1"),
+                activeTurnByRunId = mapOf("run-1" to "turn-1")
+            ),
+            event(
+                """
+                {
+                  "protocolVersion": 2,
+                  "eventId": "attachment-ready",
+                  "eventType": "attachment.state.changed",
+                  "attachmentId": "att-image-1",
+                  "messageId": "assistant-image",
+                  "state": "ready",
+                  "url": "https://relay.example/files/att-image-1"
+                }
+                """.trimIndent()
+            )
+        )
+
+        assertEquals(listOf("assistant-local"), state.messages.map { it.id })
+        assertEquals(MessageState.streaming, state.messages.single().state)
+        assertTrue(state.hasActiveRun)
+        assertTrue(hasActiveVisibleTimelineRun(state, state.messages))
     }
 
     @Test
@@ -1597,8 +1733,8 @@ class ChatTimelineReducerTest {
         val state = ChatTimelineReducer.reduceAll(
             ChatTimelineState(),
             listOf(
-                event("""{"protocolVersion":2,"eventId":"h1","eventType":"history.snapshot.page","messages":[{"turnId":"turn-1","messageId":"user-1","role":"user","text":"hello"}]}"""),
-                event("""{"protocolVersion":2,"eventId":"h2","eventType":"history.snapshot.page","messages":[{"turnId":"turn-1","messageId":"assistant-1","role":"assistant","content":[{"type":"text","text":"reply"}]}]}""")
+                event("""{"protocolVersion":2,"eventId":"h1","eventType":"history.snapshot.page","messages":[{"turnId":"turn-1","messageId":"user-1","role":"user","text":"hello","timelineOrderKey":"v1|00000000000000000001|10|000000|user-1","timelineIdentityKey":"message:user:user-1"}]}"""),
+                event("""{"protocolVersion":2,"eventId":"h2","eventType":"history.snapshot.page","messages":[{"turnId":"turn-1","messageId":"assistant-1","role":"assistant","content":[{"type":"text","text":"reply"}],"timelineOrderKey":"v1|00000000000000000001|50|000000|assistant-1","timelineIdentityKey":"message:assistant:assistant-1"}]}""")
             )
         )
 
@@ -1608,6 +1744,7 @@ class ChatTimelineReducerTest {
         assertEquals(setOf("user-1", "assistant-1"), state.historySnapshotMessageIds)
     }
 
+    @Ignore("Legacy assistant fragment collapse by contained text was removed; relay canonical identity is authoritative.")
     @Test
     fun historySnapshotPageCollapsesContainedAssistantTextFragments() {
         val state = ChatTimelineReducer.reduceAll(
@@ -1645,6 +1782,7 @@ class ChatTimelineReducerTest {
         assertEquals(setOf("assistant-fragment", "assistant-full"), state.historySnapshotMessageIds)
     }
 
+    @Ignore("Legacy createdAt ordering against optimistic local sends was removed.")
     @Test
     fun historySnapshotSortsBeforeOptimisticLocalSendByCreatedAt() {
         val localUser = ChatMessage(
@@ -1701,6 +1839,70 @@ class ChatTimelineReducerTest {
     }
 
     private fun event(raw: String): TimelineEvent {
-        return requireNotNull(TimelineEventLog.decodeEvent(raw))
+        return canonicalizedTestEvent(requireNotNull(TimelineEventLog.decodeEvent(raw)))
+    }
+
+    private fun canonicalizedTestEvent(event: TimelineEvent): TimelineEvent {
+        return when (event) {
+            is TimelineEvent.TurnUserCreated -> event.copy(
+                timelineOrderKey = event.timelineOrderKey ?: testOrderKey(event.messageId, "10"),
+                timelineIdentityKey = event.timelineIdentityKey ?: "message:user:${event.messageId}",
+                timelineItemKind = event.timelineItemKind ?: "message:user"
+            )
+            is TimelineEvent.MessagePartDelta -> {
+                val kind = testMessageKind(event.role ?: "assistant")
+                event.copy(
+                    timelineOrderKey = event.timelineOrderKey ?: testOrderKey(event.messageId, testOrderSlot(kind)),
+                    timelineIdentityKey = event.timelineIdentityKey ?: "$kind:${event.messageId}",
+                    timelineItemKind = event.timelineItemKind ?: kind
+                )
+            }
+            is TimelineEvent.MessageCompleted -> {
+                val kind = testMessageKind(event.role ?: "assistant")
+                event.copy(
+                    timelineOrderKey = event.timelineOrderKey ?: testOrderKey(event.messageId, testOrderSlot(kind)),
+                    timelineIdentityKey = event.timelineIdentityKey ?: "$kind:${event.messageId}",
+                    timelineItemKind = event.timelineItemKind ?: kind
+                )
+            }
+            is TimelineEvent.ToolInvocationUpdated -> event.copy(
+                timelineOrderKey = event.timelineOrderKey ?: testOrderKey(event.messageId ?: event.toolCallId, "30"),
+                timelineIdentityKey = event.timelineIdentityKey ?: "tool:${event.toolCallId}",
+                timelineItemKind = event.timelineItemKind ?: "tool"
+            )
+            is TimelineEvent.HistorySnapshotPage -> event.copy(
+                items = event.items.map { item ->
+                    val kind = testMessageKind(item.role)
+                    item.copy(
+                        timelineOrderKey = item.timelineOrderKey ?: testOrderKey(item.messageId, testOrderSlot(kind)),
+                        timelineIdentityKey = item.timelineIdentityKey ?: "$kind:${item.messageId}",
+                        timelineItemKind = item.timelineItemKind ?: kind
+                    )
+                }
+            )
+            else -> event
+        }
+    }
+
+    private fun testMessageKind(role: String): String {
+        return when (role.trim().lowercase()) {
+            "user" -> "message:user"
+            "tool" -> "tool"
+            "system" -> "system"
+            else -> "message:assistant"
+        }
+    }
+
+    private fun testOrderSlot(kind: String): String {
+        return when (kind) {
+            "message:user" -> "10"
+            "tool" -> "30"
+            "system" -> "40"
+            else -> "50"
+        }
+    }
+
+    private fun testOrderKey(messageId: String, slot: String): String {
+        return "v1|00000000000000000001|$slot|000000|$messageId"
     }
 }
