@@ -23,10 +23,21 @@ private val ChatMessage.hasCanonicalTimelineOrder: Boolean
         timelineIdentityKey.trim().isNotEmpty() &&
         timelineItemKind.trim().isNotEmpty()
 
+private val ChatMessage.hasLocalTimelineOrder: Boolean
+    get() = timelineOrderKey.trim().startsWith("local:")
+
 private fun ChatMessage.canonicalTurnIdentity(): String? {
-    val run = runId.trim().removePrefix("local-user-").takeIf { it.isNotEmpty() }
+    val run = normalizeTurnIdentity(runId)
     if (run != null) return run
-    return timelineMessageId.trim().takeIf { it.isNotEmpty() }
+    return normalizeTurnIdentity(timelineMessageId)
+}
+
+private fun normalizeTurnIdentity(value: String): String? {
+    var normalized = value.trim()
+    if (normalized.isEmpty()) return null
+    normalized = normalized.removePrefix("local-user-").removePrefix("user-").trim()
+    normalized = normalized.replace(Regex(":(user|assistant|tool|system|waiting)$", RegexOption.IGNORE_CASE), "").trim()
+    return normalized.takeIf { it.isNotEmpty() }
 }
 
 internal fun extractContent(item: ChatHistoryItem): String {
@@ -204,22 +215,33 @@ private fun mergeCanonicalHistoryWithCurrentMessages(
     isTrackedPendingAssistantMessageId: (String) -> Boolean
 ): List<ChatMessage> {
     val byIdentity = linkedMapOf<String, ChatMessage>()
-    currentMessages
-        .filter { it.hasCanonicalTimelineOrder }
-        .forEach { message -> byIdentity[message.timelineIdentityKey] = message }
     historyMessages
         .filter { it.hasCanonicalTimelineOrder }
         .forEach { message -> byIdentity[message.timelineIdentityKey] = message }
 
-    val canonicalTurnIds = historyMessages.mapNotNull { it.canonicalTurnIdentity() }.toSet()
+    val canonicalUserTurnIds = historyMessages
+        .filter { it.role == MessageRole.user }
+        .mapNotNull { it.canonicalTurnIdentity() }
+        .toSet()
+    val pendingTurnIds = currentMessages
+        .filter { message ->
+            message.id == currentStreamingMessageId ||
+                isTrackedPendingAssistantMessageId(message.id) ||
+                (message.role == MessageRole.assistant &&
+                    message.state in setOf(MessageState.pending, MessageState.streaming) &&
+                    isTransientAssistantPlaceholder(message))
+        }
+        .mapNotNull { it.canonicalTurnIdentity() }
+        .toSet()
     val pendingOverlay = currentMessages.filter { message ->
-        !message.hasCanonicalTimelineOrder &&
+        (!message.hasCanonicalTimelineOrder || message.hasLocalTimelineOrder) &&
             shouldPreserveCurrentMessageAcrossHistoryRefresh(
                 message = message,
                 currentStreamingMessageId = currentStreamingMessageId,
                 isTrackedPendingAssistantMessageId = isTrackedPendingAssistantMessageId
             ) &&
-            message.canonicalTurnIdentity()?.let { it !in canonicalTurnIds } ?: true
+            message.canonicalTurnIdentity()?.let { pendingTurnIds.isEmpty() || it in pendingTurnIds } ?: true &&
+            message.canonicalTurnIdentity()?.let { it !in canonicalUserTurnIds } ?: true
     }
 
     return sortTimelineMessagesV3(byIdentity.values.toList() + pendingOverlay)

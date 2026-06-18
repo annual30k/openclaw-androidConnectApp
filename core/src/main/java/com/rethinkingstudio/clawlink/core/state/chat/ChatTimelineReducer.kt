@@ -28,19 +28,20 @@ internal object ChatTimelineReducer {
             is TimelineEvent.MessageCompleted -> if (event.hasCanonicalTimelineKeys()) markedState.applyMessageCompleted(event) else markedState
             is TimelineEvent.RunTerminal -> markedState.applyRunTerminal(event)
             is TimelineEvent.AttachmentStateChanged -> AttachmentTimelineReducer.reduce(markedState, event, rememberEvent = false)
-            is TimelineEvent.ToolInvocationUpdated -> if (event.hasCanonicalTimelineKeys()) markedState.applyToolInvocation(event) else markedState
+            is TimelineEvent.ToolInvocationUpdated -> if (event.hasToolInvocationIdentity()) markedState.applyToolInvocation(event) else markedState
             is TimelineEvent.HistorySnapshotPage -> markedState.applyHistorySnapshot(event)
         }
     }
 
     private fun ChatTimelineState.applyUserTurn(event: TimelineEvent.TurnUserCreated): ChatTimelineState {
         if (messages.any { it.id == event.messageId }) return this
-        val localRunIds = listOfNotNull(
+        val incomingTurnIdentities = listOfNotNull(
             event.turnId.takeIf { it.isNotBlank() },
             event.runId?.takeIf { it.isNotBlank() }
-        ).map { "local-user-$it" }.toSet()
+        ).mapNotNull { normalizedTurnIdentity(it) }.toSet()
         val localIndex = messages.indexOfFirst { message ->
-            message.role == MessageRole.user && message.runId in localRunIds
+            message.role == MessageRole.user &&
+                normalizedTurnIdentity(message.runId) in incomingTurnIdentities
         }
             .takeIf { it >= 0 }
         val existing = localIndex?.let(messages::getOrNull)
@@ -181,6 +182,7 @@ internal object ChatTimelineReducer {
             sortTimestamp = matchedMessage?.sortTimestamp ?: timelineSortTimestamp(event.createdAt),
             seq = event.seq ?: matchedMessage?.seq,
             turnSeq = matchedMessage?.turnSeq ?: event.turnSeq,
+            timelineMessageId = event.messageId,
             timelineOrderKey = event.timelineOrderKey.orEmpty().ifBlank { matchedMessage?.timelineOrderKey.orEmpty() },
             timelineIdentityKey = event.timelineIdentityKey.orEmpty().ifBlank { matchedMessage?.timelineIdentityKey.orEmpty() },
             timelineItemKind = event.timelineItemKind.orEmpty().ifBlank { matchedMessage?.timelineItemKind.orEmpty() },
@@ -212,7 +214,7 @@ internal object ChatTimelineReducer {
         }
         val clearedRunsByTurn = activeRunsByTurnId.filterValues { activeRun -> activeRun !in runIdsToClear }
         return copy(
-            messages = nextMessages,
+            messages = orderMessagesWithSourceRunAnchors(nextMessages),
             activeRunId = if (activeRunId != null && activeRunId in runIdsToClear) null else activeRunId,
             activeRunsByTurnId = completedTurnId?.let { clearedRunsByTurn - it } ?: clearedRunsByTurn,
             activeTurnByRunId = activeTurnByRunId.filterKeys { activeRun -> activeRun !in runIdsToClear },
@@ -325,7 +327,7 @@ internal object ChatTimelineReducer {
             timelineResolvesWaiting = event.timelineResolvesWaiting ?: existingMessage?.timelineResolvesWaiting
         )
         return copy(
-            messages = upsertMessage(message),
+            messages = orderMessagesWithSourceRunAnchors(upsertToolMessage(message)),
             activeRunId = event.runId ?: activeRunId,
             activeRunsByTurnId = if (!event.turnId.isNullOrBlank() && !event.runId.isNullOrBlank()) {
                 activeRunsByTurnId + (event.turnId to event.runId)
@@ -418,17 +420,19 @@ internal object ChatTimelineReducer {
                     fallback = fallbackSortTimestamp
                 )
                 fallbackSortTimestamp = (sortTimestamp ?: fallbackSortTimestamp) + timelineMessageOrderEpsilon
+                val content = item.displayText.ifBlank { item.content.timelineText() }
                 val message = ChatMessage(
                     id = item.messageId,
                     role = item.role.toMessageRole(default = MessageRole.assistant),
                     state = MessageState.completed,
-                    content = item.displayText,
+                    content = content,
                     contentBlocks = item.content,
                     createdAt = item.createdAt.orEmpty(),
                     runId = item.runId?.takeIf { it.isNotBlank() } ?: item.messageId,
                     sortTimestamp = sortTimestamp,
                     seq = item.seq,
                     turnSeq = item.turnSeq,
+                    timelineMessageId = item.messageId,
                     timelineOrderKey = item.timelineOrderKey.orEmpty(),
                     timelineIdentityKey = item.timelineIdentityKey.orEmpty(),
                     timelineItemKind = item.timelineItemKind.orEmpty(),
@@ -439,6 +443,11 @@ internal object ChatTimelineReducer {
                         excludingMessageId = item.messageId,
                         turnId = item.turnId,
                         runId = item.runId
+                    ) ?: nextState.matchingLocalUserByContent(
+                        excludingMessageId = item.messageId,
+                        turnId = item.turnId,
+                        runId = item.runId,
+                        content = message.content
                     )
                 } else {
                     null
@@ -534,6 +543,35 @@ internal object ChatTimelineReducer {
         }
     }
 
+    private fun ChatTimelineState.upsertToolMessage(message: ChatMessage): List<ChatMessage> {
+        val identityKey = message.timelineIdentityKey.trim().takeIf { it.isNotEmpty() }
+        val index = messages.indexOfFirst { current ->
+            if (identityKey != null) {
+                current.timelineIdentityKey == identityKey
+            } else {
+                current.role == MessageRole.tool && current.id == message.id
+            }
+        }
+        if (index < 0) return messages + message
+        return messages.toMutableList().also { current ->
+            val existing = current[index]
+            current[index] = message.copy(
+                createdAt = message.createdAt.ifBlank { existing.createdAt },
+                runId = message.runId.ifBlank { existing.runId },
+                sortTimestamp = message.sortTimestamp ?: existing.sortTimestamp,
+                seq = message.seq ?: existing.seq,
+                turnSeq = message.turnSeq ?: existing.turnSeq,
+                timelineStableKey = message.timelineStableKey.ifBlank { existing.timelineStableKey },
+                timelineMessageId = message.timelineMessageId.ifBlank { existing.timelineMessageId },
+                timelinePartId = message.timelinePartId.ifBlank { existing.timelinePartId },
+                timelineOrderKey = message.timelineOrderKey.ifBlank { existing.timelineOrderKey },
+                timelineIdentityKey = message.timelineIdentityKey.ifBlank { existing.timelineIdentityKey },
+                timelineItemKind = message.timelineItemKind.ifBlank { existing.timelineItemKind },
+                timelineResolvesWaiting = message.timelineResolvesWaiting ?: existing.timelineResolvesWaiting
+            )
+        }
+    }
+
     private fun ChatTimelineState.latestKnownSortTimestamp(): Double? {
         return messages.maxOfOrNull { it.sortTimestamp ?: Double.NEGATIVE_INFINITY }
             ?.takeIf { it != Double.NEGATIVE_INFINITY }
@@ -564,24 +602,51 @@ internal object ChatTimelineReducer {
         )?.let(messages::get)
     }
 
+    private fun ChatTimelineState.matchingLocalUserByContent(
+        excludingMessageId: String,
+        turnId: String?,
+        runId: String?,
+        content: String
+    ): ChatMessage? {
+        val allowsLegacyTurnRunMatch = !turnId.isNullOrBlank() || runId?.startsWith("turn-", ignoreCase = true) == true
+        if (!allowsLegacyTurnRunMatch) return null
+        val trimmedContent = content.trim()
+        if (trimmedContent.isEmpty()) return null
+        val candidates = messages.filter { message ->
+            message.role == MessageRole.user &&
+                message.id != excludingMessageId &&
+                (message.timelineIdentityKey.isBlank() || message.timelineIdentityKey.contains(":local", ignoreCase = true)) &&
+                message.content.trim() == trimmedContent
+        }
+        return candidates.singleOrNull()
+    }
+
     private fun ChatTimelineState.matchingLocalUserIndex(
         excludingMessageId: String,
         turnId: String?,
         runId: String?
     ): Int? {
-        val localRunIds = listOfNotNull(
+        val incomingTurnIdentities = listOfNotNull(
             turnId?.takeIf { it.isNotBlank() },
             runId?.takeIf { it.isNotBlank() }
-        ).map { "local-user-$it" }.toSet()
-        if (localRunIds.isNotEmpty()) {
+        ).mapNotNull { normalizedTurnIdentity(it) }.toSet()
+        if (incomingTurnIdentities.isNotEmpty()) {
             val explicitIndex = messages.indexOfLast { message ->
                 message.role == MessageRole.user &&
                     message.id != excludingMessageId &&
-                    message.runId in localRunIds
+                    normalizedTurnIdentity(message.runId) in incomingTurnIdentities
             }
             if (explicitIndex >= 0) return explicitIndex
         }
         return null
+    }
+
+    private fun normalizedTurnIdentity(value: String?): String? {
+        var normalized = value?.trim()?.takeIf { it.isNotEmpty() } ?: return null
+        val prefix = listOf("local-user-", "user-").firstOrNull { normalized.startsWith(it, ignoreCase = true) }
+        if (prefix != null) normalized = normalized.substring(prefix.length).trim()
+        normalized = normalized.replace(Regex(":(user|assistant|tool|system|waiting)$", RegexOption.IGNORE_CASE), "").trim()
+        return normalized.takeIf { it.isNotEmpty() }
     }
 
     private fun ChatTimelineState.matchesTerminalRun(message: ChatMessage, turnId: String?, runId: String?): Boolean {
@@ -776,6 +841,10 @@ private fun TimelineEvent.ToolInvocationUpdated.hasCanonicalTimelineKeys(): Bool
     return !timelineOrderKey.isNullOrBlank() &&
         !timelineIdentityKey.isNullOrBlank() &&
         !timelineItemKind.isNullOrBlank()
+}
+
+private fun TimelineEvent.ToolInvocationUpdated.hasToolInvocationIdentity(): Boolean {
+    return toolCallId.isNotBlank() || !messageId.isNullOrBlank()
 }
 
 private fun String?.toMessageRole(default: MessageRole): MessageRole {

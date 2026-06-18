@@ -109,6 +109,143 @@ class TimelineReconcilerTest {
     }
 
     @Test
+    fun fullCanonicalSnapshotDoesNotRetainExistingConfirmedMessagesMissingFromRelay() {
+        val stale = ChatMessage(
+            id = "stale-history",
+            role = MessageRole.assistant,
+            state = MessageState.completed,
+            content = "stale",
+            contentBlocks = listOf(RelayChatContentBlock(type = "text", text = "stale")),
+            createdAt = "2026-06-09T08:00:00.000Z",
+            seq = 1,
+            timelineOrderKey = "0001",
+            timelineIdentityKey = "identity-stale",
+            timelineItemKind = "message:assistant"
+        )
+        val pending = ChatMessage(
+            id = "assistant-waiting",
+            role = MessageRole.assistant,
+            state = MessageState.streaming,
+            content = "[[clawlink:typing]]",
+            contentBlocks = listOf(RelayChatContentBlock(type = "text", text = "[[clawlink:typing]]")),
+            runId = "run-new",
+            sortTimestamp = 100.001,
+            timelineOrderKey = "local:run-new:20:assistant-waiting",
+            timelineIdentityKey = "local:waiting:run-new",
+            timelineItemKind = "waiting"
+        )
+
+        val result = reconcileTimeline(
+            existing = listOf(stale, pending),
+            snapshot = TimelineSnapshotPage(
+                sessionKey = "main",
+                messages = listOf(
+                    TimelineSnapshotMessage(
+                        messageId = "server-user",
+                        role = "user",
+                        messageState = "completed",
+                        runId = "run-new",
+                        createdAt = "2026-06-09T08:00:10.000Z",
+                        content = listOf(RelayChatContentBlock(type = "text", text = "fresh")),
+                        timelineOrderKey = "0002",
+                        timelineIdentityKey = "identity-server-user",
+                        timelineItemKind = "message:user"
+                    )
+                )
+            )
+        )
+
+        assertEquals(listOf("server-user"), result.messages.map { it.id })
+        assertEquals(listOf("assistant-waiting"), result.pending.map { it.id })
+    }
+
+    @Test
+    fun fullCanonicalSnapshotKeepsLocalUserForCurrentPendingTurnOnly() {
+        val staleLocalUser = ChatMessage(
+            id = "local-stale",
+            role = MessageRole.user,
+            state = MessageState.completed,
+            content = "stale",
+            runId = "local-user-stale-run"
+        )
+        val currentLocalUser = ChatMessage(
+            id = "local-current",
+            role = MessageRole.user,
+            state = MessageState.completed,
+            content = "current",
+            runId = "local-user-current-run"
+        )
+        val waiting = ChatMessage(
+            id = "assistant-waiting",
+            role = MessageRole.assistant,
+            state = MessageState.streaming,
+            content = "[[clawlink:typing]]",
+            contentBlocks = listOf(RelayChatContentBlock(type = "text", text = "[[clawlink:typing]]")),
+            runId = "current-run"
+        )
+
+        val result = reconcileTimeline(
+            existing = listOf(staleLocalUser, currentLocalUser, waiting),
+            snapshot = TimelineSnapshotPage(sessionKey = "main", messages = emptyList())
+        )
+
+        assertTrue(result.messages.isEmpty())
+        assertEquals(listOf("local-current", "assistant-waiting"), result.pending.map { it.id })
+    }
+
+    @Test
+    fun boundedCanonicalSnapshotRetainsExistingMessagesOutsideFetchedRange() {
+        val older = ChatMessage(
+            id = "older",
+            role = MessageRole.user,
+            state = MessageState.completed,
+            content = "older",
+            contentBlocks = listOf(RelayChatContentBlock(type = "text", text = "older")),
+            createdAt = "2026-06-09T08:00:00.000Z",
+            seq = 1,
+            timelineOrderKey = "0001",
+            timelineIdentityKey = "identity-older",
+            timelineItemKind = "message:user"
+        )
+        val inRangeStale = ChatMessage(
+            id = "in-range-stale",
+            role = MessageRole.assistant,
+            state = MessageState.completed,
+            content = "stale",
+            contentBlocks = listOf(RelayChatContentBlock(type = "text", text = "stale")),
+            createdAt = "2026-06-09T08:00:01.000Z",
+            seq = 2,
+            timelineOrderKey = "0002",
+            timelineIdentityKey = "identity-stale",
+            timelineItemKind = "message:assistant"
+        )
+
+        val result = reconcileTimeline(
+            existing = listOf(older, inRangeStale),
+            snapshot = TimelineSnapshotPage(
+                sessionKey = "main",
+                rangeStartCursor = "seq:2",
+                rangeEndCursor = "seq:4",
+                messages = listOf(
+                    TimelineSnapshotMessage(
+                        messageId = "fresh",
+                        seq = 2,
+                        role = "assistant",
+                        messageState = "completed",
+                        createdAt = "2026-06-09T08:00:02.000Z",
+                        content = listOf(RelayChatContentBlock(type = "text", text = "fresh")),
+                        timelineOrderKey = "0002",
+                        timelineIdentityKey = "identity-fresh",
+                        timelineItemKind = "message:assistant"
+                    )
+                )
+            )
+        )
+
+        assertEquals(listOf("older", "fresh"), result.messages.map { it.id })
+    }
+
+    @Test
     fun canonicalToolDoesNotClearWaitingButAttachmentAndAssistantTextDo() {
         val waitingAssistant = ChatMessage(
             id = "assistant-waiting",

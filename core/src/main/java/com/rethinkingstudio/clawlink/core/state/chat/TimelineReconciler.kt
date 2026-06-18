@@ -299,8 +299,10 @@ private fun compareEntries(left: CanonicalTimelineEntry, right: CanonicalTimelin
         if (identityCompare != 0) return identityCompare
         return left.timelineItemKind.compareTo(right.timelineItemKind)
     }
-    if (pendingWaitingOverlayOrder(left, right)) return -1
-    if (pendingWaitingOverlayOrder(right, left)) return 1
+    if (pendingWaitingOverlayOrder(left, right)) return 1
+    if (pendingWaitingOverlayOrder(right, left)) return -1
+    if (sameTurnToolBeforeAssistant(left, right)) return -1
+    if (sameTurnToolBeforeAssistant(right, left)) return 1
 
     if (leftOrderKey != null && rightOrderKey == null) return -1
     if (leftOrderKey == null && rightOrderKey != null) return 1
@@ -328,11 +330,22 @@ private fun pendingWaitingOverlayOrder(left: CanonicalTimelineEntry, right: Cano
     return right.role == MessageRole.tool || right.role == MessageRole.assistant
 }
 
+private fun sameTurnToolBeforeAssistant(left: CanonicalTimelineEntry, right: CanonicalTimelineEntry): Boolean {
+    if (left.role != MessageRole.tool || right.role != MessageRole.assistant) return false
+    if (isTransientAssistantTimelinePlaceholder(right)) return false
+    val leftTurn = normalizedTurnIdentity(left)
+    return leftTurn.isNotEmpty() && leftTurn == normalizedTurnIdentity(right)
+}
+
 private fun normalizedTurnIdentity(entry: CanonicalTimelineEntry): String {
     val turnId = entry.turnId?.trim().orEmpty()
     if (turnId.isNotEmpty()) return turnId
     val runId = entry.runId?.trim().orEmpty()
-    return runId.removePrefix("local-user-").trim()
+    return runId
+        .removePrefix("local-user-")
+        .removePrefix("user-")
+        .replace(Regex(":(user|assistant|tool|system|waiting)$", RegexOption.IGNORE_CASE), "")
+        .trim()
 }
 
 private fun isLocalTimelineMessageId(id: String): Boolean {
@@ -344,13 +357,25 @@ private fun isLocalTimelineMessageId(id: String): Boolean {
 private fun localPendingTimelineOrder(left: CanonicalTimelineEntry, right: CanonicalTimelineEntry): Boolean {
     val leftRunId = left.runId?.trim().orEmpty()
     if (left.role != MessageRole.user) return false
+    val clientRunId = leftRunId.removePrefix("local-user-").trim()
+    if (clientRunId.isNotEmpty() && right.role in setOf(MessageRole.assistant, MessageRole.tool)) {
+        val rightTurn = normalizedTurnIdentity(right)
+        if (rightTurn.isEmpty() || rightTurn == clientRunId || right.runId?.trim() == clientRunId) {
+            return true
+        }
+    }
+    if (clientRunId.isNotEmpty() &&
+        relayTimelineOrderKey(left) == null &&
+        right.role == MessageRole.tool
+    ) {
+        return true
+    }
     if (relayTimelineOrderKey(left) == null &&
         relayTimelineOrderKey(right) == null &&
         (right.role == MessageRole.assistant || right.role == MessageRole.tool)
     ) {
         return true
     }
-    val clientRunId = leftRunId.removePrefix("local-user-").trim()
     return clientRunId.isNotEmpty() &&
         right.role == MessageRole.assistant &&
         right.runId?.trim() == clientRunId
@@ -391,10 +416,12 @@ private fun reconcileCanonicalTimeline(
     val incomingIdentities = incomingCanonical.mapTo(mutableSetOf()) { it.timelineIdentityKey }
     val deletedIds = snapshot.deletedMessageIds.toSet()
     val byIdentity = linkedMapOf<String, CanonicalTimelineEntry>()
+    val range = snapshot.range
 
     existingConfirmed
         .mapIndexed { index, message -> message.toEntry(snapshot.sessionKey, index) }
         .filter { it.timelineIdentityKey.isNotBlank() && it.timelineItemKind.isNotBlank() && relayTimelineOrderKey(it) != null }
+        .filter { range.isBounded && !range.contains(it.seq ?: it.conversationSeq) }
         .forEach { entry ->
             if (entry.messageId in deletedIds || entry.timelineIdentityKey in deletedIds) {
                 byIdentity[entry.timelineIdentityKey] = deletedTombstone(entry)
@@ -407,9 +434,22 @@ private fun reconcileCanonicalTimeline(
         byIdentity[entry.timelineIdentityKey] = entry
     }
 
-    val remainingPending = pendingEntries.filter { pendingEntry ->
-        incomingCanonical.none { incomingEntry -> pendingResolvedByCanonical(pendingEntry, incomingEntry) }
-    }
+    val pendingTurnIds = pendingEntries
+        .filter { it.role == MessageRole.assistant && it.state in setOf(MessageState.pending, MessageState.streaming) }
+        .map { normalizedTurnIdentity(it) }
+        .filter { it.isNotBlank() }
+        .toSet()
+    val remainingPending = pendingEntries
+        .filter { pendingEntry ->
+            incomingCanonical.none { incomingEntry -> pendingResolvedByCanonical(pendingEntry, incomingEntry) }
+        }
+        .filter { pendingEntry ->
+            if (pendingEntry.role != MessageRole.user || pendingEntry.runId?.trim()?.startsWith("local-user-") != true) {
+                return@filter true
+            }
+            val turnIdentity = normalizedTurnIdentity(pendingEntry)
+            turnIdentity.isNotBlank() && turnIdentity in pendingTurnIds
+        }
 
     return TimelineReconcileResult(
         messages = byIdentity.values.sortedWith(::compareEntries).map { it.toChatMessage() },

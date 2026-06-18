@@ -112,6 +112,85 @@ class ChatHistoryMergeHelpersTest {
         assertEquals("已经输出的内容", result.messages.single().content)
     }
 
+    @Test
+    fun canonicalHistoryRefreshDropsStaleCompletedCacheButKeepsPendingTurnOverlay() {
+        val staleCompleted = canonicalMessage(
+            id = "stale-assistant",
+            role = MessageRole.assistant,
+            content = "old answer",
+            order = "0001|50|stale",
+            identity = "main:message:stale-assistant",
+            runId = "old-run"
+        )
+        val localUser = ChatMessage(
+            id = "local-user-run-1",
+            role = MessageRole.user,
+            content = "new question",
+            runId = "local-user-run-1",
+            sortTimestamp = 100.0,
+            timelineOrderKey = "local:run-1:10:local-user-run-1",
+            timelineIdentityKey = "local:message:user:run-1",
+            timelineItemKind = "message:user"
+        )
+        val waiting = ChatMessage(
+            id = "assistant-waiting",
+            role = MessageRole.assistant,
+            state = MessageState.streaming,
+            content = "[[clawlink:typing]]",
+            runId = "run-1",
+            sortTimestamp = 100.001,
+            timelineOrderKey = "local:run-1:20:assistant-waiting",
+            timelineIdentityKey = "local:waiting:run-1",
+            timelineItemKind = "waiting"
+        )
+
+        val merged = mergeHistoryWithCurrentMessages(
+            historyMessages = emptyList(),
+            currentMessages = listOf(staleCompleted, localUser, waiting),
+            currentStreamingMessageId = waiting.id,
+            isTrackedPendingAssistantMessageId = { it == waiting.id }
+        )
+
+        assertEquals(listOf(localUser.id, waiting.id), merged.map { it.id })
+    }
+
+    @Test
+    fun canonicalHistoryRefreshUsesRelayAsOnlyCompletedSource() {
+        val staleCompleted = canonicalMessage(
+            id = "stale-assistant",
+            role = MessageRole.assistant,
+            content = "old answer",
+            order = "0001|50|stale",
+            identity = "main:message:stale-assistant",
+            runId = "old-run"
+        )
+        val relayUser = canonicalMessage(
+            id = "server-user",
+            role = MessageRole.user,
+            content = "relay question",
+            order = "0002|10|server-user",
+            identity = "main:message:server-user",
+            runId = "relay-run"
+        )
+        val relayAssistant = canonicalMessage(
+            id = "server-assistant",
+            role = MessageRole.assistant,
+            content = "relay answer",
+            order = "0003|50|server-assistant",
+            identity = "main:message:server-assistant",
+            runId = "relay-run"
+        )
+
+        val merged = mergeHistoryWithCurrentMessages(
+            historyMessages = listOf(relayAssistant, relayUser),
+            currentMessages = listOf(staleCompleted),
+            currentStreamingMessageId = null,
+            isTrackedPendingAssistantMessageId = { false }
+        )
+
+        assertEquals(listOf("server-user", "server-assistant"), merged.map { it.id })
+    }
+
     @Ignore("Legacy non-canonical history merge behavior was removed; Relay canonical order is required.")
     @Test
     fun refreshKeepsCompletedAssistantWhenHistoryHasNotCaughtUp() {
@@ -2426,6 +2505,28 @@ class ChatHistoryMergeHelpersTest {
         assertEquals(
             listOf("history-file-status-1", "history-next-user", "history-file-status-2"),
             messages.map { it.runId }
+        )
+    }
+
+    private fun canonicalMessage(
+        id: String,
+        role: MessageRole,
+        content: String,
+        order: String,
+        identity: String,
+        runId: String
+    ): ChatMessage {
+        return ChatMessage(
+            id = id,
+            role = role,
+            state = MessageState.completed,
+            content = content,
+            contentBlocks = listOf(RelayChatContentBlock(type = "text", text = content)),
+            createdAt = "2026-06-10T00:00:00.000Z",
+            runId = runId,
+            timelineOrderKey = order,
+            timelineIdentityKey = identity,
+            timelineItemKind = if (role == MessageRole.user) "message:user" else "message:assistant"
         )
     }
 

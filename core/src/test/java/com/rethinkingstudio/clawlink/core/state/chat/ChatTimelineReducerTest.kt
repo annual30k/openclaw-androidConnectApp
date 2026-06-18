@@ -200,6 +200,113 @@ class ChatTimelineReducerTest {
     }
 
     @Test
+    fun turnUserCreatedReplacesLocalPlainUserEchoWithPrefixedRunIdentity() {
+        val initial = ChatTimelineState(
+            messages = listOf(
+                ChatMessage(
+                    id = "local-user-message",
+                    role = MessageRole.user,
+                    state = MessageState.completed,
+                    content = "那你现在可以做什么",
+                    runId = "local-user-client-run-1",
+                    sortTimestamp = 200.0
+                ),
+                ChatMessage(
+                    id = "assistant-local",
+                    role = MessageRole.assistant,
+                    state = MessageState.streaming,
+                    content = protocolTypingMarkerText,
+                    runId = "client-run-1",
+                    sortTimestamp = 200.001
+                )
+            )
+        )
+
+        val state = ChatTimelineReducer.reduce(
+            initial,
+            event(
+                """
+                {
+                  "protocolVersion": 2,
+                  "eventId": "user-server-prefixed",
+                  "eventType": "turn.user.created",
+                  "turnId": "user-client-run-1",
+                  "runId": "user-client-run-1",
+                  "messageId": "server-user-message",
+                  "content": [{ "type": "text", "text": "那你现在可以做什么" }]
+                }
+                """.trimIndent()
+            )
+        )
+
+        assertEquals(listOf("server-user-message", "assistant-local"), state.messages.map { it.id })
+        assertEquals(1, state.messages.count { it.role == MessageRole.user })
+        assertEquals("local-user-client-run-1", state.messages.first().runId)
+    }
+
+    @Test
+    fun prefixedUserConfirmationKeepsAssistantPlaceholderResolvable() {
+        val initial = ChatTimelineState(
+            messages = listOf(
+                ChatMessage(
+                    id = "local-user-message",
+                    role = MessageRole.user,
+                    state = MessageState.completed,
+                    content = "那你现在可以做什么",
+                    runId = "local-user-client-run-1",
+                    sortTimestamp = 200.0
+                ),
+                ChatMessage(
+                    id = "assistant-local",
+                    role = MessageRole.assistant,
+                    state = MessageState.streaming,
+                    content = protocolTypingMarkerText,
+                    runId = "client-run-1",
+                    sortTimestamp = 200.001
+                )
+            )
+        )
+
+        val state = ChatTimelineReducer.reduceAll(
+            initial,
+            listOf(
+                event(
+                    """
+                    {
+                      "protocolVersion": 2,
+                      "eventId": "user-server-prefixed",
+                      "eventType": "turn.user.created",
+                      "turnId": "user-client-run-1",
+                      "runId": "user-client-run-1",
+                      "messageId": "server-user-message",
+                      "content": [{ "type": "text", "text": "那你现在可以做什么" }]
+                    }
+                    """.trimIndent()
+                ),
+                event(
+                    """
+                    {
+                      "protocolVersion": 2,
+                      "eventId": "assistant-server-completed",
+                      "eventType": "message.completed",
+                      "turnId": "client-run-1",
+                      "runId": "client-run-1",
+                      "messageId": "assistant-server",
+                      "role": "assistant",
+                      "content": [{ "type": "text", "text": "我可以帮你处理本地任务。" }]
+                    }
+                    """.trimIndent()
+                )
+            )
+        )
+
+        assertEquals(listOf("server-user-message", "assistant-server"), state.messages.map { it.id })
+        assertEquals("local-user-client-run-1", state.messages.first().runId)
+        assertEquals("client-run-1", state.messages.last().runId)
+        assertEquals("我可以帮你处理本地任务。", state.messages.last().content)
+    }
+
+    @Test
     fun turnUserCreatedMergesTranscriptIntoLocalVoiceUserMessage() {
         val localVoice = ChatMessage(
             id = "local-user-message",
@@ -897,6 +1004,60 @@ class ChatTimelineReducerTest {
     }
 
     @Test
+    fun historySnapshotReplacesLocalPlainUserEchoWithRoleSuffixedRunIdentity() {
+        val initial = ChatTimelineState(
+            messages = listOf(
+                ChatMessage(
+                    id = "local-user-message",
+                    role = MessageRole.user,
+                    state = MessageState.completed,
+                    content = "那你现在可以做什么",
+                    runId = "local-user-client-run-1",
+                    sortTimestamp = 200.0
+                ),
+                ChatMessage(
+                    id = "assistant-local",
+                    role = MessageRole.assistant,
+                    state = MessageState.streaming,
+                    content = protocolTypingMarkerText,
+                    runId = "client-run-1",
+                    sortTimestamp = 200.001
+                )
+            )
+        )
+
+        val state = ChatTimelineReducer.reduce(
+            initial,
+            event(
+                """
+                {
+                  "protocolVersion": 2,
+                  "eventId": "history-user-suffixed",
+                  "eventType": "history.snapshot.page",
+                  "messages": [
+                    {
+                      "turnId": "client-run-1:user",
+                      "runId": "client-run-1:user",
+                      "messageId": "server-user-message",
+                      "role": "user",
+                      "messageState": "completed",
+                      "timelineOrderKey": "v1|00000000000000000001|10|000000|server-user-message",
+                      "timelineIdentityKey": "message:user:server-user-message",
+                      "timelineItemKind": "message:user",
+                      "content": [{ "type": "text", "text": "那你现在可以做什么" }]
+                    }
+                  ]
+                }
+                """.trimIndent()
+            )
+        )
+
+        assertEquals(listOf("server-user-message", "assistant-local"), state.messages.map { it.id })
+        assertEquals(1, state.messages.count { it.role == MessageRole.user })
+        assertEquals("local-user-client-run-1", state.messages.first().runId)
+    }
+
+    @Test
     fun historySnapshotReplacesPlainUserEchoWhenRunIdentityMatches() {
         val state = ChatTimelineReducer.reduceAll(
             ChatTimelineState(),
@@ -1375,7 +1536,7 @@ class ChatTimelineReducerTest {
             )
         )
 
-        assertEquals(listOf("user-1", "assistant-local", "tool-turn-1"), state.messages.map { it.id })
+        assertEquals(listOf("user-1", "tool-turn-1", "assistant-local"), state.messages.map { it.id })
         val toolMessage = state.messages.single { it.role == MessageRole.tool }
         assertEquals("tool-turn-1", toolMessage.id)
         assertEquals(MessageState.streaming, toolMessage.state)
@@ -1434,11 +1595,10 @@ class ChatTimelineReducerTest {
             )
         )
 
-        assertEquals(listOf("user-1", "assistant-local", "tool-turn-1"), state.messages.map { it.id })
+        assertEquals(listOf("user-1", "tool-turn-1", "assistant-local"), state.messages.map { it.id })
         val toolMessage = state.messages.single { it.role == MessageRole.tool }
         assertEquals(MessageState.streaming, toolMessage.state)
         assertEquals("web_search", toolMessage.content)
-        assertTrue(toolMessage.contentBlocks.isEmpty())
         assertTrue(toolMessage.shouldDisplayInChat(showInvocationProcess = true))
         assertEquals(protocolTypingMarkerText, state.messages.first { it.id == "assistant-local" }.content)
         assertEquals("running", state.toolsById.getValue("tool-1").state)
@@ -1555,7 +1715,7 @@ class ChatTimelineReducerTest {
         assertEquals(MessageState.streaming, stillWaiting.messages.first { it.id == "assistant-local" }.state)
         assertEquals("正在同步回复...", stillWaiting.messages.first { it.id == "assistant-local" }.content)
         assertEquals("Reading file", stillWaiting.messages.single { it.role == MessageRole.tool }.content)
-        assertEquals(listOf("user-1", "assistant-local", "tool-turn-1"), stillWaiting.messages.map { it.id })
+        assertEquals(listOf("user-1", "tool-turn-1", "assistant-local"), stillWaiting.messages.map { it.id })
         assertTrue(hasActiveVisibleTimelineRun(stillWaiting, stillWaiting.messages))
 
         val final = ChatTimelineReducer.reduce(
@@ -1576,10 +1736,10 @@ class ChatTimelineReducerTest {
             )
         )
 
+        assertEquals(listOf("user-1", "tool-turn-1", "assistant-final"), final.messages.map { it.id })
         assertEquals(MessageState.completed, final.messages.first { it.id == "assistant-final" }.state)
         assertEquals("Tool result is ready.", final.messages.first { it.id == "assistant-final" }.content)
         assertEquals("Reading file", final.messages.single { it.role == MessageRole.tool }.content)
-        assertEquals(listOf("user-1", "assistant-final", "tool-turn-1"), final.messages.map { it.id })
         assertFalse(hasActiveVisibleTimelineRun(final, final.messages))
     }
 

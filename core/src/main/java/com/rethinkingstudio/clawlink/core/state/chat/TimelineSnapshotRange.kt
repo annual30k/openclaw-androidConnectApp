@@ -4,6 +4,9 @@ internal data class TimelineSnapshotRange(
     val startSeq: Long?,
     val endSeqExclusive: Long?
 ) {
+    val isBounded: Boolean
+        get() = startSeq != null || endSeqExclusive != null
+
     fun contains(seq: Long?): Boolean {
         if (seq == null) return false
         if (startSeq != null && seq < startSeq) return false
