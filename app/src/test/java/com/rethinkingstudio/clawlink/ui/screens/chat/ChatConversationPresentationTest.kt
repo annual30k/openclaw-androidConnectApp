@@ -279,7 +279,7 @@ class ChatConversationPresentationTest {
     }
 
     @Test
-    fun displayUpdateCoalescingOnlyAllowsTailStreamingTextProgress() {
+    fun displayUpdateCoalescingAllowsTailAssistantTextProgress() {
         val user = ChatMessage(
             id = "user-1",
             role = MessageRole.user,
@@ -302,6 +302,14 @@ class ChatConversationPresentationTest {
             shouldCoalesceChatDisplayUpdate(
                 current,
                 current.copy(messages = listOf(user, streaming.copy(content = "Hello")))
+            )
+        )
+        val completed = streaming.copy(state = MessageState.completed, content = "Hel")
+        val completedState = ChatState(messages = listOf(user, completed), isStreaming = true)
+        assert(
+            shouldCoalesceChatDisplayUpdate(
+                completedState,
+                completedState.copy(messages = listOf(user, completed.copy(content = "Hello")))
             )
         )
         assert(

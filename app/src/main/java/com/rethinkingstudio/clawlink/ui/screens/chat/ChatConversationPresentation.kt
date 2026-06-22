@@ -60,10 +60,13 @@ internal fun shouldCoalesceChatDisplayUpdate(
 
     val currentTail = current.messages[lastIndex]
     val incomingTail = incoming.messages[lastIndex]
-    if (incomingTail.role != MessageRole.assistant || incomingTail.state != MessageState.streaming) {
+    if (incomingTail.role != MessageRole.assistant) {
         return false
     }
-    return currentTail.copy(content = incomingTail.content) == incomingTail
+    return currentTail.copy(
+        content = incomingTail.content,
+        contentBlocks = incomingTail.contentBlocks
+    ) == incomingTail
 }
 
 private fun List<ChatMessage>.coalescedByCanonicalIdentity(): List<ChatMessage> {

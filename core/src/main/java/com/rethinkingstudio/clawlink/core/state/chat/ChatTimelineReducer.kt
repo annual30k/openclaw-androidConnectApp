@@ -171,6 +171,8 @@ internal object ChatTimelineReducer {
         val completedRunId = completedTurnId?.let { activeRunsByTurnId[it] }
             ?: event.runId?.takeIf { it.isNotBlank() }
             ?: matchedMessage?.runId?.takeIf { it.isNotBlank() }
+        val anchoredOrderKey = completedAssistantOrderKey(event, matchedMessage)
+        val anchoredIdentityKey = completedAssistantIdentityKey(event, matchedMessage)
         val message = ChatMessage(
             id = event.messageId,
             role = role,
@@ -183,8 +185,8 @@ internal object ChatTimelineReducer {
             seq = event.seq ?: matchedMessage?.seq,
             turnSeq = matchedMessage?.turnSeq ?: event.turnSeq,
             timelineMessageId = event.messageId,
-            timelineOrderKey = event.timelineOrderKey.orEmpty().ifBlank { matchedMessage?.timelineOrderKey.orEmpty() },
-            timelineIdentityKey = event.timelineIdentityKey.orEmpty().ifBlank { matchedMessage?.timelineIdentityKey.orEmpty() },
+            timelineOrderKey = anchoredOrderKey.orEmpty().ifBlank { event.timelineOrderKey.orEmpty().ifBlank { matchedMessage?.timelineOrderKey.orEmpty() } },
+            timelineIdentityKey = anchoredIdentityKey.orEmpty().ifBlank { event.timelineIdentityKey.orEmpty().ifBlank { matchedMessage?.timelineIdentityKey.orEmpty() } },
             timelineItemKind = event.timelineItemKind.orEmpty().ifBlank { matchedMessage?.timelineItemKind.orEmpty() },
             timelineResolvesWaiting = event.timelineResolvesWaiting ?: matchedMessage?.timelineResolvesWaiting
         )
@@ -214,7 +216,7 @@ internal object ChatTimelineReducer {
         }
         val clearedRunsByTurn = activeRunsByTurnId.filterValues { activeRun -> activeRun !in runIdsToClear }
         return copy(
-            messages = orderMessagesWithSourceRunAnchors(nextMessages),
+            messages = orderMessagesWithSourceRunAnchors(anchoredMessagesForCompletedTurn(nextMessages, event)),
             activeRunId = if (activeRunId != null && activeRunId in runIdsToClear) null else activeRunId,
             activeRunsByTurnId = completedTurnId?.let { clearedRunsByTurn - it } ?: clearedRunsByTurn,
             activeTurnByRunId = activeTurnByRunId.filterKeys { activeRun -> activeRun !in runIdsToClear },
@@ -232,11 +234,9 @@ internal object ChatTimelineReducer {
                 completedEventMatchesPlaceholder(candidate, event)
         }?.let { return it }
 
-        return if (event.clearsWaitingAssistant()) {
-            singleUnresolvedTransientAssistantPlaceholder(turnId = event.turnId, runId = event.runId)
-        } else {
-            null
-        }
+        if (!event.clearsWaitingAssistant()) return null
+        return singleUnresolvedTransientAssistantPlaceholder(turnId = event.turnId, runId = event.runId)
+            ?: oldestUnresolvedTransientAssistantPlaceholder(turnId = event.turnId, runId = event.runId)
     }
 
     private fun ChatTimelineState.applyRunTerminal(event: TimelineEvent.RunTerminal): ChatTimelineState {
@@ -508,6 +508,122 @@ internal object ChatTimelineReducer {
         return nextState.copy(messages = orderMessagesWithSourceRunAnchors(nextState.messages))
     }
 
+    private fun ChatTimelineState.completedAssistantOrderKey(
+        event: TimelineEvent.MessageCompleted,
+        existing: ChatMessage?
+    ): String? {
+        if (!event.clearsWaitingAssistant()) return null
+        existing?.timelineOrderKey
+            ?.trim()
+            ?.takeIf { it.isNotEmpty() && !it.startsWith("local:") }
+            ?.let { return it }
+        val user = matchingTurnUserMessage(event) ?: return null
+        val turnBase = anchoredTurnBase(user) ?: return null
+        val identity = completedAssistantIdentityKey(event, existing) ?: event.messageId
+        return listOf(
+            "v1",
+            turnBase,
+            "50",
+            "${padded(1, 16)}:part-text-1:${event.messageId}",
+            shortStableHash(identity)
+        ).joinToString("|")
+    }
+
+    private fun completedAssistantIdentityKey(
+        event: TimelineEvent.MessageCompleted,
+        existing: ChatMessage?
+    ): String? {
+        return event.timelineIdentityKey?.trim()?.takeIf { it.isNotEmpty() }
+            ?: existing?.timelineIdentityKey?.trim()?.takeIf { it.isNotEmpty() }
+            ?: event.runId?.trim()?.takeIf { it.isNotEmpty() }?.let { "local:$it:message:assistant:030-assistant" }
+            ?: event.turnId?.trim()?.takeIf { it.isNotEmpty() }?.let { "local:$it:message:assistant:030-assistant" }
+    }
+
+    private fun ChatTimelineState.matchingTurnUserMessage(event: TimelineEvent.MessageCompleted): ChatMessage? {
+        val identities = listOfNotNull(event.turnId, event.runId)
+            .mapNotNull { normalizedTurnIdentity(it) }
+            .toSet()
+        if (identities.isEmpty()) return null
+        return messages.lastOrNull { message ->
+            message.role == MessageRole.user &&
+                listOfNotNull(
+                    normalizedTurnIdentity(message.timelineMessageId),
+                    normalizedTurnIdentity(message.runId)
+                ).any { it in identities }
+        }
+    }
+
+    private fun anchoredMessagesForCompletedTurn(
+        messages: List<ChatMessage>,
+        event: TimelineEvent.MessageCompleted
+    ): List<ChatMessage> {
+        val identities = listOfNotNull(event.turnId, event.runId)
+            .mapNotNull { normalizedTurnIdentity(it) }
+            .toSet()
+        if (identities.isEmpty()) return messages
+        val index = messages.indexOfLast { message ->
+            message.role == MessageRole.user &&
+                listOfNotNull(
+                    normalizedTurnIdentity(message.timelineMessageId),
+                    normalizedTurnIdentity(message.runId)
+                ).any { it in identities }
+        }
+        if (index < 0) return messages
+        val user = messages[index]
+        if (user.timelineOrderKey.trim().isNotEmpty() && !user.timelineOrderKey.trim().startsWith("local:")) {
+            return messages
+        }
+        val turnBase = anchoredTurnBase(user) ?: return messages
+        val identity = user.timelineIdentityKey.trim().ifEmpty {
+            "local:${user.runId.ifBlank { event.runId ?: event.turnId.orEmpty() }}:message:user:010-user"
+        }
+        val anchoredUser = user.copy(
+            timelineOrderKey = listOf(
+                "v1",
+                turnBase,
+                "10",
+                "${padded(1, 16)}:part-text-1:${user.id}",
+                shortStableHash(identity)
+            ).joinToString("|"),
+            timelineIdentityKey = identity,
+            timelineItemKind = user.timelineItemKind.ifBlank { "message:user" }
+        )
+        return messages.toMutableList().also { it[index] = anchoredUser }
+    }
+
+    private fun anchoredTurnBase(user: ChatMessage): String? {
+        val order = user.timelineOrderKey.trim()
+        if (order.isNotEmpty() && !order.startsWith("local:")) {
+            val parts = order.split("|")
+            if (parts.size >= 2 && parts[1].isNotBlank()) return parts[1]
+        }
+        return createdAtMillis(user.createdAt)?.let { padded(it) }
+    }
+
+    private fun createdAtMillis(value: String): Long? {
+        return try {
+            Instant.parse(value).toEpochMilli()
+        } catch (_: DateTimeParseException) {
+            null
+        } catch (_: IllegalArgumentException) {
+            null
+        }
+    }
+
+    private fun padded(value: Long, size: Int = 20): String {
+        val text = value.coerceAtLeast(0).toString()
+        return if (text.length >= size) text else "0".repeat(size - text.length) + text
+    }
+
+    private fun shortStableHash(value: String): String {
+        var hash = -3750763034362895579L
+        value.encodeToByteArray().forEach { byte ->
+            hash = hash xor (byte.toLong() and 0xff)
+            hash *= 1099511628211L
+        }
+        return hash.toULong().toString(16)
+    }
+
     private fun ChatTimelineState.upsertMessage(
         message: ChatMessage,
         replaceMessageId: String? = null,
@@ -722,8 +838,50 @@ internal object ChatTimelineReducer {
                     (message.state == MessageState.completed || message.state == MessageState.failed) &&
                     !isTransientAssistantPlaceholder(message) &&
                     (message.plainTextContent.trim().isNotEmpty() || message.contentBlocks.isNotEmpty())
-            }
+        }
         return if (hasTerminalAssistantAfterTrigger) null else candidate
+    }
+
+    private fun ChatTimelineState.oldestUnresolvedTransientAssistantPlaceholder(
+        turnId: String? = null,
+        runId: String? = null
+    ): ChatMessage? {
+        if (!turnId.isNullOrBlank() || !runId.isNullOrBlank()) return null
+        val ordered = messages.sortedWith(
+            compareBy<ChatMessage> { it.sortTimestamp ?: Double.MAX_VALUE }
+                .thenBy { it.createdAt }
+                .thenBy { it.id }
+        )
+        for (candidateIndex in ordered.indices) {
+            val candidate = ordered[candidateIndex]
+            if (candidate.role != MessageRole.assistant ||
+                candidate.state != MessageState.streaming ||
+                !isTransientAssistantPlaceholder(candidate)
+            ) {
+                continue
+            }
+            val triggeringUserIndex = ordered
+                .take(candidateIndex)
+                .indexOfLast { it.role == MessageRole.user }
+            if (triggeringUserIndex < 0) continue
+            val nextUserIndex = ordered
+                .drop(candidateIndex + 1)
+                .indexOfFirst { it.role == MessageRole.user }
+                .takeIf { it >= 0 }
+                ?.let { candidateIndex + 1 + it }
+                ?: ordered.size
+            val hasTerminalAssistantAfterTrigger = ordered
+                .subList(triggeringUserIndex + 1, nextUserIndex)
+                .any { message ->
+                    message.id != candidate.id &&
+                        message.role == MessageRole.assistant &&
+                        (message.state == MessageState.completed || message.state == MessageState.failed) &&
+                        !isTransientAssistantPlaceholder(message) &&
+                        (message.plainTextContent.trim().isNotEmpty() || message.contentBlocks.isNotEmpty())
+                }
+            if (!hasTerminalAssistantAfterTrigger) return candidate
+        }
+        return null
     }
 
     private fun explicitEventUserIndex(
