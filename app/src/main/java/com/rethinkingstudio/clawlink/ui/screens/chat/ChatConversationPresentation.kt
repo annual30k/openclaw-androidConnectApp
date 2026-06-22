@@ -63,10 +63,10 @@ internal fun shouldCoalesceChatDisplayUpdate(
     if (incomingTail.role != MessageRole.assistant) {
         return false
     }
-    return currentTail.copy(
-        content = incomingTail.content,
-        contentBlocks = incomingTail.contentBlocks
-    ) == incomingTail
+    if (currentTail.contentBlocks != incomingTail.contentBlocks) {
+        return false
+    }
+    return currentTail.copy(content = incomingTail.content) == incomingTail
 }
 
 private fun List<ChatMessage>.coalescedByCanonicalIdentity(): List<ChatMessage> {

@@ -314,6 +314,27 @@ class ChatConversationPresentationTest {
         )
         assert(
             !shouldCoalesceChatDisplayUpdate(
+                completedState,
+                completedState.copy(
+                    messages = listOf(
+                        user,
+                        completed.copy(
+                            contentBlocks = listOf(
+                                RelayChatContentBlock(
+                                    type = "image",
+                                    fileId = "file-img-1",
+                                    fileName = "result.png",
+                                    mimeType = "image/png",
+                                    downloadUrl = "/api/mobile/files/file-img-1"
+                                )
+                            )
+                        )
+                    )
+                )
+            )
+        )
+        assert(
+            !shouldCoalesceChatDisplayUpdate(
                 current,
                 current.copy(messages = listOf(user, streaming.copy(content = "Hello", state = MessageState.completed)))
             )
