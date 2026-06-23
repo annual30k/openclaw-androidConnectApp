@@ -327,6 +327,12 @@ internal fun sameFileMessage(existing: ChatMessage, candidate: ChatMessage): Boo
 }
 
 private fun transferBlocksReferToSameFile(left: RelayChatContentBlock, right: RelayChatContentBlock): Boolean {
+    val leftAttachmentId = left.attachmentId?.trim()?.takeIf { it.isNotEmpty() }
+    val rightAttachmentId = right.attachmentId?.trim()?.takeIf { it.isNotEmpty() }
+    if (leftAttachmentId != null && rightAttachmentId != null) {
+        return leftAttachmentId == rightAttachmentId
+    }
+
     val leftFileId = left.fileId?.trim()?.takeIf { it.isNotEmpty() }
     val rightFileId = right.fileId?.trim()?.takeIf { it.isNotEmpty() }
     if (leftFileId != null && rightFileId != null) {

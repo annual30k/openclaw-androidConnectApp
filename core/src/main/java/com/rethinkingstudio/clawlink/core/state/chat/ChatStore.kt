@@ -412,15 +412,21 @@ class ChatStore(
             MessageRole.valueOf(
                 obj.string("role")
                     ?: ((obj["message"] as? JsonObject)?.string("role"))
-                    ?: "assistant"
+                ?: "assistant"
             )
         } catch (_: Exception) {
             MessageRole.assistant
         }
+        val contentBlockFallbackText = contentBlocks.firstNotNullOfOrNull { block ->
+            block.text?.trim()?.takeIf { it.isNotEmpty() }
+                ?: block.fileDisplayName?.trim()?.takeIf { it.isNotEmpty() }
+        }.orEmpty()
         val content = if (role == MessageRole.user) {
-            extractedContent
+            extractedContent.ifBlank { contentBlockFallbackText }
         } else {
-            extractedContent.ifBlank { streamingContent.toString() }
+            extractedContent.ifBlank {
+                streamingContent.toString().ifBlank { contentBlockFallbackText }
+            }
         }
 
         val finalContentBlocks = contentBlocks
@@ -504,15 +510,28 @@ class ChatStore(
             completeCurrentRun(runId, scope.runScope)
         } else {
             val eventSortTimestamp = eventTimestampMillis(obj)?.toDouble()?.div(1000.0)
+            val msgId = UUID.randomUUID().toString()
+            val sourceRunId = attachmentSourceRunId(
+                payload = obj,
+                runId = runId,
+                contentBlocks = finalContentBlocks
+            )
             val msg = ChatMessage(
-                id = UUID.randomUUID().toString(),
+                id = msgId,
                 role = finalRole,
                 state = MessageState.completed,
                 content = content,
                 contentBlocks = finalContentBlocks,
                 createdAt = eventTimestampIso(obj),
                 runId = runId,
-                sortTimestamp = eventSortTimestamp ?: (System.currentTimeMillis() / 1000.0)
+                sortTimestamp = eventSortTimestamp ?: (System.currentTimeMillis() / 1000.0),
+                timelineOrderKey = sourceRunId
+                    ?.let { localTimelineOrderKey(it, 30, msgId) }
+                    .orEmpty(),
+                timelineIdentityKey = sourceRunId
+                    ?.let { localTimelineIdentityKey("attachment", attachmentIdentityForOrder(finalContentBlocks) ?: msgId) }
+                    .orEmpty(),
+                timelineItemKind = if (sourceRunId != null) "attachment" else ""
             )
             val mergedCompletedAssistant = mergeCompletedAssistantFinalIntoCurrentMessages(
                 currentMessages = _state.value.messages,
@@ -602,6 +621,27 @@ class ChatStore(
                 messages.firstOrNull { it.id == assistantMessageId }?.let { return it }
             }
         return null
+    }
+
+    private fun attachmentSourceRunId(
+        payload: JsonObject,
+        runId: String,
+        contentBlocks: List<RelayChatContentBlock>
+    ): String? {
+        if (contentBlocks.none { it.isFileBlock || it.isVoiceMessageBlock }) return null
+        return contentBlocks.firstNotNullOfOrNull { block ->
+            block.sourceRunId?.trim()?.takeIf { it.isNotEmpty() }
+        }
+            ?: payload.string("sourceRunId", "source_run_id")?.trim()?.takeIf { it.isNotEmpty() }
+            ?: runId.trim().takeIf { it.isNotEmpty() && !it.startsWith("file-") }
+    }
+
+    private fun attachmentIdentityForOrder(contentBlocks: List<RelayChatContentBlock>): String? {
+        return contentBlocks.firstNotNullOfOrNull { block ->
+            block.attachmentId?.trim()?.takeIf { it.isNotEmpty() }
+                ?: block.fileId?.trim()?.takeIf { it.isNotEmpty() }
+                ?: block.fileDownloadURLString?.trim()?.takeIf { it.isNotEmpty() }
+        }
     }
 
     private fun markAssistantFinalSyncingFromHistory(

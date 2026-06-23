@@ -34,4 +34,31 @@ class ChatContentBlockParserTest {
 
         assertEquals("run-voice-1", block.sourceRunId)
     }
+
+    @Test
+    fun parsesAttachmentIdFromFileContentBlocks() {
+        val payload = json.parseToJsonElement(
+            """
+            {
+              "state": "final",
+              "message": {
+                "role": "assistant",
+                "content": [
+                  {
+                    "type": "file",
+                    "attachmentId": "att_source_run_sha",
+                    "fileId": "file_reply_image",
+                    "fileName": "reply.jpg",
+                    "mimeType": "image/jpeg"
+                  }
+                ]
+              }
+            }
+            """.trimIndent()
+        ) as JsonObject
+
+        val block = parseContentBlocks(payload).single()
+
+        assertEquals("att_source_run_sha", block.attachmentId)
+    }
 }

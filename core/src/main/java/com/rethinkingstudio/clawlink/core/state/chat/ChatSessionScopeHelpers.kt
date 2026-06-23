@@ -109,7 +109,9 @@ internal fun sameSessionKey(left: String?, right: String?): Boolean {
 }
 
 internal fun normalizeSessionKey(sessionKey: String?): String {
-    return sessionKey?.trim()?.takeIf { it.isNotEmpty() } ?: defaultSessionKey
+    val normalized = sessionKey?.trim()?.takeIf { it.isNotEmpty() } ?: defaultSessionKey
+    // Relay 历史会把 agent:<agentId>:<session> 当成 <session> 的别名；客户端状态也必须落到同一个会话。
+    return parseAgentSessionKey(normalized)?.rest ?: normalized
 }
 
 internal fun isTransientGatewayLoadFailureMessage(message: String): Boolean {

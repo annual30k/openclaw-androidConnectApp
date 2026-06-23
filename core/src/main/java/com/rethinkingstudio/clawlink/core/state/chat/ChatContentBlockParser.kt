@@ -16,12 +16,58 @@ import kotlinx.serialization.json.longOrNull
 internal fun parseContentBlocks(root: JsonObject): List<RelayChatContentBlock> {
     val arrays = mutableListOf<JsonArray>()
     collectContentBlockArrays(root, arrays, mutableSetOf())
-    if (arrays.isEmpty()) return emptyList()
+    if (arrays.isEmpty()) {
+        return topLevelFileContentBlock(root)?.let(::listOf).orEmpty()
+    }
 
     val seen = linkedSetOf<String>()
-    return sanitizeChatContentBlocks(arrays.flatMap { array ->
+    val parsed = sanitizeChatContentBlocks(arrays.flatMap { array ->
         array.mapNotNull { element -> parseContentBlock(element) }
     }.filter { block -> seen.add(block.signature()) })
+    return parsed.ifEmpty { topLevelFileContentBlock(root)?.let(::listOf).orEmpty() }
+}
+
+private fun topLevelFileContentBlock(obj: JsonObject): RelayChatContentBlock? {
+    val explicitFileId = obj.string("fileId", "file_id")
+    val fileName = obj.string("fileName", "file_name", "name")
+    val mimeType = obj.string("mimeType", "mime_type")
+    val downloadUrl = obj.string("downloadUrl", "download_url", "url")
+    val downloadPath = obj.string("downloadPath", "download_path")
+    val hasFileSignal = listOf(explicitFileId, fileName, mimeType, downloadUrl, downloadPath)
+        .any { !it.isNullOrBlank() }
+    if (!hasFileSignal) return null
+    val fileId = explicitFileId ?: obj.string("id")
+
+    val normalizedMimeType = mimeType.orEmpty().lowercase()
+    val type = obj.string("type", "kind") ?: when {
+        normalizedMimeType.startsWith("image/") -> "image"
+        normalizedMimeType.startsWith("audio/") -> "audio"
+        normalizedMimeType.startsWith("video/") -> "video"
+        else -> "file"
+    }
+
+    return RelayChatContentBlock(
+        type = type,
+        text = fileName,
+        name = fileName,
+        attachmentId = obj.string("attachmentId", "attachment_id"),
+        fileId = fileId,
+        fileName = fileName,
+        mimeType = mimeType,
+        sizeBytes = obj.int("sizeBytes", "size_bytes"),
+        durationMs = obj.int("durationMs", "duration_ms"),
+        imageWidth = obj.int("imageWidth", "image_width", "width"),
+        imageHeight = obj.int("imageHeight", "image_height", "height"),
+        downloadUrl = downloadUrl,
+        downloadPath = downloadPath,
+        thumbnailUrl = obj.string("thumbnailUrl", "thumbnail_url"),
+        expiresAt = obj.string("expiresAt", "expires_at"),
+        senderDisplayName = obj.string("senderDisplayName", "sender_display_name"),
+        sourceRunId = obj.string("sourceRunId", "source_run_id"),
+        gatewayId = obj.string("gatewayId", "gateway_id"),
+        sessionKey = obj.string("sessionKey", "session_key"),
+        status = obj.string("status", "state")
+    )
 }
 
 private fun parseContentBlock(element: JsonElement): RelayChatContentBlock? {
@@ -43,6 +89,7 @@ private fun parseContentBlock(element: JsonElement): RelayChatContentBlock? {
             type = type,
             text = obj["text"]?.jsonPrimitive?.content,
             name = obj["name"]?.jsonPrimitive?.content ?: obj["tool_name"]?.jsonPrimitive?.content ?: obj["tool"]?.jsonPrimitive?.content,
+            attachmentId = obj.string("attachmentId", "attachment_id"),
             fileId = obj.string("fileId", "file_id"),
             fileName = obj.string("fileName", "file_name", "name"),
             mimeType = obj.string("mimeType", "mime_type"),

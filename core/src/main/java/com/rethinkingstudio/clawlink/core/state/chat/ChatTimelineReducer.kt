@@ -731,10 +731,17 @@ internal object ChatTimelineReducer {
         val candidates = messages.filter { message ->
             message.role == MessageRole.user &&
                 message.id != excludingMessageId &&
-                (message.timelineIdentityKey.isBlank() || message.timelineIdentityKey.contains(":local", ignoreCase = true)) &&
+                isLocalTimelineIdentityKey(message.timelineIdentityKey) &&
                 message.content.trim() == trimmedContent
         }
         return candidates.singleOrNull()
+    }
+
+    private fun isLocalTimelineIdentityKey(value: String): Boolean {
+        val trimmed = value.trim()
+        return trimmed.isEmpty() ||
+            trimmed.startsWith("local:", ignoreCase = true) ||
+            trimmed.contains(":local:", ignoreCase = true)
     }
 
     private fun ChatTimelineState.matchingLocalUserIndex(

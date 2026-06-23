@@ -8,6 +8,7 @@ import com.rethinkingstudio.clawlink.core.models.chat.MessageState
 import com.rethinkingstudio.clawlink.core.models.chat.RelayChatContentBlock
 import com.rethinkingstudio.clawlink.core.network.RelayAPIClient
 import com.rethinkingstudio.clawlink.core.network.transport.RelayWebSocketClient
+import com.rethinkingstudio.clawlink.core.network.transport.WsEvent
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
@@ -510,6 +511,177 @@ class ChatStoreSessionTest {
         }
     }
 
+    @Test
+    fun relayFileSocketEventWithTopLevelFieldsMaterializesFileBlock() {
+        val wsClient = RelayWebSocketClient()
+        try {
+            val store = ChatStore(
+                apiClient = RelayAPIClient(),
+                wsClient = wsClient,
+                notificationPort = object : NotificationPort {
+                    override fun showReplyNotification(sessionKey: String, title: String, body: String) = Unit
+                    override fun cancelNotification(id: Int) = Unit
+                    override fun cancelAll() = Unit
+                }
+            )
+
+            invokeHandleWsEvent(
+                store,
+                WsEvent(
+                    type = "event",
+                    event = "file",
+                    payload = json.parseToJsonElement(
+                        """
+                        {
+                          "state": "final",
+                          "role": "assistant",
+                          "sessionKey": "main",
+                          "runId": "file-report-1",
+                          "createdAt": "2026-06-22T08:30:00.000Z",
+                          "fileId": "file-report-1",
+                          "fileName": "report.pdf",
+                          "mimeType": "application/pdf",
+                          "sizeBytes": 4096,
+                          "downloadUrl": "/api/mobile/files/file-report-1"
+                        }
+                        """.trimIndent()
+                    )
+                )
+            )
+
+            val message = store.state.value.messages.single()
+            assertEquals(MessageRole.assistant, message.role)
+            assertEquals(MessageState.completed, message.state)
+            assertEquals("report.pdf", message.content)
+            assertEquals("file-report-1", message.contentBlocks.single().fileId)
+            assertEquals("/api/mobile/files/file-report-1", message.contentBlocks.single().downloadUrl)
+        } finally {
+            wsClient.destroy()
+        }
+    }
+
+    @Test
+    fun relayFileSocketEventsKeepDistinctCompletedImagesWithoutStableIdentity() {
+        val wsClient = RelayWebSocketClient()
+        try {
+            val store = ChatStore(
+                apiClient = RelayAPIClient(),
+                wsClient = wsClient,
+                notificationPort = object : NotificationPort {
+                    override fun showReplyNotification(sessionKey: String, title: String, body: String) = Unit
+                    override fun cancelNotification(id: Int) = Unit
+                    override fun cancelAll() = Unit
+                }
+            )
+
+            fun imageEvent(fileId: String, createdAt: String): WsEvent {
+                return WsEvent(
+                    type = "event",
+                    event = "file",
+                    payload = json.parseToJsonElement(
+                        """
+                        {
+                          "state": "final",
+                          "role": "assistant",
+                          "sessionKey": "main",
+                          "createdAt": "$createdAt",
+                          "contentBlocks": [
+                            {
+                              "type": "file",
+                              "text": "codex-shot-2026-06-22_23-35-07.png",
+                              "name": "codex-shot-2026-06-22_23-35-07.png",
+                              "fileId": "$fileId",
+                              "fileName": "codex-shot-2026-06-22_23-35-07.png",
+                              "mimeType": "image/png",
+                              "sizeBytes": 6878188,
+                              "imageWidth": 3024,
+                              "imageHeight": 1964,
+                              "downloadUrl": "/api/mobile/files/$fileId",
+                              "gatewayId": "gw-file-without-stable-identity",
+                              "sessionKey": "main",
+                              "senderDisplayName": "OpenClaw"
+                            }
+                          ]
+                        }
+                        """.trimIndent()
+                    )
+                )
+            }
+
+            invokeHandleWsEvent(store, imageEvent("file_first", "2026-06-22T15:35:42.612Z"))
+            invokeHandleWsEvent(store, imageEvent("file_second", "2026-06-22T15:35:42.634Z"))
+
+            val messages = store.state.value.messages
+            assertEquals(2, messages.size)
+            assertEquals(listOf("file_first", "file_second"), messages.map { it.fileContentBlocks.single().fileId })
+        } finally {
+            wsClient.destroy()
+        }
+    }
+
+    @Test
+    fun relayFileSocketEventsMergeCompletedImagesWithSameAttachmentId() {
+        val wsClient = RelayWebSocketClient()
+        try {
+            val store = ChatStore(
+                apiClient = RelayAPIClient(),
+                wsClient = wsClient,
+                notificationPort = object : NotificationPort {
+                    override fun showReplyNotification(sessionKey: String, title: String, body: String) = Unit
+                    override fun cancelNotification(id: Int) = Unit
+                    override fun cancelAll() = Unit
+                }
+            )
+
+            fun imageEvent(fileId: String, fileName: String, sizeBytes: Int): WsEvent {
+                return WsEvent(
+                    type = "event",
+                    event = "file",
+                    payload = json.parseToJsonElement(
+                        """
+                        {
+                          "state": "final",
+                          "role": "assistant",
+                          "sessionKey": "main",
+                          "runId": "run-image-reply",
+                          "sourceRunId": "run-image-reply",
+                          "createdAt": "2026-06-22T15:35:42.634Z",
+                          "contentBlocks": [
+                            {
+                              "type": "file",
+                              "attachmentId": "att_source_run_sha",
+                              "fileId": "$fileId",
+                              "fileName": "$fileName",
+                              "mimeType": "image/png",
+                              "sizeBytes": $sizeBytes,
+                              "downloadUrl": "/api/mobile/files/$fileId",
+                              "gatewayId": "gw-file-attachment-identity",
+                              "sessionKey": "main",
+                              "sourceRunId": "run-image-reply"
+                            }
+                          ]
+                        }
+                        """.trimIndent()
+                    )
+                )
+            }
+
+            invokeHandleWsEvent(store, imageEvent("file_first", "draft-name.png", 100))
+            invokeHandleWsEvent(store, imageEvent("file_second", "final-name.png", 200))
+
+            val messages = store.state.value.messages
+            assertEquals(1, messages.size)
+            assertEquals(MessageRole.assistant, messages.single().role)
+            assertEquals("run-image-reply", messages.single().runId)
+            assertTrue(messages.single().timelineOrderKey.startsWith("local:run-image-reply|30|"))
+            assertEquals("att_source_run_sha", messages.single().fileContentBlocks.single().attachmentId)
+            assertEquals("file_second", messages.single().fileContentBlocks.single().fileId)
+            assertEquals("final-name.png", messages.single().fileContentBlocks.single().fileDisplayName)
+        } finally {
+            wsClient.destroy()
+        }
+    }
+
     private fun currentTimelineState(store: ChatStore): ChatTimelineState {
         val field = ChatStore::class.java.getDeclaredField("timelineState")
         field.isAccessible = true
@@ -526,6 +698,12 @@ class ChatStoreSessionTest {
         val method = ChatStore::class.java.getDeclaredMethod("handleChatPayload", JsonElement::class.java)
         method.isAccessible = true
         method.invoke(store, json.parseToJsonElement(rawPayload) as JsonObject)
+    }
+
+    private fun invokeHandleWsEvent(store: ChatStore, event: WsEvent) {
+        val method = ChatStore::class.java.getDeclaredMethod("handleWsEvent", WsEvent::class.java)
+        method.isAccessible = true
+        method.invoke(store, event)
     }
 
     private fun setChatState(store: ChatStore, state: ChatState) {

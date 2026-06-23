@@ -60,7 +60,7 @@ class TimelinePayloadScopeResolverTest {
         )
 
         assertEquals("gw_2", scope.gatewayId)
-        assertEquals("agent:main:main", scope.sessionKey)
+        assertEquals("main", scope.sessionKey)
         assertTrue(sameSessionKey(scope.sessionKey, "main"))
     }
 
