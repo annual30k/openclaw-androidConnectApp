@@ -5,6 +5,17 @@ plugins {
     id("org.jetbrains.kotlin.plugin.compose")
 }
 
+val releaseStoreFilePath = providers.environmentVariable("CLAWLINK_RELEASE_STORE_FILE").orNull
+val releaseStorePasswordValue = providers.environmentVariable("CLAWLINK_RELEASE_STORE_PASSWORD").orNull
+val releaseKeyAliasValue = providers.environmentVariable("CLAWLINK_RELEASE_KEY_ALIAS").orNull
+val releaseKeyPasswordValue = providers.environmentVariable("CLAWLINK_RELEASE_KEY_PASSWORD").orNull
+val hasReleaseSigningConfig = listOf(
+    releaseStoreFilePath,
+    releaseStorePasswordValue,
+    releaseKeyAliasValue,
+    releaseKeyPasswordValue
+).all { !it.isNullOrBlank() }
+
 android {
     namespace = "com.rethinkingstudio.clawlink"
     compileSdk = 35
@@ -13,8 +24,8 @@ android {
         applicationId = "com.rethinkingstudio.clawlink"
         minSdk = 26
         targetSdk = 35
-        versionCode = 1
-        versionName = "1.0.0"
+        versionCode = 2
+        versionName = "1.0.1"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
@@ -23,8 +34,23 @@ android {
         }
     }
 
+    signingConfigs {
+        if (hasReleaseSigningConfig) {
+            create("release") {
+                // 发布签名凭据只允许从环境变量注入，避免把 keystore 密码写入仓库。
+                storeFile = file(checkNotNull(releaseStoreFilePath))
+                storePassword = releaseStorePasswordValue
+                keyAlias = releaseKeyAliasValue
+                keyPassword = releaseKeyPasswordValue
+            }
+        }
+    }
+
     buildTypes {
         release {
+            if (hasReleaseSigningConfig) {
+                signingConfig = signingConfigs.getByName("release")
+            }
             isMinifyEnabled = true
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
