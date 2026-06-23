@@ -1,11 +1,22 @@
 .DS_Store
 .codex-*.png
+
+# Local Android/IDE state
 .gradle/
 .kotlin/
 local.properties
 *.iml
+
+# Build outputs
 **/build/
+
+# Release packages and signing secrets: publish via distribution channels,
+# but never commit them to git.
 *.apk
 *.idsig
+*.aab
+*.apks
 *.keystore
 *.jks
+*.p12
+*.pfx
