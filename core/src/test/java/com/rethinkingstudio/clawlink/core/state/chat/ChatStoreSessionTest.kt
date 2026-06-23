@@ -561,6 +561,101 @@ class ChatStoreSessionTest {
     }
 
     @Test
+    fun relayFileSocketEventWithoutSourceRunAnchorsToCurrentPendingRun() {
+        val wsClient = RelayWebSocketClient()
+        try {
+            val store = ChatStore(
+                apiClient = RelayAPIClient(),
+                wsClient = wsClient,
+                notificationPort = object : NotificationPort {
+                    override fun showReplyNotification(sessionKey: String, title: String, body: String) = Unit
+                    override fun cancelNotification(id: Int) = Unit
+                    override fun cancelAll() = Unit
+                }
+            )
+            store.beginGatewaySwitch("gateway-1")
+            store.newSession("main")
+
+            val localRunId = "client-run-spider"
+            val userMessageId = "user-$localRunId"
+            val assistantMessageId = "assistant-$localRunId"
+            val userMessage = ChatMessage(
+                id = userMessageId,
+                role = MessageRole.user,
+                state = MessageState.completed,
+                content = "把桌面的蜘蛛侠图片发给我",
+                runId = "local-user-$localRunId",
+                sortTimestamp = 1_780_000_120.0
+            )
+            val assistantPlaceholder = buildLocalTextAssistantPlaceholderMessage(
+                id = assistantMessageId,
+                clientRunId = localRunId,
+                sortTimestamp = 1_780_000_120.001
+            )
+            setChatState(
+                store,
+                store.state.value.copy(
+                    messages = listOf(userMessage, assistantPlaceholder),
+                    isStreaming = true
+                )
+            )
+            rememberRunScope(
+                store,
+                localRunId,
+                ChatRunScope(
+                    gatewayId = "gateway-1",
+                    sessionKey = "main",
+                    assistantMessageId = assistantMessageId,
+                    triggeringUserMessageId = userMessageId
+                )
+            )
+
+            invokeHandleWsEvent(
+                store,
+                WsEvent(
+                    type = "event",
+                    event = "file",
+                    payload = json.parseToJsonElement(
+                        """
+                        {
+                          "state": "final",
+                          "role": "assistant",
+                          "gatewayId": "gateway-1",
+                          "sessionKey": "main",
+                          "runId": "file-file-spiderman",
+                          "createdAt": "2026-06-22T08:30:00.000Z",
+                          "contentBlocks": [
+                            {
+                              "type": "file",
+                              "fileId": "file-spiderman",
+                              "fileName": "spiderman.png",
+                              "mimeType": "image/png",
+                              "downloadUrl": "/api/mobile/files/file-spiderman"
+                            }
+                          ]
+                        }
+                        """.trimIndent()
+                    )
+                )
+            )
+
+            val messages = store.state.value.messages
+            assertEquals(
+                listOf("local-user-$localRunId", "file-file-spiderman"),
+                messages.map { it.runId }
+            )
+            val fileMessage = messages.last()
+            assertTrue(
+                "timelineOrderKey=${fileMessage.timelineOrderKey}",
+                fileMessage.timelineOrderKey.startsWith("local:$localRunId|20|")
+            )
+            assertEquals(localRunId, fileMessage.fileContentBlocks.single().sourceRunId)
+        } finally {
+            wsClient.destroy()
+        }
+    }
+
+    @Test
     fun relayFileSocketEventsKeepDistinctCompletedImagesWithoutStableIdentity() {
         val wsClient = RelayWebSocketClient()
         try {

@@ -43,4 +43,22 @@ object TokenDisplayFormatter {
     fun parseNonNegativeInteger(value: String?): Int? {
         return value?.trim()?.toIntOrNull()?.takeIf { it >= 0 }
     }
+
+    fun parseFormattedCount(value: String?): Int? {
+        val trimmed = value?.trim()?.lowercase() ?: return null
+        if (trimmed.isEmpty()) return null
+        parseNonNegativeInteger(trimmed)?.let { return it }
+
+        val suffix = trimmed.last()
+        val multiplier = when (suffix) {
+            'k' -> 1_000.0
+            'm' -> 1_000_000.0
+            else -> return null
+        }
+        val numericPart = trimmed.dropLast(1).trim()
+        val parsed = numericPart.toDoubleOrNull()?.takeIf { it >= 0 } ?: return null
+        val scaled = parsed * multiplier
+        if (!scaled.isFinite() || scaled > Int.MAX_VALUE) return null
+        return scaled.roundToInt()
+    }
 }

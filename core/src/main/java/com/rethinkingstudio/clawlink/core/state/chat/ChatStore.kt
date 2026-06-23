@@ -429,7 +429,13 @@ class ChatStore(
             }
         }
 
-        val finalContentBlocks = contentBlocks
+        val sourceRunId = attachmentSourceRunId(
+            payload = obj,
+            runId = runId,
+            contentBlocks = contentBlocks,
+            runScope = scope.runScope
+        )
+        val finalContentBlocks = contentBlocksWithAttachmentSourceRunId(contentBlocks, sourceRunId)
 
         val finalRole = if (finalContentBlocks.any { it.isToolCallBlock || it.isToolResultBlock }) MessageRole.tool else role
         val preview = buildNotificationPreview(content, contentBlocks)
@@ -511,11 +517,6 @@ class ChatStore(
         } else {
             val eventSortTimestamp = eventTimestampMillis(obj)?.toDouble()?.div(1000.0)
             val msgId = UUID.randomUUID().toString()
-            val sourceRunId = attachmentSourceRunId(
-                payload = obj,
-                runId = runId,
-                contentBlocks = finalContentBlocks
-            )
             val msg = ChatMessage(
                 id = msgId,
                 role = finalRole,
@@ -626,7 +627,8 @@ class ChatStore(
     private fun attachmentSourceRunId(
         payload: JsonObject,
         runId: String,
-        contentBlocks: List<RelayChatContentBlock>
+        contentBlocks: List<RelayChatContentBlock>,
+        runScope: ChatRunScope?
     ): String? {
         if (contentBlocks.none { it.isFileBlock || it.isVoiceMessageBlock }) return null
         return contentBlocks.firstNotNullOfOrNull { block ->
@@ -634,6 +636,55 @@ class ChatStore(
         }
             ?: payload.string("sourceRunId", "source_run_id")?.trim()?.takeIf { it.isNotEmpty() }
             ?: runId.trim().takeIf { it.isNotEmpty() && !it.startsWith("file-") }
+            ?: pendingRunIdentityForAttachment(runScope)
+    }
+
+    private fun pendingRunIdentityForAttachment(runScope: ChatRunScope?): String? {
+        val messages = _state.value.messages
+        val assistantMessageId = runScope?.assistantMessageId?.trim()?.takeIf { it.isNotEmpty() }
+        if (assistantMessageId != null) {
+            val assistantRunId = messages.firstOrNull { message ->
+                message.id == assistantMessageId &&
+                    message.role == MessageRole.assistant &&
+                    message.state == MessageState.streaming
+            }?.runId?.trim()
+            normalizeAttachmentSourceRunId(assistantRunId)?.let { return it }
+        }
+        val triggeringUserMessageId = runScope?.triggeringUserMessageId?.trim()?.takeIf { it.isNotEmpty() }
+        if (triggeringUserMessageId != null) {
+            val userRunId = messages.firstOrNull { message ->
+                message.id == triggeringUserMessageId &&
+                    message.role == MessageRole.user
+            }?.runId?.trim()
+            normalizeAttachmentSourceRunId(userRunId)?.let { return it }
+        }
+        return null
+    }
+
+    private fun normalizeAttachmentSourceRunId(value: String?): String? {
+        val normalized = value
+            ?.trim()
+            ?.removePrefix("local-user-")
+            ?.trim()
+            ?.takeIf { it.isNotEmpty() && !it.startsWith("file-") }
+        return normalized
+    }
+
+    private fun contentBlocksWithAttachmentSourceRunId(
+        contentBlocks: List<RelayChatContentBlock>,
+        sourceRunId: String?
+    ): List<RelayChatContentBlock> {
+        val normalizedSourceRunId = sourceRunId?.trim()?.takeIf { it.isNotEmpty() } ?: return contentBlocks
+        var changed = false
+        val updated = contentBlocks.map { block ->
+            if ((block.isFileBlock || block.isVoiceMessageBlock) && block.sourceRunId.isNullOrBlank()) {
+                changed = true
+                block.copy(sourceRunId = normalizedSourceRunId)
+            } else {
+                block
+            }
+        }
+        return if (changed) updated else contentBlocks
     }
 
     private fun attachmentIdentityForOrder(contentBlocks: List<RelayChatContentBlock>): String? {

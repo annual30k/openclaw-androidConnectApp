@@ -96,6 +96,23 @@ class ChatContextUsagePresentationTest {
     }
 
     @Test
+    fun hermesSessionUsageWithoutLimitKeepsGatewayCapacity() {
+        val state = ChatState(
+            currentGatewayId = "gw_hermes",
+            currentSessionKey = "main",
+            contextUsageLinesByGatewayAndSession = mapOf(
+                "gw_hermes" to mapOf("main" to "18k")
+            )
+        )
+
+        val line = state.visibleContextUsageLine(
+            gateway = gateway(type = GatewayType.hermes, contextUsage = "0/272k (0%)")
+        )
+
+        assertEquals("18k/272k (7%)", line)
+    }
+
+    @Test
     fun openClawUsesSessionContextUsageWhenAvailable() {
         val state = ChatState(
             currentGatewayId = "gw_openclaw",

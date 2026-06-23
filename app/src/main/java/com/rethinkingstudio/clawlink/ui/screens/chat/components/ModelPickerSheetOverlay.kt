@@ -25,6 +25,7 @@ import com.rethinkingstudio.clawlink.R
 import com.rethinkingstudio.clawlink.core.models.catalog.ModelItem
 import com.rethinkingstudio.clawlink.core.state.LocalizedText.choose
 import com.rethinkingstudio.clawlink.ui.screens.chat.ChatColors
+import com.rethinkingstudio.clawlink.ui.screens.model.displayContextWindow
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -238,7 +239,7 @@ private fun ModelPickerRow(model: ModelItem, isSelected: Boolean, onClick: () ->
                     }
                 }
                 
-                val contextText = model.contextWindow ?: choose("Unknown", "未知")
+                val contextText = model.displayContextWindow.takeIf { it != "--" } ?: choose("Unknown", "未知")
                 val tags = model.capabilities?.joinToString(" · ") ?: choose("Standard", "标准")
                 Text(
                     text = "$contextText · $tags",

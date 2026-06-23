@@ -340,6 +340,14 @@ private fun sameTurnToolBeforeAssistant(left: CanonicalTimelineEntry, right: Can
 private fun normalizedTurnIdentity(entry: CanonicalTimelineEntry): String {
     val turnId = normalizedTurnIdentityValue(entry.turnId)
     if (turnId.isNotEmpty()) return turnId
+    val mediaSourceRunId = entry.content.firstNotNullOfOrNull { block ->
+        if (block.isFileBlock || block.isVoiceMessageBlock) {
+            normalizedTurnIdentityValue(block.sourceRunId).takeIf { it.isNotEmpty() }
+        } else {
+            null
+        }
+    }
+    if (!mediaSourceRunId.isNullOrEmpty()) return mediaSourceRunId
     return normalizedTurnIdentityValue(entry.runId)
 }
 

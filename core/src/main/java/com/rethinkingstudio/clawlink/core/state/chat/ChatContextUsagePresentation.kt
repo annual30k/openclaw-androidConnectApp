@@ -13,12 +13,13 @@ import kotlinx.serialization.json.longOrNull
 fun ChatState.visibleContextUsageLine(gateway: GatewaySummary?): String? {
     val selectedGateway = gateway ?: return null
     val sessionContextUsageLine = contextUsageLineFor(selectedGateway.gatewayId, currentSessionKey)
+    val enrichedSessionContextUsageLine = sessionContextUsageLine.withGatewayContextLimit(selectedGateway.contextLimit)
     return when (selectedGateway.gatewayType) {
         GatewayType.openclaw -> preferredContextUsageLine(
-            sessionContextUsageLine = sessionContextUsageLine,
+            sessionContextUsageLine = enrichedSessionContextUsageLine,
             gatewayContextUsageLine = selectedGateway.contextUsage
         ) ?: "--"
-        GatewayType.hermes -> sessionContextUsageLine
+        GatewayType.hermes -> enrichedSessionContextUsageLine
             ?: if (sameSessionKey(currentSessionKey, "main")) {
                 selectedGateway.contextUsage.trim().ifBlank { "--" }
             } else if (!shouldShowHermesResetContext()) {
@@ -27,6 +28,22 @@ fun ChatState.visibleContextUsageLine(gateway: GatewaySummary?): String? {
                 TokenDisplayFormatter.formatUsage(usedTokens = 0, limitTokens = selectedGateway.contextLimit, fallback = null)
             }
     }
+}
+
+private fun String?.withGatewayContextLimit(limitTokens: Int?): String? {
+    val trimmed = this?.trim()?.takeIf { it.isNotEmpty() && it != "--" } ?: return null
+    if (trimmed.contains("/") || trimmed.contains("%")) return trimmed
+
+    val unprefixed = trimmed
+        .removePrefix("上下文 ")
+        .removePrefix("Context ")
+        .trim()
+    val usedTokens = TokenDisplayFormatter.parseFormattedCount(unprefixed) ?: return trimmed
+    return TokenDisplayFormatter.formatUsage(
+        usedTokens = usedTokens,
+        limitTokens = limitTokens,
+        fallback = trimmed
+    )
 }
 
 internal fun ChatState.withContextUsageFromPayload(envelope: JsonObject, payload: JsonObject): ChatState {
