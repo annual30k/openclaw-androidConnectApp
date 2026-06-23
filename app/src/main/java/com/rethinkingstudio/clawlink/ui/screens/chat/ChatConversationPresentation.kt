@@ -3,6 +3,7 @@ package com.rethinkingstudio.clawlink.ui.screens.chat
 import com.rethinkingstudio.clawlink.core.models.chat.ChatMessage
 import com.rethinkingstudio.clawlink.core.models.chat.MessageRole
 import com.rethinkingstudio.clawlink.core.models.chat.MessageState
+import com.rethinkingstudio.clawlink.core.models.chat.RelayChatContentBlock
 import com.rethinkingstudio.clawlink.core.state.chat.ChatState
 
 internal fun conversationDisplayMessages(
@@ -11,6 +12,10 @@ internal fun conversationDisplayMessages(
 ): List<ChatMessage> {
     return messages
         .coalescedByCanonicalIdentity()
+        .coalescedLocalUserAttachmentMessages()
+        .coalescedLocalUserLiveEchoes()
+        .coalescedDuplicateTextHistoryMessages()
+        .coalescedDuplicateFileTransferMessages()
         .filter { message ->
             message.shouldDisplayInChat(showInvocationProcess = showInvocationProcess) ||
                 message.state == MessageState.streaming && message.role == MessageRole.assistant
@@ -82,19 +87,416 @@ private fun List<ChatMessage>.coalescedByCanonicalIdentity(): List<ChatMessage> 
 }
 
 private fun mergeSameIdentityDisplayMessage(existing: ChatMessage, incoming: ChatMessage): ChatMessage {
-    return incoming.copy(
-        content = incoming.content.ifBlank { existing.content },
-        contentBlocks = incoming.contentBlocks.ifEmpty { existing.contentBlocks },
-        createdAt = incoming.createdAt.ifBlank { existing.createdAt },
-        runId = incoming.runId.ifBlank { existing.runId },
-        sortTimestamp = incoming.sortTimestamp ?: existing.sortTimestamp,
-        seq = incoming.seq ?: existing.seq,
-        turnSeq = incoming.turnSeq ?: existing.turnSeq,
-        timelineStableKey = incoming.timelineStableKey.ifBlank { existing.timelineStableKey },
-        timelineMessageId = incoming.timelineMessageId.ifBlank { existing.timelineMessageId },
-        timelinePartId = incoming.timelinePartId.ifBlank { existing.timelinePartId },
-        timelineOrderKey = incoming.timelineOrderKey.ifBlank { existing.timelineOrderKey },
-        timelineIdentityKey = incoming.timelineIdentityKey.ifBlank { existing.timelineIdentityKey },
-        timelineItemKind = incoming.timelineItemKind.ifBlank { existing.timelineItemKind }
+    return existing.copy(
+        content = existing.content.ifBlank { incoming.content },
+        contentBlocks = existing.contentBlocks.ifEmpty { incoming.contentBlocks },
+        createdAt = existing.createdAt.ifBlank { incoming.createdAt },
+        runId = existing.runId.ifBlank { incoming.runId },
+        sortTimestamp = existing.sortTimestamp ?: incoming.sortTimestamp,
+        seq = existing.seq ?: incoming.seq,
+        turnSeq = existing.turnSeq ?: incoming.turnSeq,
+        timelineStableKey = existing.timelineStableKey.ifBlank { incoming.timelineStableKey },
+        timelineMessageId = existing.timelineMessageId.ifBlank { incoming.timelineMessageId },
+        timelinePartId = existing.timelinePartId.ifBlank { incoming.timelinePartId },
+        timelineOrderKey = existing.timelineOrderKey.ifBlank { incoming.timelineOrderKey },
+        timelineIdentityKey = existing.timelineIdentityKey.ifBlank { incoming.timelineIdentityKey },
+        timelineItemKind = existing.timelineItemKind.ifBlank { incoming.timelineItemKind }
     )
 }
+
+private fun List<ChatMessage>.coalescedLocalUserAttachmentMessages(): List<ChatMessage> {
+    val output = toMutableList()
+    val attachmentIndexesToDrop = mutableSetOf<Int>()
+    val localIndexesByRunId = mutableMapOf<String, MutableList<Int>>()
+
+    output.forEachIndexed { localIndex, local ->
+        if (local.role != MessageRole.user || !local.runId.trim().startsWith("local-user-")) {
+            return@forEachIndexed
+        }
+        val localRunId = normalizedUserEchoRunId(local.runId)
+        if (localRunId.isNotEmpty()) {
+            localIndexesByRunId.getOrPut(localRunId) { mutableListOf() } += localIndex
+        }
+    }
+
+    output.forEachIndexed { attachmentIndex, attachment ->
+        if (attachment.role != MessageRole.user ||
+            attachment.runId.trim().startsWith("local-user-") ||
+            attachment.runId.trim().startsWith("history-") ||
+            attachment.contentBlocks.none { it.isTransferContentBlock }
+        ) {
+            return@forEachIndexed
+        }
+
+        val localIndex = attachment.sourceRunIds()
+            .asSequence()
+            .flatMap { sourceRunId -> localIndexesByRunId[sourceRunId].orEmpty().asSequence() }
+            .firstOrNull { index -> index != attachmentIndex }
+            ?: return@forEachIndexed
+
+        val mergedBlocks = mergedLocalAttachmentBlocks(
+            localBlocks = output[localIndex].contentBlocks,
+            completedBlocks = attachment.contentBlocks
+        ) ?: return@forEachIndexed
+        if (!mergedBlocksContainSourceRunIdentity(mergedBlocks, output[localIndex])) return@forEachIndexed
+
+        output[localIndex] = output[localIndex].copy(contentBlocks = mergedBlocks)
+        attachmentIndexesToDrop += attachmentIndex
+    }
+
+    if (attachmentIndexesToDrop.isEmpty()) return this
+    return output.filterIndexed { index, _ -> index !in attachmentIndexesToDrop }
+}
+
+private fun mergedLocalAttachmentBlocks(
+    localBlocks: List<RelayChatContentBlock>,
+    completedBlocks: List<RelayChatContentBlock>
+): List<RelayChatContentBlock>? {
+    val completedMediaBlocks = completedBlocks.filter { it.isTransferContentBlock }
+    if (completedMediaBlocks.isEmpty()) return null
+    if (localBlocks.none { it.isTransferContentBlock }) {
+        return localBlocks + completedMediaBlocks
+    }
+
+    var didMerge = false
+    val usedCompletedIndexes = mutableSetOf<Int>()
+    val merged = localBlocks.map { localBlock ->
+        if (!localBlock.isTransferContentBlock) return@map localBlock
+        val completedIndex = completedMediaBlocks.indices.firstOrNull { index ->
+            index !in usedCompletedIndexes &&
+                localBlock.matchesCompletedAttachmentBlock(completedMediaBlocks[index])
+        } ?: return@map localBlock
+
+        usedCompletedIndexes += completedIndex
+        didMerge = true
+        completedMediaBlocks[completedIndex]
+    }.toMutableList()
+
+    if (!didMerge) return null
+    completedMediaBlocks.forEachIndexed { index, block ->
+        if (index !in usedCompletedIndexes) merged += block
+    }
+    return merged
+}
+
+private fun mergedBlocksContainSourceRunIdentity(
+    blocks: List<RelayChatContentBlock>,
+    matching: ChatMessage
+): Boolean {
+    val localRunId = normalizedUserEchoRunId(matching.runId)
+    if (localRunId.isEmpty()) return false
+    return blocks.any { block ->
+        block.isTransferContentBlock && normalizedAttachmentText(block.sourceRunId) == localRunId
+    }
+}
+
+private fun List<ChatMessage>.coalescedLocalUserLiveEchoes(): List<ChatMessage> {
+    val localEchoKeys = mutableSetOf<LocalUserEchoKey>()
+    val liveEchoIndexesToDrop = mutableSetOf<Int>()
+
+    for (local in this) {
+        if (local.role != MessageRole.user || !local.runId.trim().startsWith("local-user-")) continue
+        val localContent = normalizedUserEchoContent(local.content)
+        if (localContent.isEmpty()) continue
+        val localRunId = normalizedUserEchoRunId(local.runId)
+        if (localRunId.isEmpty()) continue
+        localEchoKeys += LocalUserEchoKey(runId = localRunId, content = localContent)
+    }
+
+    forEachIndexed { liveIndex, live ->
+        if (live.role != MessageRole.user ||
+            live.runId.trim().startsWith("local-user-") ||
+            live.runId.trim().startsWith("history-")
+        ) {
+            return@forEachIndexed
+        }
+        val liveKey = LocalUserEchoKey(
+            runId = normalizedUserEchoRunId(live.runId),
+            content = normalizedUserEchoContent(live.content)
+        )
+        if (liveKey.runId.isNotEmpty() && liveKey.content.isNotEmpty() && liveKey in localEchoKeys) {
+            liveEchoIndexesToDrop += liveIndex
+        }
+    }
+
+    if (liveEchoIndexesToDrop.isEmpty()) return this
+    return filterIndexed { index, _ -> index !in liveEchoIndexesToDrop }
+}
+
+private fun List<ChatMessage>.coalescedDuplicateTextHistoryMessages(): List<ChatMessage> {
+    val output = mutableListOf<ChatMessage>()
+    val indexByKey = mutableMapOf<TextHistoryKey, Int>()
+    var didMerge = false
+
+    for (message in this) {
+        val key = message.textHistoryKey()
+        val duplicateIndex = key?.let { indexByKey[it] }
+        if (duplicateIndex == null || !output[duplicateIndex].isDuplicateTextHistoryMessage(message)) {
+            output += message
+            if (key != null) indexByKey[key] = output.lastIndex
+            continue
+        }
+
+        output[duplicateIndex] = preferredDuplicateTextMessage(output[duplicateIndex], message)
+        didMerge = true
+    }
+
+    return if (didMerge) output else this
+}
+
+private fun ChatMessage.isDuplicateTextHistoryMessage(other: ChatMessage): Boolean {
+    if (textHistoryKey() != other.textHistoryKey()) return false
+
+    val leftTimestamp = sortTimestamp
+    val rightTimestamp = other.sortTimestamp
+    return leftTimestamp != null &&
+        rightTimestamp != null &&
+        kotlin.math.abs(leftTimestamp - rightTimestamp) <= duplicateTextHistoryWindowSeconds
+}
+
+private fun preferredDuplicateTextMessage(existing: ChatMessage, incoming: ChatMessage): ChatMessage {
+    val preferred = if (incoming.id.startsWith("history:") && !existing.id.startsWith("history:")) {
+        incoming
+    } else {
+        existing
+    }
+    val fallback = if (preferred === existing) incoming else existing
+    return preferred.copy(
+        content = preferred.content.ifBlank { fallback.content },
+        contentBlocks = preferred.contentBlocks.ifEmpty { fallback.contentBlocks },
+        createdAt = preferred.createdAt.ifBlank { fallback.createdAt },
+        runId = preferred.runId.ifBlank { fallback.runId },
+        sortTimestamp = preferred.sortTimestamp ?: fallback.sortTimestamp,
+        seq = preferred.seq ?: fallback.seq,
+        turnSeq = preferred.turnSeq ?: fallback.turnSeq,
+        timelineStableKey = preferred.timelineStableKey.ifBlank { fallback.timelineStableKey },
+        timelineMessageId = preferred.timelineMessageId.ifBlank { fallback.timelineMessageId },
+        timelinePartId = preferred.timelinePartId.ifBlank { fallback.timelinePartId },
+        timelineOrderKey = preferred.timelineOrderKey.ifBlank { fallback.timelineOrderKey },
+        timelineIdentityKey = preferred.timelineIdentityKey.ifBlank { fallback.timelineIdentityKey },
+        timelineItemKind = preferred.timelineItemKind.ifBlank { fallback.timelineItemKind }
+    )
+}
+
+private fun List<ChatMessage>.coalescedDuplicateFileTransferMessages(): List<ChatMessage> {
+    val output = mutableListOf<ChatMessage>()
+    val stableIndexByKey = mutableMapOf<String, Int>()
+    val weakPreviewIndexByKey = mutableMapOf<String, Int>()
+    var didMerge = false
+
+    for (message in this) {
+        val keys = message.fileTransferDisplayKeys()
+        val duplicateIndex = keys?.stableKey
+            ?.let { stableIndexByKey[it] }
+            ?.takeIf { output[it].isDuplicateFileTransferDisplayMessage(message) }
+            ?: keys?.weakKey
+                ?.let { weakPreviewIndexByKey[it] }
+                ?.takeIf { output[it].isDuplicateFileTransferDisplayMessage(message) }
+
+        if (duplicateIndex == null) {
+            output += message
+            if (keys?.stableKey != null) stableIndexByKey[keys.stableKey] = output.lastIndex
+            if (keys?.weakKey != null && keys.hasMissingStableId) {
+                weakPreviewIndexByKey[keys.weakKey] = output.lastIndex
+            }
+        } else {
+            output[duplicateIndex] = mergeDuplicateFileTransferDisplayMessage(output[duplicateIndex], message)
+            didMerge = true
+        }
+    }
+
+    return if (didMerge) output else this
+}
+
+private fun ChatMessage.isDuplicateFileTransferDisplayMessage(other: ChatMessage): Boolean {
+    if (role != other.role) return false
+    if (runId.trim().startsWith("local-user-") || other.runId.trim().startsWith("local-user-")) {
+        return false
+    }
+
+    val leftBlocks = contentBlocks.filter { it.isTransferContentBlock }
+    val rightBlocks = other.contentBlocks.filter { it.isTransferContentBlock }
+    if (leftBlocks.isEmpty() || leftBlocks.size != rightBlocks.size) return false
+
+    val usedRightIndexes = mutableSetOf<Int>()
+    return leftBlocks.all { left ->
+        val match = rightBlocks.indices.firstOrNull { index ->
+            index !in usedRightIndexes && left.matchesCompletedAttachmentBlock(rightBlocks[index])
+        } ?: return false
+        usedRightIndexes += match
+        true
+    }
+}
+
+private fun mergeDuplicateFileTransferDisplayMessage(
+    existing: ChatMessage,
+    incoming: ChatMessage
+): ChatMessage {
+    return existing.copy(
+        content = existing.content.ifBlank { incoming.content },
+        contentBlocks = mergedDuplicateFileTransferBlocks(existing.contentBlocks, incoming.contentBlocks),
+        createdAt = existing.createdAt.ifBlank { incoming.createdAt },
+        runId = existing.runId.ifBlank { incoming.runId },
+        sortTimestamp = existing.sortTimestamp ?: incoming.sortTimestamp,
+        seq = existing.seq ?: incoming.seq,
+        turnSeq = existing.turnSeq ?: incoming.turnSeq,
+        timelineStableKey = existing.timelineStableKey.ifBlank { incoming.timelineStableKey },
+        timelineMessageId = existing.timelineMessageId.ifBlank { incoming.timelineMessageId },
+        timelinePartId = existing.timelinePartId.ifBlank { incoming.timelinePartId },
+        timelineOrderKey = existing.timelineOrderKey.ifBlank { incoming.timelineOrderKey },
+        timelineIdentityKey = existing.timelineIdentityKey.ifBlank { incoming.timelineIdentityKey },
+        timelineItemKind = existing.timelineItemKind.ifBlank { incoming.timelineItemKind }
+    )
+}
+
+private fun mergedDuplicateFileTransferBlocks(
+    existingBlocks: List<RelayChatContentBlock>,
+    incomingBlocks: List<RelayChatContentBlock>
+): List<RelayChatContentBlock> {
+    val incomingTransferBlocks = incomingBlocks.filter { it.isTransferContentBlock }
+    val usedIncomingIndexes = mutableSetOf<Int>()
+    val merged = existingBlocks.map { existingBlock ->
+        if (!existingBlock.isTransferContentBlock) return@map existingBlock
+        val incomingIndex = incomingTransferBlocks.indices.firstOrNull { index ->
+            index !in usedIncomingIndexes &&
+                existingBlock.matchesCompletedAttachmentBlock(incomingTransferBlocks[index])
+        } ?: return@map existingBlock
+
+        usedIncomingIndexes += incomingIndex
+        richerAttachmentBlock(existingBlock, incomingTransferBlocks[incomingIndex])
+    }.toMutableList()
+
+    incomingTransferBlocks.forEachIndexed { index, block ->
+        if (index !in usedIncomingIndexes) merged += block
+    }
+    return merged
+}
+
+private fun richerAttachmentBlock(
+    existing: RelayChatContentBlock,
+    incoming: RelayChatContentBlock
+): RelayChatContentBlock {
+    val incomingHasStableId = incoming.stableTransferId.isNotEmpty()
+    val existingHasStableId = existing.stableTransferId.isNotEmpty()
+    if (incomingHasStableId && !existingHasStableId) return incoming
+
+    val incomingUrl = normalizedAttachmentText(incoming.downloadUrl ?: incoming.downloadPath)
+    val existingUrl = normalizedAttachmentText(existing.downloadUrl ?: existing.downloadPath)
+    if (incomingUrl.startsWith("/api/") && !existingUrl.startsWith("/api/")) return incoming
+
+    return existing
+}
+
+private fun RelayChatContentBlock.matchesCompletedAttachmentBlock(
+    completedBlock: RelayChatContentBlock
+): Boolean {
+    val localId = stableTransferId
+    val completedId = completedBlock.stableTransferId
+    if (localId.isNotEmpty() && completedId.isNotEmpty()) {
+        return localId == completedId
+    }
+
+    val localName = normalizedAttachmentText(fileDisplayName)
+    val completedName = normalizedAttachmentText(completedBlock.fileDisplayName)
+    if (localName.isEmpty() || localName != completedName) return false
+
+    val localMimeType = normalizedAttachmentText(mimeType)
+    val completedMimeType = normalizedAttachmentText(completedBlock.mimeType)
+    return localMimeType.isEmpty() ||
+        completedMimeType.isEmpty() ||
+        localMimeType == completedMimeType ||
+        localMimeType == "application/octet-stream" ||
+        completedMimeType == "application/octet-stream"
+}
+
+private val RelayChatContentBlock.isTransferContentBlock: Boolean
+    get() = isFileBlock || isVoiceMessageBlock
+
+private val RelayChatContentBlock.stableTransferId: String
+    get() = normalizedAttachmentText(attachmentId ?: fileId)
+
+private fun ChatMessage.sourceRunIds(): List<String> {
+    return contentBlocks
+        .mapNotNull { normalizedAttachmentText(it.sourceRunId).takeIf { sourceRunId -> sourceRunId.isNotEmpty() } }
+        .distinct()
+}
+
+private fun ChatMessage.textHistoryKey(): TextHistoryKey? {
+    if (contentBlocks.any { it.isTransferContentBlock || it.isToolCallBlock || it.isToolResultBlock }) return null
+    val normalizedContent = normalizedUserEchoContent(plainTextContent)
+    if (normalizedContent.isEmpty()) return null
+    return TextHistoryKey(role = role, content = normalizedContent)
+}
+
+private fun ChatMessage.fileTransferDisplayKeys(): FileTransferDisplayKeys? {
+    if (runId.trim().startsWith("local-user-")) return null
+    val transferBlocks = contentBlocks.filter { it.isTransferContentBlock }
+    if (transferBlocks.isEmpty()) return null
+
+    val stableIds = transferBlocks.map { it.stableTransferId }
+    val hasMissingStableId = stableIds.any { it.isEmpty() }
+    val stableKey = if (!hasMissingStableId) {
+        listOf(role.name, "stable", stableIds.sorted().joinToString(separator = "|"))
+            .joinToString(separator = "\u001E")
+    } else {
+        null
+    }
+
+    val weakParts = transferBlocks.mapNotNull { block ->
+        val name = normalizedAttachmentText(block.fileDisplayName)
+        if (name.isEmpty()) return@mapNotNull null
+        name
+    }
+    val weakKey = if (weakParts.size == transferBlocks.size) {
+        listOf(role.name, "weak", weakParts.sorted().joinToString(separator = "|"))
+            .joinToString(separator = "\u001E")
+    } else {
+        null
+    }
+
+    return FileTransferDisplayKeys(
+        stableKey = stableKey,
+        weakKey = weakKey,
+        hasMissingStableId = hasMissingStableId
+    )
+}
+
+private fun normalizedAttachmentText(value: String?): String {
+    return value?.trim()?.lowercase().orEmpty()
+}
+
+private fun normalizedUserEchoRunId(value: String): String {
+    var normalized = value.trim()
+    if (normalized.startsWith("local-user-")) {
+        normalized = normalized.removePrefix("local-user-")
+    }
+    for (suffix in listOf(":user", ":assistant", ":tool", ":system")) {
+        if (normalized.endsWith(suffix)) {
+            normalized = normalized.removeSuffix(suffix)
+            break
+        }
+    }
+    return normalized.trim()
+}
+
+private fun normalizedUserEchoContent(value: String): String {
+    return value.trim().replace(Regex("\\s+"), " ")
+}
+
+private const val duplicateTextHistoryWindowSeconds = 30.0
+
+private data class LocalUserEchoKey(
+    val runId: String,
+    val content: String
+)
+
+private data class TextHistoryKey(
+    val role: MessageRole,
+    val content: String
+)
+
+private data class FileTransferDisplayKeys(
+    val stableKey: String?,
+    val weakKey: String?,
+    val hasMissingStableId: Boolean
+)

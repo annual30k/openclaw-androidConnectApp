@@ -242,6 +242,189 @@ class ChatConversationPresentationTest {
     }
 
     @Test
+    fun displayMessagesCoalescesLiveUserEchoForLocalSend() {
+        val localPrompt = ChatMessage(
+            id = "local-user-spider",
+            role = MessageRole.user,
+            state = MessageState.completed,
+            content = "我还是要蜘蛛侠的",
+            createdAt = "2026-06-22T09:39:00Z",
+            runId = "local-user-client-run-spider",
+            sortTimestamp = 100.0
+        )
+        val liveEcho = ChatMessage(
+            id = "live-user-spider",
+            role = MessageRole.user,
+            state = MessageState.completed,
+            content = "我还是要蜘蛛侠的",
+            createdAt = "2026-06-22T09:39:01Z",
+            runId = "client-run-spider:user",
+            sortTimestamp = 100.2
+        )
+
+        val displayMessages = conversationDisplayMessages(
+            messages = listOf(localPrompt, liveEcho),
+            showInvocationProcess = true
+        )
+
+        assertEquals(listOf("local-user-client-run-spider"), displayMessages.map { it.runId })
+    }
+
+    @Test
+    fun displayMessagesMergesCompletedMobileAttachmentIntoLocalTextBubble() {
+        val localPrompt = ChatMessage(
+            id = "local-user-waterfall",
+            role = MessageRole.user,
+            state = MessageState.completed,
+            content = "分析一下",
+            contentBlocks = listOf(
+                RelayChatContentBlock(
+                    type = "file",
+                    text = "album-waterfall.jpg",
+                    name = "album-waterfall.jpg",
+                    fileName = "album-waterfall.jpg",
+                    mimeType = "image/jpeg",
+                    downloadUrl = "file:///tmp/album-waterfall.jpg",
+                    sourceRunId = "client-run-waterfall"
+                )
+            ),
+            createdAt = "2026-06-22T09:39:00Z",
+            runId = "local-user-client-run-waterfall",
+            sortTimestamp = 100.0
+        )
+        val completedAttachment = ChatMessage(
+            id = "file-file-waterfall",
+            role = MessageRole.user,
+            state = MessageState.completed,
+            content = "album-waterfall.jpg",
+            contentBlocks = listOf(
+                RelayChatContentBlock(
+                    type = "file",
+                    text = "album-waterfall.jpg",
+                    name = "album-waterfall.jpg",
+                    fileId = "file-waterfall",
+                    fileName = "album-waterfall.jpg",
+                    mimeType = "image/jpeg",
+                    downloadUrl = "/api/mobile/files/file-waterfall",
+                    sourceRunId = "client-run-waterfall"
+                )
+            ),
+            createdAt = "2026-06-22T09:39:01Z",
+            runId = "file-file-waterfall",
+            sortTimestamp = 100.7
+        )
+
+        val displayMessages = conversationDisplayMessages(
+            messages = listOf(localPrompt, completedAttachment),
+            showInvocationProcess = true
+        )
+
+        assertEquals(listOf("local-user-client-run-waterfall"), displayMessages.map { it.runId })
+        assertEquals("分析一下", displayMessages[0].content)
+        assertEquals(listOf("file-waterfall"), displayMessages[0].fileContentBlocks.map { it.fileId })
+        assertEquals(listOf("/api/mobile/files/file-waterfall"), displayMessages[0].fileContentBlocks.map { it.downloadUrl })
+    }
+
+    @Test
+    fun displayMessagesAppendsCompletedMobileAttachmentWhenLocalPlaceholderIsMissing() {
+        val localPrompt = ChatMessage(
+            id = "local-user-court",
+            role = MessageRole.user,
+            state = MessageState.completed,
+            content = "分析图片",
+            createdAt = "2026-06-22T09:39:00Z",
+            runId = "local-user-client-run-court",
+            sortTimestamp = 100.0
+        )
+        val completedAttachment = ChatMessage(
+            id = "file-file-court",
+            role = MessageRole.user,
+            state = MessageState.completed,
+            content = "album-court.jpg",
+            contentBlocks = listOf(
+                RelayChatContentBlock(
+                    type = "file",
+                    text = "album-court.jpg",
+                    name = "album-court.jpg",
+                    fileId = "file-court",
+                    fileName = "album-court.jpg",
+                    mimeType = "image/jpeg",
+                    downloadUrl = "/api/mobile/files/file-court",
+                    sourceRunId = "client-run-court"
+                )
+            ),
+            createdAt = "2026-06-22T09:39:01Z",
+            runId = "file-file-court",
+            sortTimestamp = 100.1
+        )
+
+        val displayMessages = conversationDisplayMessages(
+            messages = listOf(localPrompt, completedAttachment),
+            showInvocationProcess = true
+        )
+
+        assertEquals(listOf("local-user-client-run-court"), displayMessages.map { it.runId })
+        assertEquals("分析图片", displayMessages[0].content)
+        assertEquals(listOf("file-court"), displayMessages[0].fileContentBlocks.map { it.fileId })
+    }
+
+    @Test
+    fun displayMessagesKeepsCompletedMobileAttachmentSeparateWithoutSharedRunIdentity() {
+        val localPrompt = ChatMessage(
+            id = "local-user-waterfall",
+            role = MessageRole.user,
+            state = MessageState.completed,
+            content = "分析一下",
+            contentBlocks = listOf(
+                RelayChatContentBlock(
+                    type = "file",
+                    text = "album-waterfall.jpg",
+                    name = "album-waterfall.jpg",
+                    fileName = "album-waterfall.jpg",
+                    mimeType = "image/jpeg",
+                    downloadUrl = "file:///tmp/album-waterfall.jpg",
+                    sourceRunId = "client-run-waterfall"
+                )
+            ),
+            createdAt = "2026-06-22T09:39:00Z",
+            runId = "local-user-client-run-waterfall",
+            sortTimestamp = 100.0
+        )
+        val completedAttachment = ChatMessage(
+            id = "file-file-waterfall",
+            role = MessageRole.user,
+            state = MessageState.completed,
+            content = "album-waterfall.jpg",
+            contentBlocks = listOf(
+                RelayChatContentBlock(
+                    type = "file",
+                    text = "album-waterfall.jpg",
+                    name = "album-waterfall.jpg",
+                    fileId = "file-waterfall",
+                    fileName = "album-waterfall.jpg",
+                    mimeType = "image/jpeg",
+                    downloadUrl = "/api/mobile/files/file-waterfall"
+                )
+            ),
+            createdAt = "2026-06-22T09:39:01Z",
+            runId = "file-file-waterfall",
+            sortTimestamp = 100.1
+        )
+
+        val displayMessages = conversationDisplayMessages(
+            messages = listOf(localPrompt, completedAttachment),
+            showInvocationProcess = true
+        )
+
+        assertEquals(
+            listOf("local-user-client-run-waterfall", "file-file-waterfall"),
+            displayMessages.map { it.runId }
+        )
+        assertEquals(listOf("file:///tmp/album-waterfall.jpg"), displayMessages[0].fileContentBlocks.map { it.downloadUrl })
+        assertEquals(listOf("/api/mobile/files/file-waterfall"), displayMessages[1].fileContentBlocks.map { it.downloadUrl })
+    }
+
+    @Test
     fun structureSignatureIgnoresStreamingTextProgress() {
         val streaming = ChatMessage(
             id = "assistant-streaming",
