@@ -425,7 +425,8 @@ data class ChatMessage(
     val timelineOrderKey: String = "",
     val timelineIdentityKey: String = "",
     val timelineItemKind: String = "",
-    val timelineResolvesWaiting: Boolean? = null
+    val timelineResolvesWaiting: Boolean? = null,
+    val source: String = ""
 ) {
     val plainTextContent: String
         get() {

@@ -102,7 +102,8 @@ data class ChatHistoryItem(
     val timelineOrderKey: String? = null,
     val timelineIdentityKey: String? = null,
     val timelineItemKind: String? = null,
-    val timelineResolvesWaiting: Boolean? = null
+    val timelineResolvesWaiting: Boolean? = null,
+    val source: String? = null
 )
 
 object ChatHistoryItemSerializer : KSerializer<ChatHistoryItem> {
@@ -129,6 +130,7 @@ object ChatHistoryItemSerializer : KSerializer<ChatHistoryItem> {
             value.timelineIdentityKey?.let { put("timelineIdentityKey", JsonPrimitive(it)) }
             value.timelineItemKind?.let { put("timelineItemKind", JsonPrimitive(it)) }
             value.timelineResolvesWaiting?.let { put("timelineResolvesWaiting", JsonPrimitive(it)) }
+            value.source?.let { put("source", JsonPrimitive(it)) }
         }
         encoder.encodeSerializableValue(JsonElement.serializer(), obj)
     }
@@ -152,6 +154,7 @@ object ChatHistoryItemSerializer : KSerializer<ChatHistoryItem> {
         val timelineIdentityKey = obj.string("timelineIdentityKey", "timeline_identity_key")
         val timelineItemKind = obj.string("timelineItemKind", "timeline_item_kind")
         val timelineResolvesWaiting = obj.boolean("timelineResolvesWaiting", "timeline_resolves_waiting")
+        val source = obj.string("source")
         return ChatHistoryItem(
             id = id,
             role = role,
@@ -165,7 +168,8 @@ object ChatHistoryItemSerializer : KSerializer<ChatHistoryItem> {
             timelineOrderKey = timelineOrderKey,
             timelineIdentityKey = timelineIdentityKey,
             timelineItemKind = timelineItemKind,
-            timelineResolvesWaiting = timelineResolvesWaiting
+            timelineResolvesWaiting = timelineResolvesWaiting,
+            source = source
         )
     }
 

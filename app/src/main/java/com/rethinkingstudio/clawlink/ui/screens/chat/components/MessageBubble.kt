@@ -76,6 +76,7 @@ import com.rethinkingstudio.clawlink.core.state.chat.chatAttachmentCacheKey
 import com.rethinkingstudio.clawlink.core.state.chat.chatImageCacheKey
 import com.rethinkingstudio.clawlink.ui.screens.chat.ChatColors
 import com.rethinkingstudio.clawlink.ui.screens.chat.formatChatTimestamp
+import com.rethinkingstudio.clawlink.ui.screens.chat.isUserAuthoredMessage
 import java.io.File
 import java.net.HttpURLConnection
 import java.net.URL
@@ -98,7 +99,7 @@ internal fun MessageBubble(
     onImageClick: (block: RelayChatContentBlock, url: String, fileName: String?) -> Unit = { _, _, _ -> },
     onFileClick: (block: RelayChatContentBlock, url: String, fileName: String?) -> Unit = { _, _, _ -> }
 ) {
-    val isUser = message.role == MessageRole.user
+    val isUser = message.isUserAuthoredMessage()
     val isTool = message.role == MessageRole.tool || message.hasToolContent
     val visibleToolBlocks = message.visibleToolContentBlocks(showInvocationProcess)
     if (isTool && !message.shouldDisplayInChat(showInvocationProcess = showInvocationProcess)) return

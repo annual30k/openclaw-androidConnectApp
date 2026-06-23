@@ -2,6 +2,9 @@ package com.rethinkingstudio.clawlink.ui.screens.chat.components
 
 import com.rethinkingstudio.clawlink.core.models.chat.MessageRole
 import com.rethinkingstudio.clawlink.core.models.chat.MessageState
+import com.rethinkingstudio.clawlink.core.models.chat.ChatMessage
+import com.rethinkingstudio.clawlink.ui.screens.chat.isUserAuthoredMessage
+import com.rethinkingstudio.clawlink.ui.screens.chat.isLocalUserMessage
 import androidx.compose.ui.unit.dp
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -9,6 +12,54 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class MessageBubblePresentationTest {
+    @Test
+    fun userAuthoredMessageIgnoresSourceForBubbleOwnership() {
+        val pcUserMessage = ChatMessage(
+            id = "pc-user-1",
+            role = MessageRole.user,
+            runId = "run-pc-user",
+            source = "live"
+        )
+        val assistantMessage = ChatMessage(
+            id = "assistant-1",
+            role = MessageRole.assistant,
+            runId = "run-assistant",
+            source = "live"
+        )
+
+        assertTrue(pcUserMessage.isUserAuthoredMessage())
+        assertFalse(pcUserMessage.isLocalUserMessage())
+        assertFalse(assistantMessage.isUserAuthoredMessage())
+    }
+
+    @Test
+    fun localUserMessageRequiresLocalSourceOrLocalRunId() {
+        assertTrue(
+            ChatMessage(
+                id = "local-user-1",
+                role = MessageRole.user,
+                runId = "local-user-client-run",
+                source = "local"
+            ).isLocalUserMessage()
+        )
+        assertFalse(
+            ChatMessage(
+                id = "pc-user-1",
+                role = MessageRole.user,
+                runId = "run-pc-user",
+                source = "live"
+            ).isLocalUserMessage()
+        )
+        assertFalse(
+            ChatMessage(
+                id = "history-user-1",
+                role = MessageRole.user,
+                runId = "history-user-1",
+                source = "history"
+            ).isLocalUserMessage()
+        )
+    }
+
     @Test
     fun voiceTranscriptionWaitTextUsesStreamingIndicatorPresentation() {
         assertTrue(isStreamingIndicatorDisplayText("等待宿主机识别语音..."))

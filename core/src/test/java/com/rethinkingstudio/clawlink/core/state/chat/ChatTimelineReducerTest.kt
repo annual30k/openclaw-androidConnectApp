@@ -13,6 +13,38 @@ import org.junit.Test
 
 class ChatTimelineReducerTest {
     @Test
+    fun liveUserTurnKeepsRemoteRunIdentityAndSource() {
+        val event = requireNotNull(
+            TimelineEventLog.decodeEvent(
+                """
+                {
+                  "protocolVersion": 2,
+                  "eventId": "pc-user-live",
+                  "eventType": "turn.user.created",
+                  "turnId": "turn-pc-user",
+                  "runId": "run-pc-user",
+                  "messageId": "message-pc-user",
+                  "source": "live",
+                  "createdAt": "2026-06-23T11:13:00.000Z",
+                  "timelineOrderKey": "v1|00000000000000000001|10|000000|message-pc-user",
+                  "timelineIdentityKey": "message:user:message-pc-user",
+                  "timelineItemKind": "message:user",
+                  "content": [{ "type": "text", "text": "全部都装完了吗" }]
+                }
+                """.trimIndent()
+            )
+        )
+
+        val state = ChatTimelineReducer.reduce(
+            ChatTimelineState(),
+            event
+        )
+
+        assertEquals("run-pc-user", state.messages.single().runId)
+        assertEquals("live", state.messages.single().source)
+    }
+
+    @Test
     fun decodesWithUnknownKeysAndNullOptionals() {
         val event = TimelineEventLog.decodeEvent(
             """
@@ -99,7 +131,7 @@ class ChatTimelineReducerTest {
 
         val state = ChatTimelineReducer.reduce(
             initial,
-            event("""{"protocolVersion":2,"eventId":"server-user-b","eventType":"turn.user.created","turnId":"run-b","runId":"run-b","messageId":"server-user-b","createdAt":"2026-06-09T17:00:05.000Z","content":[{"type":"text","text":"Hi"}]}""")
+            event("""{"protocolVersion":2,"eventId":"server-user-b","eventType":"turn.user.created","turnId":"run-b","runId":"run-b","messageId":"server-user-b","source":"local","createdAt":"2026-06-09T17:00:05.000Z","content":[{"type":"text","text":"Hi"}]}""")
         )
 
         assertEquals(listOf("local-user-a", "assistant-a", "server-user-b"), state.messages.map { it.id })
@@ -1186,17 +1218,18 @@ class ChatTimelineReducerTest {
                     turnId = "turn-hermes-plain",
                     runId = null,
                     messageId = "local-user-plain",
+                    source = "local",
                     content = listOf(
                         RelayChatContentBlock(
                             type = "text",
                             text = "帮我查看一下 codex 的任务完成了吗，结论是什么"
                         )
-	                    ),
-	                    createdAt = "2026-05-31T08:08:37.000Z",
-                        timelineOrderKey = "v1|00000000000000000001|10|000000|local-user-plain",
-                        timelineIdentityKey = "message:user:local-user-plain",
-                        timelineItemKind = "message:user"
-	                ),
+                    ),
+                    createdAt = "2026-05-31T08:08:37.000Z",
+                    timelineOrderKey = "v1|00000000000000000001|10|000000|local-user-plain",
+                    timelineIdentityKey = "message:user:local-user-plain",
+                    timelineItemKind = "message:user"
+                ),
                 TimelineEvent.MessageCompleted(
                     eventId = "plain-assistant-local",
                     turnId = "turn-hermes-plain",
@@ -1307,6 +1340,7 @@ class ChatTimelineReducerTest {
                     turnId = "turn-first",
                     runId = null,
                     messageId = "local-user-first",
+                    source = "local",
                     content = listOf(RelayChatContentBlock(type = "text", text = "重新总结一下")),
                     createdAt = "2026-05-31T08:08:37.000Z",
                     timelineOrderKey = "v1|00000000000000000001|10|000000|local-user-first",

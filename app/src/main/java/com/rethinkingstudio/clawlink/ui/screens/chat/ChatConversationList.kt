@@ -111,7 +111,7 @@ LazyColumn(
 
     items(displayMessages, key = { message -> "$conversationAnimationKey:${message.id}" }) { message ->
         ConversationMessageEnterAnimation(
-            role = message.role,
+            isUserAuthoredMessage = message.isUserAuthoredMessage(),
             animationKey = "$conversationAnimationKey:${message.id}"
         ) {
             MessageBubble(

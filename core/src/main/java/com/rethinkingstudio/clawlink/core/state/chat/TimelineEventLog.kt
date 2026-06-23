@@ -24,6 +24,7 @@ internal sealed interface TimelineEvent {
         val createdAt: String?,
         val seq: Long? = null,
         val turnSeq: Long? = null,
+        val source: String? = null,
         val timelineOrderKey: String? = null,
         val timelineIdentityKey: String? = null,
         val timelineItemKind: String? = null,
@@ -162,7 +163,8 @@ internal data class HistorySnapshotItem(
     val timelineOrderKey: String? = null,
     val timelineIdentityKey: String? = null,
     val timelineItemKind: String? = null,
-    val timelineResolvesWaiting: Boolean? = null
+    val timelineResolvesWaiting: Boolean? = null,
+    val source: String? = null
 ) {
     val displayText: String
         get() = if (content.isNotEmpty()) {
@@ -224,6 +226,7 @@ private data class RawTimelineEvent(
     val partId: String? = null,
     val seq: Long? = null,
     val turnSeq: Long? = null,
+    val source: String? = null,
     val timelineItemKind: String? = null,
     val timelineOrderKey: String? = null,
     val timelineIdentityKey: String? = null,
@@ -256,6 +259,7 @@ private data class RawTimelineEvent(
                 createdAt = createdAt,
                 seq = seq,
                 turnSeq = turnSeq,
+                source = source,
                 timelineOrderKey = timelineOrderKey,
                 timelineIdentityKey = timelineIdentityKey,
                 timelineItemKind = timelineItemKind,

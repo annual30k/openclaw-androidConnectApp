@@ -166,7 +166,8 @@ internal fun buildHistoryMessagesFromItems(items: List<ChatHistoryItem>): List<C
             timelineOrderKey = item.timelineOrderKey.orEmpty(),
             timelineIdentityKey = item.timelineIdentityKey.orEmpty(),
             timelineItemKind = item.timelineItemKind.orEmpty(),
-            timelineResolvesWaiting = item.timelineResolvesWaiting
+            timelineResolvesWaiting = item.timelineResolvesWaiting,
+            source = item.source.orEmpty()
         )
     }
 }

@@ -100,7 +100,8 @@ private fun mergeSameIdentityDisplayMessage(existing: ChatMessage, incoming: Cha
         timelinePartId = existing.timelinePartId.ifBlank { incoming.timelinePartId },
         timelineOrderKey = existing.timelineOrderKey.ifBlank { incoming.timelineOrderKey },
         timelineIdentityKey = existing.timelineIdentityKey.ifBlank { incoming.timelineIdentityKey },
-        timelineItemKind = existing.timelineItemKind.ifBlank { incoming.timelineItemKind }
+        timelineItemKind = existing.timelineItemKind.ifBlank { incoming.timelineItemKind },
+        source = existing.source.ifBlank { incoming.source }
     )
 }
 

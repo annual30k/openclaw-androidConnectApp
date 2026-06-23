@@ -52,14 +52,20 @@ internal object ChatTimelineReducer {
             content = event.content.timelineText(),
             contentBlocks = event.content,
             createdAt = event.createdAt.orEmpty().ifBlank { existing?.createdAt.orEmpty() },
-            runId = existing?.runId?.takeIf { it.startsWith("local-user-") } ?: "local-user-${event.turnId}",
+            runId = existing?.runId?.takeIf { it.startsWith("local-user-") }
+                ?: if (event.source.isLocalTimelineSource()) {
+                    "local-user-${event.turnId}"
+                } else {
+                    event.runId?.takeIf { it.isNotBlank() } ?: event.turnId
+                },
             sortTimestamp = existing?.sortTimestamp ?: timelineSortTimestamp(event.createdAt),
             seq = event.seq,
             turnSeq = event.turnSeq,
             timelineOrderKey = event.timelineOrderKey.orEmpty(),
             timelineIdentityKey = event.timelineIdentityKey.orEmpty(),
             timelineItemKind = event.timelineItemKind.orEmpty(),
-            timelineResolvesWaiting = event.timelineResolvesWaiting
+            timelineResolvesWaiting = event.timelineResolvesWaiting,
+            source = event.source.orEmpty()
         )
         if (localIndex == null || localIndex < 0) return copy(messages = messages + message)
         val mergedMessage = existing?.let { mergeLocalUserMessage(local = it, incoming = message) } ?: message
@@ -436,7 +442,8 @@ internal object ChatTimelineReducer {
                     timelineOrderKey = item.timelineOrderKey.orEmpty(),
                     timelineIdentityKey = item.timelineIdentityKey.orEmpty(),
                     timelineItemKind = item.timelineItemKind.orEmpty(),
-                    timelineResolvesWaiting = item.timelineResolvesWaiting
+                    timelineResolvesWaiting = item.timelineResolvesWaiting,
+                    source = item.source.orEmpty()
                 )
                 val localUser = if (message.role == MessageRole.user) {
                     nextState.matchingLocalUser(
@@ -654,7 +661,8 @@ internal object ChatTimelineReducer {
                 timelineOrderKey = message.timelineOrderKey.ifBlank { existing.timelineOrderKey },
                 timelineIdentityKey = message.timelineIdentityKey.ifBlank { existing.timelineIdentityKey },
                 timelineItemKind = message.timelineItemKind.ifBlank { existing.timelineItemKind },
-                timelineResolvesWaiting = message.timelineResolvesWaiting ?: existing.timelineResolvesWaiting
+                timelineResolvesWaiting = message.timelineResolvesWaiting ?: existing.timelineResolvesWaiting,
+                source = message.source.ifBlank { existing.source }
             )
         }
     }
@@ -683,7 +691,8 @@ internal object ChatTimelineReducer {
                 timelineOrderKey = message.timelineOrderKey.ifBlank { existing.timelineOrderKey },
                 timelineIdentityKey = message.timelineIdentityKey.ifBlank { existing.timelineIdentityKey },
                 timelineItemKind = message.timelineItemKind.ifBlank { existing.timelineItemKind },
-                timelineResolvesWaiting = message.timelineResolvesWaiting ?: existing.timelineResolvesWaiting
+                timelineResolvesWaiting = message.timelineResolvesWaiting ?: existing.timelineResolvesWaiting,
+                source = message.source.ifBlank { existing.source }
             )
         }
     }
@@ -1101,4 +1110,8 @@ private fun timelineSortTimestamp(createdAt: String?, fallback: Double? = null):
             }
         }
     return parsed ?: fallback
+}
+
+private fun String?.isLocalTimelineSource(): Boolean {
+    return this?.trim()?.equals("local", ignoreCase = true) == true
 }

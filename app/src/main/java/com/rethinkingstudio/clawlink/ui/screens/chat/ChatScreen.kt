@@ -520,7 +520,7 @@ fun ChatScreen(
         val currentFirstMessageId = visibleMessagesForScroll.firstOrNull()?.id
         val currentUserMessageIds = visibleMessagesForScroll
             .asSequence()
-            .filter { it.role == MessageRole.user }
+            .filter { it.isLocalUserMessage() }
             .map { it.id }
             .toSet()
         val isInitialLoad = previousSignature.isEmpty()
@@ -536,7 +536,7 @@ fun ChatScreen(
             emptyList()
         }
         val hasNewUserMessage = !isInitialLoad && currentUserMessageIds.any { it !in lastObservedUserMessageIds }
-        val isOwnNewMessage = newTailMessages.any { it.role == MessageRole.user } || hasNewUserMessage
+        val isOwnNewMessage = newTailMessages.any { it.isLocalUserMessage() } || hasNewUserMessage
         lastObservedVisibleMessageCount = messageCount
         lastObservedMessageSignature = messageStructureSignature
         lastObservedFirstVisibleMessageId = currentFirstMessageId

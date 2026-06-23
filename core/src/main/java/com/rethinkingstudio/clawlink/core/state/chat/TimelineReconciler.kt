@@ -64,6 +64,7 @@ internal data class TimelineSnapshotMessage @OptIn(ExperimentalSerializationApi:
     val createdAt: String = "",
     val content: List<RelayChatContentBlock> = emptyList(),
     val attachmentIds: List<String> = emptyList(),
+    val source: String? = null,
     val timelineOrderKey: String? = null,
     val timelineIdentityKey: String? = null,
     val timelineItemKind: String? = null,
@@ -163,7 +164,7 @@ private fun TimelineSnapshotMessage.toEntryOrNull(defaultSessionKey: String, ori
         createdAt = createdAt,
         content = sanitizedContent,
         attachmentIds = attachmentIds(sanitizedContent, attachmentIds),
-        source = if (messageState.toState() == MessageState.pending) "local" else "history",
+        source = source.clean() ?: if (messageState.toState() == MessageState.pending) "local" else "history",
         timelineOrderKey = canonicalOrderKey,
         timelineIdentityKey = canonicalIdentityKey,
         timelineItemKind = canonicalItemKind,
@@ -209,7 +210,8 @@ private fun ChatMessage.toEntry(sessionKey: String, originalIndex: Int = 0): Can
         createdAt = createdAt,
         content = canonicalContent,
         attachmentIds = attachmentIds(canonicalContent, emptyList()),
-        source = if (state == MessageState.pending || state == MessageState.streaming || isLocalTimelineMessageId(id)) "local" else "history",
+        source = source.clean()
+            ?: if (state == MessageState.pending || state == MessageState.streaming || isLocalTimelineMessageId(id)) "local" else "history",
         timelineOrderKey = canonicalOrderKey.orEmpty(),
         timelineIdentityKey = canonicalIdentityKey.orEmpty(),
         timelineItemKind = timelineItemKind.clean().orEmpty(),
@@ -235,7 +237,8 @@ private fun CanonicalTimelineEntry.toChatMessage(): ChatMessage {
         timelineOrderKey = timelineOrderKey,
         timelineIdentityKey = timelineIdentityKey,
         timelineItemKind = timelineItemKind,
-        timelineResolvesWaiting = timelineResolvesWaiting
+        timelineResolvesWaiting = timelineResolvesWaiting,
+        source = source
     )
 }
 

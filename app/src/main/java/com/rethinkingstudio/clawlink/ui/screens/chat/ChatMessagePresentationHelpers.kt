@@ -76,15 +76,24 @@ import com.rethinkingstudio.clawlink.ui.screens.chat.components.VoiceInputOverla
 import com.rethinkingstudio.clawlink.ui.screens.chat.components.visibleToolContentBlocks
 import kotlinx.coroutines.launch
 
+// 气泡左右归属只看语义作者；source 只表示本机回显，不能决定 PC 端 user 消息的位置。
+internal fun ChatMessage.isUserAuthoredMessage(): Boolean = role == MessageRole.user
+
+internal fun ChatMessage.isLocalUserMessage(): Boolean {
+    if (role != MessageRole.user) return false
+    val normalizedSource = source.trim().lowercase()
+    return normalizedSource == "local" || runId.trim().startsWith("local-user-")
+}
+
 @Composable
 internal fun ConversationMessageEnterAnimation(
-    role: MessageRole,
+    isUserAuthoredMessage: Boolean,
     animationKey: String,
     content: @Composable () -> Unit
 ) {
     val density = LocalDensity.current
     val startOffsetPx = with(density) {
-        val direction = if (role == MessageRole.user) 1 else -1
+        val direction = if (isUserAuthoredMessage) 1 else -1
         28.dp.toPx() * direction
     }
     val offsetX = remember(animationKey) { Animatable(startOffsetPx) }
