@@ -267,8 +267,8 @@ private fun identitiesMatch(left: CanonicalTimelineEntry, right: CanonicalTimeli
     ) {
         return true
     }
-    val leftCleanRun = left.runId?.replace("local-user-", "")
-    val rightCleanRun = right.runId?.replace("local-user-", "")
+    val leftCleanRun = normalizedTurnIdentityValue(left.runId)
+    val rightCleanRun = normalizedTurnIdentityValue(right.runId)
     if (!leftCleanRun.isNullOrEmpty() && leftCleanRun == rightCleanRun && left.role == right.role) return true
     if (left.attachmentIds.isNotEmpty() &&
         right.attachmentIds.isNotEmpty() &&
@@ -338,12 +338,19 @@ private fun sameTurnToolBeforeAssistant(left: CanonicalTimelineEntry, right: Can
 }
 
 private fun normalizedTurnIdentity(entry: CanonicalTimelineEntry): String {
-    val turnId = entry.turnId?.trim().orEmpty()
+    val turnId = normalizedTurnIdentityValue(entry.turnId)
     if (turnId.isNotEmpty()) return turnId
-    val runId = entry.runId?.trim().orEmpty()
-    return runId
+    return normalizedTurnIdentityValue(entry.runId)
+}
+
+private fun normalizedTurnIdentityValue(value: String?): String {
+    var normalized = value?.trim().orEmpty()
+    if (normalized.isEmpty()) return ""
+    normalized = normalized
         .removePrefix("local-user-")
         .removePrefix("user-")
+        .trim()
+    return normalized
         .replace(Regex(":(user|assistant|tool|system|waiting)$", RegexOption.IGNORE_CASE), "")
         .trim()
 }
@@ -463,15 +470,20 @@ private fun pendingResolvedByCanonical(
 ): Boolean {
     if (pending.role != canonical.role) return false
     if (pending.role == MessageRole.assistant && !canonical.clearsWaitingAssistantTimelineItem()) return false
-    val pendingClientId = pending.clientMessageId?.trim().orEmpty()
+    val pendingClientId = normalizedTurnIdentityValue(pending.clientMessageId)
     if (pendingClientId.isNotEmpty() &&
-        (pendingClientId == canonical.clientMessageId || pendingClientId == canonical.idempotencyKey)
+        listOf(canonical.clientMessageId, canonical.idempotencyKey, canonical.runId, canonical.turnId)
+            .any { normalizedTurnIdentityValue(it) == pendingClientId }
     ) {
         return true
     }
-    val pendingRunId = pending.runId?.removePrefix("local-user-")?.trim().orEmpty()
-    val canonicalRunId = canonical.runId?.trim().orEmpty()
-    if (pendingRunId.isNotEmpty() && pendingRunId == canonicalRunId) return true
+    val pendingRunId = normalizedTurnIdentityValue(pending.runId)
+    if (pendingRunId.isNotEmpty() &&
+        listOf(canonical.runId, canonical.turnId, canonical.clientMessageId, canonical.idempotencyKey)
+            .any { normalizedTurnIdentityValue(it) == pendingRunId }
+    ) {
+        return true
+    }
     if (pending.attachmentIds.isNotEmpty() &&
         canonical.attachmentIds.isNotEmpty() &&
         pending.attachmentIds.any { it in canonical.attachmentIds }

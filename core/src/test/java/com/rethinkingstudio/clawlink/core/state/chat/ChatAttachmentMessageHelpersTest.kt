@@ -43,6 +43,16 @@ class ChatAttachmentMessageHelpersTest {
     }
 
     @Test
+    fun stripsOpenClawMediaControlReferencesFromChatMessageText() {
+        val text = """
+            桌面截图已发送到你手机上了
+            MEDIA:/Users/example/.openclaw/tmp/codex-shot.png
+        """.trimIndent()
+
+        assertEquals("桌面截图已发送到你手机上了", sanitizeChatMessageText(text))
+    }
+
+    @Test
     fun stripsRelayFileAttachmentReferencesFromChatMessageText() {
         val text = """
             请看看这个文件

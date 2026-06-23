@@ -160,6 +160,67 @@ class TimelineReconcilerTest {
     }
 
     @Test
+    fun canonicalSnapshotResolvesLocalUserWhenHostAddsRoleSuffixToRunIdentity() {
+        val clientRunId = "66794ce4-6664-4581-88bd-ae57d27f5782"
+        val localUser = ChatMessage(
+            id = "user-$clientRunId",
+            role = MessageRole.user,
+            state = MessageState.completed,
+            content = "Send desktop screenshot to my phone test 1053",
+            contentBlocks = listOf(RelayChatContentBlock(type = "text", text = "Send desktop screenshot to my phone test 1053")),
+            createdAt = "",
+            runId = "local-user-$clientRunId",
+            sortTimestamp = 1_782_185_590.0,
+            timelineOrderKey = "local:$clientRunId:010-user",
+            timelineIdentityKey = "local:$clientRunId:message:user:010-user",
+            timelineItemKind = "message:user"
+        )
+        val localAssistant = ChatMessage(
+            id = "assistant-$clientRunId",
+            role = MessageRole.assistant,
+            state = MessageState.streaming,
+            content = protocolTypingMarkerText,
+            contentBlocks = listOf(RelayChatContentBlock(type = "text", text = protocolTypingMarkerText)),
+            createdAt = "",
+            runId = clientRunId,
+            sortTimestamp = 1_782_185_590.001,
+            timelineOrderKey = "local:$clientRunId:020-waiting",
+            timelineIdentityKey = "local:$clientRunId:message:waiting:020-waiting",
+            timelineItemKind = "message:assistant"
+        )
+
+        val result = reconcileTimeline(
+            existing = listOf(localUser, localAssistant),
+            snapshot = TimelineSnapshotPage(
+                sessionKey = "ios-session",
+                messages = listOf(
+                    TimelineSnapshotMessage(
+                        messageId = "987948be",
+                        seq = 1009,
+                        turnSeq = 1,
+                        turnId = "$clientRunId:user",
+                        runId = "$clientRunId:user",
+                        idempotencyKey = "$clientRunId:user",
+                        role = "user",
+                        messageState = "completed",
+                        createdAt = "2026-06-23T02:53:13.000Z",
+                        content = listOf(RelayChatContentBlock(type = "text", text = "Send desktop screenshot to my phone test 1053")),
+                        timelineOrderKey = "v1|00000001782185593000|10|0000000000001009:part-text-1:987948be|user",
+                        timelineIdentityKey = "ios-session:$clientRunId:user:message:user:987948be",
+                        timelineItemKind = "message:user"
+                    )
+                )
+            )
+        )
+
+        val visible = sortTimelineMessagesV3(result.messages + result.pending, "ios-session")
+        assertEquals(listOf("987948be", "assistant-$clientRunId"), visible.map { it.id })
+        assertEquals(1, visible.count { it.role == MessageRole.user })
+        assertEquals("Send desktop screenshot to my phone test 1053", visible.first().content)
+        assertEquals(listOf("assistant-$clientRunId"), result.pending.map { it.id })
+    }
+
+    @Test
     fun fullCanonicalSnapshotKeepsLocalUserForCurrentPendingTurnOnly() {
         val staleLocalUser = ChatMessage(
             id = "local-stale",

@@ -169,6 +169,10 @@ private val mediaAttachmentReferenceRegex = Regex(
 private val compactMediaAttachmentReferenceRegex = Regex(
     "(?m)[ \\t]*\\[media attached:\\s*([^\\]\\n]+)][ \\t]*"
 )
+private val openClawMediaControlReferenceRegex = Regex(
+    "(?m)^[ \\t]*MEDIA:\\s*(?:file://|~/|/)[^\\n]*(?:\\n|$)",
+    RegexOption.IGNORE_CASE
+)
 private val fileAttachmentReferenceRegex = Regex(
     "(?m)[ \\t]*\\[file attached:\\s*.+?][ \\t]*"
 )
@@ -187,6 +191,7 @@ internal fun sanitizeChatMessageText(text: String): String {
         .replace(hermesRuntimeContextRegex, "$1")
         .replace(mediaAttachmentReferenceRegex, "")
         .replace(compactMediaAttachmentReferenceRegex, "")
+        .replace(openClawMediaControlReferenceRegex, "")
         .replace(fileAttachmentReferenceRegex, "")
         .replace(mobileBridgeTimestampPrefixRegex, "")
         .replace("\u001B", "")
