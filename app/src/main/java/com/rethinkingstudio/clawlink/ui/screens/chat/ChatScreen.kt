@@ -1,21 +1,13 @@
 package com.rethinkingstudio.clawlink.ui.screens.chat
 
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.LinearOutSlowInEasing
-import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -24,13 +16,8 @@ import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowDownward
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -45,28 +32,22 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.blur
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.LocalView
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.core.view.WindowCompat
 import com.google.accompanist.permissions.ExperimentalPermissionsApi
 import com.google.accompanist.permissions.isGranted
 import com.google.accompanist.permissions.rememberPermissionState
-import com.rethinkingstudio.clawlink.R
 import com.rethinkingstudio.clawlink.core.models.chat.MessageRole
 import com.rethinkingstudio.clawlink.core.models.chat.MessageState
-import com.rethinkingstudio.clawlink.core.models.gateway.AggregateStatus
 import com.rethinkingstudio.clawlink.core.models.gateway.GatewayType
 import com.rethinkingstudio.clawlink.core.state.LocalizedText.choose
-import com.rethinkingstudio.clawlink.core.state.chat.ChatState
 import com.rethinkingstudio.clawlink.core.state.chat.ChatStore
 import com.rethinkingstudio.clawlink.core.state.chat.RemoteAttachmentCache
 import com.rethinkingstudio.clawlink.core.state.chat.RemoteImageCache
@@ -83,9 +64,8 @@ import com.rethinkingstudio.clawlink.ui.screens.chat.components.DocumentFullscre
 import com.rethinkingstudio.clawlink.ui.screens.chat.components.GatewaySheetOverlay
 import com.rethinkingstudio.clawlink.ui.screens.chat.components.ImageFullscreenOverlay
 import com.rethinkingstudio.clawlink.ui.screens.chat.components.ModelPickerSheetOverlay
+import com.rethinkingstudio.clawlink.ui.screens.chat.components.NewMessagesFloatingButton
 import com.rethinkingstudio.clawlink.ui.screens.chat.components.SkillExpansionSheetOverlay
-import com.rethinkingstudio.clawlink.ui.screens.chat.components.SlashAction
-import com.rethinkingstudio.clawlink.ui.screens.chat.components.slashCommandSuggestions
 import com.rethinkingstudio.clawlink.ui.screens.chat.components.SlashCommandPanel
 import com.rethinkingstudio.clawlink.ui.screens.chat.components.VoiceInputOverlay
 import kotlinx.coroutines.CancellationException
@@ -108,26 +88,7 @@ fun ChatScreen(
         ChatViewModel(chatStore, gatewayStore, modelStore, scope)
     }
 
-    val rawChatState by chatStore.state.collectAsState()
-    var chatState by remember { mutableStateOf(rawChatState) }
-    var pendingCoalescedChatState by remember { mutableStateOf<ChatState?>(null) }
-    LaunchedEffect(rawChatState) {
-        if (shouldCoalesceChatDisplayUpdate(chatState, rawChatState)) {
-            pendingCoalescedChatState = rawChatState
-        } else {
-            pendingCoalescedChatState = null
-            chatState = rawChatState
-        }
-    }
-    LaunchedEffect(Unit) {
-        while (true) {
-            delay(50)
-            pendingCoalescedChatState?.let { pending ->
-                chatState = pending
-                pendingCoalescedChatState = null
-            }
-        }
-    }
+    val chatState = rememberCoalescedChatState(chatStore)
     val gatewayState by gatewayStore.state.collectAsState()
     val modelState by modelStore.state.collectAsState()
     val listState = rememberLazyListState()
@@ -164,16 +125,12 @@ fun ChatScreen(
         isChatChainReady,
         selectedGatewayType
     ) {
-        when {
-            !hasSelectedGateway -> null
-            gatewayState.appRelayStatus == AggregateStatus.offline -> "无法连接到 Relay 服务器，请确认服务已启动且地址可访问。"
-            !isChatChainReady -> if (selectedGatewayType == GatewayType.hermes) {
-                "当前链路未全通，请确认 Relay 已连接到主机且 Hermes Agent 已启动。"
-            } else {
-                "当前链路未全通，请确认 Relay 已连接到主机且 OpenClaw 已启动。"
-            }
-            else -> null
-        }
+        chatConnectionIssueMessage(
+            hasSelectedGateway = hasSelectedGateway,
+            appRelayStatus = gatewayState.appRelayStatus,
+            isChatChainReady = isChatChainReady,
+            selectedGatewayType = selectedGatewayType
+        )
     }
     val statusAlertMessage = connectionIssueMessage ?: chatState.errorMessage ?: gatewayState.errorMessage ?: viewModel.composerNotice
     val isStatusAlertError = connectionIssueMessage != null || chatState.errorMessage != null || gatewayState.errorMessage != null
@@ -300,154 +257,22 @@ fun ChatScreen(
         controller.isAppearanceLightNavigationBars = systemBarStyle.useDarkNavigationBarIcons
     }
 
-    val filePickerLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
-        if (uris.isEmpty()) return@rememberLauncherForActivityResult
-        scope.launch {
-            viewModel.isUploadingAttachment = true
-            viewModel.composerNotice = null
-            try {
-                val imported = ChatFileUtils.importPickedAttachments(context, uris)
-                viewModel.composerAttachments = viewModel.composerAttachments + imported
-                if (imported.isEmpty()) {
-                    viewModel.composerNotice = context.getString(R.string.chat_attachment_import_failed)
-                }
-            } catch (e: Exception) {
-                viewModel.composerNotice = context.getString(R.string.chat_attachment_import_failed_with_reason, e.message ?: choose("Unknown error", "未知错误"))
-            } finally {
-                viewModel.isUploadingAttachment = false
-                viewModel.showAttachmentMenu = false
-            }
-        }
-    }
-    val imagePickerLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenMultipleDocuments()) { uris ->
-        if (uris.isEmpty()) return@rememberLauncherForActivityResult
-        scope.launch {
-            viewModel.isUploadingAttachment = true
-            viewModel.composerNotice = null
-            try {
-                val imported = ChatFileUtils.importPickedAttachments(context, uris)
-                viewModel.composerAttachments = viewModel.composerAttachments + imported
-                if (imported.isEmpty()) {
-                    viewModel.composerNotice = context.getString(R.string.chat_attachment_import_failed)
-                }
-            } catch (e: Exception) {
-                viewModel.composerNotice = context.getString(R.string.chat_attachment_import_failed_with_reason, e.message ?: choose("Unknown error", "未知错误"))
-            } finally {
-                viewModel.isUploadingAttachment = false
-                viewModel.showAttachmentMenu = false
-            }
-        }
-    }
-    val cameraLauncher = rememberLauncherForActivityResult(ActivityResultContracts.TakePicturePreview()) { bitmap ->
-        if (bitmap == null) {
-            viewModel.showAttachmentMenu = false
-            return@rememberLauncherForActivityResult
-        }
-        scope.launch {
-            viewModel.isUploadingAttachment = true
-            viewModel.composerNotice = null
-            try {
-                val imported = ChatFileUtils.importCapturedImage(context, bitmap)
-                viewModel.composerAttachments = viewModel.composerAttachments + imported
-            } catch (e: Exception) {
-                viewModel.composerNotice = context.getString(R.string.chat_attachment_import_failed_with_reason, e.message ?: choose("Unknown error", "未知错误"))
-            } finally {
-                viewModel.isUploadingAttachment = false
-                viewModel.showAttachmentMenu = false
-            }
-        }
-    }
-    val localSlashActions = remember(
-        viewModel.messageText,
-        gatewayState.selectedGateway?.slashCommands,
-        gatewayState.selectedGateway?.gatewayType
-    ) {
-        slashCommandSuggestions(
-            input = viewModel.messageText,
-            remoteCommands = gatewayState.selectedGateway?.slashCommands,
-            includeDefaultActions = gatewayState.selectedGateway?.gatewayType != GatewayType.hermes
-        )
-    }
-    var lazyHermesSlashActions by remember(gatewayId) { mutableStateOf<List<SlashAction>>(emptyList()) }
-    var lazyHermesSlashNextOffset by remember(gatewayId) { mutableStateOf<Int?>(null) }
-    var lazyHermesSlashQuery by remember(gatewayId) { mutableStateOf("") }
-    var isLoadingHermesSlashCommands by remember(gatewayId) { mutableStateOf(false) }
-    LaunchedEffect(gatewayId, selectedGatewayType, viewModel.messageText) {
-        val normalizedInput = viewModel.messageText.trim()
-        if (gatewayId == null || selectedGatewayType != GatewayType.hermes || !normalizedInput.startsWith("/")) {
-            lazyHermesSlashActions = emptyList()
-            lazyHermesSlashNextOffset = null
-            lazyHermesSlashQuery = ""
-            isLoadingHermesSlashCommands = false
-            return@LaunchedEffect
-        }
-        lazyHermesSlashActions = emptyList()
-        lazyHermesSlashNextOffset = null
-        lazyHermesSlashQuery = normalizedInput
-        delay(80)
-        isLoadingHermesSlashCommands = true
-        try {
-            val page = runCatching {
-                gatewayStore.fetchSlashCommands(gatewayId, normalizedInput, limit = 16, offset = 0)
-            }.getOrNull()
-            val remoteCommands = page?.items.orEmpty()
-            lazyHermesSlashActions = slashCommandSuggestions(
-                input = normalizedInput,
-                remoteCommands = remoteCommands,
-                includeDefaultActions = false,
-                limit = remoteCommands.size.coerceAtLeast(16)
-            )
-            lazyHermesSlashNextOffset = page?.nextOffset?.takeIf { page.hasMore }
-                ?: if (page?.hasMore == true) remoteCommands.size else null
-        } finally {
-            isLoadingHermesSlashCommands = false
-        }
-    }
-    val loadMoreHermesSlashCommands: (() -> Unit)? = if (
-        selectedGatewayType == GatewayType.hermes &&
-        gatewayId != null &&
-        lazyHermesSlashNextOffset != null
-    ) {
-        {
-            val nextOffset = lazyHermesSlashNextOffset
-            val activeGatewayId = gatewayId
-            val activeQuery = lazyHermesSlashQuery
-            if (
-                nextOffset != null &&
-                activeQuery.isNotBlank() &&
-                !isLoadingHermesSlashCommands
-            ) {
-                scope.launch {
-                    isLoadingHermesSlashCommands = true
-                    try {
-                        val page = runCatching {
-                            gatewayStore.fetchSlashCommands(activeGatewayId, activeQuery, limit = 16, offset = nextOffset)
-                        }.getOrNull()
-                        if (page != null && activeQuery == lazyHermesSlashQuery && activeGatewayId == gatewayId) {
-                            val pageActions = slashCommandSuggestions(
-                                input = activeQuery,
-                                remoteCommands = page.items,
-                                includeDefaultActions = false,
-                                limit = page.items.size.coerceAtLeast(16)
-                            )
-                            lazyHermesSlashActions = mergeDistinctSlashActions(lazyHermesSlashActions, pageActions)
-                            lazyHermesSlashNextOffset = page.nextOffset?.takeIf { page.hasMore }
-                                ?: if (page.hasMore) nextOffset + page.items.size else null
-                        }
-                    } finally {
-                        isLoadingHermesSlashCommands = false
-                    }
-                }
-            }
-        }
-    } else {
-        null
-    }
-    val slashActions = if (selectedGatewayType == GatewayType.hermes) {
-        lazyHermesSlashActions
-    } else {
-        localSlashActions
-    }
+    val attachmentLaunchers = rememberChatAttachmentLaunchers(
+        context = context,
+        viewModel = viewModel,
+        scope = scope,
+        cameraPermissionState = cameraPermissionState,
+        dismissKeyboard = dismissKeyboard
+    )
+    val slashCommandState = rememberChatSlashCommandState(
+        gatewayId = gatewayId,
+        selectedGatewayType = selectedGatewayType,
+        messageText = viewModel.messageText,
+        gatewaySlashCommands = gatewayState.selectedGateway?.slashCommands,
+        gatewayStore = gatewayStore,
+        scope = scope
+    )
+    val slashActions = slashCommandState.actions
 
     LaunchedEffect(Unit) {
         gatewayStore.loadGateways()
@@ -661,8 +486,8 @@ fun ChatScreen(
                         ) {
                             SlashCommandPanel(
                                 actions = slashActions,
-                                onLoadMore = loadMoreHermesSlashCommands,
-                                isLoadingMore = isLoadingHermesSlashCommands,
+                                onLoadMore = slashCommandState.onLoadMore,
+                                isLoadingMore = slashCommandState.isLoadingMore,
                                 onAction = { action ->
                                     viewModel.messageText = action.command
                                 }
@@ -691,29 +516,9 @@ fun ChatScreen(
                             attachmentButtonSize = viewModel.attachmentButtonSize,
                             onAttachmentButtonPositionChanged = { viewModel.attachmentButtonPosition = it },
                             onAttachmentButtonSizeChanged = { viewModel.attachmentButtonSize = it },
-                            onPickFiles = {
-                                dismissKeyboard()
-                                viewModel.showAttachmentMenu = false
-                                filePickerLauncher.launch(attachmentPickerMimeTypes(ComposerAttachmentPickTarget.FILES))
-                            },
-                            onPickAlbum = {
-                                dismissKeyboard()
-                                viewModel.showAttachmentMenu = false
-                                imagePickerLauncher.launch(attachmentPickerMimeTypes(ComposerAttachmentPickTarget.IMAGES))
-                            },
-                            onPickCamera = {
-                                dismissKeyboard()
-                                viewModel.showAttachmentMenu = false
-                                if (cameraPermissionState.status.isGranted) {
-                                    runCatching {
-                                        cameraLauncher.launch(null)
-                                    }.onFailure {
-                                        viewModel.composerNotice = context.getString(R.string.chat_composer_camera_unavailable)
-                                    }
-                                } else {
-                                    cameraPermissionState.launchPermissionRequest()
-                                }
-                            },
+                            onPickFiles = attachmentLaunchers.pickFiles,
+                            onPickAlbum = attachmentLaunchers.pickAlbum,
+                            onPickCamera = attachmentLaunchers.pickCamera,
                             onRemoveAttachment = { attachment ->
                                 viewModel.removeAttachment(attachment)
                             },
@@ -769,39 +574,16 @@ fun ChatScreen(
                     )
                 }
                 if (hasPendingMessagesBelow) {
-                    Surface(
+                    NewMessagesFloatingButton(
+                        composerHeight = viewModel.composerHeight,
                         onClick = {
                             scope.launch {
                                 scrollChatToBottom(animated = true)
                             }
                         },
-                        shape = androidx.compose.foundation.shape.CircleShape,
-                        color = androidx.compose.material3.MaterialTheme.colorScheme.surface.copy(alpha = 0.98f),
-                        border = androidx.compose.foundation.BorderStroke(1.dp, androidx.compose.material3.MaterialTheme.colorScheme.outline.copy(alpha = 0.14f)),
-                        shadowElevation = 10.dp,
                         modifier = Modifier
                             .align(Alignment.BottomCenter)
-                            .padding(bottom = viewModel.composerHeight + 18.dp)
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(horizontal = 18.dp, vertical = 11.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            Text(
-                                text = context.getString(R.string.chat_new_messages),
-                                color = androidx.compose.material3.MaterialTheme.colorScheme.onSurface,
-                                fontWeight = FontWeight.SemiBold,
-                                style = androidx.compose.material3.MaterialTheme.typography.labelMedium
-                            )
-                            Icon(
-                                Icons.Default.ArrowDownward,
-                                contentDescription = null,
-                                tint = androidx.compose.material3.MaterialTheme.colorScheme.onSurface,
-                                modifier = Modifier.size(15.dp)
-                            )
-                        }
-                    }
+                    )
                 }
                 if (viewModel.showGatewaySheet) {
                     GatewaySheetOverlay(
@@ -843,7 +625,6 @@ fun ChatScreen(
                         }
                     )
                 }
-
                 if (showsModelPicker && viewModel.showModelPicker) {
                     ModelPickerSheetOverlay(
                         models = modelState.models,
@@ -869,11 +650,9 @@ fun ChatScreen(
                 }
             }
         }
-
         if (chatState.isSwitchingSession) {
             ChatSessionSwitchLoadingOverlay(modifier = Modifier.matchParentSize())
         }
-
         if (imagePreview != null) {
             ImageFullscreenOverlay(
                 url = imagePreview.url,
@@ -883,7 +662,6 @@ fun ChatScreen(
                 onDismiss = { viewModel.imagePreview = null }
             )
         }
-
         if (documentPreview != null) {
             DocumentFullscreenOverlay(
                 url = documentPreview.url,
@@ -895,7 +673,6 @@ fun ChatScreen(
             )
         }
         }
-
         VoiceInputOverlay(
             phase = viewModel.voiceInputPhase,
             transcript = viewModel.voiceInputTranscript,
@@ -915,21 +692,5 @@ fun ChatScreen(
             onConfirm = { viewModel.confirmVoiceInput(context) },
             modifier = Modifier.matchParentSize()
         )
-    }
-}
-
-internal fun showsSkillExpansionControlsForGateway(gatewayType: GatewayType): Boolean =
-    gatewayType == GatewayType.openclaw || gatewayType == GatewayType.hermes
-
-internal fun showsModelPickerForGateway(gatewayType: GatewayType): Boolean =
-    gatewayType == GatewayType.openclaw || gatewayType == GatewayType.hermes
-
-private fun mergeDistinctSlashActions(
-    current: List<SlashAction>,
-    next: List<SlashAction>
-): List<SlashAction> {
-    val seen = current.map { it.command.trim().lowercase() }.toMutableSet()
-    return current + next.filter { action ->
-        seen.add(action.command.trim().lowercase())
     }
 }
