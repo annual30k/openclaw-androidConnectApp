@@ -48,6 +48,7 @@ import com.rethinkingstudio.clawlink.core.state.gateway.GatewayStore
 import com.rethinkingstudio.clawlink.core.state.log.LogSeverity
 import com.rethinkingstudio.clawlink.core.state.log.ParsedLogLine
 import com.rethinkingstudio.clawlink.core.state.log.parseLogLine
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 
 @Composable
@@ -141,6 +142,7 @@ fun LogScreen(
     var errorMessage by remember { mutableStateOf<String?>(null) }
     var searchText by remember { mutableStateOf("") }
     var lastLoadedAt by remember { mutableStateOf<String?>(null) }
+    var activeLoadRequestId by remember { mutableStateOf(0L) }
 
     val selectedGateway = gatewayState.selectedGateway
     val hasSession = gatewayState.gateways.isNotEmpty()
@@ -159,21 +161,33 @@ fun LogScreen(
 
     suspend fun loadLogs() {
         if (accessHint != null) return
+        val requestedGatewayId = selectedGateway?.id ?: return
+        val requestId = activeLoadRequestId + 1
+        activeLoadRequestId = requestId
         isLoading = true
         try {
-            val gatewayId = selectedGateway?.id ?: return
-            report = apiClient.fetchLogs(gatewayId)
+            val fetchedReport = apiClient.fetchLogs(requestedGatewayId)
+            // 固定本次请求的网关，避免切换网关时旧响应覆盖当前日志页。
+            if (activeLoadRequestId != requestId || gatewayStore.state.value.selectedGateway?.id != requestedGatewayId) return
+            report = fetchedReport
             errorMessage = null
             val sdf = java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.getDefault())
             lastLoadedAt = sdf.format(java.util.Date())
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
+            if (activeLoadRequestId != requestId || gatewayStore.state.value.selectedGateway?.id != requestedGatewayId) return
             errorMessage = context.getString(R.string.log_error_prefix, e.message ?: "Unknown")
         } finally {
-            isLoading = false
+            if (activeLoadRequestId == requestId) {
+                isLoading = false
+            }
         }
     }
 
     LaunchedEffect(selectedGateway?.id) {
+        activeLoadRequestId += 1
+        isLoading = false
         report = null
         errorMessage = null
         searchText = ""
