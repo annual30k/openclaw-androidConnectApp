@@ -81,6 +81,7 @@ private data class CanonicalTimelineEntry(
     val sessionKey: String,
     val stableKey: String,
     val messageId: String,
+    val displayId: String,
     val conversationSeq: Long?,
     val seq: Long?,
     val sortTimestamp: Double?,
@@ -147,6 +148,7 @@ private fun TimelineSnapshotMessage.toEntryOrNull(defaultSessionKey: String, ori
         sessionKey = session,
         stableKey = canonicalIdentityKey,
         messageId = authoritativeMessageId ?: messageId.clean() ?: clientMessageId.clean() ?: idempotencyKey.clean() ?: runId.clean() ?: canonicalIdentityKey,
+        displayId = authoritativeMessageId ?: messageId.clean() ?: clientMessageId.clean() ?: idempotencyKey.clean() ?: runId.clean() ?: canonicalIdentityKey,
         conversationSeq = conversationSeq,
         seq = authoritativeSeq,
         // Always use epoch-seconds for sortTimestamp so it's comparable with local user
@@ -196,6 +198,7 @@ private fun ChatMessage.toEntry(sessionKey: String, originalIndex: Int = 0): Can
         sessionKey = sessionKey,
         stableKey = identity.stableKey,
         messageId = timelineMessageId.clean() ?: id,
+        displayId = id,
         conversationSeq = null,
         seq = seq,
         sortTimestamp = sortTimestamp,
@@ -221,7 +224,7 @@ private fun ChatMessage.toEntry(sessionKey: String, originalIndex: Int = 0): Can
 
 private fun CanonicalTimelineEntry.toChatMessage(): ChatMessage {
     return ChatMessage(
-        id = messageId,
+        id = displayId,
         role = role,
         state = state,
         content = displayText(content),
@@ -512,7 +515,10 @@ private fun CanonicalTimelineEntry.isToolTimelineItem(): Boolean {
 }
 
 private fun CanonicalTimelineEntry.clearsWaitingAssistantTimelineItem(): Boolean {
-    if (isAttachmentTimelineItem()) return true
+    // 独立附件行和 assistant 文本答案是两个不同 timeline item；只有服务端显式声明
+    // resolvesWaiting=true，或真正的 assistant 文本答案，才能清掉等待中的 assistant 占位。
+    timelineResolvesWaiting?.let { return it }
+    if (isAttachmentTimelineItem()) return false
     return isAssistantAnswerTimelineItem()
 }
 

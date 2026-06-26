@@ -282,6 +282,133 @@ class ChatStoreFileSocketEventTest {
         }
     }
 
+    @Test
+    fun relayFileSocketEventWithTimelineEventsMaterializesImageWithoutReplacingTextReply() {
+        val wsClient = RelayWebSocketClient()
+        try {
+            val store = ChatStore(
+                apiClient = RelayAPIClient(),
+                wsClient = wsClient,
+                notificationPort = object : NotificationPort {
+                    override fun showReplyNotification(sessionKey: String, title: String, body: String) = Unit
+                    override fun cancelNotification(id: Int) = Unit
+                    override fun cancelAll() = Unit
+                }
+            )
+            store.beginGatewaySwitch("gateway-1")
+            store.newSession("main")
+
+            val runId = "run-screenshot"
+            setChatState(
+                store,
+                store.state.value.copy(
+                    messages = listOf(
+                        ChatMessage(
+                            id = "user-$runId",
+                            role = MessageRole.user,
+                            state = MessageState.completed,
+                            content = "截图电脑当前屏幕发过来",
+                            runId = "local-user-$runId",
+                            sortTimestamp = 1_780_000_100.0
+                        ),
+                        ChatMessage(
+                            id = "assistant-$runId",
+                            role = MessageRole.assistant,
+                            state = MessageState.streaming,
+                            content = "截图好了，发给你：",
+                            runId = runId,
+                            sortTimestamp = 1_780_000_100.001
+                        )
+                    ),
+                    isStreaming = true
+                )
+            )
+
+            invokeHandleWsEvent(
+                store,
+                WsEvent(
+                    type = "event",
+                    event = "file",
+                    payload = json.parseToJsonElement(
+                        """
+                        {
+                          "gatewayId": "gateway-1",
+                          "sessionKey": "main",
+                          "timelineEvents": [
+                            {
+                              "protocolVersion": 2,
+                              "eventId": "evt-file-message",
+                              "eventType": "message.completed",
+                              "gatewayId": "gateway-1",
+                              "sessionKey": "main",
+                              "turnId": "$runId",
+                              "runId": "$runId",
+                              "messageId": "file-file-screenshot",
+                              "partId": "part-attachment-1",
+                              "seq": 1780000100000,
+                              "turnSeq": 1,
+                              "role": "assistant",
+                              "messageState": "completed",
+                              "runState": "completed",
+                              "createdAt": "2026-06-25T09:28:44.000Z",
+                              "source": "relay-legacy",
+                              "attachmentIds": ["att-screenshot", "file-screenshot"],
+                              "content": [
+                                {
+                                  "type": "image",
+                                  "attachmentId": "att-screenshot",
+                                  "fileId": "file-screenshot",
+                                  "fileName": "desktop_screenshot.png",
+                                  "mimeType": "image/png",
+                                  "downloadUrl": "/api/mobile/files/file-screenshot",
+                                  "sourceRunId": "$runId"
+                                }
+                              ],
+                              "timelineOrderKey": "local:$runId:030-attachment:file-file-screenshot",
+                              "timelineIdentityKey": "local:$runId:attachment:att-screenshot",
+                              "timelineItemKind": "attachment",
+                              "timelineResolvesWaiting": false
+                            },
+                            {
+                              "protocolVersion": 2,
+                              "eventId": "evt-file-run",
+                              "eventType": "run.completed",
+                              "gatewayId": "gateway-1",
+                              "sessionKey": "main",
+                              "turnId": "$runId",
+                              "runId": "$runId",
+                              "messageId": "file-file-screenshot",
+                              "partId": "run-state",
+                              "seq": 1780000100001,
+                              "turnSeq": 2,
+                              "role": "assistant",
+                              "messageState": "completed",
+                              "runState": "completed",
+                              "createdAt": "2026-06-25T09:28:44.000Z",
+                              "source": "relay-legacy",
+                              "content": []
+                            }
+                          ]
+                        }
+                        """.trimIndent()
+                    )
+                )
+            )
+
+            val messages = store.state.value.messages
+            assertTrue(messages.any { it.id == "assistant-$runId" && it.content == "截图好了，发给你：" })
+            val imageMessage = messages.single { it.id == "file-file-screenshot" }
+            assertEquals(MessageRole.assistant, imageMessage.role)
+            assertEquals(MessageState.completed, imageMessage.state)
+            assertEquals("file-screenshot", imageMessage.fileContentBlocks.single().fileId)
+            assertEquals("image", imageMessage.fileContentBlocks.single().type)
+            assertEquals("att-screenshot", imageMessage.fileContentBlocks.single().attachmentId)
+            assertEquals(false, store.state.value.isStreaming)
+        } finally {
+            wsClient.destroy()
+        }
+    }
+
     private fun invokeHandleWsEvent(store: ChatStore, event: WsEvent) {
         val method = ChatStore::class.java.getDeclaredMethod("handleWsEvent", WsEvent::class.java)
         method.isAccessible = true

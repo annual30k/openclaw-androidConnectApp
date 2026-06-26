@@ -58,6 +58,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
@@ -68,6 +69,7 @@ import androidx.compose.ui.unit.dp
 import com.rethinkingstudio.clawlink.R
 import com.rethinkingstudio.clawlink.core.state.LocalizedText.choose
 import com.rethinkingstudio.clawlink.core.state.auth.AuthStore
+import com.rethinkingstudio.clawlink.core.utils.MobileDeviceId
 import com.rethinkingstudio.clawlink.ui.components.ClawLinkCard
 import com.rethinkingstudio.clawlink.ui.components.ClawLinkScaffold
 import kotlinx.coroutines.delay
@@ -82,6 +84,7 @@ internal fun ForgotPasswordScreen(
     onDismiss: () -> Unit,
     scope: kotlinx.coroutines.CoroutineScope
 ) {
+    val context = LocalContext.current
     var email by remember { mutableStateOf("") }
     var code by remember { mutableStateOf("") }
     var newPassword by remember { mutableStateOf("") }
@@ -241,7 +244,7 @@ internal fun ForgotPasswordScreen(
                         enabled = if (codeSent) canReset else canSend,
                         onClick = {
                             scope.launch {
-                                val deviceId = "android_${System.currentTimeMillis()}"
+                                val deviceId = MobileDeviceId.resolve(context)
                                 if (codeSent) {
                                     val didReset = authStore.confirmPasswordReset(relayServer, email.trim(), code.trim(), newPassword)
                                     if (didReset) {

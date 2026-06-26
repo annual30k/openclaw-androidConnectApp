@@ -292,7 +292,7 @@ class TimelineReconcilerTest {
     }
 
     @Test
-    fun canonicalToolDoesNotClearWaitingButAttachmentAndAssistantTextDo() {
+    fun canonicalToolAndNonResolvingAttachmentDoNotClearWaitingButAssistantTextDoes() {
         val waitingAssistant = ChatMessage(
             id = "assistant-waiting",
             role = MessageRole.assistant,
@@ -348,14 +348,47 @@ class TimelineReconcilerTest {
                         ),
                         timelineOrderKey = "0001",
                         timelineIdentityKey = "identity-image-1",
-                        timelineItemKind = "attachment"
+                        timelineItemKind = "attachment",
+                        timelineResolvesWaiting = false
                     )
                 )
             )
         )
 
         assertEquals(listOf("image-1"), attachmentResult.messages.map { it.id })
-        assertTrue(attachmentResult.pending.isEmpty())
+        assertEquals(listOf("assistant-waiting"), attachmentResult.pending.map { it.id })
+
+        val resolvingAttachmentResult = reconcileTimeline(
+            existing = listOf(waitingAssistant),
+            snapshot = TimelineSnapshotPage(
+                sessionKey = "main",
+                messages = listOf(
+                    TimelineSnapshotMessage(
+                        messageId = "image-2",
+                        role = "assistant",
+                        messageState = "completed",
+                        runId = "run-tool",
+                        createdAt = "2026-06-09T08:00:00.000Z",
+                        content = listOf(
+                            RelayChatContentBlock(
+                                type = "image",
+                                attachmentId = "att-image-2",
+                                fileName = "result.png",
+                                mimeType = "image/png",
+                                downloadUrl = "https://relay.example/files/att-image-2"
+                            )
+                        ),
+                        timelineOrderKey = "0001",
+                        timelineIdentityKey = "identity-image-2",
+                        timelineItemKind = "attachment",
+                        timelineResolvesWaiting = true
+                    )
+                )
+            )
+        )
+
+        assertEquals(listOf("image-2"), resolvingAttachmentResult.messages.map { it.id })
+        assertTrue(resolvingAttachmentResult.pending.isEmpty())
 
         val assistantResult = reconcileTimeline(
             existing = listOf(waitingAssistant),

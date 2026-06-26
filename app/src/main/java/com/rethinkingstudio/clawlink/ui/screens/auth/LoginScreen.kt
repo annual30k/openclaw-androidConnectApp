@@ -58,6 +58,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
@@ -79,6 +80,7 @@ fun LoginScreen(
     onLoginSuccess: () -> Unit
 ) {
     val state by authStore.state.collectAsState()
+    val context = LocalContext.current
     val scope = rememberCoroutineScope()
 
     var isRegisterMode by remember { mutableStateOf(false) }
@@ -231,6 +233,7 @@ fun LoginScreen(
                                             if (resendCountdown == 0) {
                                                 authStore.clearPendingVerification()
                                                 submitAuth(
+                                                    context = context,
                                                     authStore = authStore,
                                                     isRegisterMode = true,
                                                     waitingForVerification = false,
@@ -293,6 +296,7 @@ fun LoginScreen(
                             ),
                             onClick = {
                                 submitAuth(
+                                    context = context,
                                     authStore = authStore,
                                     isRegisterMode = isRegisterMode,
                                     waitingForVerification = waitingForVerification,

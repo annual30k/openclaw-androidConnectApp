@@ -165,10 +165,11 @@ class GatewayStore(
             }
             if (summaries.isEmpty()) return
             val currentSelected = _state.value.selectedGatewayId
-            val selectedId = when {
-                currentSelected != null && summaries.any { it.id == currentSelected } -> currentSelected
-                else -> summaries.firstOrNull()?.id
-            }
+            val selectedId = GatewaySelectionResolver.preferredSelectedGatewayId(
+                currentSelectedGatewayId = currentSelected,
+                persistedSelectedGatewayId = null,
+                gateways = summaries
+            )
             _state.value = _state.value.copy(gateways = summaries, selectedGatewayId = selectedId)
         } catch (_: Exception) { }
     }
@@ -278,11 +279,11 @@ class GatewayStore(
             val gateways = apiClient.fetchGateways()
             val persistedSelected = credentialStore.loadLastGatewayId()
             val currentSelected = _state.value.selectedGatewayId
-            val selectedId = when {
-                currentSelected != null && gateways.any { it.id == currentSelected } -> currentSelected
-                persistedSelected != null && gateways.any { it.id == persistedSelected } -> persistedSelected
-                else -> gateways.firstOrNull()?.id
-            }
+            val selectedId = GatewaySelectionResolver.preferredSelectedGatewayId(
+                currentSelectedGatewayId = currentSelected,
+                persistedSelectedGatewayId = persistedSelected,
+                gateways = gateways
+            )
             _state.value = _state.value.copy(
                 gateways = gateways,
                 selectedGatewayId = selectedId,

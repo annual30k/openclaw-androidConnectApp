@@ -19,6 +19,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
@@ -31,6 +32,7 @@ import com.rethinkingstudio.clawlink.R
 import com.rethinkingstudio.clawlink.core.models.gateway.GatewayType
 import com.rethinkingstudio.clawlink.core.state.LocalizedText.choose
 import com.rethinkingstudio.clawlink.core.state.auth.AuthStore
+import com.rethinkingstudio.clawlink.core.utils.MobileDeviceId
 import com.rethinkingstudio.clawlink.core.utils.PairingInputResolver
 import com.rethinkingstudio.clawlink.ui.components.*
 import kotlinx.coroutines.launch
@@ -44,6 +46,7 @@ fun PairingScreen(
     onBack: () -> Unit
 ) {
     val authState by authStore.state.collectAsState()
+    val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val scrollState = rememberScrollState()
 
@@ -250,7 +253,7 @@ fun PairingScreen(
                                         gatewayId = resolved.gatewayID,
                                         accessCode = resolved.accessCode,
                                         gatewayType = (resolved.gatewayType ?: pairingGatewayType)?.name,
-                                        deviceId = "android_${System.currentTimeMillis()}"
+                                        deviceId = MobileDeviceId.resolve(context)
                                     )
                                     if (success) {
                                         onPairSuccess()
@@ -310,7 +313,7 @@ fun PairingScreen(
                             gatewayId = gatewayId.ifBlank { null },
                             accessCode = pairingCode.trim(),
                             gatewayType = resolved.gatewayType?.name,
-                            deviceId = "android_${System.currentTimeMillis()}"
+                            deviceId = MobileDeviceId.resolve(context)
                         )
                         if (success) {
                             onPairSuccess()

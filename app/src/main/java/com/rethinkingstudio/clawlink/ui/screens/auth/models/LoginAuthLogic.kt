@@ -1,5 +1,6 @@
 package com.rethinkingstudio.clawlink.ui.screens.auth
 
+import android.content.Context
 import android.net.Uri
 import android.os.Build
 import androidx.compose.animation.AnimatedVisibility
@@ -67,6 +68,7 @@ import androidx.compose.ui.unit.dp
 import com.rethinkingstudio.clawlink.R
 import com.rethinkingstudio.clawlink.core.state.LocalizedText.choose
 import com.rethinkingstudio.clawlink.core.state.auth.AuthStore
+import com.rethinkingstudio.clawlink.core.utils.MobileDeviceId
 import com.rethinkingstudio.clawlink.ui.components.ClawLinkCard
 import com.rethinkingstudio.clawlink.ui.components.ClawLinkScaffold
 import kotlinx.coroutines.delay
@@ -89,6 +91,7 @@ internal fun canSubmit(
 }
 
 internal fun submitAuth(
+    context: Context,
     authStore: AuthStore,
     isRegisterMode: Boolean,
     waitingForVerification: Boolean,
@@ -102,7 +105,7 @@ internal fun submitAuth(
     scope: kotlinx.coroutines.CoroutineScope
 ) {
     scope.launch {
-        val deviceId = "android_${System.currentTimeMillis()}"
+        val deviceId = MobileDeviceId.resolve(context)
         val success = when {
             waitingForVerification -> authStore.verifyRegistrationEmail(relayServer, verificationCode.trim(), deviceId)
             isRegisterMode -> authStore.register(relayServer, name.trim(), email.trim(), password, deviceId, isPrivateDeployment)
@@ -154,4 +157,3 @@ internal fun isAndroidEmulator(): Boolean {
         Build.HARDWARE.contains("ranchu", ignoreCase = true) ||
         Build.PRODUCT.contains("sdk", ignoreCase = true)
 }
-

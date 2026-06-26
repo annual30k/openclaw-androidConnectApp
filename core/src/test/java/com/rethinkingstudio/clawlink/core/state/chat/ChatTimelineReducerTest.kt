@@ -191,7 +191,8 @@ class ChatTimelineReducerTest {
             )
         )
 
-        assertEquals(listOf("server-user-message"), state.messages.map { it.id })
+        assertEquals(listOf("local-user-message"), state.messages.map { it.id })
+        assertEquals("server-user-message", state.messages.single().timelineMessageId)
         assertEquals("local-user-client-run-1", state.messages.single().runId)
         assertEquals("file-photo-1", state.messages.single().fileContentBlocks.first().fileId)
         assertEquals("file:///tmp/album-D1.jpeg", state.messages.single().fileContentBlocks.first().downloadUrl)
@@ -226,7 +227,8 @@ class ChatTimelineReducerTest {
             )
         )
 
-        assertEquals(listOf("server-user-message"), state.messages.map { it.id })
+        assertEquals(listOf("user-client-run-1"), state.messages.map { it.id })
+        assertEquals("server-user-message", state.messages.single().timelineMessageId)
         assertEquals("local-user-client-run-1", state.messages.single().runId)
         assertEquals("本地原始提示", state.messages.single().content)
     }
@@ -271,7 +273,8 @@ class ChatTimelineReducerTest {
             )
         )
 
-        assertEquals(listOf("server-user-message", "assistant-local"), state.messages.map { it.id })
+        assertEquals(listOf("local-user-message", "assistant-local"), state.messages.map { it.id })
+        assertEquals("server-user-message", state.messages.first().timelineMessageId)
         assertEquals(1, state.messages.count { it.role == MessageRole.user })
         assertEquals("local-user-client-run-1", state.messages.first().runId)
     }
@@ -390,7 +393,8 @@ class ChatTimelineReducerTest {
             )
         )
 
-        assertEquals(listOf("server-user-message", "assistant-server"), state.messages.map { it.id })
+        assertEquals(listOf("local-user-message", "assistant-server"), state.messages.map { it.id })
+        assertEquals("server-user-message", state.messages.first().timelineMessageId)
         assertEquals("local-user-client-run-1", state.messages.first().runId)
         assertEquals("client-run-1", state.messages.last().runId)
         assertEquals("我可以帮你处理本地任务。", state.messages.last().content)
@@ -434,7 +438,8 @@ class ChatTimelineReducerTest {
             )
         )
 
-        assertEquals(listOf("server-user-voice"), state.messages.map { it.id })
+        assertEquals(listOf("local-user-message"), state.messages.map { it.id })
+        assertEquals("server-user-voice", state.messages.single().timelineMessageId)
         assertEquals("local-user-client-run-voice", state.messages.single().runId)
         assertEquals("voice-input.m4a", state.messages.single().content)
         assertEquals("我。", state.messages.single().voiceTranscriptText)

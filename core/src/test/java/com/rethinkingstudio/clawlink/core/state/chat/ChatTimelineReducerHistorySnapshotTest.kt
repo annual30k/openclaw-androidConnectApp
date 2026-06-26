@@ -342,12 +342,13 @@ class ChatTimelineReducerHistorySnapshotTest {
         val ordered = orderMessagesWithSourceRunAnchors(state.messages)
 
         assertEquals(
-            listOf("user-old", "assistant-old-server", "user-new", "assistant-new-local"),
+            listOf("local-user-old", "assistant-old-server", "user-new", "assistant-new-local"),
             ordered.map { it.id }
-	        )
-	        assertEquals("old reply", ordered[1].content)
-	        assertEquals(200.001, ordered[1].sortTimestamp ?: -1.0, 0.0001)
-	        assertEquals(MessageState.streaming, ordered.last().state)
+        )
+        assertEquals("user-old", ordered.first().timelineMessageId)
+        assertEquals("old reply", ordered[1].content)
+        assertEquals(200.001, ordered[1].sortTimestamp ?: -1.0, 0.0001)
+        assertEquals(MessageState.streaming, ordered.last().state)
         assertEquals("run-new", state.activeRunId)
         assertTrue(hasActiveVisibleTimelineRun(state, ordered))
     }
@@ -413,7 +414,8 @@ class ChatTimelineReducerHistorySnapshotTest {
             )
         )
 
-        assertEquals(listOf("server-user-message"), state.messages.map { it.id })
+        assertEquals(listOf("local-user-message"), state.messages.map { it.id })
+        assertEquals("server-user-message", state.messages.single().timelineMessageId)
         assertEquals("local-user-client-run-1", state.messages.single().runId)
         assertEquals("file-photo-1", state.messages.single().fileContentBlocks.first().fileId)
         assertEquals("file:///tmp/album-D1.jpeg", state.messages.single().fileContentBlocks.first().downloadUrl)
@@ -468,9 +470,10 @@ class ChatTimelineReducerHistorySnapshotTest {
             )
         )
 
-        assertEquals(listOf("server-user-message", "assistant-local"), state.messages.map { it.id })
+        assertEquals(listOf("local-user-message", "assistant-local"), state.messages.map { it.id })
         assertEquals(1, state.messages.count { it.role == MessageRole.user })
         assertEquals("local-user-client-run-1", state.messages.first().runId)
+        assertEquals("server-user-message", state.messages.first().timelineMessageId)
     }
 
     @Test
@@ -553,9 +556,10 @@ class ChatTimelineReducerHistorySnapshotTest {
         )
 
         assertEquals(
-            listOf("history-hermes-plain-user", "assistant-hermes-plain"),
+            listOf("local-user-plain", "assistant-hermes-plain"),
             state.messages.map { it.id }
         )
+        assertEquals("history-hermes-plain-user", state.messages.first().timelineMessageId)
         assertEquals(listOf(MessageRole.user, MessageRole.assistant), state.messages.map { it.role })
     }
 
@@ -591,7 +595,8 @@ class ChatTimelineReducerHistorySnapshotTest {
             )
         )
 
-        assertEquals(listOf("history-user-screenshot"), state.messages.map { it.id })
+        assertEquals(listOf("local-user-screenshot"), state.messages.map { it.id })
+        assertEquals("history-user-screenshot", state.messages.single().timelineMessageId)
         assertEquals("local-user-client-screenshot-run", state.messages.single().runId)
     }
 

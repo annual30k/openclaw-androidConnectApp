@@ -6,6 +6,9 @@ import com.rethinkingstudio.clawlink.core.models.chat.RelayChatContentBlock
 internal fun mergeLocalUserMessage(local: ChatMessage, incoming: ChatMessage): ChatMessage {
     val mergedBlocks = mergedLocalUserContentBlocks(local = local, incoming = incoming)
     return incoming.copy(
+        // 本地 user echo 与 relay/history 回显确认同一 turn 后，UI key 必须保持本地 id 稳定；
+        // 服务端 messageId 进入 timelineMessageId，不能通过删除再插入制造短暂双气泡。
+        id = local.id,
         content = local.content.takeIf { it.trim().isNotEmpty() } ?: incoming.content,
         contentBlocks = mergedBlocks,
         createdAt = incoming.createdAt.ifBlank { local.createdAt },
@@ -14,7 +17,7 @@ internal fun mergeLocalUserMessage(local: ChatMessage, incoming: ChatMessage): C
         seq = incoming.seq ?: local.seq,
         turnSeq = incoming.turnSeq ?: local.turnSeq,
         timelineStableKey = incoming.timelineStableKey.ifBlank { local.timelineStableKey },
-        timelineMessageId = incoming.timelineMessageId.ifBlank { local.timelineMessageId },
+        timelineMessageId = incoming.timelineMessageId.ifBlank { incoming.id.ifBlank { local.timelineMessageId } },
         timelinePartId = incoming.timelinePartId.ifBlank { local.timelinePartId }
     )
 }
