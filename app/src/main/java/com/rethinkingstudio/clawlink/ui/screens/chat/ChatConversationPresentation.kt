@@ -20,6 +20,7 @@ internal fun conversationDisplayMessages(
             message.shouldDisplayInChat(showInvocationProcess = showInvocationProcess) ||
                 message.state == MessageState.streaming && message.role == MessageRole.assistant
         }
+        .orderedForConversationDisplay()
 }
 
 internal fun conversationStructureSignature(messages: List<ChatMessage>): String {
@@ -309,6 +310,69 @@ private fun List<ChatMessage>.coalescedDuplicateFileTransferMessages(): List<Cha
     return if (didMerge) output else this
 }
 
+private fun List<ChatMessage>.orderedForConversationDisplay(): List<ChatMessage> {
+    if (size < 2) return this
+    return mapIndexed { index, message -> IndexedDisplayMessage(index, message) }
+        .sortedWith { left, right ->
+            when {
+                sameTurnOutputBeforeWaiting(left.message, right.message) -> -1
+                sameTurnOutputBeforeWaiting(right.message, left.message) -> 1
+                else -> left.index.compareTo(right.index)
+            }
+        }
+        .map { it.message }
+}
+
+private fun sameTurnOutputBeforeWaiting(left: ChatMessage, right: ChatMessage): Boolean {
+    if (!right.isTransientDisplayWaitingPlaceholder()) return false
+    val leftTurn = left.displayTurnIdentity()
+    // 同一用户 turn 的真实输出必须排在 transient waiting 前面，避免附件到达后仍被 loading 气泡压住。
+    return leftTurn.isNotEmpty() &&
+        leftTurn == right.displayTurnIdentity() &&
+        left.isAssistantOrToolOutput()
+}
+
+private fun ChatMessage.isAssistantOrToolOutput(): Boolean {
+    if (isTransientDisplayWaitingPlaceholder()) return false
+    return role == MessageRole.assistant || role == MessageRole.tool
+}
+
+private fun ChatMessage.isTransientDisplayWaitingPlaceholder(): Boolean {
+    if (role != MessageRole.assistant || state != MessageState.streaming) return false
+    if (contentBlocks.any { it.isTransferContentBlock || it.isToolCallBlock || it.isToolResultBlock }) return false
+    val text = plainTextContent.trim()
+    return timelineItemKind.trim() == "waiting" || text.isEmpty() || isTransientDisplayWaitingText(text)
+}
+
+private fun ChatMessage.displayTurnIdentity(): String {
+    val blockSourceRunId = contentBlocks.firstNotNullOfOrNull { block ->
+        normalizedDisplayTurnIdentity(block.sourceRunId)
+            .takeIf { it.isNotEmpty() }
+    }
+    if (!blockSourceRunId.isNullOrEmpty()) return blockSourceRunId
+    return normalizedDisplayTurnIdentity(runId)
+}
+
+private fun normalizedDisplayTurnIdentity(value: String?): String {
+    return normalizedUserEchoRunId(value.orEmpty()).lowercase()
+}
+
+private fun isTransientDisplayWaitingText(text: String): Boolean {
+    val trimmed = text.trim()
+    return trimmed.startsWith("正在连接") ||
+        trimmed.startsWith("连接中") ||
+        trimmed.startsWith("Connecting") ||
+        trimmed.startsWith("连接中断") ||
+        trimmed.startsWith("Connection interrupted") ||
+        trimmed == "正在同步回复..." ||
+        trimmed == "Syncing reply..." ||
+        trimmed == "已完成，但未返回文本。" ||
+        trimmed == "Completed, but no text was returned." ||
+        trimmed == "正在同步最终内容..." ||
+        trimmed == "Syncing final content..." ||
+        trimmed == "[[clawlink:typing]]"
+}
+
 private fun ChatMessage.isDuplicateFileTransferDisplayMessage(other: ChatMessage): Boolean {
     if (role != other.role) return false
     if (runId.trim().startsWith("local-user-") || other.runId.trim().startsWith("local-user-")) {
@@ -500,4 +564,9 @@ private data class FileTransferDisplayKeys(
     val stableKey: String?,
     val weakKey: String?,
     val hasMissingStableId: Boolean
+)
+
+private data class IndexedDisplayMessage(
+    val index: Int,
+    val message: ChatMessage
 )

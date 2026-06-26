@@ -425,6 +425,68 @@ class ChatConversationPresentationTest {
     }
 
     @Test
+    fun displayMessagesMovesWaitingAfterSameTurnAttachmentOutput() {
+        val localPrompt = ChatMessage(
+            id = "local-user-spider-output",
+            role = MessageRole.user,
+            state = MessageState.completed,
+            content = "帮把桌面上的蜘蛛侠的图片发过来",
+            createdAt = "2026-06-26T17:00:00Z",
+            runId = "local-user-client-run-spider-output",
+            sortTimestamp = 1780002000.0,
+            timelineStableKey = "local:client-run-spider-output:message:user:010-user",
+            timelineOrderKey = "local:client-run-spider-output:010-user",
+            timelineIdentityKey = "local:client-run-spider-output:message:user:010-user",
+            timelineItemKind = "message:user"
+        )
+        val waiting = ChatMessage(
+            id = "waiting-spider-output",
+            role = MessageRole.assistant,
+            state = MessageState.streaming,
+            content = "正在连接 Relay...",
+            createdAt = "2026-06-26T17:00:00Z",
+            runId = "client-run-spider-output",
+            sortTimestamp = 1780002000.001,
+            timelineStableKey = "local:client-run-spider-output:waiting:020-waiting",
+            timelineOrderKey = "local:client-run-spider-output:020-waiting",
+            timelineIdentityKey = "local:client-run-spider-output:waiting:020-waiting",
+            timelineItemKind = "waiting"
+        )
+        val image = ChatMessage(
+            id = "file-file-spider-output",
+            role = MessageRole.assistant,
+            state = MessageState.completed,
+            content = "spiderman.jpg",
+            contentBlocks = listOf(
+                RelayChatContentBlock(
+                    type = "image",
+                    fileId = "file-spider-output",
+                    fileName = "spiderman.jpg",
+                    mimeType = "image/jpeg",
+                    downloadUrl = "/api/mobile/files/file-spider-output",
+                    sourceRunId = "client-run-spider-output"
+                )
+            ),
+            createdAt = "2026-06-26T17:00:01Z",
+            runId = "file-file-spider-output",
+            timelineStableKey = "local:file-file-spider-output:attachment:030-attachment",
+            timelineOrderKey = "local:client-run-spider-output:030-attachment",
+            timelineIdentityKey = "local:file-file-spider-output:attachment:030-attachment",
+            timelineItemKind = "attachment"
+        )
+
+        val displayMessages = conversationDisplayMessages(
+            messages = listOf(localPrompt, waiting, image),
+            showInvocationProcess = true
+        )
+
+        assertEquals(
+            listOf("local-user-spider-output", "file-file-spider-output", "waiting-spider-output"),
+            displayMessages.map { it.id }
+        )
+    }
+
+    @Test
     fun structureSignatureIgnoresStreamingTextProgress() {
         val streaming = ChatMessage(
             id = "assistant-streaming",
