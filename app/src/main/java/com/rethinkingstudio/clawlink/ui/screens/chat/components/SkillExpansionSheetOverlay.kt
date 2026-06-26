@@ -68,7 +68,7 @@ object SkillExpansionGuideFile {
 
     然后执行 `clawconnect --help`，必要时再执行 `clawconnect send-file --help`，确认命令结构、参数和输出。接着阅读用户可见文档 `clawconnect-agent/README.zh-CN.md` 和 `clawconnect-agent/README.md`。如果当前环境能运行 `clawconnect`，必须结合实际命令输出验证 `send-file` 的真实行为。
 
-    请创建或更新 Hermes 的 `file-transfer` 技能，触发范围覆盖：从 Mac / PC 向移动端发送图片或文件、ClawLink 文件互传、`clawconnect send-file`、电脑到手机发文件。技能内容必须明确：PC / Mac 侧发送文件优先使用 `clawconnect send-file <本地路径>`；这是宿主机命令，不是在手机本机执行；图片也走 host -> relay -> mobile 文件转发流程；如果文件在手机上，则使用 App 内附件上传入口。
+    请创建或更新 Hermes 的 `file-transfer` 技能，触发范围覆盖：从 Mac / PC 向移动端发送图片或文件、ClawLink 文件互传、`clawconnect send-file`、电脑到手机发文件。技能内容必须明确：PC / Mac 侧发送文件优先使用 `clawconnect send-file --profile hermes --json <本地路径>`；这是宿主机命令，不是在手机本机执行；图片也走 host -> relay -> mobile 文件转发流程；不要依赖 Hermes 最终回答里的本地路径被自动上传；如果文件在手机上，则使用 App 内附件上传入口。
 
     完成后说明 Hermes 技能是否安装成功，并总结 `clawconnect send-file` 的真实用法、默认会话选择规则和限制。
     """.trimIndent()
@@ -120,6 +120,15 @@ enum class SkillExpansionScreen {
     MENU,
     FILE_TRANSFER,
     VOICE_RECOGNITION
+}
+
+internal fun visibleSkillExpansionScreensForGateway(isHermesGateway: Boolean): List<SkillExpansionScreen> {
+    // Hermes 文件互传也由宿主机 file-transfer skill 发起，移动端应展示同一个入口。
+    return if (isHermesGateway) {
+        listOf(SkillExpansionScreen.FILE_TRANSFER, SkillExpansionScreen.VOICE_RECOGNITION)
+    } else {
+        listOf(SkillExpansionScreen.FILE_TRANSFER, SkillExpansionScreen.VOICE_RECOGNITION)
+    }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -280,7 +289,8 @@ private fun SkillExpansionMenu(
             border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.10f))
         ) {
             Column {
-                if (!isHermesGateway) {
+                val visibleScreens = visibleSkillExpansionScreensForGateway(isHermesGateway)
+                if (visibleScreens.contains(SkillExpansionScreen.FILE_TRANSFER)) {
                     AdvancedFeatureRow(
                         title = SkillExpansionGuideFile.title,
                         detail = stringResource(R.string.chat_skill_extension_file_transfer),
@@ -290,13 +300,15 @@ private fun SkillExpansionMenu(
                     )
                     HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.08f), modifier = Modifier.padding(horizontal = 18.dp))
                 }
-                AdvancedFeatureRow(
-                    title = SkillExpansionGuideAsr.title,
-                    detail = stringResource(R.string.chat_skill_extension_asr),
-                    icon = Icons.Default.Mic,
-                    tint = Color(0xFFE0A52B),
-                    onClick = onNavigateToVoiceRecognition
-                )
+                if (visibleScreens.contains(SkillExpansionScreen.VOICE_RECOGNITION)) {
+                    AdvancedFeatureRow(
+                        title = SkillExpansionGuideAsr.title,
+                        detail = stringResource(R.string.chat_skill_extension_asr),
+                        icon = Icons.Default.Mic,
+                        tint = Color(0xFFE0A52B),
+                        onClick = onNavigateToVoiceRecognition
+                    )
+                }
             }
         }
     }
