@@ -37,6 +37,21 @@ internal fun completedAssistantIdentityKey(
         ?: event.turnId?.trim()?.takeIf { it.isNotEmpty() }?.let { "local:$it:message:assistant:030-assistant" }
 }
 
+internal fun completedAssistantItemKind(
+    event: TimelineEvent.MessageCompleted,
+    existing: ChatMessage?,
+    anchoredOrderKey: String?,
+    anchoredIdentityKey: String?
+): String {
+    event.timelineItemKind?.trim()?.takeIf { it.isNotEmpty() }?.let { return it }
+    existing?.timelineItemKind?.trim()?.takeIf { it.isNotEmpty() }?.let { return it }
+    // 本地补齐 completion order/identity 时必须同步补 itemKind，否则 canonical 排序不会承认该锚点。
+    if ((!anchoredOrderKey.isNullOrBlank() || !anchoredIdentityKey.isNullOrBlank()) && event.clearsWaitingAssistant()) {
+        return "message:assistant"
+    }
+    return ""
+}
+
 internal fun ChatTimelineState.matchingTurnUserMessage(event: TimelineEvent.MessageCompleted): ChatMessage? {
     val identities = listOfNotNull(event.turnId, event.runId)
         .mapNotNull { normalizedTurnIdentity(it) }

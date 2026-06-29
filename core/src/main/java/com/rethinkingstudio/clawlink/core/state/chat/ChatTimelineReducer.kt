@@ -13,7 +13,7 @@ internal object ChatTimelineReducer {
     fun reduce(state: ChatTimelineState, event: TimelineEvent): ChatTimelineState {
         if (event.eventId != null && event.eventId in state.seenEventIds) {
             return when (event) {
-                is TimelineEvent.MessageCompleted -> if (event.hasCanonicalTimelineKeys()) state.applyMessageCompleted(event) else state
+                is TimelineEvent.MessageCompleted -> if (state.shouldApplyMessageCompleted(event)) state.applyMessageCompleted(event) else state
                 else -> state
             }
         }
@@ -21,12 +21,20 @@ internal object ChatTimelineReducer {
         return when (event) {
             is TimelineEvent.TurnUserCreated -> if (event.hasCanonicalTimelineKeys()) markedState.applyUserTurn(event) else markedState
             is TimelineEvent.MessagePartDelta -> if (event.hasCanonicalTimelineKeys()) markedState.applyPartDelta(event) else markedState
-            is TimelineEvent.MessageCompleted -> if (event.hasCanonicalTimelineKeys()) markedState.applyMessageCompleted(event) else markedState
+            is TimelineEvent.MessageCompleted -> if (markedState.shouldApplyMessageCompleted(event)) markedState.applyMessageCompleted(event) else markedState
             is TimelineEvent.RunTerminal -> markedState.applyRunTerminal(event)
             is TimelineEvent.AttachmentStateChanged -> AttachmentTimelineReducer.reduce(markedState, event, rememberEvent = false)
             is TimelineEvent.ToolInvocationUpdated -> if (event.hasToolInvocationIdentity()) markedState.applyToolInvocation(event) else markedState
             is TimelineEvent.HistorySnapshotPage -> markedState.applyHistorySnapshot(event)
         }
+    }
+
+    private fun ChatTimelineState.shouldApplyMessageCompleted(event: TimelineEvent.MessageCompleted): Boolean {
+        if (event.hasCanonicalTimelineKeys()) return true
+        if (messages.any { it.id == event.messageId && it.timelineIdentityKey.isNotBlank() }) return true
+        // 缺 canonical 字段的 completion 只能在 turn/run 稳定身份能锚到现有 user 或等待占位时应用。
+        return event.clearsWaitingAssistant() &&
+            (matchingAssistantMessageForCompletedEvent(event) != null || matchingTurnUserMessage(event) != null)
     }
 
     private fun ChatTimelineState.applyUserTurn(event: TimelineEvent.TurnUserCreated): ChatTimelineState {
@@ -175,6 +183,7 @@ internal object ChatTimelineReducer {
             ?: matchedMessage?.runId?.takeIf { it.isNotBlank() }
         val anchoredOrderKey = completedAssistantOrderKey(event, matchedMessage)
         val anchoredIdentityKey = completedAssistantIdentityKey(event, matchedMessage)
+        val anchoredItemKind = completedAssistantItemKind(event, matchedMessage, anchoredOrderKey, anchoredIdentityKey)
         val message = ChatMessage(
             id = event.messageId,
             role = role,
@@ -189,7 +198,7 @@ internal object ChatTimelineReducer {
             timelineMessageId = event.messageId,
             timelineOrderKey = anchoredOrderKey.orEmpty().ifBlank { event.timelineOrderKey.orEmpty().ifBlank { matchedMessage?.timelineOrderKey.orEmpty() } },
             timelineIdentityKey = anchoredIdentityKey.orEmpty().ifBlank { event.timelineIdentityKey.orEmpty().ifBlank { matchedMessage?.timelineIdentityKey.orEmpty() } },
-            timelineItemKind = event.timelineItemKind.orEmpty().ifBlank { matchedMessage?.timelineItemKind.orEmpty() },
+            timelineItemKind = anchoredItemKind,
             timelineResolvesWaiting = event.timelineResolvesWaiting ?: matchedMessage?.timelineResolvesWaiting
         )
         val messageForUpsert = message

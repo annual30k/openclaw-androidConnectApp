@@ -8,7 +8,6 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
-import org.junit.Ignore
 import org.junit.Test
 
 class ChatTimelineReducerHistorySnapshotTest {
@@ -117,7 +116,6 @@ class ChatTimelineReducerHistorySnapshotTest {
         assertFalse(state.hasActiveRun)
     }
 
-    @Ignore("Legacy placeholder stealing guard without canonical order was removed.")
     @Test
     fun messageCompletedDoesNotStealLaterOptimisticPlaceholderForEarlierCommandTurn() {
         val commandUser = ChatMessage(
@@ -126,7 +124,10 @@ class ChatTimelineReducerHistorySnapshotTest {
             state = MessageState.completed,
             content = "/new",
             runId = "local-user-command-run",
-            sortTimestamp = 230.0
+            sortTimestamp = 230.0,
+            timelineOrderKey = "v1|00000000000000000230|10|0000000000000001:part-text-1:user-command-run|aaaa",
+            timelineIdentityKey = "v1|main|message|user|command-run",
+            timelineItemKind = "message:user"
         )
         val nextUser = ChatMessage(
             id = "user-next-run",
@@ -152,7 +153,7 @@ class ChatTimelineReducerHistorySnapshotTest {
                 activeRunsByTurnId = mapOf("next-run" to "next-run"),
                 activeTurnByRunId = mapOf("next-run" to "next-run")
             ),
-            event(
+            requireNotNull(TimelineEventLog.decodeEvent(
                 """
                 {
                   "protocolVersion": 2,
@@ -166,7 +167,7 @@ class ChatTimelineReducerHistorySnapshotTest {
                   "createdAt": "1970-01-01T00:03:50.001Z"
                 }
                 """.trimIndent()
-            )
+            ))
         )
         val ordered = orderMessagesWithSourceRunAnchors(state.messages)
 
@@ -176,6 +177,7 @@ class ChatTimelineReducerHistorySnapshotTest {
         )
         assertEquals("New session started", ordered[1].content)
         assertEquals(MessageState.completed, ordered[1].state)
+        assertEquals("message:assistant", ordered[1].timelineItemKind)
         assertEquals(protocolTypingMarkerText, ordered.last().content)
         assertEquals(MessageState.streaming, ordered.last().state)
         assertTrue(hasActiveVisibleTimelineRun(state, ordered))
