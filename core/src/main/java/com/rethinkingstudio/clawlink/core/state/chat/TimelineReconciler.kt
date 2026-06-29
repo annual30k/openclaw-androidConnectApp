@@ -483,7 +483,12 @@ private fun pendingResolvedByCanonical(
     canonical: CanonicalTimelineEntry
 ): Boolean {
     if (pending.role != canonical.role) return false
-    if (pending.role == MessageRole.assistant && !canonical.clearsWaitingAssistantTimelineItem()) return false
+    if (pending.role == MessageRole.assistant &&
+        !canonical.replacesStreamingAssistantWaiting(pending) &&
+        !canonical.clearsWaitingAssistantTimelineItem()
+    ) {
+        return false
+    }
     val pendingClientId = normalizedTurnIdentityValue(pending.clientMessageId)
     if (pendingClientId.isNotEmpty() &&
         listOf(canonical.clientMessageId, canonical.idempotencyKey, canonical.runId, canonical.turnId)
@@ -505,6 +510,17 @@ private fun pendingResolvedByCanonical(
         return true
     }
     return false
+}
+
+private fun CanonicalTimelineEntry.replacesStreamingAssistantWaiting(
+    pending: CanonicalTimelineEntry
+): Boolean {
+    if (!isTransientAssistantTimelinePlaceholder(pending)) return false
+    if (role != MessageRole.assistant || state !in setOf(MessageState.pending, MessageState.streaming)) return false
+    if (content.any { it.isFileBlock || it.isVoiceMessageBlock || it.isToolCallBlock || it.isToolResultBlock }) return false
+    val pendingTurn = normalizedTurnIdentity(pending)
+    // 服务端 streaming assistant 到达后必须替换同一 turn 的本地 waiting，占位合并只按规范化 run/turn 身份，不按文本或时间相似性判断。
+    return pendingTurn.isNotEmpty() && pendingTurn == normalizedTurnIdentity(this)
 }
 
 private fun CanonicalTimelineEntry.isToolTimelineItem(): Boolean {

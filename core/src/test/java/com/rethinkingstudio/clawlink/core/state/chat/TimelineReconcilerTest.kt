@@ -206,6 +206,64 @@ class TimelineReconcilerTest {
     }
 
     @Test
+    fun canonicalSnapshotReplacesLocalWaitingWhenStreamingAssistantRunHasRoleSuffix() {
+        val clientRunId = "client-run-stream-suffix"
+        val localUser = ChatMessage(
+            id = "local-user-stream-suffix",
+            role = MessageRole.user,
+            state = MessageState.completed,
+            content = "帮我分析一下这张图",
+            contentBlocks = listOf(RelayChatContentBlock(type = "text", text = "帮我分析一下这张图")),
+            createdAt = "2026-06-29T09:07:30.000Z",
+            runId = "local-user-$clientRunId",
+            sortTimestamp = 1_782_704_850.0,
+            timelineOrderKey = "local:$clientRunId:010-user",
+            timelineIdentityKey = "local:$clientRunId:message:user:010-user",
+            timelineItemKind = "message:user"
+        )
+        val waiting = ChatMessage(
+            id = "assistant-local-waiting",
+            role = MessageRole.assistant,
+            state = MessageState.streaming,
+            content = protocolTypingMarkerText,
+            contentBlocks = listOf(RelayChatContentBlock(type = "text", text = protocolTypingMarkerText)),
+            createdAt = "2026-06-29T09:07:30.001Z",
+            runId = clientRunId,
+            sortTimestamp = 1_782_704_850.001,
+            timelineOrderKey = "local:$clientRunId:020-waiting",
+            timelineIdentityKey = "local:$clientRunId:waiting:020-waiting",
+            timelineItemKind = "waiting"
+        )
+
+        val result = reconcileTimeline(
+            existing = listOf(localUser, waiting),
+            snapshot = TimelineSnapshotPage(
+                sessionKey = "main",
+                messages = listOf(
+                    TimelineSnapshotMessage(
+                        messageId = "assistant-stream-suffix",
+                        seq = 42,
+                        turnSeq = 42,
+                        turnId = "$clientRunId:assistant",
+                        runId = "$clientRunId:assistant",
+                        role = "assistant",
+                        messageState = "streaming",
+                        createdAt = "2026-06-29T09:07:30.050Z",
+                        content = listOf(RelayChatContentBlock(type = "text", text = protocolTypingMarkerText)),
+                        timelineOrderKey = "v1|00000000000000000042|20|0000000000000042:part-text-1:assistant-stream-suffix",
+                        timelineIdentityKey = "v1|main|message|assistant|assistant-stream-suffix",
+                        timelineItemKind = "message:assistant"
+                    )
+                )
+            )
+        )
+
+        val visible = sortTimelineMessagesV3(result.messages + result.pending, "main")
+        assertEquals(listOf("local-user-stream-suffix", "assistant-stream-suffix"), visible.map { it.id })
+        assertEquals(1, visible.count { it.role == MessageRole.assistant && it.state == MessageState.streaming })
+    }
+
+    @Test
     fun fullCanonicalSnapshotKeepsLocalUserForCurrentPendingTurnOnly() {
         val staleLocalUser = ChatMessage(
             id = "local-stale",
