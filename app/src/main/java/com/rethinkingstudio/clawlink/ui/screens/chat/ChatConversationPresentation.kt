@@ -15,6 +15,7 @@ internal fun conversationDisplayMessages(
     return messages
         .coalescedByCanonicalIdentity()
         .coalescedLocalUserAttachmentMessages()
+        .coalescedSameTurnUserMediaMessages()
         .coalescedLocalUserLiveEchoes()
         .coalescedDuplicateTextHistoryMessages()
         .coalescedDuplicateFileTransferMessages()
@@ -152,6 +153,118 @@ private fun List<ChatMessage>.coalescedLocalUserAttachmentMessages(): List<ChatM
 
     if (attachmentIndexesToDrop.isEmpty()) return this
     return output.filterIndexed { index, _ -> index !in attachmentIndexesToDrop }
+}
+
+private fun List<ChatMessage>.coalescedSameTurnUserMediaMessages(): List<ChatMessage> {
+    if (size < 2) return this
+
+    val output = toMutableList()
+    val indexesToDrop = mutableSetOf<Int>()
+    val indexesByTurnIdentity = linkedMapOf<String, MutableList<Int>>()
+    output.forEachIndexed { index, message ->
+        if (message.role != MessageRole.user) return@forEachIndexed
+        message.userMediaTurnIdentities().forEach { identity ->
+            indexesByTurnIdentity.getOrPut(identity) { mutableListOf() } += index
+        }
+    }
+
+    indexesByTurnIdentity.values.forEach { indexes ->
+        val activeIndexes = indexes.distinct().filter { it !in indexesToDrop }
+        if (activeIndexes.size < 2) return@forEach
+        if (activeIndexes.none { index -> output[index].contentBlocks.any { it.isTransferContentBlock } }) {
+            return@forEach
+        }
+
+        val keepIndex = activeIndexes.reduce { preferredIndex, candidateIndex ->
+            if (output[candidateIndex].sameTurnUserMediaScore() > output[preferredIndex].sameTurnUserMediaScore()) {
+                candidateIndex
+            } else {
+                preferredIndex
+            }
+        }
+        val group = activeIndexes.map { index -> output[index] }
+        // 同一 user turn 可能被 canonical 历史拆成 attachment 项和 message:user 项；只按 sourceRunId/runId 合并，不按文本或时间猜测。
+        output[keepIndex] = output[keepIndex].mergedSameTurnUserMediaMessage(group)
+        activeIndexes.forEach { index ->
+            if (index != keepIndex) indexesToDrop += index
+        }
+    }
+
+    if (indexesToDrop.isEmpty()) return this
+    return output.filterIndexed { index, _ -> index !in indexesToDrop }
+}
+
+private fun ChatMessage.userMediaTurnIdentities(): List<String> {
+    val identities = contentBlocks
+        .mapNotNull { block -> normalizedDisplayTurnIdentity(block.sourceRunId).takeIf { it.isNotEmpty() } } +
+        normalizedDisplayTurnIdentity(runId).takeIf { it.isNotEmpty() }.orEmpty()
+    return identities.distinct()
+}
+
+private fun ChatMessage.sameTurnUserMediaScore(): Int {
+    val transferBlocks = contentBlocks.filter { it.isTransferContentBlock }
+    var score = transferBlocks.size * 100
+    if (transferBlocks.any { it.stableTransferId.isNotEmpty() }) score += 20
+    if (transferBlocks.any { block ->
+            normalizedAttachmentReference(block.downloadUrl ?: block.downloadPath).startsWith("/api/", ignoreCase = true)
+        }
+    ) {
+        score += 10
+    }
+    if (plainTextContent.trim().isNotEmpty()) score += 5
+    return score
+}
+
+private fun ChatMessage.mergedSameTurnUserMediaMessage(group: List<ChatMessage>): ChatMessage {
+    return copy(
+        content = preferredSameTurnUserMediaContent(group),
+        contentBlocks = mergedSameTurnUserMediaBlocks(group)
+    )
+}
+
+private fun preferredSameTurnUserMediaContent(group: List<ChatMessage>): String {
+    val attachmentLabels = group.flatMap { message ->
+        message.contentBlocks
+            .filter { it.isTransferContentBlock }
+            .flatMap { block -> listOf(block.fileDisplayName, block.name, block.text) }
+            .mapNotNull { value -> normalizedUserEchoContent(value.orEmpty()).lowercase().takeIf { it.isNotEmpty() } }
+    }.toSet()
+    return group
+        .asSequence()
+        .map { it.plainTextContent.trim() }
+        .firstOrNull { text ->
+            text.isNotEmpty() && text.lowercase() !in attachmentLabels
+        }
+        ?: group.firstOrNull()?.plainTextContent?.trim().orEmpty()
+}
+
+private fun ChatMessage.mergedSameTurnUserMediaBlocks(group: List<ChatMessage>): List<RelayChatContentBlock> {
+    val merged = contentBlocks.toMutableList()
+    group.forEach { message ->
+        message.contentBlocks.forEach { block ->
+            if (message === this && block in contentBlocks) return@forEach
+            if (block.isTransferContentBlock) {
+                val existingIndex = merged.indexOfFirst { existing ->
+                    existing.isTransferContentBlock && existing.matchesCompletedAttachmentBlock(block)
+                }
+                if (existingIndex >= 0) {
+                    merged[existingIndex] = richerAttachmentBlock(merged[existingIndex], block)
+                } else {
+                    merged += block
+                }
+                return@forEach
+            }
+
+            if (block.isTextBlock) {
+                val text = normalizedUserEchoContent(block.text.orEmpty())
+                val hasTextBlock = merged.any { existing ->
+                    existing.isTextBlock && normalizedUserEchoContent(existing.text.orEmpty()) == text
+                }
+                if (text.isNotEmpty() && !hasTextBlock) merged += block
+            }
+        }
+    }
+    return merged
 }
 
 private fun mergedLocalAttachmentBlocks(

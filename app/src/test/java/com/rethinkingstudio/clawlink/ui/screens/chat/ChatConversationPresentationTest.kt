@@ -374,6 +374,59 @@ class ChatConversationPresentationTest {
     }
 
     @Test
+    fun displayMessagesCoalescesCanonicalMobileAttachmentAndTextEchoBySourceRunId() {
+        val runId = "client-run-hermes-video"
+        val prompt = "帮我分析一下"
+        val completedAttachment = ChatMessage(
+            id = "file-file-basketball",
+            role = MessageRole.user,
+            state = MessageState.completed,
+            content = prompt,
+            contentBlocks = listOf(
+                RelayChatContentBlock(type = "text", text = prompt),
+                RelayChatContentBlock(
+                    type = "file",
+                    text = "album-basketball.mp4",
+                    name = "album-basketball.mp4",
+                    fileId = "file-basketball",
+                    fileName = "album-basketball.mp4",
+                    mimeType = "video/mp4",
+                    downloadUrl = "/api/mobile/files/file-basketball",
+                    sourceRunId = runId
+                )
+            ),
+            createdAt = "2026-06-30T11:09:00Z",
+            runId = "file-file-basketball",
+            sortTimestamp = 200.0,
+            timelineOrderKey = "v1|00000001782800000000|40|000000|file-basketball",
+            timelineIdentityKey = "v1|main|attachment|user|file-basketball",
+            timelineItemKind = "attachment"
+        )
+        val textEcho = ChatMessage(
+            id = "server-user-basketball",
+            role = MessageRole.user,
+            state = MessageState.completed,
+            content = prompt,
+            contentBlocks = listOf(RelayChatContentBlock(type = "text", text = prompt)),
+            createdAt = "2026-06-30T11:09:00Z",
+            runId = runId,
+            sortTimestamp = 200.1,
+            timelineOrderKey = "v1|00000001782800000000|10|000000|server-user-basketball",
+            timelineIdentityKey = "v1|main|message|user|server-user-basketball",
+            timelineItemKind = "message:user"
+        )
+
+        val displayMessages = conversationDisplayMessages(
+            messages = listOf(completedAttachment, textEcho),
+            showInvocationProcess = true
+        )
+
+        assertEquals(listOf("file-file-basketball"), displayMessages.map { it.id })
+        assertEquals(prompt, displayMessages.single().content)
+        assertEquals(listOf("file-basketball"), displayMessages.single().fileContentBlocks.map { it.fileId })
+    }
+
+    @Test
     fun displayMessagesKeepsCompletedMobileAttachmentSeparateWithoutSharedRunIdentity() {
         val localPrompt = ChatMessage(
             id = "local-user-waterfall",
