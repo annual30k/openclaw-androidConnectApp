@@ -5,6 +5,7 @@ import com.rethinkingstudio.clawlink.core.models.chat.MessageRole
 import com.rethinkingstudio.clawlink.core.models.chat.MessageState
 import com.rethinkingstudio.clawlink.core.models.chat.RelayChatContentBlock
 import com.rethinkingstudio.clawlink.core.state.chat.ChatState
+import java.io.File
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
@@ -272,6 +273,8 @@ class ChatConversationPresentationTest {
 
     @Test
     fun displayMessagesMergesCompletedMobileAttachmentIntoLocalTextBubble() {
+        val localImageFile = File.createTempFile("album-waterfall", ".jpg").apply { deleteOnExit() }
+        val localImageUrl = localImageFile.toURI().toString()
         val localPrompt = ChatMessage(
             id = "local-user-waterfall",
             role = MessageRole.user,
@@ -284,7 +287,7 @@ class ChatConversationPresentationTest {
                     name = "album-waterfall.jpg",
                     fileName = "album-waterfall.jpg",
                     mimeType = "image/jpeg",
-                    downloadUrl = "file:///tmp/album-waterfall.jpg",
+                    downloadUrl = localImageUrl,
                     sourceRunId = "client-run-waterfall"
                 )
             ),
@@ -323,6 +326,8 @@ class ChatConversationPresentationTest {
         assertEquals("分析一下", displayMessages[0].content)
         assertEquals(listOf("file-waterfall"), displayMessages[0].fileContentBlocks.map { it.fileId })
         assertEquals(listOf("/api/mobile/files/file-waterfall"), displayMessages[0].fileContentBlocks.map { it.downloadUrl })
+        assertEquals(listOf(localImageUrl), displayMessages[0].fileContentBlocks.map { it.thumbnailUrl })
+        assertEquals(listOf(localImageUrl), displayMessages[0].fileContentBlocks.map { it.preferredImagePreviewURLString })
     }
 
     @Test
@@ -647,6 +652,49 @@ class ChatConversationPresentationTest {
             listOf("local-user-hermes-connect", "assistant-hermes-connecting", "assistant-hermes-text"),
             displayMessages.map { it.id }
         )
+    }
+
+    @Test
+    fun displayMessagesCoalescesUserPrefixedLiveImagePromptEchoForLocalSend() {
+        val runId = "client-run-android-hermes-image"
+        val prompt = "分析一下这张图"
+        val localPrompt = ChatMessage(
+            id = "local-user-image-prompt",
+            role = MessageRole.user,
+            state = MessageState.completed,
+            content = prompt,
+            contentBlocks = listOf(
+                RelayChatContentBlock(
+                    type = "image",
+                    text = "dinner.png",
+                    fileId = "file-dinner",
+                    fileName = "dinner.png",
+                    mimeType = "image/png",
+                    downloadUrl = "/api/mobile/files/file-dinner",
+                    sourceRunId = runId
+                )
+            ),
+            createdAt = "2026-06-30T08:08:00Z",
+            runId = "local-user-$runId",
+            sortTimestamp = 100.0
+        )
+        val liveEcho = ChatMessage(
+            id = "relay-user-image-echo",
+            role = MessageRole.user,
+            state = MessageState.completed,
+            content = prompt,
+            createdAt = "2026-06-30T08:08:00Z",
+            runId = "user-$runId",
+            sortTimestamp = 100.2
+        )
+
+        val displayMessages = conversationDisplayMessages(
+            messages = listOf(localPrompt, liveEcho),
+            showInvocationProcess = true
+        )
+
+        assertEquals(listOf("local-user-image-prompt"), displayMessages.map { it.id })
+        assertEquals(listOf("file-dinner"), displayMessages.single().contentBlocks.map { it.fileId })
     }
 
     @Test

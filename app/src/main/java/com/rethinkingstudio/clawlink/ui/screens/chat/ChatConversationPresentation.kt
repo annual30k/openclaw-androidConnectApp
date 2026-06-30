@@ -5,6 +5,8 @@ import com.rethinkingstudio.clawlink.core.models.chat.MessageRole
 import com.rethinkingstudio.clawlink.core.models.chat.MessageState
 import com.rethinkingstudio.clawlink.core.models.chat.RelayChatContentBlock
 import com.rethinkingstudio.clawlink.core.state.chat.ChatState
+import java.io.File
+import java.net.URI
 
 internal fun conversationDisplayMessages(
     messages: List<ChatMessage>,
@@ -173,7 +175,7 @@ private fun mergedLocalAttachmentBlocks(
 
         usedCompletedIndexes += completedIndex
         didMerge = true
-        completedMediaBlocks[completedIndex]
+        completedMediaBlocks[completedIndex].preservingLocalImagePreview(localBlock)
     }.toMutableList()
 
     if (!didMerge) return null
@@ -181,6 +183,34 @@ private fun mergedLocalAttachmentBlocks(
         if (index !in usedCompletedIndexes) merged += block
     }
     return merged
+}
+
+private fun RelayChatContentBlock.preservingLocalImagePreview(
+    localBlock: RelayChatContentBlock
+): RelayChatContentBlock {
+    if (!isImageFileBlock || !localBlock.isImageFileBlock) return this
+    val localPreview = localBlock.localImagePreviewReference() ?: return this
+    val existingThumbnail = normalizedAttachmentReference(thumbnailUrl)
+    if (existingThumbnail.isNotEmpty() && !existingThumbnail.startsWith("/api/", ignoreCase = true)) {
+        return this
+    }
+    return copy(thumbnailUrl = localPreview)
+}
+
+private fun RelayChatContentBlock.localImagePreviewReference(): String? {
+    if (!isImageFileBlock) return null
+    return listOf(thumbnailUrl, downloadUrl, downloadPath)
+        .map { normalizedAttachmentReference(it) }
+        .firstOrNull { value -> value.isNotEmpty() && isLocalImagePreviewReference(value) }
+}
+
+private fun isLocalImagePreviewReference(value: String): Boolean {
+    return when {
+        value.startsWith("content://", ignoreCase = true) -> true
+        value.startsWith("file:", ignoreCase = true) -> runCatching { File(URI(value)).exists() }.getOrDefault(false)
+        value.startsWith("/") && !value.startsWith("/api/", ignoreCase = true) -> File(value).exists()
+        else -> false
+    }
 }
 
 private fun mergedBlocksContainSourceRunIdentity(
@@ -610,10 +640,18 @@ private fun normalizedAttachmentText(value: String?): String {
     return value?.trim()?.lowercase().orEmpty()
 }
 
+private fun normalizedAttachmentReference(value: String?): String {
+    return value?.trim().orEmpty()
+}
+
 private fun normalizedUserEchoRunId(value: String): String {
     var normalized = value.trim()
-    if (normalized.startsWith("local-user-")) {
-        normalized = normalized.removePrefix("local-user-")
+    // 本地回显和服务端回声会使用不同前缀，但二者指向同一个 clientRunID。
+    for (prefix in listOf("local-user-", "user-")) {
+        if (normalized.startsWith(prefix)) {
+            normalized = normalized.removePrefix(prefix)
+            break
+        }
     }
     for (suffix in listOf(":user", ":assistant", ":tool", ":system")) {
         if (normalized.endsWith(suffix)) {
