@@ -407,6 +407,7 @@ class ChatStore(
         gatewayId: String,
         sessionKey: String,
         senderDisplayName: String?,
+        sourceRunId: String? = null,
         messageSortBaseTimestamp: Double
     ) {
         val messages = ComposerAttachmentMessageUpdater.begin(
@@ -415,6 +416,7 @@ class ChatStore(
             gatewayId = gatewayId,
             sessionKey = sessionKey,
             senderDisplayName = senderDisplayName,
+            sourceRunId = sourceRunId,
             messageSortBaseTimestamp = messageSortBaseTimestamp,
             orderMessages = ::orderedMessages
         )
@@ -428,7 +430,8 @@ class ChatStore(
         progress: Double,
         phase: AttachmentUploadPhase,
         failureMessage: String? = null,
-        senderDisplayName: String? = null
+        senderDisplayName: String? = null,
+        sourceRunId: String? = null
     ) {
         val messages = ComposerAttachmentMessageUpdater.update(
             currentMessages = _state.value.messages,
@@ -439,6 +442,7 @@ class ChatStore(
             phase = phase,
             failureMessage = failureMessage,
             senderDisplayName = senderDisplayName,
+            sourceRunId = sourceRunId,
             orderMessages = ::orderedMessages
         ) ?: return
         _state.value = _state.value.copy(messages = messages)
@@ -450,12 +454,14 @@ class ChatStore(
         record: RelayFileTransferItem,
         gatewayId: String,
         sessionKey: String,
+        sourceRunId: String? = null,
         completionSortTimestamp: Double
     ): Boolean {
         val result = ComposerAttachmentMessageUpdater.complete(
             currentMessages = _state.value.messages,
             attachment = attachment,
             record = record,
+            sourceRunId = sourceRunId,
             completionSortTimestamp = completionSortTimestamp,
             orderMessages = ::orderedMessages
         )
@@ -481,14 +487,16 @@ class ChatStore(
         gatewayId: String,
         attachmentIds: List<String> = emptyList(),
         attachmentBlocks: List<RelayChatContentBlock> = emptyList(),
-        commandAttachments: List<RelayChatSendAttachmentPayload> = emptyList()
+        commandAttachments: List<RelayChatSendAttachmentPayload> = emptyList(),
+        clientRunId: String? = null
     ) {
         sendTextOutgoingRun(
             content = content,
             gatewayId = gatewayId,
             attachmentIds = attachmentIds,
             attachmentBlocks = attachmentBlocks,
-            commandAttachments = commandAttachments
+            commandAttachments = commandAttachments,
+            clientRunId = clientRunId
         )
     }
 
@@ -517,6 +525,7 @@ class ChatStore(
         imageHeight: Int? = null,
         senderDisplayName: String? = null,
         clientCreatedAt: String? = null,
+        sourceRunId: String? = null,
         onProgress: ((Double) -> Unit)? = null
     ): RelayFileTransferItem {
         val sessionKey = _state.value.currentSessionKey
@@ -534,6 +543,7 @@ class ChatStore(
             imageHeight = imageHeight,
             senderDisplayName = senderDisplayName,
             clientCreatedAt = clientCreatedAt,
+            sourceRunId = sourceRunId,
             onProgress = onProgress
         )
     }
@@ -558,6 +568,13 @@ class ChatStore(
             limit = limit,
             keepSwitchingOverlay = keepSwitchingOverlay
         )
+    }
+
+    fun releaseSessionSwitchOverlay() {
+        val current = _state.value
+        if (!current.isSwitchingSession) return
+        // 已有同 scope 历史同步继续负责消息合并；这里只撤掉切换遮罩，避免重复触发时阻塞 UI。
+        _state.value = current.copy(isSwitchingSession = false)
     }
 
     suspend fun loadOlderHistory(gatewayId: String, sessionKey: String) {

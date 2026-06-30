@@ -16,6 +16,7 @@ internal suspend fun uploadMobileAttachment(
     imageHeight: Int?,
     senderDisplayName: String?,
     clientCreatedAt: String?,
+    sourceRunId: String?,
     onProgress: ((Double) -> Unit)?
 ): RelayFileTransferItem {
     val init = apiClient.initMobileFileUpload(
@@ -29,7 +30,8 @@ internal suspend fun uploadMobileAttachment(
         imageWidth = imageWidth,
         imageHeight = imageHeight,
         senderDisplayName = senderDisplayName,
-        clientCreatedAt = clientCreatedAt
+        clientCreatedAt = clientCreatedAt,
+        sourceRunId = sourceRunId
     )
     val chunkSize = init.chunkSize.coerceAtLeast(1)
     var offset = 0

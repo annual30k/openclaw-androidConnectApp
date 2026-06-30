@@ -323,7 +323,8 @@ class RelayAPIClient(
         imageWidth: Int? = null,
         imageHeight: Int? = null,
         senderDisplayName: String? = null,
-        clientCreatedAt: String? = null
+        clientCreatedAt: String? = null,
+        sourceRunId: String? = null
     ): FileUploadInitResponse {
         val req = FileUploadInitRequest(
             sessionKey = sessionKey,
@@ -335,7 +336,8 @@ class RelayAPIClient(
             imageWidth = imageWidth,
             imageHeight = imageHeight,
             senderDisplayName = senderDisplayName,
-            clientCreatedAt = clientCreatedAt
+            clientCreatedAt = clientCreatedAt,
+            sourceRunId = sourceRunId
         )
         return request(APIEndpoints.Mobile.File.initUpload(APIOrigin.mobile, gatewayId), req)
     }

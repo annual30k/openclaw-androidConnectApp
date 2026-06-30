@@ -10,19 +10,20 @@ internal fun ChatStore.sendTextOutgoingRun(
     gatewayId: String,
     attachmentIds: List<String>,
     attachmentBlocks: List<RelayChatContentBlock>,
-    commandAttachments: List<RelayChatSendAttachmentPayload>
+    commandAttachments: List<RelayChatSendAttachmentPayload>,
+    clientRunId: String? = null
 ) {
     val sessionKey = _state.value.currentSessionKey
     if (sessionKey.isBlank()) return
 
-    val clientRunId = UUID.randomUUID().toString()
-    val requestId = clientRunId
+    val resolvedClientRunId = clientRunId?.trim()?.takeIf { it.isNotEmpty() } ?: UUID.randomUUID().toString()
+    val requestId = resolvedClientRunId
     val draft = buildLocalTextOutgoingRun(
         currentMessages = _state.value.messages,
         content = content,
         gatewayId = gatewayId,
         sessionKey = sessionKey,
-        clientRunId = clientRunId,
+        clientRunId = resolvedClientRunId,
         attachmentIds = attachmentIds,
         attachmentBlocks = attachmentBlocks
     )
@@ -30,7 +31,7 @@ internal fun ChatStore.sendTextOutgoingRun(
     streamingMessageId = draft.runScope.assistantMessageId
     streamingContent.setLength(0)
     streamingContent.append(draft.assistantMessage.content)
-    rememberRunScope(clientRunId, draft.runScope)
+    rememberRunScope(resolvedClientRunId, draft.runScope)
     rememberRunScope(requestId, draft.runScope)
     persistSelectedSession(gatewayId, sessionKey)
 
@@ -40,18 +41,18 @@ internal fun ChatStore.sendTextOutgoingRun(
     )
     timelineState = timelineState.copy(
         messages = _state.value.messages,
-        activeRunId = clientRunId,
-        activeRunsByTurnId = timelineState.activeRunsByTurnId + (clientRunId to clientRunId),
-        activeTurnByRunId = timelineState.activeTurnByRunId + (clientRunId to clientRunId)
+        activeRunId = resolvedClientRunId,
+        activeRunsByTurnId = timelineState.activeRunsByTurnId + (resolvedClientRunId to resolvedClientRunId),
+        activeTurnByRunId = timelineState.activeTurnByRunId + (resolvedClientRunId to resolvedClientRunId)
     )
     TimelinePersistenceMiddleware.persistSnapshot(timelineState)
-    scheduleChatFinalSync(clientRunId, draft.runScope)
+    scheduleChatFinalSync(resolvedClientRunId, draft.runScope)
     wsClient.sendChatMessage(
         gatewayId = gatewayId,
         sessionKey = sessionKey,
         content = content,
         attachments = commandAttachments,
-        idempotencyKey = clientRunId,
+        idempotencyKey = resolvedClientRunId,
         requestId = requestId
     )
 }

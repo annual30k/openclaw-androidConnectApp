@@ -51,7 +51,7 @@ internal fun buildLocalTextOutgoingRun(
         role = MessageRole.user,
         state = MessageState.completed,
         content = content.trim().takeIf { it.isNotEmpty() && it != " " } ?: "",
-        contentBlocks = attachmentBlocks,
+        contentBlocks = contentBlocksWithOutgoingSourceRunId(attachmentBlocks, clientRunId),
         createdAt = "",
         runId = "local-user-$clientRunId",
         sortTimestamp = userSortTimestamp

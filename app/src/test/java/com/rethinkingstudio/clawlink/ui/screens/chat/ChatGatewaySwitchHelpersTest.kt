@@ -62,4 +62,16 @@ class ChatGatewaySwitchHelpersTest {
         assertFalse(gatewaySwitchHistoryBlocksOverlay(GatewayType.hermes))
         assertTrue(gatewaySwitchHistoryBlocksOverlay(GatewayType.openclaw))
     }
+
+    @Test
+    fun duplicateInFlightHistoryRequestReleasesSessionSwitchOverlay() {
+        val gate = GatewayHistoryRequestGate()
+        val request = GatewayHistoryRequest(gatewayId = "hermes-gateway", sessionKey = "work-session")
+
+        assertEquals(GatewayHistoryRequestDecision.StartLoad, gate.begin(request, isSwitchingSession = false))
+        assertEquals(
+            GatewayHistoryRequestDecision.ReleaseSwitchOverlay,
+            gate.begin(request, isSwitchingSession = true)
+        )
+    }
 }

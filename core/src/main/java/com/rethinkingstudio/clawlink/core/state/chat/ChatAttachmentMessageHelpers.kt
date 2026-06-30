@@ -80,7 +80,8 @@ internal fun makeComposerAttachmentUploadContentBlock(
     sessionKey: String,
     senderDisplayName: String?,
     statusText: String?,
-    downloadUrlString: String
+    downloadUrlString: String,
+    sourceRunId: String? = null
 ): RelayChatContentBlock {
     return RelayChatContentBlock(
         type = when {
@@ -98,14 +99,20 @@ internal fun makeComposerAttachmentUploadContentBlock(
         imageHeight = attachment.imageHeight,
         downloadUrl = downloadUrlString,
         senderDisplayName = senderDisplayName,
+        sourceRunId = sourceRunId,
         gatewayId = gatewayId,
         sessionKey = sessionKey,
         status = statusText
     )
 }
 
-internal fun makeFileContentBlock(record: RelayFileTransferItem): RelayChatContentBlock {
+internal fun makeFileContentBlock(
+    record: RelayFileTransferItem,
+    sourceRunIdOverride: String? = null
+): RelayChatContentBlock {
     val normalizedMime = record.mimeType.trim().lowercase()
+    val sourceRunId = record.sourceRunId?.trim()?.takeIf { it.isNotEmpty() }
+        ?: sourceRunIdOverride?.trim()?.takeIf { it.isNotEmpty() }
     return RelayChatContentBlock(
         type = when {
             normalizedMime.startsWith("audio/") -> "voice"
@@ -125,7 +132,7 @@ internal fun makeFileContentBlock(record: RelayFileTransferItem): RelayChatConte
         downloadPath = record.downloadPath,
         expiresAt = record.expiresAt,
         senderDisplayName = record.senderDisplayName,
-        sourceRunId = record.sourceRunId,
+        sourceRunId = sourceRunId,
         gatewayId = record.gatewayId,
         sessionKey = record.sessionKey,
         status = record.status
@@ -134,9 +141,10 @@ internal fun makeFileContentBlock(record: RelayFileTransferItem): RelayChatConte
 
 fun makeUploadedAttachmentContentBlock(
     record: RelayFileTransferItem,
-    localDownloadUrlString: String? = null
+    localDownloadUrlString: String? = null,
+    sourceRunIdOverride: String? = null
 ): RelayChatContentBlock {
-    val block = makeFileContentBlock(record)
+    val block = makeFileContentBlock(record, sourceRunIdOverride = sourceRunIdOverride)
     val localPreviewPath = localDownloadUrlString
         ?.trim()
         ?.takeIf { it.isNotEmpty() && isLocalPreviewReference(it) }
@@ -145,6 +153,23 @@ fun makeUploadedAttachmentContentBlock(
         downloadUrl = localPreviewPath,
         downloadPath = block.fileDownloadURLString
     )
+}
+
+internal fun contentBlocksWithOutgoingSourceRunId(
+    blocks: List<RelayChatContentBlock>,
+    sourceRunId: String
+): List<RelayChatContentBlock> {
+    val normalizedSourceRunId = sourceRunId.trim().takeIf { it.isNotEmpty() } ?: return blocks
+    var changed = false
+    val updated = blocks.map { block ->
+        if ((block.isFileBlock || block.isVoiceMessageBlock) && block.sourceRunId.isNullOrBlank()) {
+            changed = true
+            block.copy(sourceRunId = normalizedSourceRunId)
+        } else {
+            block
+        }
+    }
+    return if (changed) updated else blocks
 }
 
 internal fun AttachmentUploadPhase.toMessageState(): MessageState {

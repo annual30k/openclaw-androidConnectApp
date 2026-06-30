@@ -23,6 +23,7 @@ internal object ComposerAttachmentMessageUpdater {
         gatewayId: String,
         sessionKey: String,
         senderDisplayName: String?,
+        sourceRunId: String?,
         messageSortBaseTimestamp: Double,
         orderMessages: (List<ChatMessage>) -> List<ChatMessage>
     ): List<ChatMessage> {
@@ -50,7 +51,8 @@ internal object ComposerAttachmentMessageUpdater {
                         sessionKey = sessionKey,
                         senderDisplayName = senderDisplayName,
                         statusText = statusText,
-                        downloadUrlString = attachment.fileUri
+                        downloadUrlString = attachment.fileUri,
+                        sourceRunId = sourceRunId
                     )
                 ),
                 createdAt = Instant.ofEpochMilli((sortTimestamp * 1000).toLong()).toString(),
@@ -78,6 +80,7 @@ internal object ComposerAttachmentMessageUpdater {
         phase: AttachmentUploadPhase,
         failureMessage: String?,
         senderDisplayName: String?,
+        sourceRunId: String?,
         orderMessages: (List<ChatMessage>) -> List<ChatMessage>
     ): List<ChatMessage>? {
         val messages = currentMessages.toMutableList()
@@ -96,7 +99,8 @@ internal object ComposerAttachmentMessageUpdater {
                     sessionKey = sessionKey,
                     senderDisplayName = senderDisplayName ?: existing.transferContentBlocks().firstOrNull()?.senderDisplayName,
                     statusText = null,
-                    downloadUrlString = attachment.fileUri
+                    downloadUrlString = attachment.fileUri,
+                    sourceRunId = sourceRunId
                 )
             )
         )
@@ -135,7 +139,8 @@ internal object ComposerAttachmentMessageUpdater {
                     sessionKey = sessionKey,
                     senderDisplayName = senderDisplayName ?: existing.fileContentBlocks.firstOrNull()?.senderDisplayName,
                     statusText = uploadItem.statusText,
-                    downloadUrlString = attachment.fileUri
+                    downloadUrlString = attachment.fileUri,
+                    sourceRunId = sourceRunId
                 )
             ),
             createdAt = existing.createdAt,
@@ -150,6 +155,7 @@ internal object ComposerAttachmentMessageUpdater {
         currentMessages: List<ChatMessage>,
         attachment: ComposerAttachmentDraft,
         record: RelayFileTransferItem,
+        sourceRunId: String?,
         completionSortTimestamp: Double,
         orderMessages: (List<ChatMessage>) -> List<ChatMessage>
     ): ComposerAttachmentCompletionResult {
@@ -163,7 +169,7 @@ internal object ComposerAttachmentMessageUpdater {
         if (index < 0) return ComposerAttachmentCompletionResult(completed = false, messages = currentMessages)
 
         val existing = messages[index]
-        val finalBlock = makeFileContentBlock(record)
+        val finalBlock = makeFileContentBlock(record, sourceRunIdOverride = sourceRunId)
         cacheCompletedAttachmentPreview(attachment, finalBlock)
         val completedMessage = ChatMessage(
             id = existing.id,

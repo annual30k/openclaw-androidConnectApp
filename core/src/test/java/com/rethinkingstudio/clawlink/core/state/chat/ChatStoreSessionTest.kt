@@ -14,6 +14,7 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Ignore
@@ -152,6 +153,87 @@ class ChatStoreSessionTest {
     }
 
     @Test
+    fun realtimeUserEchoPrefersSourceRunIdOverLegacyRunIdForLocalImagePrompt() {
+        val wsClient = RelayWebSocketClient()
+        try {
+            val store = ChatStore(
+                apiClient = RelayAPIClient(),
+                wsClient = wsClient,
+                notificationPort = object : NotificationPort {
+                    override fun showReplyNotification(sessionKey: String, title: String, body: String) = Unit
+                    override fun cancelNotification(id: Int) = Unit
+                    override fun cancelAll() = Unit
+                }
+            )
+            val clientRunId = "client-run-android-hermes-top-level-source"
+            val prompt = "帮我分析一下这张图"
+            val localUser = ChatMessage(
+                id = "local-user-image-prompt",
+                role = MessageRole.user,
+                state = MessageState.completed,
+                content = prompt,
+                contentBlocks = listOf(
+                    RelayChatContentBlock(
+                        type = "image",
+                        fileId = "local-screenshot",
+                        fileName = "screenshot.png",
+                        mimeType = "image/png",
+                        downloadUrl = "file:///tmp/screenshot.png",
+                        sourceRunId = clientRunId
+                    )
+                ),
+                runId = "local-user-$clientRunId",
+                sortTimestamp = 100.0
+            )
+            val completedAssistant = ChatMessage(
+                id = "assistant-completed",
+                role = MessageRole.assistant,
+                state = MessageState.completed,
+                content = "你好，我在。",
+                runId = clientRunId,
+                sortTimestamp = 100.001
+            )
+            setChatState(
+                store,
+                store.state.value.copy(
+                    messages = listOf(localUser, completedAssistant),
+                    currentSessionKey = "main",
+                    isStreaming = false
+                )
+            )
+
+            invokeHandleWsEvent(
+                store,
+                WsEvent(
+                    type = "event",
+                    event = "chat",
+                    payload = json.parseToJsonElement(
+                        """
+                        {
+                          "state": "final",
+                          "role": "user",
+                          "sessionKey": "main",
+                          "runId": "legacy-hermes-user-echo",
+                          "sourceRunId": "$clientRunId",
+                          "text": "$prompt",
+                          "ts": 1779383003000
+                        }
+                        """.trimIndent()
+                    )
+                )
+            )
+
+            val messages = store.state.value.messages
+            assertEquals(listOf(MessageRole.user, MessageRole.assistant), messages.map { it.role })
+            assertEquals(1, messages.count { it.role == MessageRole.user })
+            assertEquals("local-user-$clientRunId", messages.first().runId)
+            assertEquals(listOf("local-screenshot"), messages.first().contentBlocks.mapNotNull { it.fileId })
+        } finally {
+            wsClient.destroy()
+        }
+    }
+
+    @Test
     fun selectingSessionClearsCurrentTimelineRunState() {
         val wsClient = RelayWebSocketClient()
         try {
@@ -194,6 +276,47 @@ class ChatStoreSessionTest {
             assertTrue(timelineState.activeTurnByRunId.isEmpty())
             assertEquals("session-b", store.state.value.currentSessionKey)
             assertEquals(emptyList<Any>(), store.state.value.messages)
+        } finally {
+            wsClient.destroy()
+        }
+    }
+
+    @Test
+    fun releaseSessionSwitchOverlayOnlyClearsSwitchingFlag() {
+        val wsClient = RelayWebSocketClient()
+        try {
+            val store = ChatStore(
+                apiClient = RelayAPIClient(),
+                wsClient = wsClient,
+                notificationPort = object : NotificationPort {
+                    override fun showReplyNotification(sessionKey: String, title: String, body: String) = Unit
+                    override fun cancelNotification(id: Int) = Unit
+                    override fun cancelAll() = Unit
+                }
+            )
+            val message = ChatMessage(
+                id = "message-1",
+                role = MessageRole.user,
+                state = MessageState.completed,
+                content = "hello"
+            )
+            setChatState(
+                store,
+                store.state.value.copy(
+                    currentGatewayId = "gateway-1",
+                    currentSessionKey = "session-a",
+                    messages = listOf(message),
+                    isLoading = true,
+                    isSwitchingSession = true
+                )
+            )
+
+            store.releaseSessionSwitchOverlay()
+
+            assertFalse(store.state.value.isSwitchingSession)
+            assertTrue(store.state.value.isLoading)
+            assertEquals("session-a", store.state.value.currentSessionKey)
+            assertEquals(listOf(message), store.state.value.messages)
         } finally {
             wsClient.destroy()
         }

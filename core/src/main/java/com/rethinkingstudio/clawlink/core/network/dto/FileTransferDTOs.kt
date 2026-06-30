@@ -41,7 +41,8 @@ data class FileUploadInitRequest(
     val imageWidth: Int? = null,
     val imageHeight: Int? = null,
     val senderDisplayName: String? = null,
-    val clientCreatedAt: String? = null
+    val clientCreatedAt: String? = null,
+    val sourceRunId: String? = null
 )
 
 @Serializable

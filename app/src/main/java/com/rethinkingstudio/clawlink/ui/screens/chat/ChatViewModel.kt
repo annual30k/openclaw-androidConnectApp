@@ -456,6 +456,7 @@ internal class ChatViewModel(
         }
 
         isUploadingAttachment = true
+        val clientRunId = trimmed.takeIf { it.isNotBlank() }?.let { UUID.randomUUID().toString() }
         try {
             composerAttachmentUploadItems = attachments.map { attachment ->
                 ComposerAttachmentUploadItem(
@@ -472,6 +473,7 @@ internal class ChatViewModel(
                 gatewayId = gatewayId,
                 sessionKey = sessionKey,
                 senderDisplayName = gatewayStore.state.value.selectedGateway?.displayName,
+                sourceRunId = clientRunId,
                 messageSortBaseTimestamp = sendStartedAt
             )
             composerAttachments = emptyList()
@@ -486,6 +488,7 @@ internal class ChatViewModel(
                         attachment = attachment,
                         senderDisplayName = gatewayStore.state.value.selectedGateway?.displayName,
                         clientCreatedAt = Instant.ofEpochMilli(((sendStartedAt + (index * 0.001)) * 1000).toLong()).toString(),
+                        sourceRunId = clientRunId,
                         onProgress = { progress ->
                             scope.launch(Dispatchers.Main) {
                                 setUploadItemProgress(attachment.id, progress)
@@ -495,7 +498,8 @@ internal class ChatViewModel(
                                     sessionKey = sessionKey,
                                     progress = progress,
                                     phase = AttachmentUploadPhase.uploading,
-                                    senderDisplayName = gatewayStore.state.value.selectedGateway?.displayName
+                                    senderDisplayName = gatewayStore.state.value.selectedGateway?.displayName,
+                                    sourceRunId = clientRunId
                                 )
                             }
                         }
@@ -503,7 +507,8 @@ internal class ChatViewModel(
                 }
                 uploadedAttachmentBlocks += makeUploadedAttachmentContentBlock(
                     record = record,
-                    localDownloadUrlString = attachment.fileUri
+                    localDownloadUrlString = attachment.fileUri,
+                    sourceRunIdOverride = clientRunId
                 )
                 makeRelayCommandAttachment(attachment)?.let { commandAttachments += it }
                 chatStore.completeComposerAttachmentUploadMessage(
@@ -511,6 +516,7 @@ internal class ChatViewModel(
                     record = record,
                     gatewayId = gatewayId,
                     sessionKey = sessionKey,
+                    sourceRunId = clientRunId,
                     completionSortTimestamp = (System.currentTimeMillis() / 1000.0)
                 )
                 setUploadItemPhase(attachment.id, AttachmentUploadPhase.completed)
@@ -523,7 +529,8 @@ internal class ChatViewModel(
                     gatewayId = gatewayId,
                     attachmentIds = attachments.map { it.id },
                     attachmentBlocks = uploadedAttachmentBlocks,
-                    commandAttachments = commandAttachments
+                    commandAttachments = commandAttachments,
+                    clientRunId = clientRunId
                 )
             }
 
@@ -556,7 +563,8 @@ internal class ChatViewModel(
                         progress = composerAttachmentUploadItems.firstOrNull { it.attachment.id == failedAttachmentId }?.progress ?: 0.0,
                         phase = AttachmentUploadPhase.failed,
                         failureMessage = e.message ?: choose("Unknown error", "未知错误"),
-                        senderDisplayName = gatewayStore.state.value.selectedGateway?.displayName
+                        senderDisplayName = gatewayStore.state.value.selectedGateway?.displayName,
+                        sourceRunId = clientRunId
                     )
                 }
             }
@@ -575,6 +583,7 @@ internal class ChatViewModel(
         attachment: ComposerAttachmentDraft,
         senderDisplayName: String?,
         clientCreatedAt: String?,
+        sourceRunId: String?,
         onProgress: ((Double) -> Unit)? = null
     ): RelayFileTransferItem {
         val bytes = withContext(Dispatchers.IO) {
@@ -591,6 +600,7 @@ internal class ChatViewModel(
             imageHeight = attachment.imageHeight,
             senderDisplayName = senderDisplayName,
             clientCreatedAt = clientCreatedAt,
+            sourceRunId = sourceRunId,
             onProgress = onProgress
         )
     }

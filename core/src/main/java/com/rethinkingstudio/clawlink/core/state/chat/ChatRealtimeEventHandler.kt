@@ -455,13 +455,16 @@ private fun remoteUserEchoRunId(
     contentBlocks: List<RelayChatContentBlock>,
     runId: String
 ): String {
-    val candidates = sequenceOf(
-        runId,
-        payload.string("idempotencyKey", "idempotency_key"),
-        payload.string("clientMessageId", "client_message_id"),
-        payload.string("messageId", "message_id"),
+    val sourceRunIds = sequenceOf(
         payload.string("sourceRunId", "source_run_id")
     ) + contentBlocks.asSequence().mapNotNull { it.sourceRunId }
+    val candidates = sourceRunIds + sequenceOf(
+        payload.string("idempotencyKey", "idempotency_key"),
+        payload.string("clientMessageId", "client_message_id"),
+        runId,
+        payload.string("messageId", "message_id")
+    )
+    // Hermes 旧回显可能把本地 turn 放在 sourceRunId，而 runId 是宿主侧临时值；优先 sourceRunId 才能在入桶前合并本地媒体气泡。
     // 只接受协议里的稳定身份字段，不用文本或时间推断，避免吞掉重复同文的真实提问。
     return candidates.firstNotNullOfOrNull { candidate ->
         candidate?.trim()?.takeIf(String::isNotEmpty)

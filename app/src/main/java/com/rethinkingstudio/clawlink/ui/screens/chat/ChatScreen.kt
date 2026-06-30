@@ -142,7 +142,7 @@ fun ChatScreen(
     var hasCompletedInitialAutoScroll by remember { mutableStateOf(false) }
     var hasPendingMessagesBelow by remember { mutableStateOf(false) }
     var activeGatewaySwitchId by remember { mutableStateOf<String?>(null) }
-    var lastAutoHistoryRequestKey by remember { mutableStateOf<String?>(null) }
+    val autoHistoryRequestGate = remember { GatewayHistoryRequestGate() }
     val visibleMessagesForScroll = remember(
         chatState.messages,
         chatState.showInvocationProcess
@@ -198,9 +198,14 @@ fun ChatScreen(
         request: GatewayHistoryRequest,
         keepSwitchingOverlay: Boolean = true
     ) {
-        val requestKey = gatewayHistoryRequestKey(request)
-        if (lastAutoHistoryRequestKey == requestKey) return
-        lastAutoHistoryRequestKey = requestKey
+        when (autoHistoryRequestGate.begin(request, isSwitchingSession = chatStore.state.value.isSwitchingSession)) {
+            GatewayHistoryRequestDecision.Skip -> return
+            GatewayHistoryRequestDecision.ReleaseSwitchOverlay -> {
+                chatStore.releaseSessionSwitchOverlay()
+                return
+            }
+            GatewayHistoryRequestDecision.StartLoad -> Unit
+        }
         try {
             chatStore.loadHistory(
                 request.gatewayId,
@@ -210,9 +215,7 @@ fun ChatScreen(
         } catch (e: CancellationException) {
             throw e
         } finally {
-            if (lastAutoHistoryRequestKey == requestKey) {
-                lastAutoHistoryRequestKey = null
-            }
+            autoHistoryRequestGate.finish(request)
         }
     }
 
@@ -315,8 +318,9 @@ fun ChatScreen(
         }
     }
 
-    LaunchedEffect(gatewayId, chatState.currentGatewayId, chatState.currentSessionKey) {
+    LaunchedEffect(gatewayId, chatState.currentGatewayId, chatState.currentSessionKey, activeGatewaySwitchId) {
         yield()
+        // 网关切换期间会暂停自动历史加载；切换完成后必须用同一 session scope 再触发一次。
         gatewaySwitchHistoryRequest(
             selectedGatewayId = gatewayId,
             currentGatewayId = chatState.currentGatewayId,
