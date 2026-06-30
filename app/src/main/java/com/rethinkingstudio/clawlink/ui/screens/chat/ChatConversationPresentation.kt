@@ -16,6 +16,7 @@ internal fun conversationDisplayMessages(
         .coalescedLocalUserLiveEchoes()
         .coalescedDuplicateTextHistoryMessages()
         .coalescedDuplicateFileTransferMessages()
+        .coalescedResolvedTransientAssistantPlaceholders()
         .coalescedDuplicateTransientAssistantPlaceholders()
         .filter { message ->
             message.shouldDisplayInChat(showInvocationProcess = showInvocationProcess) ||
@@ -329,6 +330,31 @@ private fun List<ChatMessage>.coalescedDuplicateTransientAssistantPlaceholders()
     }
 }
 
+private fun List<ChatMessage>.coalescedResolvedTransientAssistantPlaceholders(): List<ChatMessage> {
+    if (size < 2) return this
+
+    val placeholderIndexesToDrop = mutableSetOf<Int>()
+    forEachIndexed { index, message ->
+        if (!message.isResolvableTransientTypingPlaceholder()) return@forEachIndexed
+        val previousUserIndex = indices.lastOrNull { candidateIndex ->
+            candidateIndex < index && this[candidateIndex].role == MessageRole.user
+        } ?: return@forEachIndexed
+        val nextUserIndex = indices.firstOrNull { candidateIndex ->
+            candidateIndex > index && this[candidateIndex].role == MessageRole.user
+        } ?: size
+        val currentTurnHasVisibleAssistantText = (previousUserIndex + 1 until nextUserIndex).any { candidateIndex ->
+            candidateIndex != index && this[candidateIndex].isVisibleAssistantTextOutput()
+        }
+        if (currentTurnHasVisibleAssistantText) {
+            placeholderIndexesToDrop += index
+        }
+    }
+
+    if (placeholderIndexesToDrop.isEmpty()) return this
+    // 同一用户段里 assistant 已经输出真实文字后，typing 必须被正文替换，不能再作为第二个气泡残留。
+    return filterIndexed { index, _ -> index !in placeholderIndexesToDrop }
+}
+
 private fun ChatMessage.prefersTransientAssistantPlaceholderOver(other: ChatMessage): Boolean {
     val keyComparison = compareNormalizedText(timelineOrderKey, other.timelineOrderKey)
     if (keyComparison != 0) return keyComparison > 0
@@ -353,7 +379,7 @@ private fun List<ChatMessage>.orderedForConversationDisplay(): List<ChatMessage>
 }
 
 private fun sameTurnOutputBeforeWaiting(left: ChatMessage, right: ChatMessage): Boolean {
-    if (!right.isTransientDisplayWaitingPlaceholder()) return false
+    if (!right.isResolvableTransientTypingPlaceholder()) return false
     val leftTurn = left.displayTurnIdentity()
     // 同一用户 turn 的真实输出必须排在 transient waiting 前面，避免附件到达后仍被 loading 气泡压住。
     return leftTurn.isNotEmpty() &&
@@ -364,6 +390,31 @@ private fun sameTurnOutputBeforeWaiting(left: ChatMessage, right: ChatMessage): 
 private fun ChatMessage.isAssistantOrToolOutput(): Boolean {
     if (isTransientDisplayWaitingPlaceholder()) return false
     return role == MessageRole.assistant || role == MessageRole.tool
+}
+
+private fun ChatMessage.isVisibleAssistantTextOutput(): Boolean {
+    if (role != MessageRole.assistant || isTransientDisplayWaitingPlaceholder()) return false
+
+    val textBlockContent = contentBlocks
+        .filter { it.isTextBlock }
+        .mapNotNull { it.text?.trim()?.ifEmpty { null } }
+        .joinToString("\n\n")
+        .trim()
+    if (textBlockContent.isNotEmpty() && !isTransientDisplayWaitingText(textBlockContent)) {
+        return true
+    }
+
+    if (contentBlocks.any { it.isTransferContentBlock || it.isToolCallBlock || it.isToolResultBlock }) {
+        return false
+    }
+    val text = plainTextContent.trim()
+    return text.isNotEmpty() && !isTransientDisplayWaitingText(text)
+}
+
+private fun ChatMessage.isResolvableTransientTypingPlaceholder(): Boolean {
+    if (!isTransientDisplayWaitingPlaceholder()) return false
+    val text = plainTextContent.trim()
+    return timelineItemKind.trim() == "waiting" || text.isEmpty() || text == "[[clawlink:typing]]"
 }
 
 private fun ChatMessage.isTransientDisplayWaitingPlaceholder(): Boolean {

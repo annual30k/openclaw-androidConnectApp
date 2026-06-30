@@ -547,6 +547,109 @@ class ChatConversationPresentationTest {
     }
 
     @Test
+    fun displayMessagesRemovesTransientTypingAfterVisibleAssistantTextInCurrentTurn() {
+        val localPrompt = ChatMessage(
+            id = "local-user-waterfall",
+            role = MessageRole.user,
+            state = MessageState.completed,
+            content = "现在帮我分析一下这张图",
+            contentBlocks = listOf(
+                RelayChatContentBlock(
+                    type = "image",
+                    fileId = "local-waterfall",
+                    fileName = "waterfall.jpg",
+                    mimeType = "image/jpeg",
+                    sourceRunId = "client-run-waterfall-analysis"
+                )
+            ),
+            createdAt = "2026-06-30T01:30:00Z",
+            runId = "local-user-client-run-waterfall-analysis",
+            timelineOrderKey = "local:client-run-waterfall-analysis:010-user",
+            timelineIdentityKey = "local:client-run-waterfall-analysis:message:user:010-user",
+            timelineItemKind = "message:user"
+        )
+        val assistantText = ChatMessage(
+            id = "assistant-waterfall-text",
+            role = MessageRole.assistant,
+            state = MessageState.streaming,
+            content = "这张拍得不错！分析如下：",
+            createdAt = "2026-06-30T01:30:03Z",
+            runId = "server-run-waterfall-analysis",
+            timelineOrderKey = "server:waterfall-analysis:030-assistant",
+            timelineIdentityKey = "server:waterfall-analysis:message:assistant:030-assistant",
+            timelineItemKind = "message:assistant"
+        )
+        val staleTyping = ChatMessage(
+            id = "waiting-waterfall",
+            role = MessageRole.assistant,
+            state = MessageState.streaming,
+            content = "[[clawlink:typing]]",
+            createdAt = "2026-06-30T01:30:00Z",
+            runId = "client-run-waterfall-analysis",
+            timelineOrderKey = "local:client-run-waterfall-analysis:020-waiting",
+            timelineIdentityKey = "local:client-run-waterfall-analysis:waiting:020-waiting",
+            timelineItemKind = "waiting"
+        )
+
+        val displayMessages = conversationDisplayMessages(
+            messages = listOf(localPrompt, assistantText, staleTyping),
+            showInvocationProcess = true
+        )
+
+        assertEquals(
+            listOf("local-user-waterfall", "assistant-waterfall-text"),
+            displayMessages.map { it.id }
+        )
+    }
+
+    @Test
+    fun displayMessagesKeepsNonWaitingConnectionStatusBeforeVisibleAssistantText() {
+        val localPrompt = ChatMessage(
+            id = "local-user-hermes-connect",
+            role = MessageRole.user,
+            state = MessageState.completed,
+            content = "Hermes 连接状态检查",
+            createdAt = "2026-06-30T01:35:00Z",
+            runId = "local-user-client-run-hermes-connect",
+            timelineOrderKey = "local:client-run-hermes-connect:010-user",
+            timelineIdentityKey = "local:client-run-hermes-connect:message:user:010-user",
+            timelineItemKind = "message:user"
+        )
+        val connecting = ChatMessage(
+            id = "assistant-hermes-connecting",
+            role = MessageRole.assistant,
+            state = MessageState.streaming,
+            content = "正在连接 Mac Hermes Agent...",
+            createdAt = "2026-06-30T01:35:01Z",
+            runId = "client-run-hermes-connect",
+            timelineOrderKey = "local:client-run-hermes-connect:020-status",
+            timelineIdentityKey = "local:client-run-hermes-connect:message:assistant:020-status",
+            timelineItemKind = "message:assistant"
+        )
+        val assistantText = ChatMessage(
+            id = "assistant-hermes-text",
+            role = MessageRole.assistant,
+            state = MessageState.streaming,
+            content = "Hermes 已开始返回正文。",
+            createdAt = "2026-06-30T01:35:02Z",
+            runId = "client-run-hermes-connect:assistant",
+            timelineOrderKey = "local:client-run-hermes-connect:030-assistant",
+            timelineIdentityKey = "local:client-run-hermes-connect:message:assistant:030-assistant",
+            timelineItemKind = "message:assistant"
+        )
+
+        val displayMessages = conversationDisplayMessages(
+            messages = listOf(localPrompt, connecting, assistantText),
+            showInvocationProcess = true
+        )
+
+        assertEquals(
+            listOf("local-user-hermes-connect", "assistant-hermes-connecting", "assistant-hermes-text"),
+            displayMessages.map { it.id }
+        )
+    }
+
+    @Test
     fun structureSignatureIgnoresStreamingTextProgress() {
         val streaming = ChatMessage(
             id = "assistant-streaming",
