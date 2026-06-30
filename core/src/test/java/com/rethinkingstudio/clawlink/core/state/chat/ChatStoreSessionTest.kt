@@ -72,6 +72,86 @@ class ChatStoreSessionTest {
     }
 
     @Test
+    fun realtimeUserEchoWithIdempotencyKeyMergesLocalImagePromptAfterPendingFinished() {
+        val wsClient = RelayWebSocketClient()
+        try {
+            val store = ChatStore(
+                apiClient = RelayAPIClient(),
+                wsClient = wsClient,
+                notificationPort = object : NotificationPort {
+                    override fun showReplyNotification(sessionKey: String, title: String, body: String) = Unit
+                    override fun cancelNotification(id: Int) = Unit
+                    override fun cancelAll() = Unit
+                }
+            )
+            val clientRunId = "client-run-android-hermes-late-idempotency"
+            val prompt = "帮我分析一下"
+            val localUser = ChatMessage(
+                id = "local-user-image-prompt",
+                role = MessageRole.user,
+                state = MessageState.completed,
+                content = prompt,
+                contentBlocks = listOf(
+                    RelayChatContentBlock(
+                        type = "image",
+                        fileId = "local-dinner",
+                        fileName = "dinner.png",
+                        mimeType = "image/png",
+                        downloadUrl = "file:///tmp/dinner.png",
+                        sourceRunId = clientRunId
+                    )
+                ),
+                runId = "local-user-$clientRunId",
+                sortTimestamp = 100.0
+            )
+            val completedAssistant = ChatMessage(
+                id = "assistant-completed",
+                role = MessageRole.assistant,
+                state = MessageState.completed,
+                content = "已经完成",
+                runId = clientRunId,
+                sortTimestamp = 100.001
+            )
+            setChatState(
+                store,
+                store.state.value.copy(
+                    messages = listOf(localUser, completedAssistant),
+                    currentSessionKey = "main",
+                    isStreaming = false
+                )
+            )
+
+            invokeHandleWsEvent(
+                store,
+                WsEvent(
+                    type = "event",
+                    event = "chat",
+                    payload = json.parseToJsonElement(
+                        """
+                        {
+                          "state": "final",
+                          "role": "user",
+                          "sessionKey": "main",
+                          "idempotencyKey": "$clientRunId",
+                          "text": "$prompt",
+                          "ts": 1779383003000
+                        }
+                        """.trimIndent()
+                    )
+                )
+            )
+
+            val messages = store.state.value.messages
+            assertEquals(listOf(MessageRole.user, MessageRole.assistant), messages.map { it.role })
+            assertEquals(1, messages.count { it.role == MessageRole.user })
+            assertEquals("local-user-$clientRunId", messages.first().runId)
+            assertEquals(listOf("local-dinner"), messages.first().contentBlocks.mapNotNull { it.fileId })
+        } finally {
+            wsClient.destroy()
+        }
+    }
+
+    @Test
     fun selectingSessionClearsCurrentTimelineRunState() {
         val wsClient = RelayWebSocketClient()
         try {

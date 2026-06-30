@@ -299,7 +299,7 @@ internal fun ChatStore.handleRealtimeFinal(envelope: JsonObject, payload: JsonEl
         appendOrMergeRemoteUserMessage(
             content = content,
             contentBlocks = finalContentBlocks,
-            runId = runId,
+            runId = remoteUserEchoRunId(obj, finalContentBlocks, runId),
             sortTimestamp = eventTimestampMillis(obj)?.toDouble()?.div(1000.0),
             assistantMessageId = scope.runScope?.assistantMessageId
         )
@@ -448,6 +448,24 @@ internal fun ChatStore.appendOrMergeRemoteUserMessage(
         assistantMessageId = assistantMessageId
     )
     _state.value = _state.value.copy(messages = orderMessagesForRealtime(messages))
+}
+
+private fun remoteUserEchoRunId(
+    payload: JsonObject,
+    contentBlocks: List<RelayChatContentBlock>,
+    runId: String
+): String {
+    val candidates = sequenceOf(
+        runId,
+        payload.string("idempotencyKey", "idempotency_key"),
+        payload.string("clientMessageId", "client_message_id"),
+        payload.string("messageId", "message_id"),
+        payload.string("sourceRunId", "source_run_id")
+    ) + contentBlocks.asSequence().mapNotNull { it.sourceRunId }
+    // 只接受协议里的稳定身份字段，不用文本或时间推断，避免吞掉重复同文的真实提问。
+    return candidates.firstNotNullOfOrNull { candidate ->
+        candidate?.trim()?.takeIf(String::isNotEmpty)
+    }.orEmpty()
 }
 
 internal fun ChatStore.markAssistantFinalSyncingFromHistory(

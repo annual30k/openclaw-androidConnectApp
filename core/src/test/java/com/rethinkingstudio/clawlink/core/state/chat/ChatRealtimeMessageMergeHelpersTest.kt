@@ -131,6 +131,77 @@ class ChatRealtimeMessageMergeHelpersTest {
     }
 
     @Test
+    fun mergesUserPrefixedRemoteMediaEchoIntoMatchingLocalUserBubble() {
+        val localUser = ChatMessage(
+            id = "local-user",
+            role = MessageRole.user,
+            content = "分析一下这张图",
+            runId = "local-user-client-run-image",
+            sortTimestamp = 50.0
+        )
+        val pendingAssistant = assistantMessage(
+            id = "assistant-1",
+            runId = "client-run-image",
+            content = "正在连接...",
+            sortTimestamp = 50.001
+        )
+
+        val merged = mergeRemoteUserMessageIntoCurrentMessages(
+            currentMessages = listOf(localUser, pendingAssistant),
+            content = "分析一下这张图",
+            contentBlocks = emptyList(),
+            runId = "user-client-run-image",
+            sortTimestamp = 51.0
+        )
+
+        assertEquals(listOf(MessageRole.user, MessageRole.assistant), merged.map { it.role })
+        assertEquals(listOf("local-user-client-run-image", "client-run-image"), merged.map { it.runId })
+        assertEquals(1, merged.count { it.role == MessageRole.user })
+    }
+
+    @Test
+    fun mergesRunlessRemoteMediaEchoByContentBlockSourceRunId() {
+        val runId = "client-run-image-source-only"
+        val localUser = ChatMessage(
+            id = "local-user",
+            role = MessageRole.user,
+            content = "分析一下这张图",
+            contentBlocks = listOf(
+                RelayChatContentBlock(
+                    type = "image",
+                    fileId = "local-dinner",
+                    fileName = "dinner.png",
+                    mimeType = "image/png",
+                    downloadUrl = "file:///tmp/dinner.png",
+                    sourceRunId = runId
+                )
+            ),
+            runId = "local-user-$runId",
+            sortTimestamp = 50.0
+        )
+        val completedAssistant = ChatMessage(
+            id = "assistant-1",
+            role = MessageRole.assistant,
+            runId = runId,
+            content = "已经完成",
+            state = MessageState.completed,
+            sortTimestamp = 50.001
+        )
+
+        val merged = mergeRemoteUserMessageIntoCurrentMessages(
+            currentMessages = listOf(localUser, completedAssistant),
+            content = "分析一下这张图",
+            contentBlocks = listOf(RelayChatContentBlock(type = "text", text = "分析一下这张图", sourceRunId = runId)),
+            runId = "",
+            sortTimestamp = 51.0
+        )
+
+        assertEquals(listOf(MessageRole.user, MessageRole.assistant), merged.map { it.role })
+        assertEquals(1, merged.count { it.role == MessageRole.user })
+        assertEquals(listOf("local-dinner"), merged.first().contentBlocks.mapNotNull { it.fileId })
+    }
+
+    @Test
     fun appliesAssistantErrorToPendingAssistantMessage() {
         val localVoice = voiceMessage(runId = "local-user-client-run-1", sortTimestamp = 30.0)
         val pendingAssistant = assistantMessage(

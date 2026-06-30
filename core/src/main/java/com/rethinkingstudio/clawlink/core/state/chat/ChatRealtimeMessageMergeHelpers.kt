@@ -21,24 +21,25 @@ internal fun mergeRemoteUserMessageIntoCurrentMessages(
     if (trimmed.isBlank() && contentBlocks.isEmpty()) return currentMessages
 
     val messages = currentMessages.toMutableList()
+    val normalizedRunId = runId?.trim()?.takeIf { it.isNotEmpty() }
+    val incomingTurnIdentities = remoteUserTurnIdentities(normalizedRunId, contentBlocks)
+
     if (mergeRemoteVoiceTranscriptIntoLocalMessage(
             messages = messages,
             transcript = trimmed,
-            runId = runId,
+            incomingTurnIdentities = incomingTurnIdentities,
             eventSortTimestamp = sortTimestamp
         )
     ) {
         return orderMessagesWithSourceRunAnchors(messages)
     }
 
-    val normalizedRunId = runId?.trim()?.takeIf { it.isNotEmpty() }
-    val localUserRunId = normalizedRunId?.let { "local-user-$it" }
+    // 旧 Hermes echo 可能带 user-/local-user- 前缀；实时合并必须按稳定 turn identity 对齐本地气泡。
     val localTextIndex = messages.indexOfLast { message ->
         message.role == MessageRole.user &&
             message.runId.startsWith("local-user-") &&
             !message.hasVoiceContent &&
-            localUserRunId != null &&
-            message.runId == localUserRunId
+            localUserTurnIdentities(message).any { it in incomingTurnIdentities }
     }
     if (localTextIndex >= 0) {
         val existing = messages[localTextIndex]
@@ -52,8 +53,7 @@ internal fun mergeRemoteUserMessageIntoCurrentMessages(
     val last = messages.lastOrNull()
     if (last != null &&
         last.role == MessageRole.user &&
-        normalizedRunId != null &&
-        last.runId == normalizedRunId
+        localUserTurnIdentities(last).any { it in incomingTurnIdentities }
     ) {
         return currentMessages
     }
@@ -62,6 +62,7 @@ internal fun mergeRemoteUserMessageIntoCurrentMessages(
     val pendingAssistant = pendingAssistantForRemoteUserEcho(
         messages = messages,
         runId = normalizedRunId,
+        incomingTurnIdentities = incomingTurnIdentities,
         assistantMessageId = assistantMessageId
     )
     val insertedAt = if (pendingAssistant?.sortTimestamp != null) {
@@ -77,7 +78,7 @@ internal fun mergeRemoteUserMessageIntoCurrentMessages(
             content = trimmed,
             contentBlocks = contentBlocks,
             createdAt = Instant.ofEpochMilli((insertedAt * 1000).toLong()).toString(),
-            runId = normalizedRunId ?: "remote-user-${UUID.randomUUID().toString().take(8)}",
+            runId = normalizedRunId ?: firstSourceRunId(contentBlocks) ?: "remote-user-${UUID.randomUUID().toString().take(8)}",
             sortTimestamp = insertedAt
         )
     )
@@ -285,19 +286,20 @@ private fun hasRenderableFinalContentBlocks(blocks: List<RelayChatContentBlock>)
 private fun mergeRemoteVoiceTranscriptIntoLocalMessage(
     messages: MutableList<ChatMessage>,
     transcript: String,
-    runId: String?,
+    incomingTurnIdentities: Set<String>,
     eventSortTimestamp: Double?
 ): Boolean {
     if (transcript.isBlank()) return false
 
-    val normalizedRunId = runId?.trim()?.takeIf { it.isNotEmpty() }
-    val runMatchedIndex = normalizedRunId?.let { resolvedRunId ->
+    val runMatchedIndex = if (incomingTurnIdentities.isNotEmpty()) {
         messages.indexOfLast { message ->
             message.role == MessageRole.user &&
-                message.runId == "local-user-$resolvedRunId" &&
+                localUserTurnIdentities(message).any { it in incomingTurnIdentities } &&
                 message.hasVoiceContent
         }
-    } ?: -1
+    } else {
+        -1
+    }
 
     val index = runMatchedIndex
     if (index < 0) return false
@@ -316,13 +318,36 @@ private fun mergeRemoteVoiceTranscriptIntoLocalMessage(
 private fun pendingAssistantForRemoteUserEcho(
     messages: List<ChatMessage>,
     runId: String?,
+    incomingTurnIdentities: Set<String>,
     assistantMessageId: String?
 ): ChatMessage? {
     if (!assistantMessageId.isNullOrBlank()) {
         messages.firstOrNull { it.role == MessageRole.assistant && it.id == assistantMessageId }?.let { return it }
     }
-    if (!runId.isNullOrBlank()) {
-        messages.firstOrNull { it.role == MessageRole.assistant && it.runId == runId }?.let { return it }
+    val runIdentities = incomingTurnIdentities.ifEmpty {
+        normalizedTurnIdentity(runId)?.let(::setOf).orEmpty()
+    }
+    if (runIdentities.isNotEmpty()) {
+        messages.firstOrNull {
+            it.role == MessageRole.assistant &&
+                normalizedTurnIdentity(it.runId) in runIdentities
+        }?.let { return it }
     }
     return null
+}
+
+private fun remoteUserTurnIdentities(runId: String?, contentBlocks: List<RelayChatContentBlock>): Set<String> {
+    return (listOf(runId) + contentBlocks.mapNotNull { it.sourceRunId })
+        .mapNotNull { normalizedTurnIdentity(it) }
+        .toSet()
+}
+
+private fun localUserTurnIdentities(message: ChatMessage): Set<String> {
+    return (listOf(message.runId) + message.contentBlocks.mapNotNull { it.sourceRunId })
+        .mapNotNull { normalizedTurnIdentity(it) }
+        .toSet()
+}
+
+private fun firstSourceRunId(contentBlocks: List<RelayChatContentBlock>): String? {
+    return contentBlocks.firstNotNullOfOrNull { it.sourceRunId?.trim()?.takeIf(String::isNotEmpty) }
 }
