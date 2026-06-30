@@ -16,6 +16,7 @@ internal fun conversationDisplayMessages(
         .coalescedLocalUserLiveEchoes()
         .coalescedDuplicateTextHistoryMessages()
         .coalescedDuplicateFileTransferMessages()
+        .coalescedDuplicateTransientAssistantPlaceholders()
         .filter { message ->
             message.shouldDisplayInChat(showInvocationProcess = showInvocationProcess) ||
                 message.state == MessageState.streaming && message.role == MessageRole.assistant
@@ -310,6 +311,34 @@ private fun List<ChatMessage>.coalescedDuplicateFileTransferMessages(): List<Cha
     return if (didMerge) output else this
 }
 
+private fun List<ChatMessage>.coalescedDuplicateTransientAssistantPlaceholders(): List<ChatMessage> {
+    if (size < 2) return this
+
+    val placeholderIndexes = indices.filter { index -> this[index].isTransientDisplayWaitingPlaceholder() }
+    if (placeholderIndexes.size < 2) return this
+
+    val keepIndex = placeholderIndexes.reduce { preferredIndex, candidateIndex ->
+        val preferred = this[preferredIndex]
+        val candidate = this[candidateIndex]
+        if (candidate.prefersTransientAssistantPlaceholderOver(preferred)) candidateIndex else preferredIndex
+    }
+
+    // 展示层只允许一个纯 waiting 占位；真实文本、附件、工具输出不走这个分支，避免误删业务消息。
+    return filterIndexed { index, message ->
+        !message.isTransientDisplayWaitingPlaceholder() || index == keepIndex
+    }
+}
+
+private fun ChatMessage.prefersTransientAssistantPlaceholderOver(other: ChatMessage): Boolean {
+    val keyComparison = compareNormalizedText(timelineOrderKey, other.timelineOrderKey)
+    if (keyComparison != 0) return keyComparison > 0
+
+    val identityComparison = compareNormalizedText(timelineIdentityKey.ifBlank { id }, other.timelineIdentityKey.ifBlank { other.id })
+    if (identityComparison != 0) return identityComparison > 0
+
+    return false
+}
+
 private fun List<ChatMessage>.orderedForConversationDisplay(): List<ChatMessage> {
     if (size < 2) return this
     return mapIndexed { index, message -> IndexedDisplayMessage(index, message) }
@@ -546,6 +575,15 @@ private fun normalizedUserEchoRunId(value: String): String {
 
 private fun normalizedUserEchoContent(value: String): String {
     return value.trim().replace(Regex("\\s+"), " ")
+}
+
+private fun compareNormalizedText(left: String, right: String): Int {
+    val normalizedLeft = left.trim()
+    val normalizedRight = right.trim()
+    if (normalizedLeft.isEmpty() && normalizedRight.isEmpty()) return 0
+    if (normalizedLeft.isEmpty()) return -1
+    if (normalizedRight.isEmpty()) return 1
+    return normalizedLeft.compareTo(normalizedRight)
 }
 
 private const val duplicateTextHistoryWindowSeconds = 30.0

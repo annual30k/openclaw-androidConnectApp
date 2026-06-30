@@ -487,6 +487,66 @@ class ChatConversationPresentationTest {
     }
 
     @Test
+    fun displayMessagesShowsAtMostOneTransientAssistantTypingBubble() {
+        val firstUser = ChatMessage(
+            id = "local-user-first",
+            role = MessageRole.user,
+            state = MessageState.completed,
+            content = "第一条",
+            createdAt = "2026-06-30T00:48:00Z",
+            runId = "local-user-client-run-first",
+            timelineOrderKey = "local:client-run-first:010-user",
+            timelineIdentityKey = "local:client-run-first:message:user:010-user",
+            timelineItemKind = "message:user"
+        )
+        val firstTyping = ChatMessage(
+            id = "waiting-first",
+            role = MessageRole.assistant,
+            state = MessageState.streaming,
+            content = "[[clawlink:typing]]",
+            createdAt = "2026-06-30T00:48:00Z",
+            runId = "client-run-first",
+            timelineOrderKey = "local:client-run-first:020-waiting",
+            timelineIdentityKey = "local:client-run-first:waiting:020-waiting",
+            timelineItemKind = "waiting"
+        )
+        val secondUser = ChatMessage(
+            id = "local-user-second",
+            role = MessageRole.user,
+            state = MessageState.completed,
+            content = "第二条",
+            createdAt = "2026-06-30T00:48:03Z",
+            runId = "local-user-client-run-second",
+            timelineOrderKey = "local:client-run-second:010-user",
+            timelineIdentityKey = "local:client-run-second:message:user:010-user",
+            timelineItemKind = "message:user"
+        )
+        val secondTyping = ChatMessage(
+            id = "waiting-second",
+            role = MessageRole.assistant,
+            state = MessageState.streaming,
+            content = "[[clawlink:typing]]",
+            createdAt = "2026-06-30T00:48:03Z",
+            runId = "client-run-second",
+            timelineOrderKey = "local:client-run-second:020-waiting",
+            timelineIdentityKey = "local:client-run-second:waiting:020-waiting",
+            timelineItemKind = "waiting"
+        )
+
+        val displayMessages = conversationDisplayMessages(
+            messages = listOf(firstUser, firstTyping, secondUser, secondTyping),
+            showInvocationProcess = true
+        )
+
+        assertEquals(
+            listOf("waiting-second"),
+            displayMessages
+                .filter { it.role == MessageRole.assistant && it.state == MessageState.streaming }
+                .map { it.id }
+        )
+    }
+
+    @Test
     fun structureSignatureIgnoresStreamingTextProgress() {
         val streaming = ChatMessage(
             id = "assistant-streaming",
