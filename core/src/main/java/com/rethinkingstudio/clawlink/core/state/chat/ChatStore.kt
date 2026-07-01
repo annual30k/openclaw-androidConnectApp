@@ -16,6 +16,7 @@ import com.rethinkingstudio.clawlink.core.network.dto.RelayFileTransferItem
 import com.rethinkingstudio.clawlink.core.network.transport.RelayChatSendAttachmentPayload
 import com.rethinkingstudio.clawlink.core.network.transport.RelayWebSocketClient
 import com.rethinkingstudio.clawlink.core.network.transport.VoiceSendAudioPayload
+import com.rethinkingstudio.clawlink.core.network.transport.WsConnectionState
 import com.rethinkingstudio.clawlink.core.network.transport.WsEvent
 import com.rethinkingstudio.clawlink.core.state.chat.RemoteImageCache
 import com.rethinkingstudio.clawlink.core.state.chat.RemoteImageSizeCache
@@ -32,6 +33,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.booleanOrNull
@@ -51,7 +53,8 @@ class ChatStore(
     internal val wsClient: RelayWebSocketClient,
     internal val notificationPort: NotificationPort,
     internal val sessionSelectionStore: ChatSessionSelectionStore? = null,
-    private val chatHistoryPageFetcher: ChatHistoryPageFetcher? = null
+    private val chatHistoryPageFetcher: ChatHistoryPageFetcher? = null,
+    private val gatewayTypeFor: (String) -> GatewayType = { GatewayType.openclaw }
 ) {
     val relayBaseUrl: String get() = apiClient.baseUrl
     val accessToken: String get() = apiClient.accessToken
@@ -107,15 +110,44 @@ class ChatStore(
             .launchIn(scope)
     }
 
-    fun rehydrateTimelineState() {
-        val restored = TimelinePersistenceMiddleware.restoreSnapshot() ?: return
-        timelineState = restored
-        val ordered = orderedMessages(restored.messages)
-        val hasActiveVisibleRun = hasActiveVisibleTimelineRun(restored, ordered)
+    internal data class PreparedTimelineRehydration(
+        val timelineState: ChatTimelineState,
+        val orderedMessages: List<ChatMessage>,
+        val hasActiveVisibleRun: Boolean
+    )
+
+    suspend fun rehydrateTimelineState() {
+        // 启动页会在主线程进入这里；SharedPreferences + JSON 反序列化 + 排序必须放到后台，
+        // 否则大历史会话会把首屏聊天页卡在 Compose 主线程上。
+        val prepared = withContext(Dispatchers.IO) {
+            val restored = TimelinePersistenceMiddleware.restoreSnapshot() ?: return@withContext null
+            prepareTimelineRehydration(restored, _state.value.currentSessionKey)
+        } ?: return
+        applyPreparedTimelineRehydration(prepared)
+    }
+
+    internal fun prepareTimelineRehydration(
+        restored: ChatTimelineState,
+        sessionKey: String
+    ): PreparedTimelineRehydration {
+        val ordered = sortTimelineMessagesV3(
+            removeResolvedTransientAssistantPlaceholders(restored.messages),
+            sessionKey
+        )
+        val restoredTimelineState = restored.copy(messages = ordered)
+        return PreparedTimelineRehydration(
+            timelineState = restoredTimelineState,
+            orderedMessages = ordered,
+            hasActiveVisibleRun = hasActiveVisibleTimelineRun(restoredTimelineState, ordered)
+        )
+    }
+
+    internal fun applyPreparedTimelineRehydration(prepared: PreparedTimelineRehydration) {
+        timelineState = prepared.timelineState
         _state.value = _state.value.copy(
-            messages = ordered,
-            isStreaming = hasActiveVisibleRun,
-            isStoppingRun = if (hasActiveVisibleRun) _state.value.isStoppingRun else false
+            messages = prepared.orderedMessages,
+            isStreaming = prepared.hasActiveVisibleRun,
+            isStoppingRun = if (prepared.hasActiveVisibleRun) _state.value.isStoppingRun else false
         )
     }
 
@@ -184,11 +216,7 @@ class ChatStore(
                 .filterKeys { activeRunId -> activeRunId !in runIdsToClear }
                 .filterValues { turnId -> turnId !in turnIdsToClear }
         )
-        if (hasActiveVisibleTimelineRun(timelineState, ordered)) {
-            TimelinePersistenceMiddleware.persistSnapshot(timelineState.copy(messages = ordered))
-        } else {
-            TimelinePersistenceMiddleware.clearSnapshot()
-        }
+        persistOrClearTimelineSnapshot(timelineState, ordered)
     }
 
     internal fun scheduleChatFinalSync(runId: String, runScope: ChatRunScope?, attempt: Int = 0) {
@@ -197,9 +225,11 @@ class ChatStore(
         val gatewayId = runScope.gatewayId.trim()
         val sessionKey = normalizeSessionKey(runScope.sessionKey)
         if (gatewayId.isBlank() || sessionKey.isBlank()) return
+        val gatewayType = gatewayTypeFor(gatewayId)
+        val connectionState = wsClient.connectionState.value
 
         val job = scope.launch {
-            delay(chatFinalSyncDelayMs(attempt))
+            delay(chatFinalSyncDelayMs(attempt, gatewayType, connectionState))
             chatFinalSyncJobs.remove(assistantMessageId)
             if (!needsChatFinalSync(runId, runScope)) return@launch
 
@@ -241,11 +271,11 @@ class ChatStore(
     }
 
     private fun chatFinalSyncDelayMs(attempt: Int): Long {
-        return when {
-            attempt <= 0 -> chatFinalSyncInitialDelayMs
-            attempt < 6 -> chatFinalSyncFastRetryDelayMs
-            else -> chatFinalSyncSlowRetryDelayMs
-        }
+        return chatFinalSyncDelayMs(
+            attempt = attempt,
+            gatewayType = GatewayType.openclaw,
+            connectionState = WsConnectionState.connected
+        )
     }
 
     private fun cancelChatFinalSync(runScope: ChatRunScope?) {
@@ -421,6 +451,7 @@ class ChatStore(
             orderMessages = ::orderedMessages
         )
         _state.value = _state.value.copy(messages = messages)
+        syncTimelineMessagesSnapshot(messages)
     }
 
     fun updateComposerAttachmentUploadMessage(
@@ -446,6 +477,7 @@ class ChatStore(
             orderMessages = ::orderedMessages
         ) ?: return
         _state.value = _state.value.copy(messages = messages)
+        syncTimelineMessagesSnapshot(messages)
     }
 
     @Suppress("ReturnCount")
@@ -467,6 +499,7 @@ class ChatStore(
         )
         if (!result.completed) return false
         _state.value = _state.value.copy(messages = result.messages)
+        syncTimelineMessagesSnapshot(result.messages)
         return true
     }
 
@@ -478,8 +511,16 @@ class ChatStore(
             index == canonicalIndex || !sameFileMessage(message, fileMessage)
         }
         if (deduped.size != currentMessages.size) {
-            _state.value = _state.value.copy(messages = orderedMessages(deduped))
+            val ordered = orderedMessages(deduped)
+            _state.value = _state.value.copy(messages = ordered)
+            syncTimelineMessagesSnapshot(ordered)
         }
+    }
+
+    internal fun syncTimelineMessagesSnapshot(messages: List<ChatMessage>) {
+        val snapshotMessages = canonicalizeMessagesForTimelineSnapshot(messages)
+        timelineState = timelineState.copy(messages = snapshotMessages)
+        persistOrClearTimelineSnapshot(timelineState, snapshotMessages)
     }
 
     fun sendMessage(
@@ -695,15 +736,39 @@ class ChatStore(
         pruneLocallyStoppedRunIds()
     }
 
-    private companion object {
+    internal companion object {
         const val maxChatRunScopes = 256
         const val chatFinalSyncInitialDelayMs = 2_500L
         const val chatFinalSyncFastRetryDelayMs = 4_000L
         const val chatFinalSyncSlowRetryDelayMs = 8_000L
+        const val hermesRealtimeFinalSyncInitialDelayMs = 30_000L
+        const val hermesRealtimeFinalSyncRetryDelayMs = 30_000L
+        const val hermesRealtimeFinalSyncSlowRetryDelayMs = 60_000L
         const val chatFinalSyncMaxAttempts = 60
         const val chatHistoryPageSize = 500
         const val chatHistoryWindowMaxMessages = 500
         const val chatHistoryPendingResolveMaxPages = 5
         const val localUserEchoMergeWindowSeconds = 600.0
+    }
+}
+
+internal fun chatFinalSyncDelayMs(
+    attempt: Int,
+    gatewayType: GatewayType,
+    connectionState: WsConnectionState
+): Long {
+    // Hermes 在 Android 上的 history fallback 会触发 host 侧同步 sessions export。
+    // 当移动端 WebSocket 已连通时，过早补拉会反向堵住 Hermes 实时回包，因此这里只把它当成慢兜底。
+    if (gatewayType == GatewayType.hermes && connectionState == WsConnectionState.connected) {
+        return when {
+            attempt <= 0 -> ChatStore.hermesRealtimeFinalSyncInitialDelayMs
+            attempt < 6 -> ChatStore.hermesRealtimeFinalSyncRetryDelayMs
+            else -> ChatStore.hermesRealtimeFinalSyncSlowRetryDelayMs
+        }
+    }
+    return when {
+        attempt <= 0 -> ChatStore.chatFinalSyncInitialDelayMs
+        attempt < 6 -> ChatStore.chatFinalSyncFastRetryDelayMs
+        else -> ChatStore.chatFinalSyncSlowRetryDelayMs
     }
 }

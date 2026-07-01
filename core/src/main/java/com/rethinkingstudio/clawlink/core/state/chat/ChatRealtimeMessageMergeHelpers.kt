@@ -23,6 +23,17 @@ internal fun mergeRemoteUserMessageIntoCurrentMessages(
     val messages = currentMessages.toMutableList()
     val normalizedRunId = runId?.trim()?.takeIf { it.isNotEmpty() }
     val incomingTurnIdentities = remoteUserTurnIdentities(normalizedRunId, contentBlocks)
+    val candidateRunId = normalizedRunId ?: firstSourceRunId(contentBlocks) ?: "remote-user-${UUID.randomUUID().toString().take(8)}"
+    val incomingAttachmentCandidate = ChatMessage(
+        id = UUID.randomUUID().toString(),
+        role = MessageRole.user,
+        state = MessageState.completed,
+        content = trimmed,
+        contentBlocks = contentBlocks,
+        createdAt = Instant.EPOCH.toString(),
+        runId = candidateRunId,
+        sortTimestamp = sortTimestamp
+    )
 
     if (mergeRemoteVoiceTranscriptIntoLocalMessage(
             messages = messages,
@@ -31,6 +42,39 @@ internal fun mergeRemoteUserMessageIntoCurrentMessages(
             eventSortTimestamp = sortTimestamp
         )
     ) {
+        return orderMessagesWithSourceRunAnchors(messages)
+    }
+
+    val localAttachmentIndex = messages.indexOfLast { message ->
+        message.role == MessageRole.user &&
+            message.transferContentBlocks().isNotEmpty() &&
+            (samePendingUploadMessage(message, incomingAttachmentCandidate) ||
+                sameFileMessage(message, incomingAttachmentCandidate) ||
+                samePendingUploadMessageByUnambiguousSourceRunId(
+                    messages = messages,
+                    pending = message,
+                    completed = incomingAttachmentCandidate
+                ))
+    }
+    if (localAttachmentIndex >= 0) {
+        val existing = messages[localAttachmentIndex]
+        // 远端 user 文件回显一旦带上稳定附件身份，就应当直接确认本地上传占位，
+        // 不能等到稍后的上传完成回调再去收敛，否则中间会短暂出现两个 user 附件气泡。
+        val mergedBlocks = if (existing.transferContentBlocks().isNotEmpty() && incomingAttachmentCandidate.transferContentBlocks().isNotEmpty()) {
+            mergeCompletedFileMessage(existing = existing, completed = incomingAttachmentCandidate).contentBlocks
+        } else if (existing.contentBlocks.isEmpty()) {
+            incomingAttachmentCandidate.contentBlocks
+        } else {
+            existing.contentBlocks
+        }
+        messages[localAttachmentIndex] = existing.copy(
+            state = MessageState.completed,
+            content = existing.content.takeIf { it.trim().isNotEmpty() } ?: incomingAttachmentCandidate.content,
+            contentBlocks = mergedBlocks,
+            createdAt = existing.createdAt.ifBlank { incomingAttachmentCandidate.createdAt },
+            runId = existing.runId.takeIf { it.isNotBlank() } ?: incomingAttachmentCandidate.runId,
+            sortTimestamp = existing.sortTimestamp ?: incomingAttachmentCandidate.sortTimestamp
+        )
         return orderMessagesWithSourceRunAnchors(messages)
     }
 
@@ -55,7 +99,20 @@ internal fun mergeRemoteUserMessageIntoCurrentMessages(
         last.role == MessageRole.user &&
         localUserTurnIdentities(last).any { it in incomingTurnIdentities }
     ) {
-        return currentMessages
+        val incomingHasAttachment = incomingAttachmentCandidate.transferContentBlocks().isNotEmpty()
+        val lastRepresentsSameAttachment = incomingHasAttachment &&
+            (
+                samePendingUploadMessage(last, incomingAttachmentCandidate) ||
+                    sameFileMessage(last, incomingAttachmentCandidate) ||
+                    samePendingUploadMessageByUnambiguousSourceRunId(
+                        messages = messages,
+                        pending = last,
+                        completed = incomingAttachmentCandidate
+                    )
+                )
+        if (!incomingHasAttachment || lastRepresentsSameAttachment) {
+            return currentMessages
+        }
     }
 
     val candidateTimestamp = sortTimestamp ?: (System.currentTimeMillis() / 1000.0)
@@ -78,7 +135,7 @@ internal fun mergeRemoteUserMessageIntoCurrentMessages(
             content = trimmed,
             contentBlocks = contentBlocks,
             createdAt = Instant.ofEpochMilli((insertedAt * 1000).toLong()).toString(),
-            runId = normalizedRunId ?: firstSourceRunId(contentBlocks) ?: "remote-user-${UUID.randomUUID().toString().take(8)}",
+            runId = candidateRunId,
             sortTimestamp = insertedAt
         )
     )
@@ -135,7 +192,10 @@ internal fun shouldSyncAssistantFinalFromHistory(
     finalText: String,
     finalContentBlocks: List<RelayChatContentBlock>
 ): Boolean {
-    if (sanitizeChatMessageText(finalText).isNotBlank() || hasRenderableFinalContentBlocks(finalContentBlocks)) {
+    val normalizedFinalText = sanitizeChatMessageText(finalText).trim()
+    if ((normalizedFinalText.isNotBlank() && !isProtocolTypingMarkerText(normalizedFinalText)) ||
+        hasRenderableFinalContentBlocks(finalContentBlocks)
+    ) {
         return false
     }
     if (existing == null) return false

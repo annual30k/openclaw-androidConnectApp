@@ -87,7 +87,7 @@ internal fun anchoredMessagesForCompletedTurn(
     if (user.timelineOrderKey.trim().isNotEmpty() && !user.timelineOrderKey.trim().startsWith("local:")) {
         return messages
     }
-    val turnBase = anchoredTurnBase(user) ?: return messages
+    val turnBase = anchoredTurnBase(user, event.timelineOrderKey) ?: return messages
     val identity = user.timelineIdentityKey.trim().ifEmpty {
         "local:${user.runId.ifBlank { event.runId ?: event.turnId.orEmpty() }}:message:user:010-user"
     }
@@ -105,13 +105,57 @@ internal fun anchoredMessagesForCompletedTurn(
     return messages.toMutableList().also { it[index] = anchoredUser }
 }
 
-private fun anchoredTurnBase(user: ChatMessage): String? {
-    val order = user.timelineOrderKey.trim()
-    if (order.isNotEmpty() && !order.startsWith("local:")) {
-        val parts = order.split("|")
-        if (parts.size >= 2 && parts[1].isNotBlank()) return parts[1]
+internal fun anchoredMessagesForToolTurn(
+    messages: List<ChatMessage>,
+    event: TimelineEvent.ToolInvocationUpdated
+): List<ChatMessage> {
+    val identities = listOfNotNull(event.turnId, event.runId)
+        .mapNotNull { normalizedTurnIdentity(it) }
+        .toSet()
+    if (identities.isEmpty()) return messages
+    val index = messages.indexOfLast { message ->
+        message.role == MessageRole.user &&
+            listOfNotNull(
+                normalizedTurnIdentity(message.timelineMessageId),
+                normalizedTurnIdentity(message.runId)
+            ).any { it in identities }
     }
+    if (index < 0) return messages
+    val user = messages[index]
+    if (user.timelineOrderKey.trim().isNotEmpty() && !user.timelineOrderKey.trim().startsWith("local:")) {
+        return messages
+    }
+    val turnBase = anchoredTurnBase(user, event.timelineOrderKey) ?: return messages
+    val identity = user.timelineIdentityKey.trim().ifEmpty {
+        "local:${user.runId.ifBlank { event.runId ?: event.turnId.orEmpty() }}:message:user:010-user"
+    }
+    // tool 先于本地 user 到达 canonical 排序层时，先给 user 补同 turn 的 10 槽锚点；
+    // 否则刚发送阶段会显示为 tool/user/waiting，历史刷新后才恢复。
+    val anchoredUser = user.copy(
+        timelineOrderKey = listOf(
+            "v1",
+            turnBase,
+            "10",
+            "${paddedTimelineOrderValue(1, 16)}:part-text-1:${user.id}",
+            shortStableTimelineHash(identity)
+        ).joinToString("|"),
+        timelineIdentityKey = identity,
+        timelineItemKind = user.timelineItemKind.ifBlank { "message:user" }
+    )
+    return messages.toMutableList().also { it[index] = anchoredUser }
+}
+
+private fun anchoredTurnBase(user: ChatMessage, fallbackOrderKey: String? = null): String? {
+    canonicalTurnBaseFromOrderKey(user.timelineOrderKey)?.let { return it }
     return createdAtMillis(user.createdAt)?.let { paddedTimelineOrderValue(it) }
+        ?: canonicalTurnBaseFromOrderKey(fallbackOrderKey)
+}
+
+private fun canonicalTurnBaseFromOrderKey(orderKey: String?): String? {
+    val order = orderKey?.trim().orEmpty()
+    if (order.isEmpty() || order.startsWith("local:")) return null
+    val parts = order.split("|")
+    return parts.getOrNull(1)?.takeIf { it.isNotBlank() }
 }
 
 private fun createdAtMillis(value: String): Long? {

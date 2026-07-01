@@ -313,13 +313,24 @@ internal object ChatTimelineReducer {
         if (existingMessage == null && contentBlocks.isEmpty() && content.isBlank()) {
             return copy(toolsById = toolsById + (event.toolCallId to tool))
         }
-        val fallbackSortTimestamp = event.turnId?.let { turnId ->
+        val fallbackTurnId = event.turnId
+            ?: event.runId?.let { runId -> activeTurnByRunId[runId] }
+        val fallbackSortTimestamp = fallbackTurnId?.let { turnId ->
                 messages.lastOrNull { candidate ->
                     candidate.role == MessageRole.user &&
-                        (candidate.runId == "local-user-$turnId" || candidate.id == "user-$turnId")
+                        (
+                            candidate.runId == "local-user-$turnId" ||
+                                candidate.id == "user-$turnId" ||
+                                normalizedTurnIdentity(candidate.runId) == normalizedTurnIdentity(turnId)
+                            )
                 }?.sortTimestamp?.plus(timelineMessageOrderEpsilon)
             }
             ?: latestKnownSortTimestamp()?.plus(timelineMessageOrderEpsilon)
+        val resolvedSortTimestamp = existingMessage?.sortTimestamp
+            ?: timelineSortTimestamp(event.createdAt, fallbackSortTimestamp)
+                ?.let { parsed ->
+                    if (fallbackSortTimestamp != null) maxOf(parsed, fallbackSortTimestamp) else parsed
+                }
         val message = ChatMessage(
             id = messageId,
             role = MessageRole.tool,
@@ -328,8 +339,7 @@ internal object ChatTimelineReducer {
             contentBlocks = contentBlocks,
             createdAt = event.createdAt.orEmpty().ifBlank { existingMessage?.createdAt.orEmpty() },
             runId = event.runId.orEmpty().ifBlank { existingMessage?.runId.orEmpty() },
-            sortTimestamp = existingMessage?.sortTimestamp
-                ?: timelineSortTimestamp(event.createdAt, fallbackSortTimestamp),
+            sortTimestamp = resolvedSortTimestamp,
             seq = event.seq ?: existingMessage?.seq,
             turnSeq = event.turnSeq ?: existingMessage?.turnSeq,
             timelineOrderKey = event.timelineOrderKey.orEmpty().ifBlank { existingMessage?.timelineOrderKey.orEmpty() },
@@ -338,7 +348,7 @@ internal object ChatTimelineReducer {
             timelineResolvesWaiting = event.timelineResolvesWaiting ?: existingMessage?.timelineResolvesWaiting
         )
         return copy(
-            messages = orderMessagesWithSourceRunAnchors(upsertToolMessage(message)),
+            messages = orderMessagesWithSourceRunAnchors(anchoredMessagesForToolTurn(upsertToolMessage(message), event)),
             activeRunId = event.runId ?: activeRunId,
             activeRunsByTurnId = if (!event.turnId.isNullOrBlank() && !event.runId.isNullOrBlank()) {
                 activeRunsByTurnId + (event.turnId to event.runId)

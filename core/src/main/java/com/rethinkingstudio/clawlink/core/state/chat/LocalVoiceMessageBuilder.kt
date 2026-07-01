@@ -15,6 +15,7 @@ internal fun buildLocalVoiceUserMessage(
     clientRunId: String,
     sortTimestamp: Double
 ): ChatMessage {
+    val userMessageId = "user-$clientRunId"
     val localFileUrl = writeLocalVoicePlaybackCopy(audio)
     val contentBlock = RelayChatContentBlock(
         type = "voice",
@@ -22,18 +23,22 @@ internal fun buildLocalVoiceUserMessage(
         mimeType = audio.mimeType,
         sizeBytes = audio.sizeBytes.coerceAtMost(Int.MAX_VALUE.toLong()).toInt(),
         downloadUrl = localFileUrl,
+        sourceRunId = clientRunId,
         gatewayId = gatewayId,
         sessionKey = sessionKey
     )
     return ChatMessage(
-        id = "user-$clientRunId",
+        id = userMessageId,
         role = MessageRole.user,
         state = MessageState.completed,
         content = audio.fileName,
         contentBlocks = listOf(contentBlock),
         createdAt = "",
         runId = "local-user-$clientRunId",
-        sortTimestamp = sortTimestamp
+        sortTimestamp = sortTimestamp,
+        timelineOrderKey = localTimelineOrderKey(clientRunId, 10, userMessageId),
+        timelineIdentityKey = localTimelineIdentityKey("message:user", clientRunId),
+        timelineItemKind = "message:user"
     )
 }
 

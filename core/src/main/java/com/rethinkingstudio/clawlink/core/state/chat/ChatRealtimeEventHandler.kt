@@ -110,11 +110,7 @@ private fun ChatStore.applyTimelineEvents(events: List<TimelineEvent>) {
         isStoppingRun = if (hasActiveVisibleRun) _state.value.isStoppingRun else false
     )
     clearStreamingPointersIfResolved(ordered)
-    if (!hasActiveVisibleRun) {
-        TimelinePersistenceMiddleware.clearSnapshot()
-    } else {
-        TimelinePersistenceMiddleware.persistSnapshot(timelineState.copy(messages = ordered))
-    }
+    persistOrClearTimelineSnapshot(timelineState, ordered)
 }
 
 private fun ChatStore.handleAgentPayload(payload: JsonElement?) {
@@ -318,6 +314,36 @@ internal fun ChatStore.handleRealtimeFinal(envelope: JsonObject, payload: JsonEl
         }
     }
 
+    if (shouldAppendLegacyAssistantAttachmentSeparately(
+            existingAssistant = existingAssistantForFinal,
+            finalText = extractedContent,
+            finalContentBlocks = finalContentBlocks
+        )
+    ) {
+        completeExistingAssistantTextMessage(existingAssistantForFinal!!)
+        appendCompletedFinalMessage(
+            obj = obj,
+            runId = runId,
+            finalRole = finalRole,
+            content = contentBlockFallbackText,
+            contentBlocks = contentBlocks,
+            finalContentBlocks = finalContentBlocks,
+            sourceRunId = sourceRunId,
+            scope = scope
+        )
+        noteSessionActivity(scope, lastActivityAt = eventTimestampIso(obj))
+        if (scope.sessionKey.isNotBlank() && preview.isNotBlank()) {
+            notificationPort.showReplyNotification(
+                sessionKey = scope.sessionKey,
+                title = "PocketClaw reply",
+                body = preview
+            )
+        }
+        streamingMessageId = null
+        streamingContent.clear()
+        return
+    }
+
     // final 优先完成同 run 的 streaming message；只有没有可绑定占位时才追加新消息，保证 final/delta 幂等收敛。
     if (streamingMessageId != null && finalRole != MessageRole.user && shouldUseStreamingMessage(runId, scope)) {
         val messages = _state.value.messages.toMutableList()
@@ -360,6 +386,37 @@ internal fun ChatStore.handleRealtimeFinal(envelope: JsonObject, payload: JsonEl
 
     streamingMessageId = null
     streamingContent.clear()
+}
+
+private fun shouldAppendLegacyAssistantAttachmentSeparately(
+    existingAssistant: ChatMessage?,
+    finalText: String,
+    finalContentBlocks: List<RelayChatContentBlock>
+): Boolean {
+    if (existingAssistant == null) return false
+    val normalizedFinalText = sanitizeChatMessageText(finalText).trim()
+    if (normalizedFinalText.isNotBlank() && !isProtocolTypingMarkerText(normalizedFinalText)) return false
+    if (!finalContentBlocks.any { it.isFileBlock || it.isVoiceMessageBlock }) return false
+    val existingText = sanitizeChatMessageText(existingAssistant.content).trim()
+    if (existingText.isBlank()) return false
+    // legacy file final 缺少 canonical timeline 事件时，若 assistant 文本已经可见，就必须保留文本并追加独立附件行。
+    return !isTransientAssistantPlaceholder(existingAssistant)
+}
+
+private fun ChatStore.completeExistingAssistantTextMessage(existingAssistant: ChatMessage) {
+    val messages = _state.value.messages.toMutableList()
+    val index = messages.indexOfFirst { it.id == existingAssistant.id }
+    if (index < 0) return
+    messages[index] = existingAssistant.copy(
+        state = MessageState.completed,
+        contentBlocks = existingAssistant.contentBlocks.filterNot { block ->
+            block.isFileBlock || block.isVoiceMessageBlock
+        }
+    )
+    _state.value = _state.value.copy(
+        messages = orderMessagesForRealtime(messages),
+        isStreaming = false
+    )
 }
 
 private fun ChatStore.appendCompletedFinalMessage(
@@ -448,6 +505,7 @@ internal fun ChatStore.appendOrMergeRemoteUserMessage(
         assistantMessageId = assistantMessageId
     )
     _state.value = _state.value.copy(messages = orderMessagesForRealtime(messages))
+    syncTimelineMessagesSnapshot(_state.value.messages)
 }
 
 private fun remoteUserEchoRunId(

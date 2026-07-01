@@ -7,6 +7,7 @@ import com.rethinkingstudio.clawlink.core.models.chat.MessageRole
 import com.rethinkingstudio.clawlink.core.models.chat.MessageState
 import com.rethinkingstudio.clawlink.core.models.chat.RelayChatContentBlock
 import com.rethinkingstudio.clawlink.core.network.RelayAPIClient
+import com.rethinkingstudio.clawlink.core.network.dto.RelayFileTransferItem
 import com.rethinkingstudio.clawlink.core.network.transport.RelayWebSocketClient
 import com.rethinkingstudio.clawlink.core.network.transport.WsEvent
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -323,6 +324,64 @@ class ChatStoreSessionTest {
     }
 
     @Test
+    fun preparedTimelineRehydrationRestoresOrderedMessagesAndVisibleRunState() {
+        val wsClient = RelayWebSocketClient()
+        try {
+            val store = ChatStore(
+                apiClient = RelayAPIClient(),
+                wsClient = wsClient,
+                notificationPort = object : NotificationPort {
+                    override fun showReplyNotification(sessionKey: String, title: String, body: String) = Unit
+                    override fun cancelNotification(id: Int) = Unit
+                    override fun cancelAll() = Unit
+                }
+            )
+            val user = ChatMessage(
+                id = "user-1",
+                role = MessageRole.user,
+                state = MessageState.completed,
+                content = "发我截图",
+                runId = "local-user-turn-1",
+                sortTimestamp = 200.0,
+                timelineOrderKey = localTimelineOrderKey("turn-1", 10, "user-1"),
+                timelineIdentityKey = localTimelineIdentityKey("message:user", "turn-1"),
+                timelineItemKind = "message:user"
+            )
+            val waiting = buildLocalTextAssistantPlaceholderMessage(
+                id = "assistant-local",
+                clientRunId = "run-1",
+                sortTimestamp = 200.001
+            )
+            setChatState(
+                store,
+                store.state.value.copy(
+                    currentSessionKey = "main",
+                    isStoppingRun = true
+                )
+            )
+
+            val prepared = store.prepareTimelineRehydration(
+                restored = ChatTimelineState(
+                    messages = listOf(waiting, user),
+                    activeRunId = "run-1",
+                    activeRunsByTurnId = mapOf("turn-1" to "run-1"),
+                    activeTurnByRunId = mapOf("run-1" to "turn-1")
+                ),
+                sessionKey = "main"
+            )
+            store.applyPreparedTimelineRehydration(prepared)
+
+            assertEquals(listOf("user-1", "assistant-local"), store.state.value.messages.map { it.id })
+            assertTrue(store.state.value.isStreaming)
+            assertTrue(store.state.value.isStoppingRun)
+            assertEquals(listOf("user-1", "assistant-local"), currentTimelineState(store).messages.map { it.id })
+            assertEquals("run-1", currentTimelineState(store).activeRunId)
+        } finally {
+            wsClient.destroy()
+        }
+    }
+
+    @Test
     fun canonicalTimelineWithoutSessionKeyUsesTrackedCurrentRunScope() {
         val wsClient = RelayWebSocketClient()
         try {
@@ -467,6 +526,235 @@ class ChatStoreSessionTest {
             assertEquals(100.0, userMessages.single().sortTimestamp ?: 0.0, 0.0001)
             assertTrue(store.state.value.messages.none { it.id == attachment.id || it.runId == "upload-${attachment.id}" })
             assertEquals(1, store.state.value.messages.count { it.role == MessageRole.assistant && it.state == MessageState.streaming })
+        } finally {
+            wsClient.destroy()
+        }
+    }
+
+    @Test
+    fun attachmentOnlyUploadSyncsTimelineSnapshotWithoutAssistantRun() {
+        val wsClient = RelayWebSocketClient()
+        try {
+            val store = ChatStore(
+                apiClient = RelayAPIClient(),
+                wsClient = wsClient,
+                notificationPort = object : NotificationPort {
+                    override fun showReplyNotification(sessionKey: String, title: String, body: String) = Unit
+                    override fun cancelNotification(id: Int) = Unit
+                    override fun cancelAll() = Unit
+                }
+            )
+            val attachment = ComposerAttachmentDraft(
+                id = "attachment-only-1",
+                fileUri = "/tmp/android-hidden-attachment-only.txt",
+                fileName = "android-hidden-attachment-only.txt",
+                mimeType = "text/plain",
+                sizeBytes = 36
+            )
+
+            store.beginComposerAttachmentUploadMessages(
+                attachments = listOf(attachment),
+                gatewayId = "gateway-1",
+                sessionKey = "main",
+                senderDisplayName = "Mac",
+                sourceRunId = "client-run-attachment-only",
+                messageSortBaseTimestamp = 100.0
+            )
+
+            val placeholderTimeline = currentTimelineState(store)
+            assertEquals(1, placeholderTimeline.messages.size)
+            assertEquals("attachment", placeholderTimeline.messages.single().timelineItemKind)
+            assertFalse(hasActiveVisibleTimelineRun(placeholderTimeline, placeholderTimeline.messages))
+            assertTrue(shouldPersistTimelineSnapshot(placeholderTimeline, placeholderTimeline.messages))
+
+            store.completeComposerAttachmentUploadMessage(
+                attachment = attachment,
+                record = RelayFileTransferItem(
+                    fileId = "file-attachment-only-1",
+                    gatewayId = "gateway-1",
+                    sessionKey = "main",
+                    fileName = "android-hidden-attachment-only.txt",
+                    mimeType = "text/plain",
+                    sizeBytes = 36,
+                    sha256 = "sha",
+                    origin = "mobile",
+                    senderDisplayName = "Mac",
+                    createdAt = "2026-07-01T01:05:51.000Z",
+                    sortTimestampMs = 100000,
+                    updatedAt = "2026-07-01T01:05:52.000Z",
+                    expiresAt = "2026-07-07T17:05:51.000Z",
+                    status = "completed",
+                    storagePath = "/tmp/android-hidden-attachment-only.txt",
+                    downloadPath = "/api/mobile/files/file-attachment-only-1",
+                    chunkSize = 1,
+                    totalChunks = 1,
+                    sourceRunId = "client-run-attachment-only"
+                ),
+                gatewayId = "gateway-1",
+                sessionKey = "main",
+                sourceRunId = "client-run-attachment-only",
+                completionSortTimestamp = 100.0
+            )
+
+            val completedTimeline = currentTimelineState(store)
+            assertEquals(1, completedTimeline.messages.size)
+            assertEquals("android-hidden-attachment-only.txt", completedTimeline.messages.single().content)
+            assertTrue(completedTimeline.messages.single().timelineOrderKey.startsWith("local:client-run-attachment-only|30|"))
+            assertFalse(hasActiveVisibleTimelineRun(completedTimeline, completedTimeline.messages))
+            assertTrue(shouldPersistTimelineSnapshot(completedTimeline, completedTimeline.messages))
+        } finally {
+            wsClient.destroy()
+        }
+    }
+
+    @Test
+    fun relayLegacyAttachmentOnlyEchoSyncsRestorableTimelineSnapshot() {
+        val wsClient = RelayWebSocketClient()
+        try {
+            val store = ChatStore(
+                apiClient = RelayAPIClient(),
+                wsClient = wsClient,
+                notificationPort = object : NotificationPort {
+                    override fun showReplyNotification(sessionKey: String, title: String, body: String) = Unit
+                    override fun cancelNotification(id: Int) = Unit
+                    override fun cancelAll() = Unit
+                }
+            )
+
+            store.appendOrMergeRemoteUserMessage(
+                content = "android-hidden-attachment-only-fix.txt",
+                contentBlocks = listOf(
+                    RelayChatContentBlock(
+                        type = "file",
+                        attachmentId = "att-attachment-only-echo",
+                        fileId = "file-attachment-only-echo",
+                        fileName = "android-hidden-attachment-only-fix.txt",
+                        mimeType = "text/plain",
+                        downloadUrl = "/api/mobile/files/file-attachment-only-echo",
+                        sourceRunId = "client-run-attachment-only-echo"
+                    )
+                ),
+                runId = "client-run-attachment-only-echo",
+                sortTimestamp = 100.0
+            )
+
+            val timeline = currentTimelineState(store)
+            assertEquals(1, timeline.messages.size)
+            val message = timeline.messages.single()
+            assertTrue(message.timelineOrderKey.startsWith("local:client-run-attachment-only-echo|30|"))
+            assertEquals(
+                "local:attachment:att-attachment-only-echo",
+                message.timelineIdentityKey
+            )
+            assertEquals("attachment", message.timelineItemKind)
+            assertTrue(shouldPersistTimelineSnapshot(timeline, timeline.messages))
+        } finally {
+            wsClient.destroy()
+        }
+    }
+
+    @Test
+    fun userFileEventWithoutSourceRunIdKeepsLocalAttachmentTimelineIdentityForLaterSnapshotSync() {
+        val wsClient = RelayWebSocketClient()
+        try {
+            val store = ChatStore(
+                apiClient = RelayAPIClient(),
+                wsClient = wsClient,
+                notificationPort = object : NotificationPort {
+                    override fun showReplyNotification(sessionKey: String, title: String, body: String) = Unit
+                    override fun cancelNotification(id: Int) = Unit
+                    override fun cancelAll() = Unit
+                }
+            )
+            store.beginGatewaySwitch("gateway-1")
+            store.newSession("main")
+
+            val attachment = ComposerAttachmentDraft(
+                id = "attachment-only-no-source",
+                fileUri = "/tmp/android-hidden-attachment-no-source.txt",
+                fileName = "android-hidden-attachment-no-source.txt",
+                mimeType = "text/plain",
+                sizeBytes = 40
+            )
+
+            store.beginComposerAttachmentUploadMessages(
+                attachments = listOf(attachment),
+                gatewayId = "gateway-1",
+                sessionKey = "main",
+                senderDisplayName = "Mac",
+                sourceRunId = "client-run-attachment-no-source",
+                messageSortBaseTimestamp = 100.0
+            )
+            store.completeComposerAttachmentUploadMessage(
+                attachment = attachment,
+                record = RelayFileTransferItem(
+                    fileId = "file-attachment-no-source-1",
+                    gatewayId = "gateway-1",
+                    sessionKey = "main",
+                    fileName = "android-hidden-attachment-no-source.txt",
+                    mimeType = "text/plain",
+                    sizeBytes = 40,
+                    sha256 = "sha",
+                    origin = "mobile",
+                    senderDisplayName = "Mac",
+                    createdAt = "2026-07-01T01:47:28.300Z",
+                    sortTimestampMs = 100000,
+                    updatedAt = "2026-07-01T01:47:28.301Z",
+                    expiresAt = "2026-07-07T17:47:28.000Z",
+                    status = "completed",
+                    storagePath = "/tmp/android-hidden-attachment-no-source.txt",
+                    downloadPath = "/api/mobile/files/file-attachment-no-source-1",
+                    chunkSize = 1,
+                    totalChunks = 1,
+                    sourceRunId = "client-run-attachment-no-source"
+                ),
+                gatewayId = "gateway-1",
+                sessionKey = "main",
+                sourceRunId = "client-run-attachment-no-source",
+                completionSortTimestamp = 100.0
+            )
+
+            invokeHandleWsEvent(
+                store,
+                WsEvent(
+                    type = "event",
+                    event = "file",
+                    payload = json.parseToJsonElement(
+                        """
+                        {
+                          "state": "final",
+                          "role": "user",
+                          "gatewayId": "gateway-1",
+                          "sessionKey": "main",
+                          "runId": "file-file-attachment-no-source-1",
+                          "createdAt": "2026-07-01T01:47:28.658Z",
+                          "contentBlocks": [
+                            {
+                              "type": "file",
+                              "attachmentId": "attachment-only-no-source",
+                              "fileId": "file-attachment-no-source-1",
+                              "fileName": "android-hidden-attachment-no-source.txt",
+                              "mimeType": "text/plain",
+                              "downloadUrl": "/api/mobile/files/file-attachment-no-source-1"
+                            }
+                          ]
+                        }
+                        """.trimIndent()
+                    )
+                )
+            )
+
+            val realtimeMessage = store.state.value.messages.single()
+            assertTrue(realtimeMessage.timelineOrderKey.startsWith("local:client-run-attachment-no-source|30|"))
+            assertEquals(
+                "local:attachment:attachment-only-no-source",
+                realtimeMessage.timelineIdentityKey
+            )
+
+            store.syncTimelineMessagesSnapshot(store.state.value.messages)
+
+            val timeline = currentTimelineState(store)
+            assertTrue(shouldPersistTimelineSnapshot(timeline, timeline.messages))
         } finally {
             wsClient.destroy()
         }

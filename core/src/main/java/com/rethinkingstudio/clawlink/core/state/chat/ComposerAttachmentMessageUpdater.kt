@@ -57,7 +57,10 @@ internal object ComposerAttachmentMessageUpdater {
                 ),
                 createdAt = Instant.ofEpochMilli((sortTimestamp * 1000).toLong()).toString(),
                 runId = composerAttachmentUploadRunId(attachment),
-                sortTimestamp = sortTimestamp
+                sortTimestamp = sortTimestamp,
+                timelineOrderKey = attachmentTimelineOrderKey(attachment, sourceRunId),
+                timelineIdentityKey = attachmentTimelineIdentityKey(attachment),
+                timelineItemKind = "attachment"
             )
 
             val existingIndex = messages.indexOfFirst { it.id == attachment.id }
@@ -105,7 +108,15 @@ internal object ComposerAttachmentMessageUpdater {
             )
         )
         val completedDuplicateIndex = messages.indexOfFirst { message ->
-            message.id != existing.id && samePendingUploadMessage(uploadPlaceholder, message)
+            message.id != existing.id &&
+                (
+                    samePendingUploadMessage(uploadPlaceholder, message) ||
+                        samePendingUploadMessageByUnambiguousSourceRunId(
+                            messages = messages,
+                            pending = uploadPlaceholder,
+                            completed = message
+                        )
+                    )
         }
         if (completedDuplicateIndex >= 0) {
             // 上传完成事件可能先生成了最终文件消息；进度回调再到时合并到原占位，保留本地排序并去掉重复。
@@ -145,7 +156,10 @@ internal object ComposerAttachmentMessageUpdater {
             ),
             createdAt = existing.createdAt,
             runId = existing.runId.ifBlank { composerAttachmentUploadRunId(attachment) },
-            sortTimestamp = existing.sortTimestamp
+            sortTimestamp = existing.sortTimestamp,
+            timelineOrderKey = existing.timelineOrderKey.ifBlank { attachmentTimelineOrderKey(attachment, sourceRunId) },
+            timelineIdentityKey = existing.timelineIdentityKey.ifBlank { attachmentTimelineIdentityKey(attachment) },
+            timelineItemKind = existing.timelineItemKind.ifBlank { "attachment" }
         )
 
         return orderMessages(messages)
@@ -169,7 +183,11 @@ internal object ComposerAttachmentMessageUpdater {
         if (index < 0) return ComposerAttachmentCompletionResult(completed = false, messages = currentMessages)
 
         val existing = messages[index]
-        val finalBlock = makeFileContentBlock(record, sourceRunIdOverride = sourceRunId)
+        val finalBlock = makeFileContentBlock(
+            record,
+            sourceRunIdOverride = sourceRunId,
+            attachmentIdOverride = attachment.id
+        )
         cacheCompletedAttachmentPreview(attachment, finalBlock)
         val completedMessage = ChatMessage(
             id = existing.id,
@@ -179,7 +197,10 @@ internal object ComposerAttachmentMessageUpdater {
             contentBlocks = listOf(finalBlock),
             createdAt = Instant.ofEpochMilli((completionSortTimestamp * 1000).toLong()).toString(),
             runId = if (record.fileId.isNotBlank()) fileMessageRunId(record.fileId) else existing.runId,
-            sortTimestamp = existing.sortTimestamp ?: completionSortTimestamp
+            sortTimestamp = existing.sortTimestamp ?: completionSortTimestamp,
+            timelineOrderKey = existing.timelineOrderKey.ifBlank { attachmentTimelineOrderKey(attachment, sourceRunId) },
+            timelineIdentityKey = existing.timelineIdentityKey.ifBlank { attachmentTimelineIdentityKey(attachment) },
+            timelineItemKind = existing.timelineItemKind.ifBlank { "attachment" }
         )
         val finalMessage = mergeCompletedFileMessage(existing = existing, completed = completedMessage)
         messages[index] = finalMessage
@@ -193,6 +214,17 @@ internal object ComposerAttachmentMessageUpdater {
             completed = true,
             messages = orderMessages(dedupedMessages)
         )
+    }
+
+    // 附件上传占位和完成态必须共享同一条本地时间线身份；即使当前没有文本 turn，也不能在快照恢复时丢失。
+    private fun attachmentTimelineOrderKey(attachment: ComposerAttachmentDraft, sourceRunId: String?): String {
+        val turnIdentity = sourceRunId?.trim()?.takeIf { it.isNotEmpty() }
+            ?: composerAttachmentUploadRunId(attachment)
+        return localTimelineOrderKey(turnIdentity, 30, attachment.id)
+    }
+
+    private fun attachmentTimelineIdentityKey(attachment: ComposerAttachmentDraft): String {
+        return localTimelineIdentityKey("attachment", attachment.id)
     }
 
     private fun cacheCompletedAttachmentPreview(

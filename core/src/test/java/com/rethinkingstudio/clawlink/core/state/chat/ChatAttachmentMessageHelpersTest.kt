@@ -1,10 +1,160 @@
 package com.rethinkingstudio.clawlink.core.state.chat
 
+import com.rethinkingstudio.clawlink.core.models.chat.ChatMessage
+import com.rethinkingstudio.clawlink.core.models.chat.MessageRole
+import com.rethinkingstudio.clawlink.core.models.chat.ComposerAttachmentDraft
+import com.rethinkingstudio.clawlink.core.models.chat.MessageState
 import com.rethinkingstudio.clawlink.core.models.chat.RelayChatContentBlock
+import com.rethinkingstudio.clawlink.core.network.dto.RelayFileTransferItem
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
 class ChatAttachmentMessageHelpersTest {
+    @Test
+    fun composerAttachmentUploadContentBlockCarriesLocalAttachmentId() {
+        val attachment = ComposerAttachmentDraft(
+            id = "attachment-local-1",
+            fileUri = "file:///tmp/image.png",
+            fileName = "image.png",
+            mimeType = "image/png",
+            sizeBytes = 42,
+            imageWidth = 320,
+            imageHeight = 240
+        )
+
+        val block = makeComposerAttachmentUploadContentBlock(
+            attachment = attachment,
+            gatewayId = "gateway-1",
+            sessionKey = "main",
+            senderDisplayName = "Mac",
+            statusText = "上传中 10%",
+            downloadUrlString = attachment.fileUri,
+            sourceRunId = "client-run-1"
+        )
+
+        assertEquals("attachment-local-1", block.attachmentId)
+    }
+
+    @Test
+    fun uploadedAttachmentContentBlockAcceptsAttachmentIdOverride() {
+        val record = RelayFileTransferItem(
+            fileId = "file-1",
+            gatewayId = "gateway-1",
+            sessionKey = "main",
+            fileName = "image.png",
+            mimeType = "image/png",
+            sizeBytes = 42,
+            sha256 = "deadbeef",
+            origin = "mobile",
+            createdAt = "2026-07-01T00:00:00.000Z",
+            updatedAt = "2026-07-01T00:00:01.000Z",
+            expiresAt = "2026-07-02T00:00:00.000Z",
+            status = "completed",
+            storagePath = "/relay/files/file-1",
+            downloadPath = "/api/mobile/files/file-1",
+            chunkSize = 1024,
+            totalChunks = 1
+        )
+
+        val block = makeUploadedAttachmentContentBlock(
+            record = record,
+            localDownloadUrlString = "file:///tmp/image.png",
+            sourceRunIdOverride = "client-run-1",
+            attachmentIdOverride = "attachment-local-1"
+        )
+
+        assertEquals("attachment-local-1", block.attachmentId)
+    }
+
+    @Test
+    fun mergeCompletedFileMessageKeepsLocalPreviewWhenIncomingBlockOmitsAttachmentId() {
+        val existing = ChatMessage(
+            id = "local-user",
+            role = MessageRole.user,
+            state = MessageState.completed,
+            content = "image.png",
+            contentBlocks = listOf(
+                RelayChatContentBlock(
+                    type = "image",
+                    attachmentId = "attachment-local-1",
+                    fileId = "file-1",
+                    fileName = "image.png",
+                    mimeType = "image/png",
+                    downloadUrl = "file:///tmp/image.png"
+                )
+            ),
+            runId = "local-user-run-1",
+            sortTimestamp = 1.0
+        )
+        val completed = ChatMessage(
+            id = "server-user",
+            role = MessageRole.user,
+            state = MessageState.completed,
+            content = "image.png",
+            contentBlocks = listOf(
+                RelayChatContentBlock(
+                    type = "image",
+                    fileId = "file-1",
+                    fileName = "image.png",
+                    mimeType = "image/png",
+                    downloadUrl = "/api/mobile/files/file-1"
+                )
+            ),
+            runId = "server-user-run-1",
+            sortTimestamp = 2.0
+        )
+
+        val merged = mergeCompletedFileMessage(existing = existing, completed = completed)
+
+        assertEquals("file:///tmp/image.png", merged.fileContentBlocks.single().downloadUrl)
+        assertEquals("/api/mobile/files/file-1", merged.fileContentBlocks.single().downloadPath)
+    }
+
+    @Test
+    fun mergeCompletedFileMessageKeepsLocalPreviewWhenAttachmentIdsDifferButFileIdMatches() {
+        val existing = ChatMessage(
+            id = "local-user",
+            role = MessageRole.user,
+            state = MessageState.completed,
+            content = "image.png",
+            contentBlocks = listOf(
+                RelayChatContentBlock(
+                    type = "image",
+                    attachmentId = "attachment-local-1",
+                    fileId = "file-1",
+                    fileName = "image.png",
+                    mimeType = "image/png",
+                    downloadUrl = "file:///tmp/image.png"
+                )
+            ),
+            runId = "local-user-run-1",
+            sortTimestamp = 1.0
+        )
+        val completed = ChatMessage(
+            id = "server-user",
+            role = MessageRole.user,
+            state = MessageState.completed,
+            content = "image.png",
+            contentBlocks = listOf(
+                RelayChatContentBlock(
+                    type = "image",
+                    attachmentId = "server-attachment-9",
+                    fileId = "file-1",
+                    fileName = "image.png",
+                    mimeType = "image/png",
+                    downloadUrl = "/api/mobile/files/file-1"
+                )
+            ),
+            runId = "server-user-run-1",
+            sortTimestamp = 2.0
+        )
+
+        val merged = mergeCompletedFileMessage(existing = existing, completed = completed)
+
+        assertEquals("file:///tmp/image.png", merged.fileContentBlocks.single().downloadUrl)
+        assertEquals("/api/mobile/files/file-1", merged.fileContentBlocks.single().downloadPath)
+    }
+
     @Test
     fun stripsRelayMediaAttachmentReferencesFromChatMessageText() {
         val text = """

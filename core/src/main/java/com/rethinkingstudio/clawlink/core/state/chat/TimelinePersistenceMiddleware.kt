@@ -66,8 +66,13 @@ object TimelinePersistenceMiddleware {
 }
 
 private fun ChatTimelineState.canonicalSnapshotState(): ChatTimelineState {
-    val canonicalMessages = messages.filter { it.hasCanonicalTimelineKeysForSnapshot() }
-    if (canonicalMessages.size == messages.size) return this
+    val snapshotMessages = canonicalizeMessagesForTimelineSnapshot(messages)
+    val canonicalMessages = snapshotMessages
+        .filter { it.hasCanonicalTimelineKeysForSnapshot() }
+    if (canonicalMessages == messages) return this
+    if (canonicalMessages.size == messages.size) {
+        return copy(messages = canonicalMessages)
+    }
     return copy(
         messages = canonicalMessages,
         activeRunId = null,

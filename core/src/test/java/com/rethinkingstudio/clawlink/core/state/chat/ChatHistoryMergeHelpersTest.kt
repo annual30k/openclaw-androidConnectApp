@@ -30,6 +30,258 @@ import org.junit.Test
 
 class ChatHistoryMergeHelpersTest {
     @Test
+    fun samePendingUploadMessageDoesNotGuessByFileMetadataAlone() {
+        val pending = ChatMessage(
+            id = "attachment-1",
+            role = MessageRole.user,
+            state = MessageState.streaming,
+            content = "same-name.png",
+            contentBlocks = listOf(
+                RelayChatContentBlock(
+                    type = "image",
+                    fileName = "same-name.png",
+                    mimeType = "image/png",
+                    sizeBytes = 42,
+                    gatewayId = "gateway-1",
+                    sessionKey = "main"
+                )
+            ),
+            runId = "upload-attachment-1",
+            sortTimestamp = 10.0
+        )
+        val completed = ChatMessage(
+            id = "file-file-2",
+            role = MessageRole.user,
+            state = MessageState.completed,
+            content = "same-name.png",
+            contentBlocks = listOf(
+                RelayChatContentBlock(
+                    type = "image",
+                    fileId = "file-2",
+                    fileName = "same-name.png",
+                    mimeType = "image/png",
+                    sizeBytes = 42,
+                    downloadUrl = "/api/mobile/files/file-2",
+                    gatewayId = "gateway-1",
+                    sessionKey = "main"
+                )
+            ),
+            runId = "file-file-2",
+            sortTimestamp = 11.0
+        )
+
+        assertFalse(samePendingUploadMessage(pending, completed))
+    }
+
+    @Test
+    fun samePendingUploadMessageMatchesByAttachmentId() {
+        val pending = ChatMessage(
+            id = "attachment-1",
+            role = MessageRole.user,
+            state = MessageState.streaming,
+            content = "same-name.png",
+            contentBlocks = listOf(
+                RelayChatContentBlock(
+                    type = "image",
+                    attachmentId = "attachment-1",
+                    fileName = "same-name.png",
+                    mimeType = "image/png",
+                    sizeBytes = 42
+                )
+            ),
+            runId = "upload-attachment-1",
+            sortTimestamp = 10.0
+        )
+        val completed = ChatMessage(
+            id = "file-file-2",
+            role = MessageRole.user,
+            state = MessageState.completed,
+            content = "renamed-final.png",
+            contentBlocks = listOf(
+                RelayChatContentBlock(
+                    type = "image",
+                    attachmentId = "attachment-1",
+                    fileId = "file-2",
+                    fileName = "renamed-final.png",
+                    mimeType = "image/png",
+                    sizeBytes = 84,
+                    downloadUrl = "/api/mobile/files/file-2"
+                )
+            ),
+            runId = "file-file-2",
+            sortTimestamp = 11.0
+        )
+
+        assertTrue(samePendingUploadMessage(pending, completed))
+    }
+
+    @Test
+    fun samePendingUploadMessageDoesNotMergeAcrossRolesWhenAttachmentIdMatches() {
+        val pending = ChatMessage(
+            id = "attachment-1",
+            role = MessageRole.user,
+            state = MessageState.streaming,
+            content = "same-name.png",
+            contentBlocks = listOf(
+                RelayChatContentBlock(
+                    type = "image",
+                    attachmentId = "attachment-1",
+                    fileName = "same-name.png",
+                    mimeType = "image/png",
+                    sizeBytes = 42
+                )
+            ),
+            runId = "upload-attachment-1",
+            sortTimestamp = 10.0
+        )
+        val assistantCompleted = ChatMessage(
+            id = "file-file-2",
+            role = MessageRole.assistant,
+            state = MessageState.completed,
+            content = "same-name.png",
+            contentBlocks = listOf(
+                RelayChatContentBlock(
+                    type = "image",
+                    attachmentId = "attachment-1",
+                    fileId = "file-2",
+                    fileName = "same-name.png",
+                    mimeType = "image/png",
+                    sizeBytes = 84,
+                    downloadUrl = "/api/mobile/files/file-2"
+                )
+            ),
+            runId = "file-file-2",
+            sortTimestamp = 11.0
+        )
+
+        assertFalse(samePendingUploadMessage(pending, assistantCompleted))
+    }
+
+    @Test
+    fun sameFileMessageDoesNotMergeByFileMetadataWithoutStableIdentity() {
+        val localPlaceholder = ChatMessage(
+            id = "attachment-1",
+            role = MessageRole.user,
+            state = MessageState.streaming,
+            content = "duplicate-name.png",
+            contentBlocks = listOf(
+                RelayChatContentBlock(
+                    type = "image",
+                    fileName = "duplicate-name.png",
+                    mimeType = "image/png",
+                    sizeBytes = 42,
+                    gatewayId = "gateway-1",
+                    sessionKey = "main"
+                )
+            ),
+            runId = "upload-attachment-1",
+            sortTimestamp = 10.0
+        )
+        val completedOtherUpload = ChatMessage(
+            id = "file-file-2",
+            role = MessageRole.user,
+            state = MessageState.completed,
+            content = "duplicate-name.png",
+            contentBlocks = listOf(
+                RelayChatContentBlock(
+                    type = "image",
+                    fileId = "file-2",
+                    fileName = "duplicate-name.png",
+                    mimeType = "image/png",
+                    sizeBytes = 42,
+                    downloadUrl = "/api/mobile/files/file-2",
+                    gatewayId = "gateway-1",
+                    sessionKey = "main"
+                )
+            ),
+            runId = "file-file-2",
+            sortTimestamp = 11.0
+        )
+
+        assertFalse(sameFileMessage(localPlaceholder, completedOtherUpload))
+    }
+
+    @Test
+    fun sameFileMessageDoesNotMergeAcrossRolesWhenAttachmentIdMatches() {
+        val localPlaceholder = ChatMessage(
+            id = "attachment-1",
+            role = MessageRole.user,
+            state = MessageState.streaming,
+            content = "shared.png",
+            contentBlocks = listOf(
+                RelayChatContentBlock(
+                    type = "image",
+                    attachmentId = "att-shared",
+                    fileName = "shared.png",
+                    mimeType = "image/png"
+                )
+            ),
+            runId = "upload-att-shared",
+            sortTimestamp = 10.0
+        )
+        val assistantFile = ChatMessage(
+            id = "assistant-file",
+            role = MessageRole.assistant,
+            state = MessageState.completed,
+            content = "shared.png",
+            contentBlocks = listOf(
+                RelayChatContentBlock(
+                    type = "image",
+                    attachmentId = "att-shared",
+                    fileId = "file-shared",
+                    fileName = "shared.png",
+                    mimeType = "image/png",
+                    downloadUrl = "/api/mobile/files/file-shared"
+                )
+            ),
+            runId = "file-file-shared",
+            sortTimestamp = 11.0
+        )
+
+        assertFalse(sameFileMessage(localPlaceholder, assistantFile))
+    }
+
+    @Test
+    fun sameFileMessageMatchesByAttachmentIdEvenWhenFileNameChanges() {
+        val initial = ChatMessage(
+            id = "message-1",
+            role = MessageRole.assistant,
+            state = MessageState.completed,
+            content = "draft.png",
+            contentBlocks = listOf(
+                RelayChatContentBlock(
+                    type = "image",
+                    attachmentId = "att-1",
+                    fileName = "draft.png",
+                    mimeType = "image/png"
+                )
+            ),
+            runId = "attachment-run",
+            sortTimestamp = 10.0
+        )
+        val renamed = ChatMessage(
+            id = "message-2",
+            role = MessageRole.assistant,
+            state = MessageState.completed,
+            content = "final.png",
+            contentBlocks = listOf(
+                RelayChatContentBlock(
+                    type = "image",
+                    attachmentId = "att-1",
+                    fileId = "file-2",
+                    fileName = "final.png",
+                    mimeType = "image/png",
+                    downloadUrl = "/api/mobile/files/file-2"
+                )
+            ),
+            runId = "file-file-2",
+            sortTimestamp = 11.0
+        )
+
+        assertTrue(sameFileMessage(initial, renamed))
+    }
+
+    @Test
     fun chatHistoryWindowStateDefaultsToIdleEmptyWindow() {
         val state = ChatHistoryWindowState()
 

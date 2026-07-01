@@ -10,6 +10,67 @@ import org.junit.Ignore
 import org.junit.Test
 
 class TimelineReconcilerTest {
+    @Test
+    fun localPendingTurnsKeepEachUserAnchoredToItsOwnAssistantPlaceholder() {
+        val firstUser = ChatMessage(
+            id = "user-first-run",
+            role = MessageRole.user,
+            state = MessageState.completed,
+            content = "1111",
+            contentBlocks = listOf(RelayChatContentBlock(type = "text", text = "1111")),
+            runId = "local-user-first-run",
+            sortTimestamp = 100.0,
+            timelineOrderKey = "local:first-run|10|user-first-run",
+            timelineIdentityKey = "local:message:user:first-run",
+            timelineItemKind = "message:user"
+        )
+        val firstWaiting = ChatMessage(
+            id = "assistant-first-run",
+            role = MessageRole.assistant,
+            state = MessageState.streaming,
+            content = protocolTypingMarkerText,
+            contentBlocks = listOf(RelayChatContentBlock(type = "text", text = protocolTypingMarkerText)),
+            runId = "first-run",
+            sortTimestamp = 100.001,
+            timelineOrderKey = "local:first-run|20|assistant-first-run",
+            timelineIdentityKey = "local:waiting:first-run",
+            timelineItemKind = "waiting"
+        )
+        val secondUser = ChatMessage(
+            id = "user-second-run",
+            role = MessageRole.user,
+            state = MessageState.completed,
+            content = "2222",
+            contentBlocks = listOf(RelayChatContentBlock(type = "text", text = "2222")),
+            runId = "local-user-second-run",
+            sortTimestamp = 101.0,
+            timelineOrderKey = "local:second-run|10|user-second-run",
+            timelineIdentityKey = "local:message:user:second-run",
+            timelineItemKind = "message:user"
+        )
+        val secondWaiting = ChatMessage(
+            id = "assistant-second-run",
+            role = MessageRole.assistant,
+            state = MessageState.streaming,
+            content = protocolTypingMarkerText,
+            contentBlocks = listOf(RelayChatContentBlock(type = "text", text = protocolTypingMarkerText)),
+            runId = "second-run",
+            sortTimestamp = 101.001,
+            timelineOrderKey = "local:second-run|20|assistant-second-run",
+            timelineIdentityKey = "local:waiting:second-run",
+            timelineItemKind = "waiting"
+        )
+
+        val ordered = sortTimelineMessagesV3(
+            listOf(firstUser, firstWaiting, secondUser, secondWaiting)
+        )
+
+        assertEquals(
+            listOf("user-first-run", "assistant-first-run", "user-second-run", "assistant-second-run"),
+            ordered.map { it.id }
+        )
+    }
+
     @Ignore("Legacy fixture expectations without canonical order keys were removed.")
     @Test
     fun sharedFixturesProduceExpectedStableKeysAndPendingOverlay() {
@@ -1031,4 +1092,12 @@ class TimelineReconcilerTest {
         assertEquals("/api/mobile/files/att-local", result.messages.single().contentBlocks.single().downloadUrl)
     }
 
+}
+
+private fun debugTimelineDump(messages: List<ChatMessage>, sessionKey: String): List<Map<String, String>> {
+    return messages.map { message ->
+        mapOf(
+            "stableKey" to message.timelineStableKey
+        )
+    }
 }

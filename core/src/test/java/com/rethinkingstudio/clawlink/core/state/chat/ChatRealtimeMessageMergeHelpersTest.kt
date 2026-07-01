@@ -202,6 +202,160 @@ class ChatRealtimeMessageMergeHelpersTest {
     }
 
     @Test
+    fun mergesRemoteAttachmentEchoIntoMatchingUploadPlaceholder() {
+        val localPlaceholder = ChatMessage(
+            id = "attachment-1",
+            role = MessageRole.user,
+            state = MessageState.streaming,
+            content = "photo.png",
+            contentBlocks = listOf(
+                RelayChatContentBlock(
+                    type = "image",
+                    attachmentId = "attachment-1",
+                    fileName = "photo.png",
+                    mimeType = "image/png",
+                    downloadUrl = "file:///tmp/photo.png",
+                    sourceRunId = "client-run-attachment-1"
+                )
+            ),
+            runId = "upload-attachment-1",
+            sortTimestamp = 60.0
+        )
+
+        val merged = mergeRemoteUserMessageIntoCurrentMessages(
+            currentMessages = listOf(localPlaceholder),
+            content = "photo.png",
+            contentBlocks = listOf(
+                RelayChatContentBlock(
+                    type = "image",
+                    attachmentId = "attachment-1",
+                    fileId = "file-photo-1",
+                    fileName = "photo.png",
+                    mimeType = "image/png",
+                    downloadUrl = "/api/mobile/files/file-photo-1",
+                    sourceRunId = "client-run-attachment-1"
+                )
+            ),
+            runId = "client-run-attachment-1",
+            sortTimestamp = 61.0
+        )
+
+        assertEquals(1, merged.size)
+        val message = merged.single()
+        assertEquals("attachment-1", message.id)
+        assertEquals(MessageState.completed, message.state)
+        assertEquals("file-photo-1", message.fileContentBlocks.single().fileId)
+        assertEquals("file:///tmp/photo.png", message.fileContentBlocks.single().downloadUrl)
+    }
+
+    @Test
+    fun mergesRemoteAttachmentEchoWithoutAttachmentIdIntoSingleMatchingUploadPlaceholder() {
+        val localPlaceholder = ChatMessage(
+            id = "attachment-1",
+            role = MessageRole.user,
+            state = MessageState.streaming,
+            content = "photo.png",
+            contentBlocks = listOf(
+                RelayChatContentBlock(
+                    type = "image",
+                    attachmentId = "attachment-1",
+                    fileName = "photo.png",
+                    mimeType = "image/png",
+                    downloadUrl = "file:///tmp/photo.png",
+                    sourceRunId = "client-run-attachment-1"
+                )
+            ),
+            runId = "upload-attachment-1",
+            sortTimestamp = 60.0
+        )
+
+        val merged = mergeRemoteUserMessageIntoCurrentMessages(
+            currentMessages = listOf(localPlaceholder),
+            content = "photo.png",
+            contentBlocks = listOf(
+                RelayChatContentBlock(
+                    type = "image",
+                    fileId = "file-photo-1",
+                    fileName = "photo.png",
+                    mimeType = "image/png",
+                    downloadUrl = "/api/mobile/files/file-photo-1",
+                    sourceRunId = "client-run-attachment-1"
+                )
+            ),
+            runId = "client-run-attachment-1",
+            sortTimestamp = 61.0
+        )
+
+        assertEquals(1, merged.size)
+        val message = merged.single()
+        assertEquals("attachment-1", message.id)
+        assertEquals(MessageState.completed, message.state)
+        assertEquals("file-photo-1", message.fileContentBlocks.single().fileId)
+        assertEquals("file:///tmp/photo.png", message.fileContentBlocks.single().downloadUrl)
+    }
+
+    @Test
+    fun doesNotMergeRemoteAttachmentEchoWithoutAttachmentIdWhenMultipleUploadPlaceholdersShareSourceRunId() {
+        val localPlaceholderA = ChatMessage(
+            id = "attachment-1",
+            role = MessageRole.user,
+            state = MessageState.streaming,
+            content = "photo-a.png",
+            contentBlocks = listOf(
+                RelayChatContentBlock(
+                    type = "image",
+                    attachmentId = "attachment-1",
+                    fileName = "photo-a.png",
+                    mimeType = "image/png",
+                    downloadUrl = "file:///tmp/photo-a.png",
+                    sourceRunId = "client-run-shared"
+                )
+            ),
+            runId = "upload-attachment-1",
+            sortTimestamp = 60.0
+        )
+        val localPlaceholderB = ChatMessage(
+            id = "attachment-2",
+            role = MessageRole.user,
+            state = MessageState.streaming,
+            content = "photo-b.png",
+            contentBlocks = listOf(
+                RelayChatContentBlock(
+                    type = "image",
+                    attachmentId = "attachment-2",
+                    fileName = "photo-b.png",
+                    mimeType = "image/png",
+                    downloadUrl = "file:///tmp/photo-b.png",
+                    sourceRunId = "client-run-shared"
+                )
+            ),
+            runId = "upload-attachment-2",
+            sortTimestamp = 60.001
+        )
+
+        val merged = mergeRemoteUserMessageIntoCurrentMessages(
+            currentMessages = listOf(localPlaceholderA, localPlaceholderB),
+            content = "photo-a.png",
+            contentBlocks = listOf(
+                RelayChatContentBlock(
+                    type = "image",
+                    fileId = "file-photo-1",
+                    fileName = "photo-a.png",
+                    mimeType = "image/png",
+                    downloadUrl = "/api/mobile/files/file-photo-1",
+                    sourceRunId = "client-run-shared"
+                )
+            ),
+            runId = "client-run-shared",
+            sortTimestamp = 61.0
+        )
+
+        assertEquals(3, merged.size)
+        assertEquals(listOf("attachment-1", "attachment-2"), merged.take(2).map { it.id })
+        assertEquals(3, merged.count { it.role == MessageRole.user })
+    }
+
+    @Test
     fun appliesAssistantErrorToPendingAssistantMessage() {
         val localVoice = voiceMessage(runId = "local-user-client-run-1", sortTimestamp = 30.0)
         val pendingAssistant = assistantMessage(
@@ -292,6 +446,24 @@ class ChatRealtimeMessageMergeHelpersTest {
                 existing = pendingAssistant,
                 finalText = "",
                 finalContentBlocks = listOf(RelayChatContentBlock(type = "text", text = ""))
+            )
+        )
+    }
+
+    @Test
+    fun requestsHistorySyncWhenFinalOnlyContainsTypingMarkerText() {
+        val pendingAssistant = assistantMessage(
+            id = "assistant-1",
+            runId = "run-1",
+            content = "正在连接...",
+            sortTimestamp = 50.001
+        )
+
+        assertTrue(
+            shouldSyncAssistantFinalFromHistory(
+                existing = pendingAssistant,
+                finalText = protocolTypingMarkerText,
+                finalContentBlocks = emptyList()
             )
         )
     }

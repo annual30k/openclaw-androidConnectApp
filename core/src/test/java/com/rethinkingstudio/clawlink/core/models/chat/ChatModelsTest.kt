@@ -109,6 +109,10 @@ class ChatModelsTest {
         assertEquals("audio/mp4", voice.mimeType)
         assertEquals(4, voice.sizeBytes)
         assertTrue(voice.voiceDownloadURLString!!.startsWith("file://"))
+        assertEquals("run-1", voice.sourceRunId)
+        assertEquals("local:run-1|10|user-run-1", message.timelineOrderKey)
+        assertEquals("local:message:user:run-1", message.timelineIdentityKey)
+        assertEquals("message:user", message.timelineItemKind)
     }
 
     @Test

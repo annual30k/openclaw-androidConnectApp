@@ -46,15 +46,21 @@ internal fun buildLocalTextOutgoingRun(
         }
     }
     val userSortTimestamp = replacedUploadSortTimestamp ?: (System.currentTimeMillis() / 1000.0)
+    val normalizedContent = content.trim().takeIf { it.isNotEmpty() && it != " " } ?: ""
+    val userMessageId = "user-$clientRunId"
+    val outgoingAttachmentBlocks = contentBlocksWithOutgoingSourceRunId(attachmentBlocks, clientRunId)
     val userMessage = ChatMessage(
-        id = "user-$clientRunId",
+        id = userMessageId,
         role = MessageRole.user,
         state = MessageState.completed,
-        content = content.trim().takeIf { it.isNotEmpty() && it != " " } ?: "",
-        contentBlocks = contentBlocksWithOutgoingSourceRunId(attachmentBlocks, clientRunId),
+        content = normalizedContent,
+        contentBlocks = localOutgoingUserContentBlocks(normalizedContent, outgoingAttachmentBlocks),
         createdAt = "",
         runId = "local-user-$clientRunId",
-        sortTimestamp = userSortTimestamp
+        sortTimestamp = userSortTimestamp,
+        timelineOrderKey = localTimelineOrderKey(clientRunId, 10, userMessageId),
+        timelineIdentityKey = localTimelineIdentityKey("message:user", clientRunId),
+        timelineItemKind = "message:user"
     )
     val assistantMessageId = "assistant-$clientRunId"
     val assistantMessage = buildLocalTextAssistantPlaceholderMessage(
@@ -74,6 +80,20 @@ internal fun buildLocalTextOutgoingRun(
         ),
         messages = baseMessages + userMessage + assistantMessage
     )
+}
+
+private fun localOutgoingUserContentBlocks(
+    text: String,
+    attachmentBlocks: List<RelayChatContentBlock>
+): List<RelayChatContentBlock> {
+    if (attachmentBlocks.isEmpty()) return emptyList()
+    val normalizedText = sanitizeChatMessageText(text).trim()
+    if (normalizedText.isBlank()) return attachmentBlocks
+    val hasEquivalentTextBlock = attachmentBlocks.any { block ->
+        block.isTextBlock && sanitizeChatMessageText(block.text.orEmpty()).trim() == normalizedText
+    }
+    if (hasEquivalentTextBlock) return attachmentBlocks
+    return listOf(RelayChatContentBlock(type = "text", text = normalizedText)) + attachmentBlocks
 }
 
 internal fun buildLocalVoiceOutgoingRun(

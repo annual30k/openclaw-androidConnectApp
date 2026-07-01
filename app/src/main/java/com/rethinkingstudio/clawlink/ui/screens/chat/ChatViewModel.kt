@@ -456,7 +456,8 @@ internal class ChatViewModel(
         }
 
         isUploadingAttachment = true
-        val clientRunId = trimmed.takeIf { it.isNotBlank() }?.let { UUID.randomUUID().toString() }
+        // 只要存在附件，本地上传占位和最终文件消息都必须挂到稳定 runId 上，不能只在“有文本”时分配。
+        val clientRunId = UUID.randomUUID().toString()
         try {
             composerAttachmentUploadItems = attachments.map { attachment ->
                 ComposerAttachmentUploadItem(
@@ -508,7 +509,8 @@ internal class ChatViewModel(
                 uploadedAttachmentBlocks += makeUploadedAttachmentContentBlock(
                     record = record,
                     localDownloadUrlString = attachment.fileUri,
-                    sourceRunIdOverride = clientRunId
+                    sourceRunIdOverride = clientRunId,
+                    attachmentIdOverride = attachment.id
                 )
                 makeRelayCommandAttachment(attachment)?.let { commandAttachments += it }
                 chatStore.completeComposerAttachmentUploadMessage(

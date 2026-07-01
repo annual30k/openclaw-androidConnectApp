@@ -45,6 +45,28 @@ internal fun hasActiveVisibleTimelineRun(
     }
 }
 
+internal fun shouldPersistTimelineSnapshot(
+    timelineState: ChatTimelineState,
+    messages: List<ChatMessage>
+): Boolean {
+    val snapshotMessages = canonicalizeMessagesForTimelineSnapshot(messages)
+    if (hasActiveVisibleTimelineRun(timelineState, snapshotMessages)) return true
+    return snapshotMessages.any { it.hasRestorableLocalTimelineIdentity() }
+}
+
+internal fun persistOrClearTimelineSnapshot(
+    timelineState: ChatTimelineState,
+    messages: List<ChatMessage>
+) {
+    val snapshotMessages = canonicalizeMessagesForTimelineSnapshot(messages)
+    // 仅附件发送没有 assistant streaming run，但当前本地消息仍需跨进程恢复，不能因为“无活跃运行”就清空快照。
+    if (shouldPersistTimelineSnapshot(timelineState, snapshotMessages)) {
+        TimelinePersistenceMiddleware.persistSnapshot(timelineState.copy(messages = snapshotMessages))
+    } else {
+        TimelinePersistenceMiddleware.clearSnapshot()
+    }
+}
+
 internal fun buildLocalTextAssistantPlaceholderMessage(
     id: String,
     clientRunId: String,
@@ -71,4 +93,39 @@ internal fun localTimelineOrderKey(turnIdentity: String, slot: Int, itemId: Stri
 
 internal fun localTimelineIdentityKey(kind: String, identity: String): String {
     return "local:$kind:${identity.trim()}"
+}
+
+internal fun canonicalizeMessagesForTimelineSnapshot(messages: List<ChatMessage>): List<ChatMessage> {
+    var changed = false
+    val canonical = messages.map { message ->
+        val derived = message.withDerivedAttachmentTimelineIdentityForSnapshot()
+        if (derived != message) changed = true
+        derived
+    }
+    return if (changed) canonical else messages
+}
+
+private fun ChatMessage.hasRestorableLocalTimelineIdentity(): Boolean {
+    return timelineOrderKey.startsWith("local:") &&
+        timelineIdentityKey.startsWith("local:") &&
+        timelineItemKind.trim().isNotEmpty()
+}
+
+private fun ChatMessage.withDerivedAttachmentTimelineIdentityForSnapshot(): ChatMessage {
+    if (hasRestorableLocalTimelineIdentity()) return this
+    if (role != MessageRole.user) return this
+    if (contentBlocks.isEmpty() || !contentBlocks.all { it.isFileBlock || it.isVoiceMessageBlock }) return this
+
+    val sourceRunId = transferContentBlocks()
+        .firstNotNullOfOrNull { block -> block.sourceRunId?.trim()?.takeIf { it.isNotEmpty() } }
+        ?: return this
+    val attachmentIdentity = attachmentIdentityForOrder(transferContentBlocks()) ?: return this
+
+    // relay legacy 的纯附件/纯语音用户回显在历史追平前可能还没有 canonical timeline key。
+    // 这里用 sourceRunId + attachment identity 派生稳定本地键，保证进程重启前的恢复不依赖后续历史刷新。
+    return copy(
+        timelineOrderKey = timelineOrderKey.ifBlank { localTimelineOrderKey(sourceRunId, 30, id) },
+        timelineIdentityKey = timelineIdentityKey.ifBlank { localTimelineIdentityKey("attachment", attachmentIdentity) },
+        timelineItemKind = timelineItemKind.ifBlank { "attachment" }
+    )
 }

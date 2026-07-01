@@ -199,6 +199,66 @@ class ChatTimelineReducerTest {
     }
 
     @Test
+    fun turnUserCreatedReplacesLocalImageUserMessageWithAttachmentIdAndKeepsPreview() {
+        val localImageBlock = RelayChatContentBlock(
+            type = "file",
+            text = "album-D1.jpeg",
+            attachmentId = "attachment-local-1",
+            fileId = "file-photo-1",
+            fileName = "album-D1.jpeg",
+            mimeType = "image/jpeg",
+            sizeBytes = 12_345,
+            imageWidth = 1200,
+            imageHeight = 900,
+            downloadUrl = "file:///tmp/album-D1.jpeg"
+        )
+        val localUser = ChatMessage(
+            id = "local-user-message",
+            role = MessageRole.user,
+            state = MessageState.completed,
+            content = "帮我分析一下这个图片",
+            contentBlocks = listOf(localImageBlock),
+            runId = "local-user-client-run-1",
+            sortTimestamp = 200.0
+        )
+
+        val state = ChatTimelineReducer.reduce(
+            ChatTimelineState(messages = listOf(localUser)),
+            event(
+                """
+                {
+                  "protocolVersion": 2,
+                  "eventId": "user-server",
+                  "eventType": "turn.user.created",
+                  "turnId": "client-run-1",
+                  "runId": "client-run-1",
+                  "messageId": "server-user-message",
+                  "createdAt": "1970-01-01T00:03:20.500Z",
+                  "content": [
+                    { "type": "text", "text": "帮我分析一下这个图片" },
+                    {
+                      "type": "file",
+                      "text": "album-D1.jpeg",
+                      "fileId": "file-photo-1",
+                      "fileName": "album-D1.jpeg",
+                      "mimeType": "image/jpeg",
+                      "sizeBytes": 12345,
+                      "imageWidth": 1200,
+                      "imageHeight": 900,
+                      "downloadUrl": "/api/mobile/files/file-photo-1"
+                    }
+                  ]
+                }
+                """.trimIndent()
+            )
+        )
+
+        assertEquals(listOf("local-user-message"), state.messages.map { it.id })
+        assertEquals("server-user-message", state.messages.single().timelineMessageId)
+        assertEquals("file:///tmp/album-D1.jpeg", state.messages.single().fileContentBlocks.first().downloadUrl)
+    }
+
+    @Test
     fun turnUserCreatedReplacesLocalUserMessageWhenRunIdMatchesClientRun() {
         val localUser = ChatMessage(
             id = "user-client-run-1",

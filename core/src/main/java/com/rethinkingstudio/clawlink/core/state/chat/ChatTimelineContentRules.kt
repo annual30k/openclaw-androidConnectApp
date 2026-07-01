@@ -18,7 +18,9 @@ internal fun TimelineEvent.MessageCompleted.clearsWaitingAssistant(): Boolean {
     val completedRole = role.toMessageRole(default = MessageRole.assistant)
     val kind = timelineItemKind?.trim()?.lowercase().orEmpty()
     if (kind == "message:assistant") return true
-    return completedRole == MessageRole.assistant && !content.hasToolTimelineContent()
+    // 缺少显式 flag 的旧事件里，只有“纯 assistant answer 文本”才默认替换 waiting placeholder；
+    // attachment / voice / tool 结果都必须保持 non-resolving，避免晚到的附件把底部 waiting 行吞掉。
+    return completedRole == MessageRole.assistant && !content.hasNonAnswerResultContent()
 }
 
 internal fun ChatMessage.hasAssistantAnswerTimelineContent(): Boolean {

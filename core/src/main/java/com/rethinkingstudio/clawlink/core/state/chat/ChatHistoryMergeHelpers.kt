@@ -294,6 +294,9 @@ internal fun isTransientAssistantPlaceholderContent(content: String): Boolean {
 }
 
 internal fun sameFileMessage(existing: ChatMessage, candidate: ChatMessage): Boolean {
+    // 文件 identity 只能在同 role 消息内去重；跨 role 共享同一 attachment/file 引用时也必须保留为独立气泡。
+    if (existing.role != candidate.role) return false
+
     val existingCanonicalRunId = canonicalFileRunId(existing)
     val candidateCanonicalRunId = canonicalFileRunId(candidate)
     if (!existingCanonicalRunId.isNullOrBlank() && existingCanonicalRunId == candidateCanonicalRunId) {
@@ -330,73 +333,16 @@ internal fun sameFileMessage(existing: ChatMessage, candidate: ChatMessage): Boo
 private fun transferBlocksReferToSameFile(left: RelayChatContentBlock, right: RelayChatContentBlock): Boolean {
     val leftAttachmentId = left.attachmentId?.trim()?.takeIf { it.isNotEmpty() }
     val rightAttachmentId = right.attachmentId?.trim()?.takeIf { it.isNotEmpty() }
-    if (leftAttachmentId != null && rightAttachmentId != null) {
-        return leftAttachmentId == rightAttachmentId
+    if (leftAttachmentId != null || rightAttachmentId != null) {
+        return leftAttachmentId != null && leftAttachmentId == rightAttachmentId
     }
 
     val leftFileId = left.fileId?.trim()?.takeIf { it.isNotEmpty() }
     val rightFileId = right.fileId?.trim()?.takeIf { it.isNotEmpty() }
-    if (leftFileId != null && rightFileId != null) {
-        return leftFileId == rightFileId
+    if (leftFileId != null || rightFileId != null) {
+        return leftFileId != null && leftFileId == rightFileId
     }
-
-    val leftName = normalizedTransferFileName(left)
-    val rightName = normalizedTransferFileName(right)
-    val leftStem = stableTransferFileStem(left)
-    val rightStem = stableTransferFileStem(right)
-    val namesMatch = leftName.isNotBlank() && leftName == rightName
-    val stemsMatch = leftStem.isNotBlank() && leftStem == rightStem
-    if (!namesMatch && !stemsMatch) return false
-
-    val leftMime = left.mimeType?.trim()?.lowercase().orEmpty()
-    val rightMime = right.mimeType?.trim()?.lowercase().orEmpty()
-    if (!mimeTypesCompatible(leftMime, rightMime)) return false
-
-    val leftSize = left.sizeBytes?.takeIf { it > 0 }
-    val rightSize = right.sizeBytes?.takeIf { it > 0 }
-    if (leftSize != null && rightSize != null && leftSize != rightSize) return false
-
-    val leftGatewayId = left.gatewayId?.trim().orEmpty()
-    val rightGatewayId = right.gatewayId?.trim().orEmpty()
-    if (leftGatewayId.isNotBlank() && rightGatewayId.isNotBlank() && leftGatewayId != rightGatewayId) return false
-
-    val leftSessionKey = left.sessionKey?.trim().orEmpty()
-    val rightSessionKey = right.sessionKey?.trim().orEmpty()
-    if (leftSessionKey.isNotBlank() && rightSessionKey.isNotBlank() && leftSessionKey != rightSessionKey) return false
-
-    val leftWidth = left.imageWidth?.takeIf { it > 0 }
-    val rightWidth = right.imageWidth?.takeIf { it > 0 }
-    if (leftWidth != null && rightWidth != null && leftWidth != rightWidth) return false
-
-    val leftHeight = left.imageHeight?.takeIf { it > 0 }
-    val rightHeight = right.imageHeight?.takeIf { it > 0 }
-    if (leftHeight != null && rightHeight != null && leftHeight != rightHeight) return false
-
-    return true
-}
-
-private fun mimeTypesCompatible(left: String, right: String): Boolean {
-    if (left.isBlank() || right.isBlank()) return true
-    if (left == right) return true
-    if (left == "application/octet-stream" || right == "application/octet-stream") return true
-    if (left.startsWith("image/") && right.startsWith("image/")) return true
-    if (left.startsWith("audio/") && right.startsWith("audio/")) return true
     return false
-}
-
-private fun normalizedTransferFileName(block: RelayChatContentBlock): String {
-    return (block.fileDisplayName ?: block.fileDownloadURLString)
-        .orEmpty()
-        .substringAfterLast('/')
-        .substringAfterLast('\\')
-        .trim()
-        .lowercase()
-}
-
-private fun stableTransferFileStem(block: RelayChatContentBlock): String {
-    val name = normalizedTransferFileName(block)
-    val stem = name.substringBeforeLast('.', name)
-    return stem.substringBefore("---")
 }
 
 private fun canonicalFileRunId(message: ChatMessage): String? {
@@ -412,6 +358,8 @@ internal fun ChatMessage.transferContentBlocks(): List<RelayChatContentBlock> {
 }
 
 internal fun samePendingUploadMessage(pending: ChatMessage, completed: ChatMessage): Boolean {
+    if (pending.role != completed.role) return false
+
     val isLocalUploadPlaceholder = pending.runId.startsWith("upload-") || pending.state == MessageState.streaming
     if (!isLocalUploadPlaceholder) return false
 
@@ -419,31 +367,51 @@ internal fun samePendingUploadMessage(pending: ChatMessage, completed: ChatMessa
     if (!pendingBlock.fileId.isNullOrBlank()) return false
 
     val completedBlock = completed.transferContentBlocks().firstOrNull { !it.fileId.isNullOrBlank() } ?: return false
-    val pendingName = pendingBlock.fileDisplayName?.trim().orEmpty()
-    val completedName = completedBlock.fileDisplayName?.trim().orEmpty()
-    if (pendingName.isBlank() || !pendingName.equals(completedName, ignoreCase = true)) return false
-
-    val pendingMime = pendingBlock.mimeType?.trim().orEmpty()
-    val completedMime = completedBlock.mimeType?.trim().orEmpty()
-    if (!mimeTypesCompatible(pendingMime.lowercase(), completedMime.lowercase())) {
-        return false
+    // 只允许显式稳定身份把上传占位和完成文件合并；同名/同大小文件在同一会话里也必须保留为独立传输。
+    val pendingAttachmentId = pendingBlock.attachmentId?.trim()?.takeIf { it.isNotEmpty() }
+    val completedAttachmentId = completedBlock.attachmentId?.trim()?.takeIf { it.isNotEmpty() }
+    if (pendingAttachmentId != null || completedAttachmentId != null) {
+        return pendingAttachmentId != null && pendingAttachmentId == completedAttachmentId
     }
 
-    val pendingSize = pendingBlock.sizeBytes?.takeIf { it > 0 }
-    val completedSize = completedBlock.sizeBytes?.takeIf { it > 0 }
-    if (pendingSize != null && completedSize != null && pendingSize != completedSize) {
-        return false
+    val pendingFileId = pendingBlock.fileId?.trim()?.takeIf { it.isNotEmpty() }
+    val completedFileId = completedBlock.fileId?.trim()?.takeIf { it.isNotEmpty() }
+    if (pendingFileId != null || completedFileId != null) {
+        return pendingFileId != null && pendingFileId == completedFileId
     }
 
-    val pendingGatewayId = pendingBlock.gatewayId?.trim().orEmpty()
-    val completedGatewayId = completedBlock.gatewayId?.trim().orEmpty()
-    if (pendingGatewayId.isNotBlank() && completedGatewayId.isNotBlank() && pendingGatewayId != completedGatewayId) {
-        return false
-    }
+    return false
+}
 
-    val pendingSessionKey = pendingBlock.sessionKey?.trim().orEmpty()
-    val completedSessionKey = completedBlock.sessionKey?.trim().orEmpty()
-    return pendingSessionKey.isBlank() || completedSessionKey.isBlank() || pendingSessionKey == completedSessionKey
+internal fun samePendingUploadMessageByUnambiguousSourceRunId(
+    messages: List<ChatMessage>,
+    pending: ChatMessage,
+    completed: ChatMessage
+): Boolean {
+    if (pending.role != MessageRole.user || completed.role != MessageRole.user) return false
+
+    val isLocalUploadPlaceholder = pending.runId.startsWith("upload-") || pending.state == MessageState.streaming
+    if (!isLocalUploadPlaceholder) return false
+
+    val pendingBlock = pending.transferContentBlocks().singleOrNull() ?: return false
+    if (!pendingBlock.fileId.isNullOrBlank()) return false
+    val completedBlock = completed.transferContentBlocks().firstOrNull { !it.fileId.isNullOrBlank() } ?: return false
+
+    val pendingSourceRunId = normalizedTurnIdentity(pendingBlock.sourceRunId) ?: return false
+    val completedSourceRunId = normalizedTurnIdentity(completedBlock.sourceRunId) ?: return false
+    if (pendingSourceRunId != completedSourceRunId) return false
+
+    val sameSourcePendingCount = messages.count { message ->
+        message.role == MessageRole.user &&
+            (message.runId.startsWith("upload-") || message.state == MessageState.streaming) &&
+            message.transferContentBlocks().any { block ->
+                block.fileId.isNullOrBlank() &&
+                    normalizedTurnIdentity(block.sourceRunId) == pendingSourceRunId
+            }
+    }
+    // sourceRunId 只能在“当前就这一条本地 user 上传占位”时作为兜底稳定身份；
+    // 同一轮多附件会共享 sourceRunId，assistant/tool 侧文件输出也会复用它，不能在这里跨角色猜测归属。
+    return sameSourcePendingCount == 1
 }
 
 internal fun fileMessageRunId(fileId: String): String {

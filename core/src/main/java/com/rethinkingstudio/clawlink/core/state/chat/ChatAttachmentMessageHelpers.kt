@@ -11,7 +11,16 @@ import java.io.File
 internal fun mergeCompletedFileMessage(existing: ChatMessage, completed: ChatMessage): ChatMessage {
     val existingLocalBlocks = existing.transferContentBlocks()
     if (existingLocalBlocks.isEmpty() || completed.contentBlocks.isEmpty()) {
-        return completed
+        return completed.copy(
+            timelineStableKey = completed.timelineStableKey.ifBlank { existing.timelineStableKey },
+            timelineMessageId = completed.timelineMessageId.ifBlank { existing.timelineMessageId },
+            timelinePartId = completed.timelinePartId.ifBlank { existing.timelinePartId },
+            timelineOrderKey = completed.timelineOrderKey.ifBlank { existing.timelineOrderKey },
+            timelineIdentityKey = completed.timelineIdentityKey.ifBlank { existing.timelineIdentityKey },
+            timelineItemKind = completed.timelineItemKind.ifBlank { existing.timelineItemKind },
+            timelineResolvesWaiting = completed.timelineResolvesWaiting ?: existing.timelineResolvesWaiting,
+            source = completed.source.ifBlank { existing.source }
+        )
     }
 
     val mergedBlocks = completed.contentBlocks.map { completedBlock ->
@@ -33,7 +42,19 @@ internal fun mergeCompletedFileMessage(existing: ChatMessage, completed: ChatMes
         }
     }
 
-    return completed.copy(contentBlocks = mergedBlocks)
+    // 完成态副本经常比本地占位先到或后到；只要它没有给出更稳定的 timeline 身份字段，就必须继承本地键，
+    // 否则一次普通的上传进度/文件回显合并就会把可恢复的 local timeline key 覆盖成空值。
+    return completed.copy(
+        contentBlocks = mergedBlocks,
+        timelineStableKey = completed.timelineStableKey.ifBlank { existing.timelineStableKey },
+        timelineMessageId = completed.timelineMessageId.ifBlank { existing.timelineMessageId },
+        timelinePartId = completed.timelinePartId.ifBlank { existing.timelinePartId },
+        timelineOrderKey = completed.timelineOrderKey.ifBlank { existing.timelineOrderKey },
+        timelineIdentityKey = completed.timelineIdentityKey.ifBlank { existing.timelineIdentityKey },
+        timelineItemKind = completed.timelineItemKind.ifBlank { existing.timelineItemKind },
+        timelineResolvesWaiting = completed.timelineResolvesWaiting ?: existing.timelineResolvesWaiting,
+        source = completed.source.ifBlank { existing.source }
+    )
 }
 
 private fun isLocalPreviewReference(value: String): Boolean {
@@ -44,21 +65,28 @@ private fun isLocalPreviewReference(value: String): Boolean {
 }
 
 private fun sameTransferIdentity(left: RelayChatContentBlock, right: RelayChatContentBlock): Boolean {
+    val leftAttachmentId = left.attachmentId?.trim()?.takeIf { it.isNotEmpty() }
+    val rightAttachmentId = right.attachmentId?.trim()?.takeIf { it.isNotEmpty() }
+    val bothAttachmentIdsPresent = leftAttachmentId != null && rightAttachmentId != null
+    if (bothAttachmentIdsPresent && leftAttachmentId == rightAttachmentId) return true
+
     val leftFileId = left.fileId?.trim()?.takeIf { it.isNotEmpty() }
     val rightFileId = right.fileId?.trim()?.takeIf { it.isNotEmpty() }
     if (leftFileId != null && rightFileId != null) {
-        return leftFileId == rightFileId
-    }
-
-    val leftName = left.fileDisplayName?.trim().orEmpty()
-    val rightName = right.fileDisplayName?.trim().orEmpty()
-    if (leftName.isBlank() || !leftName.equals(rightName, ignoreCase = true)) return false
-
-    val leftMime = left.mimeType?.trim().orEmpty()
-    val rightMime = right.mimeType?.trim().orEmpty()
-    if (!attachmentMimeTypesCompatible(leftMime.lowercase(), rightMime.lowercase())) {
+        if (leftFileId == rightFileId) return true
         return false
     }
+    if (bothAttachmentIdsPresent) return false
+
+    // 这里只用于同一条本地 user 消息与服务端确认消息之间的块级预览保留，
+    // 不是跨消息去重；显式 identity 缺失时，允许回退到同文件元数据匹配。
+    val leftName = left.fileDisplayName?.trim()?.lowercase().orEmpty()
+    val rightName = right.fileDisplayName?.trim()?.lowercase().orEmpty()
+    if (leftName.isBlank() || leftName != rightName) return false
+
+    val leftMime = left.mimeType?.trim()?.lowercase().orEmpty()
+    val rightMime = right.mimeType?.trim()?.lowercase().orEmpty()
+    if (!attachmentMimeTypesCompatible(leftMime, rightMime)) return false
 
     val leftSize = left.sizeBytes?.takeIf { it > 0 }
     val rightSize = right.sizeBytes?.takeIf { it > 0 }
@@ -91,6 +119,7 @@ internal fun makeComposerAttachmentUploadContentBlock(
         },
         text = attachment.fileName,
         name = attachment.fileName,
+        attachmentId = attachment.id,
         fileName = attachment.fileName,
         mimeType = attachment.mimeType,
         sizeBytes = attachment.sizeBytes.coerceAtMost(Int.MAX_VALUE.toLong()).toInt(),
@@ -108,11 +137,13 @@ internal fun makeComposerAttachmentUploadContentBlock(
 
 internal fun makeFileContentBlock(
     record: RelayFileTransferItem,
-    sourceRunIdOverride: String? = null
+    sourceRunIdOverride: String? = null,
+    attachmentIdOverride: String? = null
 ): RelayChatContentBlock {
     val normalizedMime = record.mimeType.trim().lowercase()
     val sourceRunId = record.sourceRunId?.trim()?.takeIf { it.isNotEmpty() }
         ?: sourceRunIdOverride?.trim()?.takeIf { it.isNotEmpty() }
+    val attachmentId = attachmentIdOverride?.trim()?.takeIf { it.isNotEmpty() }
     return RelayChatContentBlock(
         type = when {
             normalizedMime.startsWith("audio/") -> "voice"
@@ -121,6 +152,7 @@ internal fun makeFileContentBlock(
         },
         text = record.fileName,
         name = record.fileName,
+        attachmentId = attachmentId,
         fileId = record.fileId,
         fileName = record.fileName,
         mimeType = record.mimeType,
@@ -142,9 +174,14 @@ internal fun makeFileContentBlock(
 fun makeUploadedAttachmentContentBlock(
     record: RelayFileTransferItem,
     localDownloadUrlString: String? = null,
-    sourceRunIdOverride: String? = null
+    sourceRunIdOverride: String? = null,
+    attachmentIdOverride: String? = null
 ): RelayChatContentBlock {
-    val block = makeFileContentBlock(record, sourceRunIdOverride = sourceRunIdOverride)
+    val block = makeFileContentBlock(
+        record,
+        sourceRunIdOverride = sourceRunIdOverride,
+        attachmentIdOverride = attachmentIdOverride
+    )
     val localPreviewPath = localDownloadUrlString
         ?.trim()
         ?.takeIf { it.isNotEmpty() && isLocalPreviewReference(it) }

@@ -105,6 +105,66 @@ class ChatTimelineReducerToolAttachmentTest {
     }
 
     @Test
+    fun attachmentMessageCompletedWithoutTimelineResolvesWaitingKeepsWaitingPlaceholder() {
+        val user = ChatMessage(
+            id = "user-1",
+            role = MessageRole.user,
+            state = MessageState.completed,
+            content = "发我截图",
+            runId = "local-user-turn-1",
+            sortTimestamp = 200.0,
+            timelineOrderKey = localTimelineOrderKey("turn-1", 10, "user-1"),
+            timelineIdentityKey = localTimelineIdentityKey("message:user", "user-1"),
+            timelineItemKind = "message:user"
+        )
+        val assistant = buildLocalTextAssistantPlaceholderMessage(
+            id = "assistant-local",
+            clientRunId = "run-1",
+            sortTimestamp = 200.001
+        )
+
+        val state = ChatTimelineReducer.reduce(
+            ChatTimelineState(
+                messages = listOf(user, assistant),
+                activeRunId = "run-1",
+                activeRunsByTurnId = mapOf("turn-1" to "run-1"),
+                activeTurnByRunId = mapOf("run-1" to "turn-1")
+            ),
+            event(
+                """
+                {
+                  "protocolVersion": 2,
+                  "eventId": "attachment-no-resolve-flag",
+                  "eventType": "message.completed",
+                  "turnId": "turn-1",
+                  "runId": "run-1",
+                  "messageId": "attachment-1",
+                  "role": "assistant",
+                  "createdAt": "1970-01-01T00:03:20.002Z",
+                  "content": [
+                    {
+                      "type": "image",
+                      "attachmentId": "att-1",
+                      "fileId": "file-1",
+                      "fileName": "shot.png",
+                      "mimeType": "image/png",
+                      "downloadUrl": "/api/mobile/files/file-1"
+                    }
+                  ],
+                  "timelineOrderKey": "v1|00000000000000000001|30|000000|attachment-1",
+                  "timelineIdentityKey": "local:turn-1:attachment:att-1",
+                  "timelineItemKind": "attachment"
+                }
+                """.trimIndent()
+            )
+        )
+
+        assertEquals(listOf("user-1", "attachment-1", "assistant-local"), state.messages.map { it.id })
+        assertEquals(MessageState.streaming, state.messages.last().state)
+        assertTrue(hasActiveVisibleTimelineRun(state, state.messages))
+    }
+
+    @Test
     fun toolInvocationUpdatedUpsertsToolState() {
         val state = ChatTimelineReducer.reduce(
             ChatTimelineState(),
@@ -375,7 +435,7 @@ class ChatTimelineReducerToolAttachmentTest {
     }
 
     @Test
-    fun assistantAttachmentCompletedReplacesWaitingBubble() {
+    fun assistantAttachmentCompletedWithTimelineResolvesWaitingReplacesWaitingBubble() {
         val waitingAssistant = ChatMessage(
             id = "assistant-local",
             role = MessageRole.assistant,
@@ -403,6 +463,7 @@ class ChatTimelineReducerToolAttachmentTest {
                   "messageId": "assistant-image",
                   "role": "assistant",
                   "timelineItemKind": "attachment",
+                  "timelineResolvesWaiting": true,
                   "content": [
                     {
                       "type": "image",

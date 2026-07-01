@@ -6,6 +6,8 @@ import com.rethinkingstudio.clawlink.core.models.chat.MessageState
 import com.rethinkingstudio.clawlink.core.network.RelayAPIClient
 import com.rethinkingstudio.clawlink.core.network.dto.ChatHistoryResponse
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 internal class ChatHistoryCoordinator(
     private val apiClient: RelayAPIClient,
@@ -25,6 +27,17 @@ internal class ChatHistoryCoordinator(
     private val windowMaxMessages: Int,
     private val pendingResolveMaxPages: Int
 ) {
+    private enum class HistoryWindowMode {
+        NEWEST,
+        OLDER
+    }
+
+    private data class PreparedHistoryMerge(
+        val snapshotReduction: ChatHistorySnapshotReduction?,
+        val orderedMessages: List<ChatMessage>,
+        val hasActiveStreaming: Boolean
+    )
+
     suspend fun loadHistory(
         gatewayId: String,
         sessionKey: String,
@@ -60,44 +73,29 @@ internal class ChatHistoryCoordinator(
                 fetchChatHistoryPage(normalizedGatewayId, normalizedSessionKey, limit)
             }
             val currentBeforeHistory = getState()
-            val isCanonicalTimelineSnapshot = isCanonicalTimelineV3(response.timelineSnapshot)
-            val shouldMergeCurrentLocalUsers = hasLocalUserMessagesNeedingHistoryMerge(currentBeforeHistory.messages)
-            val shouldReplaceTimelineState = isCanonicalTimelineSnapshot ||
-                (currentStreamingMessageId() == null && !shouldMergeCurrentLocalUsers)
-            val snapshotReduction = reduceTimelineHistorySnapshot(
+            val prepared = prepareHistoryMerge(
                 response = response,
-                currentMessages = currentBeforeHistory.messages,
-                currentSessionKey = getState().currentSessionKey,
+                currentState = currentBeforeHistory,
                 timelineState = getTimelineState(),
-                replaceExistingTimelineState = shouldReplaceTimelineState
+                knownV3Sessions = v3Sessions.toSet(),
+                activeStreamingMessageId = currentStreamingMessageId(),
+                trackedPendingAssistantMessageIds = trackedPendingAssistantMessageIds(currentBeforeHistory.messages),
+                replaceExistingTimelineState = shouldReplaceTimelineState(
+                    response = response,
+                    currentMessages = currentBeforeHistory.messages
+                ),
+                windowMode = HistoryWindowMode.NEWEST
             )
-            applySnapshotReduction(snapshotReduction)
-            val historyMessages = snapshotReduction?.messages ?: buildHistoryMessagesFromItems(response.items)
             val current = getState()
-            val shouldUseAuthoritativeSnapshot = (shouldReplaceTimelineState && response.timelineSnapshot != null) ||
-                isCanonicalTimelineV3(response.timelineSnapshot)
-            val messages = if (shouldUseAuthoritativeSnapshot) {
-                historyMessages
-            } else if (matchesRequestedChatScope(current, normalizedGatewayId, normalizedSessionKey)) {
-                mergeHistoryWithCurrentMessages(
-                    historyMessages = historyMessages,
-                    currentMessages = current.messages,
-                    currentStreamingMessageId = currentStreamingMessageId(),
-                    isTrackedPendingAssistantMessageId = isTrackedPendingAssistantMessageId
-                )
-            } else {
-                historyMessages
-            }
-            val ordered = trimToNewestHistoryWindow(messages)
+            applySnapshotReduction(prepared.snapshotReduction)
             if (matchesRequestedChatScope(current, normalizedGatewayId, normalizedSessionKey)) {
-                val hasActiveStreaming = hasActiveStreamingMessage(ordered)
                 setState(
                     current.copy(
-                        messages = ordered,
+                        messages = prepared.orderedMessages,
                         isLoading = false,
                         isSwitchingSession = false,
-                        isStreaming = hasActiveStreaming,
-                        isStoppingRun = if (hasActiveStreaming) current.isStoppingRun else false,
+                        isStreaming = prepared.hasActiveStreaming,
+                        isStoppingRun = if (prepared.hasActiveStreaming) current.isStoppingRun else false,
                         errorMessage = null,
                         historyWindow = current.historyWindow.copy(
                             isLoadingOlder = false,
@@ -105,14 +103,14 @@ internal class ChatHistoryCoordinator(
                             hasOlder = response.hasMore,
                             olderCursor = response.nextCursor,
                             newestCursor = response.newestCursor,
-                            loadedMessageCount = ordered.size
+                            loadedMessageCount = prepared.orderedMessages.size
                         )
                     )
                 )
-                clearStreamingPointersIfResolved(ordered)
-                if (!hasActiveStreaming) {
-                    TimelinePersistenceMiddleware.clearSnapshot()
-                }
+                clearStreamingPointersIfResolved(prepared.orderedMessages)
+                val updatedTimelineState = getTimelineState().copy(messages = prepared.orderedMessages)
+                setTimelineState(updatedTimelineState)
+                persistOrClearTimelineSnapshot(updatedTimelineState, prepared.orderedMessages)
             }
         } catch (e: CancellationException) {
             val currentState = getState()
@@ -186,42 +184,31 @@ internal class ChatHistoryCoordinator(
             ) {
                 return
             }
-            val snapshotReduction = reduceTimelineHistorySnapshot(
+            val prepared = prepareHistoryMerge(
                 response = response,
-                currentMessages = latest.messages,
-                currentSessionKey = getState().currentSessionKey,
-                timelineState = getTimelineState()
+                currentState = latest,
+                timelineState = getTimelineState(),
+                knownV3Sessions = v3Sessions.toSet(),
+                activeStreamingMessageId = currentStreamingMessageId(),
+                trackedPendingAssistantMessageIds = trackedPendingAssistantMessageIds(latest.messages),
+                windowMode = HistoryWindowMode.OLDER
             )
-            applySnapshotReduction(snapshotReduction)
-            val historyMessages = snapshotReduction?.messages
-            val messages = if (historyMessages != null && isCanonicalTimelineV3(response.timelineSnapshot)) {
-                historyMessages
-            } else {
-                val baseHistory = historyMessages ?: buildHistoryMessagesFromItems(response.items)
-                mergeHistoryWithCurrentMessages(
-                    historyMessages = baseHistory,
-                    currentMessages = latest.messages,
-                    currentStreamingMessageId = currentStreamingMessageId(),
-                    isTrackedPendingAssistantMessageId = isTrackedPendingAssistantMessageId
-                )
-            }
-            val ordered = trimToOlderHistoryWindow(messages)
-            val hasActiveStreaming = hasActiveStreamingMessage(ordered)
+            applySnapshotReduction(prepared.snapshotReduction)
             setState(
                 latest.copy(
-                    messages = ordered,
+                    messages = prepared.orderedMessages,
                     historyWindow = latest.historyWindow.copy(
                         isLoadingOlder = false,
                         hasOlder = response.hasMore,
                         olderCursor = response.nextCursor,
                         newestCursor = response.newestCursor ?: latest.historyWindow.newestCursor,
-                        loadedMessageCount = ordered.size
+                        loadedMessageCount = prepared.orderedMessages.size
                     ),
-                    isStreaming = hasActiveStreaming,
-                    isStoppingRun = if (hasActiveStreaming) latest.isStoppingRun else false
+                    isStreaming = prepared.hasActiveStreaming,
+                    isStoppingRun = if (prepared.hasActiveStreaming) latest.isStoppingRun else false
                 )
             )
-            clearStreamingPointersIfResolved(ordered)
+            clearStreamingPointersIfResolved(prepared.orderedMessages)
         } catch (e: CancellationException) {
             val latest = getState()
             if (latest.currentGatewayId == normalizedGatewayId &&
@@ -278,42 +265,31 @@ internal class ChatHistoryCoordinator(
                 ) {
                     return
                 }
-                val snapshotReduction = reduceTimelineHistorySnapshot(
+                val prepared = prepareHistoryMerge(
                     response = response,
-                    currentMessages = current.messages,
-                    currentSessionKey = getState().currentSessionKey,
-                    timelineState = getTimelineState()
+                    currentState = current,
+                    timelineState = getTimelineState(),
+                    knownV3Sessions = v3Sessions.toSet(),
+                    activeStreamingMessageId = currentStreamingMessageId(),
+                    trackedPendingAssistantMessageIds = trackedPendingAssistantMessageIds(current.messages),
+                    windowMode = HistoryWindowMode.NEWEST
                 )
-                applySnapshotReduction(snapshotReduction)
-                val historyMessages = snapshotReduction?.messages
-                val messages = if (historyMessages != null && isCanonicalTimelineV3(response.timelineSnapshot)) {
-                    historyMessages
-                } else {
-                    val baseHistory = historyMessages ?: buildHistoryMessagesFromItems(response.items)
-                    mergeHistoryWithCurrentMessages(
-                        historyMessages = baseHistory,
-                        currentMessages = current.messages,
-                        currentStreamingMessageId = currentStreamingMessageId(),
-                        isTrackedPendingAssistantMessageId = isTrackedPendingAssistantMessageId
-                    )
-                }
-                val ordered = trimToNewestHistoryWindow(messages)
-                val hasActiveStreaming = hasActiveStreamingMessage(ordered)
+                applySnapshotReduction(prepared.snapshotReduction)
                 setState(
                     current.copy(
-                        messages = ordered,
+                        messages = prepared.orderedMessages,
                         historyWindow = current.historyWindow.copy(
                             isCatchingUp = true,
                             hasOlder = response.hasMore,
                             olderCursor = response.nextCursor,
                             newestCursor = response.newestCursor ?: current.historyWindow.newestCursor,
-                            loadedMessageCount = ordered.size
+                            loadedMessageCount = prepared.orderedMessages.size
                         ),
-                        isStreaming = hasActiveStreaming,
-                        isStoppingRun = if (hasActiveStreaming) current.isStoppingRun else false
+                        isStreaming = prepared.hasActiveStreaming,
+                        isStoppingRun = if (prepared.hasActiveStreaming) current.isStoppingRun else false
                     )
                 )
-                clearStreamingPointersIfResolved(ordered)
+                clearStreamingPointersIfResolved(prepared.orderedMessages)
                 android.util.Log.d(
                     "ChatStore",
                     "Silent chat final sync merged page ${pageCount + 1} with ${response.items.size} history items for $normalizedGatewayId/$normalizedSessionKey"
@@ -355,9 +331,80 @@ internal class ChatHistoryCoordinator(
         v3Sessions.addAll(reduction.v3SessionKeys)
     }
 
-    private fun trimToNewestHistoryWindow(messages: List<ChatMessage>): List<ChatMessage> {
-        val sessionKey = getState().currentSessionKey
-        if (v3Sessions.any { sameSessionKey(it, sessionKey) }) {
+    private suspend fun prepareHistoryMerge(
+        response: ChatHistoryResponse,
+        currentState: ChatState,
+        timelineState: ChatTimelineState,
+        knownV3Sessions: Set<String>,
+        activeStreamingMessageId: String?,
+        trackedPendingAssistantMessageIds: Set<String>,
+        replaceExistingTimelineState: Boolean = false,
+        windowMode: HistoryWindowMode
+    ): PreparedHistoryMerge = withContext(Dispatchers.Default) {
+        val snapshotReduction = reduceTimelineHistorySnapshot(
+            response = response,
+            currentMessages = currentState.messages,
+            currentSessionKey = currentState.currentSessionKey,
+            timelineState = timelineState,
+            replaceExistingTimelineState = replaceExistingTimelineState
+        )
+        val historyMessages = snapshotReduction?.messages ?: buildHistoryMessagesFromItems(response.items)
+        val shouldUseAuthoritativeSnapshot = (replaceExistingTimelineState && response.timelineSnapshot != null) ||
+            isCanonicalTimelineV3(response.timelineSnapshot)
+        val mergedMessages = if (shouldUseAuthoritativeSnapshot) {
+            historyMessages
+        } else {
+            mergeHistoryWithCurrentMessages(
+                historyMessages = historyMessages,
+                currentMessages = currentState.messages,
+                currentStreamingMessageId = activeStreamingMessageId,
+                isTrackedPendingAssistantMessageId = { messageId ->
+                    messageId in trackedPendingAssistantMessageIds
+                }
+            )
+        }
+        val effectiveV3Sessions = if (snapshotReduction == null) {
+            knownV3Sessions
+        } else {
+            knownV3Sessions + snapshotReduction.v3SessionKeys
+        }
+        val orderedMessages = when (windowMode) {
+            HistoryWindowMode.NEWEST -> trimToNewestHistoryWindow(
+                messages = mergedMessages,
+                sessionKey = currentState.currentSessionKey,
+                knownV3Sessions = effectiveV3Sessions
+            )
+            HistoryWindowMode.OLDER -> trimToOlderHistoryWindow(
+                messages = mergedMessages,
+                sessionKey = currentState.currentSessionKey,
+                knownV3Sessions = effectiveV3Sessions,
+                activeStreamingMessageId = activeStreamingMessageId,
+                trackedPendingAssistantMessageIds = trackedPendingAssistantMessageIds
+            )
+        }
+        PreparedHistoryMerge(
+            snapshotReduction = snapshotReduction,
+            orderedMessages = orderedMessages,
+            hasActiveStreaming = hasActiveStreamingMessage(orderedMessages)
+        )
+    }
+
+    private fun shouldReplaceTimelineState(
+        response: ChatHistoryResponse,
+        currentMessages: List<ChatMessage>
+    ): Boolean {
+        val isCanonicalTimelineSnapshot = isCanonicalTimelineV3(response.timelineSnapshot)
+        val shouldMergeCurrentLocalUsers = hasLocalUserMessagesNeedingHistoryMerge(currentMessages)
+        return isCanonicalTimelineSnapshot ||
+            (currentStreamingMessageId() == null && !shouldMergeCurrentLocalUsers)
+    }
+
+    private fun trimToNewestHistoryWindow(
+        messages: List<ChatMessage>,
+        sessionKey: String,
+        knownV3Sessions: Set<String>
+    ): List<ChatMessage> {
+        if (knownV3Sessions.any { sameSessionKey(it, sessionKey) }) {
             return sortTimelineMessagesV3(messages, sessionKey).takeLast(windowMaxMessages)
         }
         return newestBoundedHistoryWindowMessages(
@@ -366,15 +413,25 @@ internal class ChatHistoryCoordinator(
         )
     }
 
-    private fun trimToOlderHistoryWindow(messages: List<ChatMessage>): List<ChatMessage> {
-        val sessionKey = getState().currentSessionKey
-        if (v3Sessions.any { sameSessionKey(it, sessionKey) }) {
+    private fun trimToOlderHistoryWindow(
+        messages: List<ChatMessage>,
+        sessionKey: String,
+        knownV3Sessions: Set<String>,
+        activeStreamingMessageId: String?,
+        trackedPendingAssistantMessageIds: Set<String>
+    ): List<ChatMessage> {
+        if (knownV3Sessions.any { sameSessionKey(it, sessionKey) }) {
             val ordered = sortTimelineMessagesV3(messages, sessionKey)
             if (ordered.size <= windowMaxMessages) return ordered
             val oldestWindow = ordered.take(windowMaxMessages)
             val oldestWindowIds = oldestWindow.mapTo(mutableSetOf()) { it.id }
             val activeMessagesOutsideOldestWindow = ordered.filter { message ->
-                message.id !in oldestWindowIds && shouldPreserveDuringOlderWindowTrim(message)
+                message.id !in oldestWindowIds &&
+                    shouldPreserveDuringOlderWindowTrim(
+                        message = message,
+                        activeStreamingMessageId = activeStreamingMessageId,
+                        trackedPendingAssistantMessageIds = trackedPendingAssistantMessageIds
+                    )
             }
             if (activeMessagesOutsideOldestWindow.isEmpty()) {
                 return oldestWindow
@@ -387,14 +444,32 @@ internal class ChatHistoryCoordinator(
         return olderBoundedHistoryWindowMessages(
             messages = messages,
             maxMessages = windowMaxMessages,
-            shouldPreserveActiveMessage = ::shouldPreserveDuringOlderWindowTrim
+            shouldPreserveActiveMessage = { message ->
+                shouldPreserveDuringOlderWindowTrim(
+                    message = message,
+                    activeStreamingMessageId = activeStreamingMessageId,
+                    trackedPendingAssistantMessageIds = trackedPendingAssistantMessageIds
+                )
+            }
         )
     }
 
-    private fun shouldPreserveDuringOlderWindowTrim(message: ChatMessage): Boolean {
+    private fun shouldPreserveDuringOlderWindowTrim(
+        message: ChatMessage,
+        activeStreamingMessageId: String?,
+        trackedPendingAssistantMessageIds: Set<String>
+    ): Boolean {
         return message.state == MessageState.streaming ||
-            currentStreamingMessageId() == message.id ||
-            isTrackedPendingAssistantMessageId(message.id)
+            activeStreamingMessageId == message.id ||
+            message.id in trackedPendingAssistantMessageIds
+    }
+
+    private fun trackedPendingAssistantMessageIds(messages: List<ChatMessage>): Set<String> {
+        return messages
+            .mapNotNull { message ->
+                message.id.takeIf { it.isNotBlank() && isTrackedPendingAssistantMessageId(it) }
+            }
+            .toSet()
     }
 
     private fun hasActiveStreamingMessage(messages: List<ChatMessage>): Boolean {
