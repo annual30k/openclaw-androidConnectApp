@@ -68,7 +68,7 @@ object SkillExpansionGuideFile {
 
     然后执行 `clawconnect --help`，必要时再执行 `clawconnect send-file --help`，确认命令结构、参数和输出。接着阅读用户可见文档 `clawconnect-agent/README.zh-CN.md` 和 `clawconnect-agent/README.md`。如果当前环境能运行 `clawconnect`，必须结合实际命令输出验证 `send-file` 的真实行为。
 
-    请创建或更新 Hermes 的 `file-transfer` 技能，触发范围覆盖：从 Mac / PC 向移动端发送图片或文件、ClawLink 文件互传、`clawconnect send-file`、电脑到手机发文件。技能内容必须明确：PC / Mac 侧发送文件优先使用 `clawconnect send-file --profile hermes --json <本地路径>`；这是宿主机命令，不是在手机本机执行；图片也走 host -> relay -> mobile 文件转发流程；不要依赖 Hermes 最终回答里的本地路径被自动上传；如果文件在手机上，则使用 App 内附件上传入口。
+    请创建或更新 Hermes 的 `file-transfer` 技能，触发范围覆盖：从 Mac / PC 向移动端发送图片或文件、ClawLink 文件互传、`clawconnect send-file`、电脑到手机发文件。技能内容必须明确：PC / Mac 侧发送文件优先使用 `clawconnect send-file --profile hermes --json <本地路径>`；这是宿主机命令，不是在手机本机执行；ClawLink / 移动端触发 Hermes 文件发送时，必须通过 Hermes 可用的终端/命令执行工具直接运行该命令，不要把它包进 `execute_code`、Python、Node.js 或脚本运行器里，避免进入移动端无法处理的工具审批流程；macOS 上中文“桌面”或“桌面的”必须解析为用户的 `~/Desktop`，不是 `~/桌面`；图片也走 host -> relay -> mobile 文件转发流程；不要依赖 Hermes 最终回答里的本地路径被自动上传；如果文件在手机上，则使用 App 内附件上传入口。
 
     完成后说明 Hermes 技能是否安装成功，并总结 `clawconnect send-file` 的真实用法、默认会话选择规则和限制。
     """.trimIndent()

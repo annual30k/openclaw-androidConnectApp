@@ -21,6 +21,9 @@ class SkillExpansionFileTransferTest {
         assertTrue(prompt.contains("创建或更新 `file-transfer` 技能"))
         assertTrue(prompt.contains("clawconnect send-file"))
         assertTrue(prompt.contains("--profile hermes"))
+        assertTrue(prompt.contains("不要把它包进 `execute_code`"))
+        assertTrue(prompt.contains("`~/Desktop`"))
+        assertTrue(prompt.contains("不是 `~/桌面`"))
         assertFalse(prompt.contains("删除"))
     }
 }
