@@ -18,12 +18,28 @@ class SkillExpansionFileTransferTest {
     fun hermesFileTransferPromptCreatesHermesSkill() {
         val prompt = SkillExpansionGuideFile.hermesInstallPrompt
 
+        assertTrue(SkillExpansionGuideFile.installPromptForGateway(isHermesGateway = true) == SkillExpansionGuideFile.hermesInstallPrompt)
+        assertTrue(SkillExpansionGuideFile.installPromptForGateway(isHermesGateway = false) == SkillExpansionGuideFile.installPrompt)
         assertTrue(prompt.contains("创建或更新 `file-transfer` 技能"))
-        assertTrue(prompt.contains("clawconnect send-file"))
+        assertTrue(prompt.contains("version: 1.3.0"))
+        assertTrue(prompt.contains("clawconnect send-file --profile hermes --json \"<本地文件绝对路径>\""))
         assertTrue(prompt.contains("--profile hermes"))
-        assertTrue(prompt.contains("不要把它包进 `execute_code`"))
-        assertTrue(prompt.contains("`~/Desktop`"))
-        assertTrue(prompt.contains("不是 `~/桌面`"))
+        assertTrue(prompt.contains("不要使用 `delegate_task`、子代理、`execute_code`、Python、Node.js、shell 脚本或包装命令"))
+        assertTrue(prompt.contains("这个请求就是发送意图确认"))
+        assertTrue(prompt.contains("pending_approval"))
+        assertTrue(prompt.contains("approval_pending"))
+        assertTrue(prompt.contains("不要换用 `execute_code`、脚本包装、聊天附件或最终回答本地路径绕过审批"))
+        assertTrue(prompt.contains("不要在 ClawLink/移动端触发的回合里添加 `--session` 或 `--source-run-id`"))
+        assertTrue(prompt.contains("CLAWCONNECT_CHAT_SESSION_KEY"))
+        assertTrue(prompt.contains("CLAWCONNECT_SOURCE_RUN_ID"))
+        assertTrue(prompt.contains("只在最终回答里输出本地路径并不会发送文件"))
+        assertFalse(prompt.contains("skill-creator"))
+        assertFalse(prompt.contains("~/.openclaw"))
+        assertFalse(prompt.contains("OpenClaw"))
         assertFalse(prompt.contains("删除"))
+        assertFalse(prompt.contains("默认会话选择规则"))
+        assertFalse(prompt.contains("不传时默认使用最近活跃会话"))
+        assertFalse(prompt.contains("桌面"))
+        assertFalse(prompt.contains("Desktop"))
     }
 }

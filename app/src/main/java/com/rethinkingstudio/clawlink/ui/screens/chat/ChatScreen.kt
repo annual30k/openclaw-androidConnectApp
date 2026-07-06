@@ -111,8 +111,8 @@ fun ChatScreen(
     val isChatChainReady = gatewayState.isSelectedGatewayChatChainReady
     val hasActiveSession = hasSelectedGateway && chatState.currentSessionKey.isNotBlank() && isChatChainReady
     val selectedGatewayType = gatewayState.selectedGateway?.gatewayType ?: GatewayType.openclaw
-    val showsSkillExpansionControls = showsSkillExpansionControlsForGateway(selectedGatewayType)
-    val showsModelPicker = showsModelPickerForGateway(selectedGatewayType)
+    val showsSkillExpansionControls = hasSelectedGateway && showsSkillExpansionControlsForGateway(selectedGatewayType)
+    val showsModelPicker = hasSelectedGateway && showsModelPickerForGateway(selectedGatewayType)
     LaunchedEffect(gatewayId, showsModelPicker) {
         if (showsModelPicker && !gatewayId.isNullOrBlank()) {
             modelStore.loadModels(gatewayId)

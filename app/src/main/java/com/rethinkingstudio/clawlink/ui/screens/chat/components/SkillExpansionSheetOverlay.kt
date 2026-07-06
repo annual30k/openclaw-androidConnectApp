@@ -38,7 +38,7 @@ data class SkillExpansionGuideStep(
 object SkillExpansionGuideFile {
     val title get() = choose("Start file transfer", "启动文件互传")
     val heroTitle get() = choose("Let the host send and receive files", "让宿主机帮你收发文件")
-    val heroSubtitle get() = choose("No need to write skill content manually. One tap lets OpenClaw create and verify it.", "不用手写技能内容，点一下就能让它自己创建并验证。")
+    val heroSubtitle get() = choose("No need to write skill content manually. One tap lets the host assistant create and verify it.", "不用手写技能内容，点一下就能让宿主机助手自己创建并验证。")
     val installButtonTitle get() = choose("Install file transfer on host", "让宿主机安装文件互传")
     val installPrompt = """
     先确认 OpenClaw 里是否已经可用 `skill-creator`；如果可用，直接使用 OpenClaw 的 `skill-creator`，把 `file-transfer` 技能写到 OpenClaw 的技能存放目录 `~/.openclaw/workspace/.agents/skills/file-transfer/SKILL.md`。如果本地已经存在 `file-transfer` skill，先判断是否需要更新；如果不需要更新，就直接告诉用户本地已存在，不要重复创建。不要写到 `~/.codex/skills`，也不要放到 Codex 的技能目录里。
@@ -64,19 +64,79 @@ object SkillExpansionGuideFile {
     使用 OpenClaw 的 `skill-creator` 创建或更新一个 OpenClaw skill，名称必须是 `file-transfer`，位置存放在 OpenClaw 技能存放的默认位置。不要让我手写技能内容，直接生成完整的技能文件。
     """.trimIndent()
     val hermesInstallPrompt = """
-    请使用 Hermes Agent 的技能扩展机制创建或更新 `file-transfer` 技能。先执行 `hermes skills --help`、`hermes skills list` 或 Hermes 当前可用的等价命令，确认技能安装目录和安装方式；不要写到 `~/.codex/skills`，也不要假设 OpenClaw 的技能目录适用于 Hermes。
+    请使用 Hermes Agent 的技能扩展机制创建或更新 `file-transfer` 技能；如果已存在同名技能，只有内容不一致时才更新。先执行 `hermes skills --help`、`hermes skills list` 或 Hermes 当前可用的等价命令，确认技能安装目录、安装方式和当前是否已经存在同名技能；不要写到 `~/.codex/skills`，只写入 Hermes 命令确认出的技能目录。
 
-    然后执行 `clawconnect --help`，必要时再执行 `clawconnect send-file --help`，确认命令结构、参数和输出。接着阅读用户可见文档 `clawconnect-agent/README.zh-CN.md` 和 `clawconnect-agent/README.md`。如果当前环境能运行 `clawconnect`，必须结合实际命令输出验证 `send-file` 的真实行为。
+    然后执行 `clawconnect --help` 和 `clawconnect send-file --help`，确认宿主机可直接运行 `clawconnect send-file --profile hermes --json <本地路径>`。不要把下面的 skill 改写成命令总结、默认会话说明、安装指南或长篇 README。
 
-    请创建或更新 Hermes 的 `file-transfer` 技能，触发范围覆盖：从 Mac / PC 向移动端发送图片或文件、ClawLink 文件互传、`clawconnect send-file`、电脑到手机发文件。技能内容必须明确：PC / Mac 侧发送文件优先使用 `clawconnect send-file --profile hermes --json <本地路径>`；这是宿主机命令，不是在手机本机执行；ClawLink / 移动端触发 Hermes 文件发送时，必须通过 Hermes 可用的终端/命令执行工具直接运行该命令，不要把它包进 `execute_code`、Python、Node.js 或脚本运行器里，避免进入移动端无法处理的工具审批流程；macOS 上中文“桌面”或“桌面的”必须解析为用户的 `~/Desktop`，不是 `~/桌面`；图片也走 host -> relay -> mobile 文件转发流程；不要依赖 Hermes 最终回答里的本地路径被自动上传；如果文件在手机上，则使用 App 内附件上传入口。
+    请把 Hermes 的 `file-transfer` 技能写成下面这个固定 `SKILL.md` 内容。必须保留 `version: 1.3.0`、`## 必须执行`、`## 硬性规则`、`## 路径处理`、`## 成功回复` 和 `## 失败回复`；不要删掉禁止 `delegate_task`、子代理、`execute_code`、Python、Node.js、脚本包装、聊天附件替代、只回复本地路径、`--session`、`--source-run-id` 和 `pending_approval` 确认流程的规则。
 
-    完成后说明 Hermes 技能是否安装成功，并总结 `clawconnect send-file` 的真实用法、默认会话选择规则和限制。
+    ~~~markdown
+    ---
+    name: file-transfer
+    description: "当用户要把宿主机本地文件或图片发送到当前 ClawLink/iPhone/移动端聊天时使用；适用于电脑文件发到手机、发送图片到 ClawLink、send file/image to phone；不适用于只存在于手机上的文件。"
+    version: 1.3.0
+    author: ClawConnect
+    license: MIT
+    platforms: [macos, linux, windows]
+    metadata:
+      hermes:
+        tags: [file-transfer, clawconnect, mobile, iphone, image]
+    ---
+
+    # 文件互传
+
+    ## 必须执行
+
+    当用户要求把宿主机本地文件或图片发送到 iPhone/ClawLink/移动端聊天时，必须先通过终端/命令工具直接运行：
+
+    ```bash
+    clawconnect send-file --profile hermes --json "<本地文件绝对路径>"
+    ```
+
+    必须在最终回复前执行这个命令。只在最终回答里输出本地路径并不会发送文件。
+
+    如果用户已经在 ClawLink/移动端明确要求“发送/传/发到手机”某个宿主机文件或图片，这个请求就是发送意图确认；不要再二次询问是否发送。若 Hermes 终端/命令工具返回 `pending_approval` 或 `approval_pending`，必须等待用户在当前 Hermes/ClawLink 审批提示中确认，或提示用户完成该确认；确认后继续执行同一条 `clawconnect send-file --profile hermes --json "<本地文件绝对路径>"`。
+
+    ## 硬性规则
+
+    - 必须用终端/命令工具直接运行 `clawconnect send-file`。
+    - 不要使用 `delegate_task`、子代理、`execute_code`、Python、Node.js、shell 脚本或包装命令来执行传输。
+    - 如果遇到 `pending_approval` / `approval_pending`，不要换用 `execute_code`、脚本包装、聊天附件或最终回答本地路径绕过审批；只能等待用户确认后继续同一条发送命令，或报告需要确认。
+    - 不要用聊天附件、`chat.send` attachments、Markdown 图片链接或最终回答里的本地路径替代文件发送。
+    - 不要在 ClawLink/移动端触发的回合里添加 `--session` 或 `--source-run-id`，除非用户明确指定了其他目标。ClawConnect 会从当前 Hermes 环境读取 `CLAWCONNECT_CHAT_SESSION_KEY` 和 `CLAWCONNECT_SOURCE_RUN_ID`，并把文件发送到当前手机聊天。
+    - 如果文件只存在于 iPhone/手机上，不要运行 `clawconnect send-file`；告诉用户使用 ClawLink App 内附件/文件选择入口。
+
+    ## 路径处理
+
+    - 优先使用绝对路径。
+    - 路径里有空格或 shell 特殊字符时必须加引号。
+    - 如果用户只给文件名，先在用户描述的宿主机位置或当前可访问的本地文件范围内查找。
+    - 如果只找到一个匹配文件，直接发送。
+    - 如果找到多个可能文件且没有精确匹配，先问用户要发送哪一个。
+    - 如果找不到宿主机本地文件，说明已经查找的位置，不要编造路径。
+
+    ## 成功回复
+
+    命令成功后，简短回复已发送的文件名，并说明已发送到 ClawLink/iPhone。除非用户要求，不要粘贴完整 JSON。
+
+    ## 失败回复
+
+    如果命令失败，报告 `clawconnect send-file` 的具体错误和尝试过的路径。不要改用其他机制重试，除非错误信息指出了明确修复方式。
+    ~~~
+
+    不要创建额外的 README、安装指南或其他无关文档。完成后用一个真实小文件做冒烟测试：`clawconnect send-file --profile hermes --json <本地路径>`；这是验证命令，不要把冒烟测试写成 skill 的必需步骤。
+
+    完成后说明：Hermes 技能是否安装成功、技能路径、Hermes 是否仍保持连接、`clawconnect send-file --profile hermes` 冒烟测试是否成功，以及如果文件在手机上应改用 ClawLink App 内附件/文件选择入口。
     """.trimIndent()
+
+    fun installPromptForGateway(isHermesGateway: Boolean): String {
+        return if (isHermesGateway) hermesInstallPrompt else installPrompt
+    }
 
     val steps get() = listOf(
         SkillExpansionGuideStep("understand-capability", 1, choose("Understand this capability", "了解这个能力"), choose("After setup, ClawLink can send computer files to mobile via `clawconnect send-file`, and mobile can send files back through chat attachments.", "配置完成后，ClawLink 可以把电脑上的文件通过 `clawconnect send-file` 发到手机，手机端也能把文件通过附件入口回传到聊天中。")),
         SkillExpansionGuideStep("confirm-source", 2, choose("Confirm skill source", "确认技能来源"), choose("This depends on `skill-creator` and the `clawconnect-agent` send-file flow. Confirm tools first, then generate the correct `file-transfer` skill from the fixed template.", "这个能力依赖 `skill-creator` 和 `clawconnect-agent` 的 send-file 流程，先确认工具已安装，再按固定模板生成正确的 `file-transfer` 技能。")),
-        SkillExpansionGuideStep("install-verify", 3, choose("Install and verify file transfer", "安装并验证文件互传"), choose("After tapping the bottom button, OpenClaw will understand `clawconnect send-file`, generate the `file-transfer` skill, verify relay upload, and save the preference.", "点底部按钮后，OpenClaw 会先读懂 `clawconnect send-file` 的用法，再自己生成 `file-transfer` 技能、验证 relay 上传流程，并把偏好写进记忆。"))
+        SkillExpansionGuideStep("install-verify", 3, choose("Install and verify file transfer", "安装并验证文件互传"), choose("After tapping the bottom button, the host assistant will understand `clawconnect send-file`, generate the `file-transfer` skill, verify relay upload, and save the preference.", "点底部按钮后，宿主机助手会先读懂 `clawconnect send-file` 的用法，再自己生成 `file-transfer` 技能、验证 relay 上传流程，并把偏好写进记忆。"))
     )
 }
 
@@ -184,7 +244,7 @@ fun SkillExpansionSheetOverlay(
                                 tint = Color(0xFF5ECF7A),
                                 onBack = { currentScreen = SkillExpansionScreen.MENU },
                                 onInstall = {
-                                    onSendPrompt(if (isHermesGateway) SkillExpansionGuideFile.hermesInstallPrompt else SkillExpansionGuideFile.installPrompt)
+                                    onSendPrompt(SkillExpansionGuideFile.installPromptForGateway(isHermesGateway))
                                     onDismiss()
                                 }
                             )
