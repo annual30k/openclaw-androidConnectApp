@@ -41,27 +41,68 @@ object SkillExpansionGuideFile {
     val heroSubtitle get() = choose("No need to write skill content manually. One tap lets the host assistant create and verify it.", "不用手写技能内容，点一下就能让宿主机助手自己创建并验证。")
     val installButtonTitle get() = choose("Install file transfer on host", "让宿主机安装文件互传")
     val installPrompt = """
-    先确认 OpenClaw 里是否已经可用 `skill-creator`；如果可用，直接使用 OpenClaw 的 `skill-creator`，把 `file-transfer` 技能写到 OpenClaw 的技能存放目录 `~/.openclaw/workspace/.agents/skills/file-transfer/SKILL.md`。如果本地已经存在 `file-transfer` skill，先判断是否需要更新；如果不需要更新，就直接告诉用户本地已存在，不要重复创建。不要写到 `~/.codex/skills`，也不要放到 Codex 的技能目录里。
+    请使用 OpenClaw 的 `skill-creator` 或当前可用的 OpenClaw 技能机制创建或更新 OpenClaw 的 `file-transfer` 技能；如果已存在同名技能，只有内容不一致时才更新。只写入 `~/.openclaw/workspace/.agents/skills/file-transfer/SKILL.md`，不要写到 `~/.codex/skills` 或 Codex 的技能目录。
 
-    然后执行 `clawconnect --help`，必要时再执行 `clawconnect send-file --help`，确认命令结构、参数和输出。
+    然后执行 `clawconnect --help` 和 `clawconnect send-file --help`，确认宿主机可直接运行 `clawconnect send-file --profile openclaw --json <本地路径>`。不要把下面的 skill 改写成命令总结、会话说明、安装指南或长篇 README。
 
-    接着阅读并理解当前仓库里用户可见的文档：
-    - `clawconnect-agent/README.zh-CN.md`
-    - `clawconnect-agent/README.md`
+    请把 OpenClaw 的 `file-transfer` 技能写成下面这个固定 `SKILL.md` 内容。必须保留 `version: 1.3.0`、`## 必须执行`、`## 硬性规则`、`## 路径处理`、`## 成功回复` 和 `## 失败回复`；不要删掉禁止 `delegate_task`、子代理、`execute_code`、Python、Node.js、脚本包装、聊天附件替代、只回复本地路径、`--session` 和 `--source-run-id` 的规则。
 
-    如果当前环境里还能直接运行 `clawconnect`，再结合实际命令输出验证 `send-file` 的真实行为。不要依赖打包后看不到的源码文件，也不要引用内部实现路径或接口细节；以可见文档和实际运行结果为准。
+    ~~~markdown
+    ---
+    name: file-transfer
+    description: "当用户要把宿主机本地文件或图片发送到当前 ClawLink/iPhone/移动端聊天时使用；适用于电脑文件发到手机、发送图片到 ClawLink、send file/image to phone；不适用于只存在于手机上的文件。"
+    version: 1.3.0
+    author: ClawConnect
+    license: MIT
+    platforms: [macos, linux, windows]
+    metadata:
+      openclaw:
+        tags: [file-transfer, clawconnect, mobile, iphone, image]
+    ---
 
-    请准确总结 `clawconnect send-file` 的真实行为，不要写成猜测：
-    - 它是 host 侧命令，只在 PC / Mac 上执行，不是在 Android 上执行
-    - 它处理本机可访问的本地文件
-    - 它会先检查文件是否存在、是否为普通文件
-    - 它会把文件上传到 relay，再把它作为聊天里的文件消息发到对应会话
-    - `--session <key>` 可指定会话；不传时默认使用最近活跃会话
-    - `--gateway <id>` 可指定网关；不传时使用本地配置里的网关
-    - 不要把 `chat.send` 的 attachments 当成跨设备文件互传入口
-    - 如果文件其实在手机上，先确认文件所在设备，再走 Android App 里的附件上传入口，不要把 `clawconnect send-file` 说成能在手机本机运行
+    # 文件互传
 
-    使用 OpenClaw 的 `skill-creator` 创建或更新一个 OpenClaw skill，名称必须是 `file-transfer`，位置存放在 OpenClaw 技能存放的默认位置。不要让我手写技能内容，直接生成完整的技能文件。
+    ## 必须执行
+
+    当用户要求把宿主机本地文件或图片发送到 iPhone/ClawLink/移动端聊天时，必须先通过终端/命令工具直接运行：
+
+    ```bash
+    clawconnect send-file --profile openclaw --json "<本地文件绝对路径>"
+    ```
+
+    必须在最终回复前执行这个命令。只在最终回答里输出本地路径并不会发送文件。
+
+    如果用户已经在 ClawLink/移动端明确要求“发送/传/发到手机”某个宿主机文件或图片，这个请求就是发送意图确认；不要再二次询问是否发送。
+
+    ## 硬性规则
+
+    - 必须用终端/命令工具直接运行 `clawconnect send-file`。
+    - 不要使用 `delegate_task`、子代理、`execute_code`、Python、Node.js、shell 脚本或包装命令来执行传输。
+    - 不要用聊天附件、`chat.send` attachments、Markdown 图片链接或最终回答里的本地路径替代文件发送。
+    - 不要在 ClawLink/移动端触发的回合里添加 `--session` 或 `--source-run-id`，除非用户明确指定了其他目标。ClawConnect 会优先从当前 OpenClaw 环境读取 `CLAWCONNECT_CHAT_SESSION_KEY` 和 `CLAWCONNECT_SOURCE_RUN_ID`，并把文件发送到当前手机聊天。
+    - 如果文件只存在于 iPhone/手机上，不要运行 `clawconnect send-file`；告诉用户使用 ClawLink App 内附件/文件选择入口。
+
+    ## 路径处理
+
+    - 优先使用绝对路径。
+    - 路径里有空格或 shell 特殊字符时必须加引号。
+    - 如果用户只给文件名，先在用户描述的宿主机位置或当前可访问的本地文件范围内查找。
+    - 如果只找到一个匹配文件，直接发送。
+    - 如果找到多个可能文件且没有精确匹配，先问用户要发送哪一个。
+    - 如果找不到宿主机本地文件，说明已经查找的位置，不要编造路径。
+
+    ## 成功回复
+
+    命令成功后，简短回复已发送的文件名，并说明已发送到 ClawLink/iPhone。除非用户要求，不要粘贴完整 JSON。
+
+    ## 失败回复
+
+    如果命令失败，报告 `clawconnect send-file` 的具体错误和尝试过的路径。不要改用其他机制重试，除非错误信息指出了明确修复方式。
+    ~~~
+
+    不要创建额外的 README、安装指南或其他无关文档。完成后用一个真实小文件做冒烟测试：`clawconnect send-file --profile openclaw --json <本地路径>`；这是验证命令，不要把冒烟测试写成 skill 的必需步骤。
+
+    完成后说明：OpenClaw 技能是否安装成功、技能路径、`clawconnect send-file --profile openclaw` 冒烟测试是否成功，以及如果文件在 iPhone/手机上应改用 ClawLink App 内附件/文件选择入口。
     """.trimIndent()
     val hermesInstallPrompt = """
     请使用 Hermes Agent 的技能扩展机制创建或更新 `file-transfer` 技能；如果已存在同名技能，只有内容不一致时才更新。先执行 `hermes skills --help`、`hermes skills list` 或 Hermes 当前可用的等价命令，确认技能安装目录、安装方式和当前是否已经存在同名技能；不要写到 `~/.codex/skills`，只写入 Hermes 命令确认出的技能目录。

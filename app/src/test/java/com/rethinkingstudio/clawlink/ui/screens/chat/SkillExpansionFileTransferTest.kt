@@ -42,4 +42,29 @@ class SkillExpansionFileTransferTest {
         assertFalse(prompt.contains("桌面"))
         assertFalse(prompt.contains("Desktop"))
     }
+
+    @Test
+    fun openClawFileTransferPromptCreatesFixedOpenClawSkill() {
+        val prompt = SkillExpansionGuideFile.installPrompt
+
+        assertTrue(prompt.contains("创建或更新 OpenClaw 的 `file-transfer` 技能"))
+        assertTrue(prompt.contains("~/.openclaw/workspace/.agents/skills/file-transfer/SKILL.md"))
+        assertTrue(prompt.contains("version: 1.3.0"))
+        assertTrue(prompt.contains("clawconnect --help"))
+        assertTrue(prompt.contains("clawconnect send-file --help"))
+        assertTrue(prompt.contains("clawconnect send-file --profile openclaw --json \"<本地文件绝对路径>\""))
+        assertTrue(prompt.contains("必须在最终回复前执行这个命令"))
+        assertTrue(prompt.contains("只在最终回答里输出本地路径并不会发送文件"))
+        assertTrue(prompt.contains("不要使用 `delegate_task`、子代理、`execute_code`、Python、Node.js、shell 脚本或包装命令"))
+        assertTrue(prompt.contains("不要用聊天附件、`chat.send` attachments、Markdown 图片链接或最终回答里的本地路径替代文件发送"))
+        assertTrue(prompt.contains("不要在 ClawLink/移动端触发的回合里添加 `--session` 或 `--source-run-id`"))
+        assertTrue(prompt.contains("CLAWCONNECT_CHAT_SESSION_KEY"))
+        assertTrue(prompt.contains("CLAWCONNECT_SOURCE_RUN_ID"))
+        assertTrue(prompt.contains("不要写到 `~/.codex/skills`"))
+        assertTrue(prompt.contains("如果文件在 iPhone/手机上"))
+        assertFalse(prompt.contains("clawconnect send-file <本地路径>"))
+        assertFalse(prompt.contains("默认会话选择规则"))
+        assertFalse(prompt.contains("不传时默认使用最近活跃会话"))
+        assertFalse(prompt.contains("长期记忆"))
+    }
 }
