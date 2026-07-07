@@ -122,8 +122,12 @@ private fun String.toState(): MessageState = when (trim().lowercase()) {
 }
 
 private fun displayText(blocks: List<RelayChatContentBlock>): String {
+    val textBlockContent = blocks
+        .filter { it.isTextBlock }
+        .mapNotNull { it.text?.trim()?.takeIf(String::isNotEmpty) }
+        .joinToString("\n\n")
+    if (textBlockContent.isNotEmpty()) return textBlockContent
     return blocks
-        .filter { it.type == "text" || it.text?.isNotBlank() == true }
         .mapNotNull { it.text?.trim()?.takeIf(String::isNotEmpty) }
         .joinToString("\n\n")
 }
@@ -188,11 +192,7 @@ private fun ChatMessage.toEntry(sessionKey: String, originalIndex: Int = 0): Can
     val canonicalOrderKey = timelineOrderKey.clean()
     val identity = canonicalIdentityKey?.let { TimelineStableIdentity(it, TimelineIdentitySource.MessageId) }
         ?: stableTimelineKey(sessionKey, this)
-    val canonicalContent = sanitizeChatContentBlocks(contentBlocks).ifEmpty {
-        sanitizeChatMessageText(content).takeIf { it.isNotEmpty() }?.let {
-            listOf(RelayChatContentBlock(type = "text", text = it))
-        } ?: emptyList()
-    }
+    val canonicalContent = canonicalContentForTimelineEntry()
     return CanonicalTimelineEntry(
         originalIndex = originalIndex,
         sessionKey = sessionKey,
@@ -247,6 +247,35 @@ private fun CanonicalTimelineEntry.toChatMessage(): ChatMessage {
 
 private fun ChatMessage.localClientId(): String? {
     return runId.removePrefix("local-user-").takeIf { it != runId && it.isNotBlank() }
+}
+
+private fun ChatMessage.canonicalContentForTimelineEntry(): List<RelayChatContentBlock> {
+    val sanitizedBlocks = sanitizeChatContentBlocks(contentBlocks)
+    val sanitizedText = sanitizeChatMessageText(content).takeIf { it.isNotEmpty() }
+    if (sanitizedText == null) return sanitizedBlocks
+    if (sanitizedBlocks.isEmpty()) return listOf(RelayChatContentBlock(type = "text", text = sanitizedText))
+    if (role != MessageRole.user) return sanitizedBlocks
+    if (sanitizedBlocks.any { it.isTextBlock && sanitizeChatMessageText(it.text.orEmpty()) == sanitizedText }) {
+        return sanitizedBlocks
+    }
+    if (sanitizedText.isAttachmentLabelFor(sanitizedBlocks)) return sanitizedBlocks
+
+    // 图片/文件 user 消息在本地回显、实时回显、历史 snapshot 间切换时，content 可能保存用户提示词，
+    // 但 contentBlocks 只剩文件块。v3 对账必须把提示词提升为 text block，避免重排后正文降级成文件名或空白。
+    return listOf(RelayChatContentBlock(type = "text", text = sanitizedText)) + sanitizedBlocks
+}
+
+private fun String.isAttachmentLabelFor(blocks: List<RelayChatContentBlock>): Boolean {
+    val normalizedText = normalizedAttachmentLabel()
+    if (normalizedText.isEmpty()) return false
+    return blocks
+        .filter { it.isFileBlock || it.isVoiceMessageBlock }
+        .flatMap { block -> listOf(block.fileDisplayName, block.name, block.text, block.fileStatusText, block.voiceStatusText) }
+        .any { label -> label?.normalizedAttachmentLabel() == normalizedText }
+}
+
+private fun String.normalizedAttachmentLabel(): String {
+    return trim().replace(Regex("\\s+"), " ").lowercase()
 }
 
 private fun String.toEpochSeconds(): Double? {
