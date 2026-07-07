@@ -19,6 +19,7 @@ import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.double
 import kotlinx.serialization.json.long
 import java.io.File
+import java.util.Locale
 
 // ── MessageRole ──────────────────────────────────────────────────────────
 @Serializable
@@ -365,7 +366,7 @@ data class RelayChatContentBlock(
         get() {
             val duration = durationMs?.takeIf { it > 0 } ?: return null
             val totalSeconds = maxOf(1, kotlin.math.round(duration / 1000.0).toInt())
-            return String.format("%d:%02d", totalSeconds / 60, totalSeconds % 60)
+            return String.format(Locale.ROOT, "%d:%02d", totalSeconds / 60, totalSeconds % 60)
         }
     val voiceTranscriptText: String? get() = transcript?.trim()?.takeIf { it.isNotEmpty() }
     val voiceStatusText: String?
@@ -519,7 +520,7 @@ data class ComposerAttachmentDraft(
             val parts = mutableListOf(mimeType)
             if (durationMs != null && durationMs > 0) {
                 val totalSec = maxOf(1, (durationMs / 1000.0).toInt())
-                parts.add(String.format("%d:%02d", totalSec / 60, totalSec % 60))
+                parts.add(String.format(Locale.ROOT, "%d:%02d", totalSec / 60, totalSec % 60))
             }
             parts.add(displaySize)
             return parts.filter { it.isNotBlank() }.joinToString(" · ")
@@ -528,9 +529,9 @@ data class ComposerAttachmentDraft(
     companion object {
         fun formatByteCount(bytes: Long): String = when {
             bytes < 1024 -> "$bytes B"
-            bytes < 1024 * 1024 -> String.format("%.1f KB", bytes / 1024.0)
-            bytes < 1024 * 1024 * 1024 -> String.format("%.1f MB", bytes / (1024.0 * 1024))
-            else -> String.format("%.1f GB", bytes / (1024.0 * 1024 * 1024))
+            bytes < 1024 * 1024 -> String.format(Locale.ROOT, "%.1f KB", bytes / 1024.0)
+            bytes < 1024 * 1024 * 1024 -> String.format(Locale.ROOT, "%.1f MB", bytes / (1024.0 * 1024))
+            else -> String.format(Locale.ROOT, "%.1f GB", bytes / (1024.0 * 1024 * 1024))
         }
     }
 }

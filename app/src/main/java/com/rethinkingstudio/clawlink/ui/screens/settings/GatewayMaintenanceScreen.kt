@@ -38,6 +38,7 @@ import com.rethinkingstudio.clawlink.R
 import com.rethinkingstudio.clawlink.core.models.gateway.AggregateStatus
 import com.rethinkingstudio.clawlink.core.models.gateway.GatewayType
 import com.rethinkingstudio.clawlink.core.state.gateway.GatewayStore
+import java.util.Locale
 import com.rethinkingstudio.clawlink.ui.components.ClawLinkScaffold
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -460,7 +461,7 @@ fun GatewayMaintenanceScreen(
                                     }
 
                                     Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                                        val elapsedFmt = String.format("%02d:%02d", elapsedSeconds / 60, elapsedSeconds % 60)
+                                        val elapsedFmt = String.format(Locale.ROOT, "%02d:%02d", elapsedSeconds / 60, elapsedSeconds % 60)
                                         Box(modifier = Modifier.weight(1f)) {
                                             MetricChip(stringResource(R.string.maintenance_metric_elapsed), elapsedFmt)
                                         }

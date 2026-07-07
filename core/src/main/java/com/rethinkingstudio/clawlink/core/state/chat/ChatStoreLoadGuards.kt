@@ -4,6 +4,8 @@ import io.ktor.client.plugins.HttpRequestTimeoutException
 import java.net.SocketTimeoutException
 import kotlinx.coroutines.delay
 
+private const val CHAT_STORE_LOG_TAG = "ChatStore"
+
 internal suspend fun <T> retryOnceOnTransientFailure(
     operationName: String,
     block: suspend () -> T
@@ -23,9 +25,17 @@ internal suspend fun <T> retryOnceOnTransientFailure(
 internal fun logWarning(message: String, throwable: Throwable? = null) {
     runCatching {
         if (throwable == null) {
-            android.util.Log.w("ChatStore", message)
+            android.util.Log.w(CHAT_STORE_LOG_TAG, message)
         } else {
-            android.util.Log.w("ChatStore", message, throwable)
+            android.util.Log.w(CHAT_STORE_LOG_TAG, message, throwable)
+        }
+    }
+}
+
+internal fun logDebug(message: String) {
+    runCatching {
+        if (android.util.Log.isLoggable(CHAT_STORE_LOG_TAG, android.util.Log.DEBUG)) {
+            android.util.Log.d(CHAT_STORE_LOG_TAG, message)
         }
     }
 }

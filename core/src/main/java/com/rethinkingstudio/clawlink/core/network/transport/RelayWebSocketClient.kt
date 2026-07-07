@@ -29,6 +29,8 @@ import java.util.UUID
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 
+private const val RELAY_WS_LOG_TAG = "RelayWS"
+
 data class WsEvent(
     val type: String,
     val event: String? = null,
@@ -268,18 +270,24 @@ class RelayWebSocketClient {
             pendingOutbound.clear()
             queued
         }
+        if (messages.isNotEmpty()) {
+            logDebug("WS flush queued outbound count=${messages.size}")
+        }
         for (message in messages) {
-            logDebug("WS FLUSH: $message")
             socket.send(message)
         }
     }
 
     private fun logDebug(message: String) {
-        runCatching { android.util.Log.d("RelayWS", message) }
+        runCatching {
+            if (android.util.Log.isLoggable(RELAY_WS_LOG_TAG, android.util.Log.DEBUG)) {
+                android.util.Log.d(RELAY_WS_LOG_TAG, message)
+            }
+        }
     }
 
     private fun logWarning(message: String) {
-        runCatching { android.util.Log.w("RelayWS", message) }
+        runCatching { android.util.Log.w(RELAY_WS_LOG_TAG, message) }
     }
 
     private val reconnectDelays = listOf(1_000L, 2_000L, 4_000L, 8_000L, 15_000L)

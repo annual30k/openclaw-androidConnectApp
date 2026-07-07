@@ -28,7 +28,7 @@ internal fun ChatStore.abortActiveRun() {
     abortRequestIds.add(requestId)
     _state.value = _state.value.copy(isStoppingRun = true)
 
-    android.util.Log.d("ChatStore", "Stopping run: $activeRunId for gateway: $gatewayId, session: $sessionKey")
+    logDebug("Stopping active chat run")
 
     wsClient.abortChatRun(gatewayId, sessionKey, activeRunId, requestId)
     completeCurrentStreamingMessageLocally(activeRunId)

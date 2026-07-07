@@ -290,10 +290,7 @@ internal class ChatHistoryCoordinator(
                     )
                 )
                 clearStreamingPointersIfResolved(prepared.orderedMessages)
-                android.util.Log.d(
-                    "ChatStore",
-                    "Silent chat final sync merged page ${pageCount + 1} with ${response.items.size} history items for $normalizedGatewayId/$normalizedSessionKey"
-                )
+                logDebug("Silent chat final sync merged page ${pageCount + 1} with ${response.items.size} history items")
                 pageCount += 1
                 cursor = response.nextCursor
                 if (!response.hasMore || cursor.isNullOrBlank()) {

@@ -183,7 +183,7 @@ internal object TimelineEventLog {
 
     fun decodeEvent(raw: String): TimelineEvent? {
         return try {
-        val event = json.decodeFromString(RawTimelineEvent.serializer(), raw)
+            val event = json.decodeFromString(RawTimelineEvent.serializer(), raw)
             if (event.protocolVersion != 2) return null
             event.toTimelineEvent()
         } catch (_: SerializationException) {

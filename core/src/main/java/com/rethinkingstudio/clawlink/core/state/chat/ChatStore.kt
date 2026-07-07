@@ -233,7 +233,7 @@ class ChatStore(
             chatFinalSyncJobs.remove(assistantMessageId)
             if (!needsChatFinalSync(runId, runScope)) return@launch
 
-            android.util.Log.d("ChatStore", "Silent chat final sync attempt=${attempt + 1} runId=$runId session=$sessionKey")
+            logDebug("Silent chat final sync attempt=${attempt + 1}")
             historyCoordinator.resolvePendingFinalFromHistory(
                 gatewayId = gatewayId,
                 sessionKey = sessionKey,

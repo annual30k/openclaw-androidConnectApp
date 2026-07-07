@@ -25,17 +25,12 @@ class OfficeRoutePlanner private constructor(context: Context? = null) {
     private var walkable: Array<BooleanArray> = emptyArray()
 
     init {
-        android.util.Log.e("PixelOffice", "OfficeRoutePlanner: Initializing")
         if (context != null) {
-            android.util.Log.e("PixelOffice", "OfficeRoutePlanner: Building grid from background asset")
             val grid = buildWalkableGrid(context)
             if (grid != null) {
                 rows = grid.rows
                 cols = grid.cols
                 walkable = grid.walkable
-                android.util.Log.e("PixelOffice", "OfficeRoutePlanner: Grid built: $rows x $cols")
-            } else {
-                android.util.Log.e("PixelOffice", "OfficeRoutePlanner: FAILED to build grid from background asset")
             }
         }
         
