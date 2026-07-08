@@ -107,11 +107,12 @@ internal fun ChatStore.sendVoiceOutgoingRun(
 }
 
 internal fun ChatStore.sendSlashCommand(gatewayId: String, command: String) {
-    val sessionKey = _state.value.currentSessionKey
-    if (sessionKey.isBlank()) return
-
-    val requestId = UUID.randomUUID().toString()
-    rememberRunScope(requestId, ChatRunScope(gatewayId = gatewayId, sessionKey = sessionKey))
-    persistSelectedSession(gatewayId, sessionKey)
-    wsClient.sendCommand(gatewayId, sessionKey, command, requestId)
+    // Slash 指令也需要走完整本地 turn，这样用户能看到已发送内容，后续事件也能按稳定 run scope 归位。
+    sendTextOutgoingRun(
+        content = command,
+        gatewayId = gatewayId,
+        attachmentIds = emptyList(),
+        attachmentBlocks = emptyList(),
+        commandAttachments = emptyList()
+    )
 }

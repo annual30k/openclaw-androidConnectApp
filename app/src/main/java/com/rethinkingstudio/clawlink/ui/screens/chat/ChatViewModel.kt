@@ -422,26 +422,29 @@ internal class ChatViewModel(
         }
         
         if (trimmed.startsWith("/")) {
-            if (trimmed == "/new" && gatewayStore.state.value.selectedGateway?.gatewayType == GatewayType.hermes) {
-                chatStore.newSession(newMobileDraftSessionKey())
-                chatStore.sendCommand(
-                    gatewayId = gatewayId,
-                    command = trimmed
-                )
-                resetComposerForNewSession()
-            } else {
-                chatStore.sendCommand(
-                    gatewayId = gatewayId,
-                    command = trimmed
-                )
-                if (trimmed == "/new") {
-                    chatStore.newSession()
-                    resetComposerForNewSession()
-                    return
+            if (trimmed == "/new") {
+                val nextSessionKey = newMobileDraftSessionKey()
+                chatStore.newSession(nextSessionKey)
+                if (gatewayStore.state.value.selectedGateway?.gatewayType == GatewayType.hermes) {
+                    chatStore.sendCommand(
+                        gatewayId = gatewayId,
+                        command = trimmed
+                    )
+                } else {
+                    chatStore.resetSession(
+                        gatewayId = gatewayId,
+                        sessionKey = nextSessionKey
+                    )
                 }
-                messageText = ""
-                composerNotice = null
+                resetComposerForNewSession()
+                return
             }
+            chatStore.sendCommand(
+                gatewayId = gatewayId,
+                command = trimmed
+            )
+            messageText = ""
+            composerNotice = null
             return
         }
 

@@ -41,4 +41,21 @@ class RelayChatSendPayloadTest {
         assertEquals("4", attachment["sizeBytes"]!!.jsonPrimitive.content)
         assertEquals("YWJjZA==", attachment["content"]!!.jsonPrimitive.content)
     }
+
+    @Test
+    fun buildsSessionResetCommandWithTargetSessionKey() {
+        val payload = buildSessionResetPayload(
+            gatewayId = "gateway-1",
+            sessionKey = "mobile-abc123",
+            requestId = "request-1"
+        )
+
+        assertEquals("cmd", payload["type"]!!.jsonPrimitive.content)
+        assertEquals("request-1", payload["id"]!!.jsonPrimitive.content)
+        assertEquals("gateway-1", payload["gatewayId"]!!.jsonPrimitive.content)
+        assertEquals("sessions.reset", payload["method"]!!.jsonPrimitive.content)
+
+        val params = payload["params"]!!.jsonObject
+        assertEquals("mobile-abc123", params["key"]!!.jsonPrimitive.content)
+    }
 }

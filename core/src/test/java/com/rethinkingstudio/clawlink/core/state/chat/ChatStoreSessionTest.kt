@@ -468,6 +468,39 @@ class ChatStoreSessionTest {
         }
     }
 
+    @Test
+    fun sendSlashCommandAddsVisibleLocalTurnInCurrentSession() {
+        val wsClient = RelayWebSocketClient()
+        try {
+            val store = ChatStore(
+                apiClient = RelayAPIClient(),
+                wsClient = wsClient,
+                notificationPort = object : NotificationPort {
+                    override fun showReplyNotification(sessionKey: String, title: String, body: String) = Unit
+                    override fun cancelNotification(id: Int) = Unit
+                    override fun cancelAll() = Unit
+                }
+            )
+
+            store.beginGatewaySwitch("gateway-1")
+            store.newSession("session-a")
+
+            store.sendCommand(gatewayId = "gateway-1", command = "/status")
+
+            val messages = store.state.value.messages
+            assertEquals("session-a", store.state.value.currentSessionKey)
+            assertEquals(listOf(MessageRole.user, MessageRole.assistant), messages.map { it.role })
+            assertEquals("/status", messages.first().content)
+            assertEquals(MessageState.completed, messages.first().state)
+            assertEquals(MessageState.streaming, messages.last().state)
+            assertTrue(messages.first().runId.startsWith("local-user-"))
+            assertTrue(store.state.value.isStreaming)
+            assertEquals(messages, currentTimelineState(store).messages)
+        } finally {
+            wsClient.destroy()
+        }
+    }
+
     @Ignore("Legacy attachment upload placeholder coalescing by local identity was removed from display ordering.")
     @Test
     fun sendMessageReplacesAttachmentUploadPlaceholderWithCombinedPrompt() {

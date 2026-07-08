@@ -593,6 +593,17 @@ class ChatStore(
         sendSlashCommand(gatewayId, command)
     }
 
+    fun resetSession(gatewayId: String, sessionKey: String = _state.value.currentSessionKey) {
+        val normalizedGatewayId = gatewayId.trim()
+        if (normalizedGatewayId.isBlank()) return
+        val normalizedSessionKey = normalizeSessionKey(sessionKey)
+        persistSelectedSession(normalizedGatewayId, normalizedSessionKey)
+        wsClient.resetSession(
+            gatewayId = normalizedGatewayId,
+            sessionKey = normalizedSessionKey
+        )
+    }
+
     fun abortRun() {
         abortActiveRun()
     }

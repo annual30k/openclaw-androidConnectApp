@@ -213,6 +213,20 @@ class RelayWebSocketClient {
         return requestId
     }
 
+    fun resetSession(
+        gatewayId: String,
+        sessionKey: String,
+        requestId: String = UUID.randomUUID().toString()
+    ): String {
+        val payload = buildSessionResetPayload(
+            gatewayId = gatewayId,
+            sessionKey = sessionKey,
+            requestId = requestId
+        )
+        send(payload.toString())
+        return requestId
+    }
+
     fun abortChatRun(gatewayId: String, sessionKey: String, runId: String?, requestId: String = UUID.randomUUID().toString()) {
         val params = buildJsonObject {
             put("sessionKey", JsonPrimitive(sessionKey))

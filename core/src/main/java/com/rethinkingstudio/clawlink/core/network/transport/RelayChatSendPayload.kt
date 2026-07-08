@@ -61,3 +61,20 @@ internal fun buildChatSendPayloadFromJsonAttachments(
         put("params", params)
     }
 }
+
+fun buildSessionResetPayload(
+    gatewayId: String,
+    sessionKey: String,
+    requestId: String
+): JsonObject {
+    val params = buildJsonObject {
+        put("key", JsonPrimitive(sessionKey))
+    }
+    return buildJsonObject {
+        put("type", JsonPrimitive("cmd"))
+        put("id", JsonPrimitive(requestId))
+        put("gatewayId", JsonPrimitive(gatewayId))
+        put("method", JsonPrimitive("sessions.reset"))
+        put("params", params)
+    }
+}
