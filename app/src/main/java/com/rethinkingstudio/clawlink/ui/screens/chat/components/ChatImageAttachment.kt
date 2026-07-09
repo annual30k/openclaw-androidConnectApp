@@ -90,6 +90,17 @@ import kotlinx.coroutines.withContext
 import java.io.File
 import java.net.HttpURLConnection
 import java.net.URL
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.foundation.gestures.detectTransformGestures
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.geometry.Offset
+import com.rethinkingstudio.clawlink.ui.screens.chat.ChatImageItem
+import com.rethinkingstudio.clawlink.ui.screens.chat.ChatImagePreviewState
 
 internal fun imagePreviewDimensions(block: RelayChatContentBlock, maxWidth: Dp = 290.dp): Pair<Dp, Dp> {
     val maxHeight = 400.dp
@@ -295,30 +306,25 @@ private fun ImageLoadingPlaceholder(isFailed: Boolean, modifier: Modifier = Modi
 }
 
 @Composable
+@OptIn(ExperimentalFoundationApi::class)
 internal fun ImageFullscreenOverlay(
-    url: String,
-    accessToken: String,
-    fileName: String?,
-    cacheKey: String? = null,
+    images: List<ChatImageItem>,
+    initialIndex: Int,
     onDismiss: () -> Unit
 ) {
     val context = LocalContext.current
-    val resolvedCacheKey = cacheKey ?: url
-    val displayFileName = fileName?.trim()?.takeIf { it.isNotEmpty() } ?: choose("image", "图片")
-    var bitmap by remember(resolvedCacheKey, url) { mutableStateOf(RemoteImageCache.get(resolvedCacheKey)) }
-    var didFail by remember(resolvedCacheKey, url) { mutableStateOf(false) }
-    var showTopMenu by remember(url) { mutableStateOf(false) }
+    val pagerState = rememberPagerState(initialPage = initialIndex) { images.size }
+    val currentImage = images[pagerState.currentPage]
+
+    val resolvedCacheKey = currentImage.cacheKey ?: currentImage.url
+    val displayFileName = currentImage.fileName?.trim()?.takeIf { it.isNotEmpty() } ?: choose("image", "图片")
+    var showTopMenu by remember(currentImage.url) { mutableStateOf(false) }
     var localCopyFile by remember(resolvedCacheKey) { mutableStateOf(RemoteImageCache.cachedFile(resolvedCacheKey)) }
-    LaunchedEffect(resolvedCacheKey, url, accessToken) {
-        if (bitmap != null) return@LaunchedEffect
-        didFail = false
-        val result = withContext(Dispatchers.IO) { loadRemoteBitmap(url, accessToken, resolvedCacheKey) }
-        if (result != null) {
-            RemoteImageCache.put(resolvedCacheKey, result)
-            localCopyFile = RemoteImageCache.cachedFile(resolvedCacheKey)
-        }
-        bitmap = result; didFail = result == null
+
+    LaunchedEffect(resolvedCacheKey) {
+        localCopyFile = RemoteImageCache.cachedFile(resolvedCacheKey)
     }
+
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -327,17 +333,16 @@ internal fun ImageFullscreenOverlay(
             .zIndex(100f)
     ) {
         Box(modifier = Modifier.fillMaxWidth().fillMaxHeight(0.18f).background(Brush.verticalGradient(listOf(Color.Black.copy(alpha = 0.78f), Color.Transparent))))
-        Box(modifier = Modifier.fillMaxWidth().fillMaxHeight(0.16f).align(Alignment.BottomCenter).background(Brush.verticalGradient(listOf(Color.Transparent, Color.Black.copy(alpha = 0.82f)))))
-        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            val bmp = bitmap
-            when {
-                bmp != null -> Image(bitmap = bmp.asImageBitmap(), contentDescription = fileName, contentScale = ContentScale.Fit, modifier = Modifier.fillMaxSize())
-                didFail -> Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Icon(Icons.Default.Image, contentDescription = null, tint = Color.White.copy(alpha = 0.80f), modifier = Modifier.size(42.dp))
-                    Text(choose("Image load failed", "图片加载失败"), style = MaterialTheme.typography.bodyMedium, color = Color.White.copy(alpha = 0.74f))
-                }
-                else -> CircularProgressIndicator(modifier = Modifier.size(32.dp), color = Color.White.copy(alpha = 0.80f), strokeWidth = 2.5.dp)
-            }
+        
+        HorizontalPager(
+            state = pagerState,
+            modifier = Modifier.fillMaxSize()
+        ) { page ->
+            val img = images[page]
+            ImagePageContent(
+                imageItem = img,
+                onDismiss = onDismiss
+            )
         }
 
         Row(modifier = Modifier.fillMaxWidth().statusBarsPadding().padding(horizontal = 14.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -376,6 +381,22 @@ internal fun ImageFullscreenOverlay(
                     onDismissRequest = { showTopMenu = false }
                 ) {
                     DropdownMenuItem(
+                        text = { Text(choose("Share", "分享")) },
+                        leadingIcon = { Icon(Icons.Default.Share, contentDescription = null) },
+                        onClick = {
+                            shareCurrentImage(context, null, localCopyFile)
+                            showTopMenu = false
+                        }
+                    )
+                    DropdownMenuItem(
+                        text = { Text(choose("Save", "保存")) },
+                        leadingIcon = { Icon(Icons.Default.SaveAlt, contentDescription = null) },
+                        onClick = {
+                            saveImageToLocal(context, null, localCopyFile, currentImage.fileName)
+                            showTopMenu = false
+                        }
+                    )
+                    DropdownMenuItem(
                         text = { Text(choose("Delete local copy", "删除本地副本")) },
                         leadingIcon = { Icon(Icons.Default.Delete, contentDescription = null) },
                         onClick = {
@@ -401,111 +422,113 @@ internal fun ImageFullscreenOverlay(
                 }
             }
         }
+    }
+}
 
-        ImagePreviewActionDock(
-            onShare = { shareCurrentImage(context, bitmap, localCopyFile) },
-            onSave = { saveImageToLocal(context, bitmap, localCopyFile, fileName) },
-            onCopy = {
-                val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
-                clipboard?.setPrimaryClip(ClipData.newPlainText("file_name", displayFileName))
-                Toast.makeText(context, choose("Copied", "已复制"), Toast.LENGTH_SHORT).show()
+@Composable
+private fun ImagePageContent(
+    imageItem: ChatImageItem,
+    onDismiss: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val resolvedCacheKey = imageItem.cacheKey ?: imageItem.url
+    var bitmap by remember(resolvedCacheKey, imageItem.url) { mutableStateOf(RemoteImageCache.get(resolvedCacheKey)) }
+    var didFail by remember(resolvedCacheKey, imageItem.url) { mutableStateOf(false) }
+
+    LaunchedEffect(resolvedCacheKey, imageItem.url, imageItem.accessToken) {
+        if (bitmap != null) return@LaunchedEffect
+        didFail = false
+        val result = withContext(Dispatchers.IO) {
+            loadRemoteBitmap(imageItem.url, imageItem.accessToken, resolvedCacheKey)
+        }
+        if (result != null) {
+            RemoteImageCache.put(resolvedCacheKey, result)
+        }
+        bitmap = result
+        didFail = result == null
+    }
+
+    Box(modifier = modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+        val bmp = bitmap
+        when {
+            bmp != null -> ZoomableImage(bitmap = bmp, contentDescription = imageItem.fileName, onDismiss = onDismiss)
+            didFail -> Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+                modifier = Modifier.pointerInput(Unit) { detectTapGestures(onTap = { onDismiss() }) }
+            ) {
+                Icon(Icons.Default.Image, contentDescription = null, tint = Color.White.copy(alpha = 0.80f), modifier = Modifier.size(42.dp))
+                Text(choose("Image load failed", "图片加载失败"), style = MaterialTheme.typography.bodyMedium, color = Color.White.copy(alpha = 0.74f))
+            }
+            else -> CircularProgressIndicator(modifier = Modifier.size(32.dp), color = Color.White.copy(alpha = 0.80f), strokeWidth = 2.5.dp)
+        }
+    }
+}
+
+@Composable
+fun ZoomableImage(
+    bitmap: Bitmap,
+    contentDescription: String?,
+    onDismiss: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    var scale by remember { mutableStateOf(1f) }
+    var offset by remember { mutableStateOf(Offset.Zero) }
+
+    BoxWithConstraints(
+        modifier = modifier
+            .fillMaxSize()
+            .pointerInput(Unit) {
+                detectTapGestures(
+                    onDoubleTap = {
+                        if (scale > 1f) {
+                            scale = 1f
+                            offset = Offset.Zero
+                        } else {
+                            scale = 2.5f
+                            offset = Offset.Zero
+                        }
+                    },
+                    onTap = {
+                        onDismiss()
+                    }
+                )
             },
+        contentAlignment = Alignment.Center
+    ) {
+        val width = constraints.maxWidth.toFloat()
+        val height = constraints.maxHeight.toFloat()
+
+        Image(
+            bitmap = bitmap.asImageBitmap(),
+            contentDescription = contentDescription,
+            contentScale = ContentScale.Fit,
             modifier = Modifier
-                .align(Alignment.BottomCenter)
-                .navigationBarsPadding()
-                .padding(horizontal = 20.dp, vertical = 18.dp)
+                .fillMaxSize()
+                .pointerInput(Unit) {
+                    detectTransformGestures { _, pan, zoom, _ ->
+                        val newScale = (scale * zoom).coerceIn(1f, 5f)
+                        val maxX = (width * (newScale - 1f)) / 2f
+                        val maxY = (height * (newScale - 1f)) / 2f
+
+                        scale = newScale
+                        offset = if (newScale > 1f) {
+                            Offset(
+                                x = (offset.x + pan.x).coerceIn(-maxX, maxX),
+                                y = (offset.y + pan.y).coerceIn(-maxY, maxY)
+                            )
+                        } else {
+                            Offset.Zero
+                        }
+                    }
+                }
+                .graphicsLayer(
+                    scaleX = scale,
+                    scaleY = scale,
+                    translationX = offset.x,
+                    translationY = offset.y
+                )
         )
-    }
-}
-
-@Composable
-private fun ImagePreviewActionDock(
-    onShare: () -> Unit,
-    onSave: () -> Unit,
-    onCopy: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    Surface(
-        shape = RoundedCornerShape(24.dp),
-        color = Color(0xFF20242D).copy(alpha = 0.58f),
-        border = BorderStroke(1.dp, Color.White.copy(alpha = 0.16f)),
-        shadowElevation = 0.dp,
-        modifier = modifier.fillMaxWidth()
-    ) {
-        Row(
-            modifier = Modifier
-                .background(
-                    Brush.verticalGradient(
-                        listOf(
-                            Color.White.copy(alpha = 0.14f),
-                            Color.White.copy(alpha = 0.04f)
-                        )
-                    )
-                )
-                .padding(8.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            ImagePreviewDockButton(
-                icon = Icons.Default.Share,
-                label = choose("Share", "分享"),
-                onClick = onShare,
-                modifier = Modifier.weight(1f)
-            )
-            ImagePreviewDockButton(
-                icon = Icons.Default.SaveAlt,
-                label = choose("Save", "保存"),
-                onClick = onSave,
-                modifier = Modifier.weight(1f)
-            )
-            ImagePreviewDockButton(
-                icon = Icons.Default.ContentCopy,
-                label = choose("Copy", "复制"),
-                onClick = onCopy,
-                modifier = Modifier.weight(1f)
-            )
-        }
-    }
-}
-
-@Composable
-private fun ImagePreviewDockButton(
-    icon: ImageVector,
-    label: String,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    Surface(
-        onClick = onClick,
-        shape = RoundedCornerShape(18.dp),
-        color = Color.White.copy(alpha = 0.08f),
-        border = BorderStroke(1.dp, Color.White.copy(alpha = 0.18f)),
-        modifier = modifier.height(46.dp)
-    ) {
-        Row(
-            modifier = Modifier
-                .background(
-                    Brush.verticalGradient(
-                        listOf(
-                            Color.White.copy(alpha = 0.24f),
-                            Color.White.copy(alpha = 0.07f)
-                        )
-                    )
-                )
-                .padding(horizontal = 10.dp),
-            horizontalArrangement = Arrangement.Center,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Icon(icon, contentDescription = null, tint = Color.White, modifier = Modifier.size(17.dp))
-            Spacer(Modifier.width(6.dp))
-            Text(
-                label,
-                style = MaterialTheme.typography.labelMedium.copy(fontSize = 14.sp, fontWeight = FontWeight.SemiBold),
-                color = Color.White,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
-        }
     }
 }
 

@@ -659,10 +659,8 @@ fun ChatScreen(
         }
         if (imagePreview != null) {
             ImageFullscreenOverlay(
-                url = imagePreview.url,
-                accessToken = imagePreview.accessToken,
-                fileName = imagePreview.fileName,
-                cacheKey = imagePreview.cacheKey,
+                images = imagePreview.images,
+                initialIndex = imagePreview.initialIndex,
                 onDismiss = { viewModel.imagePreview = null }
             )
         }

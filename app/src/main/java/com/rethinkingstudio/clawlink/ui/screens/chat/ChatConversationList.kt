@@ -26,6 +26,7 @@ import com.rethinkingstudio.clawlink.ui.screens.chat.components.EmptyGatewayCard
 import com.rethinkingstudio.clawlink.ui.screens.chat.components.MessageBubble
 import com.rethinkingstudio.clawlink.ui.screens.chat.components.ThinkingRow
 import com.rethinkingstudio.clawlink.ui.screens.chat.components.UsageGuidePromptCard
+import com.rethinkingstudio.clawlink.ui.screens.chat.components.resolveFileDownloadUrl
 
 @Composable
 internal fun ChatConversationList(
@@ -135,11 +136,25 @@ LazyColumn(
                 },
                 onImageClick = { block, url, fileName ->
                     onDismissKeyboard()
+                    val allImages = displayMessages.flatMap { msg ->
+                        msg.contentBlocks.filter { it.isImageFileBlock }.mapNotNull { b ->
+                            val rawUrl = b.preferredImagePreviewURLString?.trim()?.takeIf { it.isNotEmpty() }
+                            val resolvedUrl = resolveFileDownloadUrl(b, chatStore.relayBaseUrl, rawUrl)
+                            if (resolvedUrl != null) {
+                                ChatImageItem(
+                                    url = resolvedUrl,
+                                    accessToken = chatStore.accessToken,
+                                    fileName = b.fileDisplayName ?: b.fileName,
+                                    cacheKey = b.chatImageCacheKey()
+                                )
+                            } else null
+                        }
+                    }
+                    val clickedCacheKey = block.chatImageCacheKey()
+                    val initialIndex = allImages.indexOfFirst { it.cacheKey == clickedCacheKey }.coerceAtLeast(0)
                     viewModel.imagePreview = ChatImagePreviewState(
-                        url = url,
-                        accessToken = chatStore.accessToken,
-                        fileName = fileName,
-                        cacheKey = block.chatImageCacheKey()
+                        images = allImages,
+                        initialIndex = initialIndex
                     )
                 },
                 onFileClick = { block, url, fileName ->
