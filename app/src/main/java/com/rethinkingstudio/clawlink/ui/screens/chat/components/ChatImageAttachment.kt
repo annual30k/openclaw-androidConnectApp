@@ -63,13 +63,14 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -303,6 +304,7 @@ internal fun ImageFullscreenOverlay(
 ) {
     val context = LocalContext.current
     val resolvedCacheKey = cacheKey ?: url
+    val displayFileName = fileName?.trim()?.takeIf { it.isNotEmpty() } ?: choose("image", "图片")
     var bitmap by remember(resolvedCacheKey, url) { mutableStateOf(RemoteImageCache.get(resolvedCacheKey)) }
     var didFail by remember(resolvedCacheKey, url) { mutableStateOf(false) }
     var showTopMenu by remember(url) { mutableStateOf(false) }
@@ -337,18 +339,31 @@ internal fun ImageFullscreenOverlay(
                 else -> CircularProgressIndicator(modifier = Modifier.size(32.dp), color = Color.White.copy(alpha = 0.80f), strokeWidth = 2.5.dp)
             }
         }
-        // Top bar
+
         Row(modifier = Modifier.fillMaxWidth().statusBarsPadding().padding(horizontal = 14.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
             Surface(onClick = onDismiss, shape = CircleShape, color = Color(0xFF2A2D36).copy(alpha = 0.92f), border = BorderStroke(1.dp, Color.White.copy(alpha = 0.08f)), modifier = Modifier.size(40.dp)) {
                 Box(contentAlignment = Alignment.Center) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = choose("Close", "关闭"), tint = Color.White, modifier = Modifier.size(18.dp)) }
             }
             Spacer(Modifier.size(12.dp))
-            Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.Center) {
-                if (!fileName.isNullOrBlank()) {
-                    Surface(shape = RoundedCornerShape(999.dp), color = Color.Black.copy(alpha = 0.34f), border = BorderStroke(1.dp, Color.White.copy(alpha = 0.08f))) {
-                        Text(fileName, modifier = Modifier.padding(horizontal = 16.dp, vertical = 9.dp), style = MaterialTheme.typography.labelMedium.copy(fontSize = 13.sp), color = Color.White, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    }
-                }
+            Column(
+                modifier = Modifier.weight(1f).padding(horizontal = 4.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.Center
+            ) {
+                Text(
+                    displayFileName,
+                    style = MaterialTheme.typography.titleSmall.copy(fontSize = 15.sp, fontWeight = FontWeight.SemiBold),
+                    color = Color.White,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Text(
+                    choose("Image preview", "图片预览"),
+                    style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp, fontWeight = FontWeight.Medium),
+                    color = Color.White.copy(alpha = 0.58f),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
             }
             Spacer(Modifier.size(12.dp))
             Box {
@@ -361,27 +376,17 @@ internal fun ImageFullscreenOverlay(
                     onDismissRequest = { showTopMenu = false }
                 ) {
                     DropdownMenuItem(
-                        text = { Text(choose("Share", "分享")) },
-                        leadingIcon = { Icon(Icons.Default.Share, contentDescription = null) },
+                        text = { Text(choose("Delete local copy", "删除本地副本")) },
+                        leadingIcon = { Icon(Icons.Default.Delete, contentDescription = null) },
                         onClick = {
-                            shareCurrentImage(context, bitmap, localCopyFile)
-                            showTopMenu = false
-                        }
-                    )
-                    DropdownMenuItem(
-                        text = { Text(choose("Save locally", "保存到本地")) },
-                        leadingIcon = { Icon(Icons.Default.SaveAlt, contentDescription = null) },
-                        onClick = {
-                            saveImageToLocal(context, bitmap, localCopyFile, fileName)
-                            showTopMenu = false
-                        }
-                    )
-                    DropdownMenuItem(
-                        text = { Text(choose("Copy filename", "复制文件名")) },
-                        leadingIcon = { Icon(Icons.Default.ContentCopy, contentDescription = null) },
-                        onClick = {
-                            val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
-                            clipboard?.setPrimaryClip(ClipData.newPlainText("file_name", fileName ?: ""))
+                            deleteCachedLocalCopy(
+                                context = context,
+                                cacheKey = resolvedCacheKey,
+                                localCopyFile = localCopyFile
+                            ) {
+                                localCopyFile = null
+                                Toast.makeText(context, choose("Local copy deleted", "已删除本地副本"), Toast.LENGTH_SHORT).show()
+                            }
                             showTopMenu = false
                         }
                     )
@@ -396,19 +401,134 @@ internal fun ImageFullscreenOverlay(
                 }
             }
         }
+
+        ImagePreviewActionDock(
+            onShare = { shareCurrentImage(context, bitmap, localCopyFile) },
+            onSave = { saveImageToLocal(context, bitmap, localCopyFile, fileName) },
+            onCopy = {
+                val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
+                clipboard?.setPrimaryClip(ClipData.newPlainText("file_name", displayFileName))
+                Toast.makeText(context, choose("Copied", "已复制"), Toast.LENGTH_SHORT).show()
+            },
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .navigationBarsPadding()
+                .padding(horizontal = 20.dp, vertical = 18.dp)
+        )
     }
 }
 
 @Composable
-private fun imageChromeButton(icon: androidx.compose.ui.graphics.vector.ImageVector, action: () -> Unit) {
+private fun ImagePreviewActionDock(
+    onShare: () -> Unit,
+    onSave: () -> Unit,
+    onCopy: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Surface(
+        shape = RoundedCornerShape(24.dp),
+        color = Color(0xFF20242D).copy(alpha = 0.58f),
+        border = BorderStroke(1.dp, Color.White.copy(alpha = 0.16f)),
+        shadowElevation = 0.dp,
+        modifier = modifier.fillMaxWidth()
+    ) {
+        Row(
+            modifier = Modifier
+                .background(
+                    Brush.verticalGradient(
+                        listOf(
+                            Color.White.copy(alpha = 0.14f),
+                            Color.White.copy(alpha = 0.04f)
+                        )
+                    )
+                )
+                .padding(8.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            ImagePreviewDockButton(
+                icon = Icons.Default.Share,
+                label = choose("Share", "分享"),
+                onClick = onShare,
+                modifier = Modifier.weight(1f)
+            )
+            ImagePreviewDockButton(
+                icon = Icons.Default.SaveAlt,
+                label = choose("Save", "保存"),
+                onClick = onSave,
+                modifier = Modifier.weight(1f)
+            )
+            ImagePreviewDockButton(
+                icon = Icons.Default.ContentCopy,
+                label = choose("Copy", "复制"),
+                onClick = onCopy,
+                modifier = Modifier.weight(1f)
+            )
+        }
+    }
+}
+
+@Composable
+private fun ImagePreviewDockButton(
+    icon: ImageVector,
+    label: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Surface(
+        onClick = onClick,
+        shape = RoundedCornerShape(18.dp),
+        color = Color.White.copy(alpha = 0.08f),
+        border = BorderStroke(1.dp, Color.White.copy(alpha = 0.18f)),
+        modifier = modifier.height(46.dp)
+    ) {
+        Row(
+            modifier = Modifier
+                .background(
+                    Brush.verticalGradient(
+                        listOf(
+                            Color.White.copy(alpha = 0.24f),
+                            Color.White.copy(alpha = 0.07f)
+                        )
+                    )
+                )
+                .padding(horizontal = 10.dp),
+            horizontalArrangement = Arrangement.Center,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(icon, contentDescription = null, tint = Color.White, modifier = Modifier.size(17.dp))
+            Spacer(Modifier.width(6.dp))
+            Text(
+                label,
+                style = MaterialTheme.typography.labelMedium.copy(fontSize = 14.sp, fontWeight = FontWeight.SemiBold),
+                color = Color.White,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+    }
+}
+
+@Composable
+private fun imageChromeButton(icon: ImageVector, action: () -> Unit) {
     Surface(
         onClick = action,
         shape = CircleShape,
-        color = Color(0xFF2A2D36).copy(alpha = 0.92f),
-        border = BorderStroke(1.dp, Color.White.copy(alpha = 0.08f)),
+        color = Color.White.copy(alpha = 0.12f),
+        border = BorderStroke(1.dp, Color.White.copy(alpha = 0.18f)),
         modifier = Modifier.size(40.dp)
     ) {
-        Box(contentAlignment = Alignment.Center) {
+        Box(
+            contentAlignment = Alignment.Center,
+            modifier = Modifier.background(
+                Brush.verticalGradient(
+                    listOf(
+                        Color.White.copy(alpha = 0.2f),
+                        Color(0xFF252936).copy(alpha = 0.42f)
+                    )
+                )
+            )
+        ) {
             Icon(imageVector = icon, contentDescription = null, tint = Color.White, modifier = Modifier.size(16.dp))
         }
     }

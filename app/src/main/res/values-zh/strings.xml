@@ -142,6 +142,10 @@
     <string name="usage_guide_step_3_label_status_all">检查全部</string>
     <string name="usage_guide_after_title">完成后怎么用</string>
     <string name="usage_guide_after_desc">回到聊天页，只要网关在线即可对话。如果你有多个主机，可以在设置 -> 网关中切换。</string>
+    <string name="usage_guide_faq_repair_title">取消配对或重置（reset）后如何再配对？</string>
+    <string name="usage_guide_faq_repair_desc">小程序/App“取消关联”或在宿主机执行了 `clawconnect reset-openclaw` / `reset-hermes` 清除凭证后，Agent 会显示离线并提示 401 鉴权失效。\n解决办法：1. 在小程序/App设置中“取消关联”原网关删除旧记录； 2. 在宿主机重新运行对应配对命令（`pair-openclaw` 或 `pair-hermes`）生成新码并绑定。</string>
+    <string name="usage_guide_faq_offline_title">重新配对后依然离线？</string>
+    <string name="usage_guide_faq_offline_desc">可执行 `clawconnect status-all` 查看连接状态。\n若后台服务没有自动同步新配对状态，可执行 `clawconnect install` 重新注册/刷新服务。</string>
     <string name="usage_guide_copy">复制</string>
     <string name="usage_guide_copied">已复制到剪贴板</string>
 

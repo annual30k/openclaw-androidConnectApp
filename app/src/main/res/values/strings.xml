@@ -142,6 +142,10 @@
     <string name="usage_guide_step_3_label_status_all">Check All</string>
     <string name="usage_guide_after_title">What\'s Next?</string>
     <string name="usage_guide_after_desc">Return to the chat page — as long as the gateway is online, you can chat. If you have multiple hosts, switch them in Settings > Gateway.</string>
+    <string name="usage_guide_faq_repair_title">How to re-pair after unpairing or resetting?</string>
+    <string name="usage_guide_faq_repair_desc">After unlinking in the app or running `clawconnect reset-openclaw` / `reset-hermes` on the host to clear credentials, the agent will go offline (401 Auth Failure).\nSolution: 1. Unlink/delete the old gateway in app settings; 2. Run the pairing command (`pair-openclaw` or `pair-hermes`) again on the host to generate a new code and bind it.</string>
+    <string name="usage_guide_faq_offline_title">Still offline after re-pairing?</string>
+    <string name="usage_guide_faq_offline_desc">Run `clawconnect status-all` to check the connection status.\nIf the background service doesn\'t sync the new pairing state automatically, run `clawconnect install` to re-register/refresh the service.</string>
     <string name="usage_guide_copy">Copy</string>
     <string name="usage_guide_copied">Copied to clipboard</string>
 
