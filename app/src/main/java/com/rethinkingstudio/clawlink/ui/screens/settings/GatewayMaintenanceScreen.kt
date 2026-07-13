@@ -49,7 +49,10 @@ enum class MaintenanceMode {
 }
 
 internal fun maintenanceRestartMethod(gatewayType: GatewayType?, isRemote: Boolean): String {
-    if (gatewayType == GatewayType.hermes) return "hermes.agent.restart"
+    if (gatewayType == GatewayType.hermes) {
+        // Hermes Gateway 离线时，远程恢复必须由仍在线的 Agent 执行网关重启，而不是重启 Agent 自身。
+        return if (isRemote) "hermes.gateway.restart" else "hermes.agent.restart"
+    }
     return if (isRemote) "clawpilot.gateway.remoteRestart" else "clawpilot.gateway.restart"
 }
 

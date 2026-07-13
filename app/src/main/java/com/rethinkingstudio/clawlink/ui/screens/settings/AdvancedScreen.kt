@@ -34,6 +34,8 @@ internal fun advancedRemoteRestartDetailRes(gatewayType: GatewayType?): Int {
     }
 }
 
+internal fun advancedShowsOnlineRestart(gatewayType: GatewayType?): Boolean = gatewayType != GatewayType.hermes
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AdvancedScreen(
@@ -82,15 +84,17 @@ fun AdvancedScreen(
         ) {
             ClawLinkCard(modifier = Modifier.fillMaxWidth()) {
                 Column {
-                    AdvancedFeatureRow(
-                        icon = Icons.Default.Refresh,
-                        title = stringResource(R.string.advanced_restart),
-                        detail = stringResource(R.string.advanced_restart_detail),
-                        tint = Color(0xFF3B82F6),
-                        enabled = isNormalActionEnabled,
-                        onClick = onNavigateToRestartGateway
-                    )
-                    HorizontalDivider(modifier = Modifier.padding(start = 64.dp), color = MaterialTheme.colorScheme.outline.copy(alpha = 0.16f))
+                    if (advancedShowsOnlineRestart(selectedGatewayType)) {
+                        AdvancedFeatureRow(
+                            icon = Icons.Default.Refresh,
+                            title = stringResource(R.string.advanced_restart),
+                            detail = stringResource(R.string.advanced_restart_detail),
+                            tint = Color(0xFF3B82F6),
+                            enabled = isNormalActionEnabled,
+                            onClick = onNavigateToRestartGateway
+                        )
+                        HorizontalDivider(modifier = Modifier.padding(start = 64.dp), color = MaterialTheme.colorScheme.outline.copy(alpha = 0.16f))
+                    }
                     AdvancedFeatureRow(
                         icon = Icons.Default.SettingsRemote,
                         title = stringResource(R.string.advanced_remote_restart),

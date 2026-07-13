@@ -88,11 +88,17 @@ class HermesParityPresentationTest {
     }
 
     @Test
-    fun hermesRestartTargetsClawConnectProfileAgent() {
+    fun hermesRestartActionsUseHermesLifecycleMethods() {
         assertEquals("hermes.agent.restart", maintenanceRestartMethod(GatewayType.hermes, isRemote = false))
-        assertEquals("hermes.agent.restart", maintenanceRestartMethod(GatewayType.hermes, isRemote = true))
+        assertEquals("hermes.gateway.restart", maintenanceRestartMethod(GatewayType.hermes, isRemote = true))
         assertEquals("clawpilot.gateway.restart", maintenanceRestartMethod(GatewayType.openclaw, isRemote = false))
         assertEquals("clawpilot.gateway.remoteRestart", maintenanceRestartMethod(GatewayType.openclaw, isRemote = true))
+    }
+
+    @Test
+    fun hermesAdvancedPageOnlyShowsRemoteRestart() {
+        assertFalse(advancedShowsOnlineRestart(GatewayType.hermes))
+        assertTrue(advancedShowsOnlineRestart(GatewayType.openclaw))
     }
 
     @Test
