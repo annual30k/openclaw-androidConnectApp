@@ -86,13 +86,18 @@ internal object ChatTimelineReducer {
             return copy(seenPartSeqKeys = seenPartSeqKeys + exactSeqKey)
         }
 
+        val existingMessage = messages.firstOrNull { it.id == event.messageId }
+        if (existingMessage?.state == MessageState.completed || existingMessage?.state == MessageState.failed) {
+            // message/run 已进入权威终态后，迟到 delta 只能忽略，不能重新激活 active run。
+            return this
+        }
+
         val existingParts = messagePartsById[event.messageId] ?: TimelineMessageParts(turnId = event.turnId)
         val nextParts = existingParts.copy(
             turnId = existingParts.turnId ?: event.turnId,
             parts = existingParts.parts + (event.partId to event.content.timelineText())
         )
         val role = event.role.toMessageRole(default = MessageRole.assistant)
-        val existingMessage = messages.firstOrNull { it.id == event.messageId }
         val localPlaceholder = if (
             existingMessage == null &&
             role == MessageRole.assistant &&
@@ -254,14 +259,6 @@ internal object ChatTimelineReducer {
         val turnId = event.turnId ?: event.runId?.let { activeTurnByRunId[it] }
         val runId = event.runId ?: turnId?.let { activeRunsByTurnId[it] }
         val hasExplicitScope = !turnId.isNullOrBlank() || !runId.isNullOrBlank()
-        if ((event.status == "completed" || event.status == "aborted") && messages.any { message ->
-                message.state == MessageState.streaming &&
-                    matchesTerminalEvent(message, turnId, runId, hasExplicitScope) &&
-                    isWaitingOnlyStreamingContent(message.content)
-            }
-        ) {
-            return this
-        }
         val shouldClearActiveRunId = !hasExplicitScope || activeRunId == null || activeRunId == runId
         val nextRunsByTurn = when {
             !hasExplicitScope -> emptyMap()
@@ -276,11 +273,15 @@ internal object ChatTimelineReducer {
             else -> activeTurnByRunId
         }
         val terminalMessageState = if (event.status == "failed") MessageState.failed else MessageState.completed
-        val terminalMessages = messages.map { message ->
-            if (message.state == MessageState.streaming && matchesTerminalEvent(message, turnId, runId, hasExplicitScope)) {
-                message.copy(state = terminalMessageState)
-            } else {
-                message
+        val removesWaitingPlaceholder = event.status == "completed" || event.status == "aborted"
+        val terminalMessages = messages.mapNotNull { message ->
+            val matches = message.state == MessageState.streaming &&
+                matchesTerminalEvent(message, turnId, runId, hasExplicitScope)
+            when {
+                // run 终态是 waiting 生命周期的权威结束信号；晚到 completion 仍按稳定身份进入 timeline。
+                matches && removesWaitingPlaceholder && isWaitingOnlyStreamingContent(message.content) -> null
+                matches -> message.copy(state = terminalMessageState)
+                else -> message
             }
         }
         return copy(

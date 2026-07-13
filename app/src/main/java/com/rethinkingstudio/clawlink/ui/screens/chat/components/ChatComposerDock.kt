@@ -89,11 +89,10 @@ import com.rethinkingstudio.clawlink.ui.screens.chat.isImage
 
 private val composerDockHorizontalPadding = 14.dp
 private val composerDockTopPadding = 6.dp
-private val composerDockBottomPadding = 8.dp
+private val composerDockBottomPadding = composerDockTopPadding
 private val composerDockVerticalSpacing = 10.dp
 private val composerControlButtonSize = 42.dp
 private val composerInputActionButtonSize = 32.dp
-private val composerInputActionButtonInset = (composerControlButtonSize - composerInputActionButtonSize) / 2
 private val composerCompactInputHeight = composerControlButtonSize
 private val composerTwoLineInputHeight = 58.dp
 private val composerThreeLineInputHeight = 74.dp
@@ -273,7 +272,7 @@ internal fun ComposerDock(
                                         Box(
                                             modifier = Modifier
                                                 .fillMaxSize()
-                                                .padding(start = 18.dp, end = composerInputActionButtonInset),
+                                                .padding(start = 18.dp),
                                             contentAlignment = inputTextAlignment
                                         ) {
                                             if (messageText.isEmpty()) {
@@ -550,26 +549,31 @@ private fun ComposerInputActionButton(
         disabledContainer = ChatColors.disabledAction,
         disabledContent = MaterialTheme.colorScheme.onSurfaceVariant
     )
-    Surface(
-        onClick = {
-            when {
-                isStreaming && !isStoppingRun -> onAbort()
-                hasDraft -> onSend()
-                else -> onVoice()
-            }
-        },
-        enabled = enabled,
-        shape = CircleShape,
-        color = palette.container,
-        contentColor = palette.content,
-        modifier = modifier.size(composerInputActionButtonSize)
+    Box(
+        modifier = modifier
+            .size(composerControlButtonSize)
+            .clickable(enabled = enabled) {
+                when {
+                    isStreaming && !isStoppingRun -> onAbort()
+                    hasDraft -> onSend()
+                    else -> onVoice()
+                }
+            },
+        contentAlignment = Alignment.Center
     ) {
-        Box(contentAlignment = Alignment.Center) {
-            when {
-                isStoppingRun -> CircularProgressIndicator(modifier = Modifier.size(18.dp), color = Color.White, strokeWidth = 2.dp)
-                isStreaming -> Icon(Icons.Default.Stop, choose("Stop", "停止"), modifier = Modifier.size(19.dp))
-                hasDraft -> Icon(Icons.AutoMirrored.Filled.Send, stringResource(R.string.chat_send), modifier = Modifier.size(19.dp))
-                else -> Icon(Icons.Default.Mic, stringResource(R.string.chat_voice_message), modifier = Modifier.size(22.dp))
+        Surface(
+            shape = CircleShape,
+            color = palette.container,
+            contentColor = palette.content,
+            modifier = Modifier.size(composerInputActionButtonSize)
+        ) {
+            Box(contentAlignment = Alignment.Center) {
+                when {
+                    isStoppingRun -> CircularProgressIndicator(modifier = Modifier.size(18.dp), color = Color.White, strokeWidth = 2.dp)
+                    isStreaming -> Icon(Icons.Default.Stop, choose("Stop", "停止"), modifier = Modifier.size(19.dp))
+                    hasDraft -> Icon(Icons.AutoMirrored.Filled.Send, stringResource(R.string.chat_send), modifier = Modifier.size(19.dp))
+                    else -> Icon(Icons.Default.Mic, stringResource(R.string.chat_voice_message), modifier = Modifier.size(22.dp))
+                }
             }
         }
     }

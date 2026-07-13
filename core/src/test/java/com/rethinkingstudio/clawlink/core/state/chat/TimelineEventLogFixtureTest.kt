@@ -18,7 +18,7 @@ class TimelineEventLogFixtureTest {
     fun sharedFixturesReduceToExpectedState() {
         val fixtureDir = fixtureDirectory()
         val fixtures = fixtureDir.listFiles { file -> file.extension == "json" }?.sortedBy { it.name }.orEmpty()
-        assertEquals(25, fixtures.size)
+        assertEquals(27, fixtures.size)
 
         fixtures.forEach { file ->
             val fixture = json.decodeFromString(Fixture.serializer(), file.readText())

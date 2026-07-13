@@ -33,7 +33,7 @@ class ChatTimelineReducerToolAttachmentTest {
     }
 
     @Test
-    fun runAbortedKeepsWaitingAssistantPlaceholderForRemoteTerminalEvent() {
+    fun runAbortedRemovesWaitingAssistantPlaceholderForRemoteTerminalEvent() {
         val user = ChatMessage(
             id = "user-stop",
             role = MessageRole.user,
@@ -62,9 +62,8 @@ class ChatTimelineReducerToolAttachmentTest {
             event("""{"protocolVersion":2,"eventId":"abort-stop","eventType":"run.aborted","turnId":"turn-stop","runId":"run-stop"}""")
         )
 
-        assertEquals(listOf("user-stop", "assistant-stop"), state.messages.map { it.id })
-        assertEquals(MessageState.streaming, state.messages.last().state)
-        assertTrue(state.hasActiveRun)
+        assertEquals(listOf("user-stop"), state.messages.map { it.id })
+        assertFalse(state.hasActiveRun)
     }
 
     @Test
@@ -352,7 +351,7 @@ class ChatTimelineReducerToolAttachmentTest {
     }
 
     @Test
-    fun runCompletedAfterToolEventKeepsWaitingBubbleUntilFinalContentArrives() {
+    fun runCompletedAfterToolEventClosesWaitingAndStillAcceptsLateFinalContent() {
         val user = ChatMessage(
             id = "user-1",
             role = MessageRole.user,
@@ -398,19 +397,18 @@ class ChatTimelineReducerToolAttachmentTest {
             )
         )
 
-        val stillWaiting = ChatTimelineReducer.reduce(
+        val completed = ChatTimelineReducer.reduce(
             toolRunning,
             event("""{"protocolVersion":2,"eventId":"run-done","eventType":"run.completed","turnId":"turn-1","runId":"run-1"}""")
         )
 
-        assertEquals(MessageState.streaming, stillWaiting.messages.first { it.id == "assistant-local" }.state)
-        assertEquals("正在同步回复...", stillWaiting.messages.first { it.id == "assistant-local" }.content)
-        assertEquals("Reading file", stillWaiting.messages.single { it.role == MessageRole.tool }.content)
-        assertEquals(listOf("user-1", "tool-turn-1", "assistant-local"), stillWaiting.messages.map { it.id })
-        assertTrue(hasActiveVisibleTimelineRun(stillWaiting, stillWaiting.messages))
+        assertEquals("Reading file", completed.messages.single { it.role == MessageRole.tool }.content)
+        assertEquals(MessageState.completed, completed.messages.single { it.role == MessageRole.tool }.state)
+        assertEquals(listOf("user-1", "tool-turn-1"), completed.messages.map { it.id })
+        assertFalse(hasActiveVisibleTimelineRun(completed, completed.messages))
 
         val final = ChatTimelineReducer.reduce(
-            stillWaiting,
+            completed,
             event(
                 """
                 {

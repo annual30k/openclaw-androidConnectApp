@@ -743,20 +743,28 @@ class ChatTimelineReducerHistorySnapshotTest {
     }
 
     @Test
-    fun runCompletedKeepsTransientStreamingPlaceholderWaitingForFinalContent() {
+    fun runCompletedRemovesTransientStreamingPlaceholderAndAcceptsLateFinalContent() {
         val streaming = ChatTimelineReducer.reduce(
             ChatTimelineState(),
             event("""{"protocolVersion":2,"eventId":"d1","eventType":"message.part.delta","messageId":"assistant-1","turnId":"turn-1","runId":"run-1","role":"assistant","partId":"text","seq":1,"content":[{"type":"text","text":"[[clawlink:typing]]"}]}""")
         )
 
-        val stillWaiting = ChatTimelineReducer.reduce(
+        val completed = ChatTimelineReducer.reduce(
             streaming,
             event("""{"protocolVersion":2,"eventId":"r1","eventType":"run.completed","turnId":"turn-1","runId":"run-1"}""")
         )
 
-        assertEquals(MessageState.streaming, stillWaiting.messages.single().state)
-        assertTrue(stillWaiting.hasActiveRun)
-        assertTrue(hasActiveVisibleTimelineRun(stillWaiting, stillWaiting.messages))
+        assertTrue(completed.messages.isEmpty())
+        assertFalse(completed.hasActiveRun)
+        assertFalse(hasActiveVisibleTimelineRun(completed, completed.messages))
+
+        val lateFinal = ChatTimelineReducer.reduce(
+            completed,
+            event("""{"protocolVersion":2,"eventId":"f1","eventType":"message.completed","messageId":"assistant-final","turnId":"turn-1","runId":"run-1","role":"assistant","content":[{"type":"text","text":"OK"}]}""")
+        )
+        assertEquals("OK", lateFinal.messages.single().content)
+        assertEquals(MessageState.completed, lateFinal.messages.single().state)
+        assertFalse(lateFinal.hasActiveRun)
     }
 
     @Test
