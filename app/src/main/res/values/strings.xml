@@ -625,7 +625,7 @@ Tap the button below to refresh manually.</string>
 
     <string name="chat_placeholder_gateway_recovering">Gateway is recovering. Sending is temporarily unavailable.</string>
 
-    <string name="chat_placeholder_message">Message</string>
+    <string name="chat_placeholder_message">Type a message, or type / to view commands</string>
 
     <string name="chat_placeholder_not_ready">Connection is not fully ready. Sending is unavailable.</string>
 

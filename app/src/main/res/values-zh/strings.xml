@@ -625,7 +625,7 @@
 
     <string name="chat_placeholder_gateway_recovering">网关重启恢复中，暂不可发送</string>
 
-    <string name="chat_placeholder_message">消息</string>
+    <string name="chat_placeholder_message">输入消息，或输入 / 查看命令</string>
 
     <string name="chat_placeholder_not_ready">链路未全部连通，暂不可发送</string>
 
