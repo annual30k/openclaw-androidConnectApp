@@ -45,10 +45,12 @@ internal fun ChatConversationList(
     modifier: Modifier = Modifier
 ) {
     val displayMessages = remember(
+        hasSelectedGateway,
         chatState.messages,
         chatState.showInvocationProcess
     ) {
-        conversationDisplayMessages(
+        conversationDisplayMessagesForGatewayState(
+            hasSelectedGateway = hasSelectedGateway,
             messages = chatState.messages,
             showInvocationProcess = chatState.showInvocationProcess
         )
@@ -106,7 +108,7 @@ LazyColumn(
         }
     }
 
-    if (chatState.isLoading && displayMessages.isEmpty() && !chatState.isSwitchingSession) {
+    if (hasSelectedGateway && chatState.isLoading && displayMessages.isEmpty() && !chatState.isSwitchingSession) {
         item { ChatSessionLoadingCard() }
     }
 
@@ -171,7 +173,7 @@ LazyColumn(
         }
     }
 
-    if (chatState.isStreaming && !hasStreamingAssistantMessage) {
+    if (hasSelectedGateway && chatState.isStreaming && !hasStreamingAssistantMessage) {
         item { ThinkingRow() }
     }
 

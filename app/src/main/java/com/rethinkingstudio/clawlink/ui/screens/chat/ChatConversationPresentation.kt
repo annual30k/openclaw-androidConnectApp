@@ -28,6 +28,16 @@ internal fun conversationDisplayMessages(
         .orderedForConversationDisplay()
 }
 
+internal fun conversationDisplayMessagesForGatewayState(
+    hasSelectedGateway: Boolean,
+    messages: List<ChatMessage>,
+    showInvocationProcess: Boolean
+): List<ChatMessage> {
+    // 最后一个网关解绑后本地时间线仍可保留，但未绑定页面不得泄露旧网关的聊天内容。
+    if (!hasSelectedGateway) return emptyList()
+    return conversationDisplayMessages(messages, showInvocationProcess)
+}
+
 internal fun conversationStructureSignature(messages: List<ChatMessage>): String {
     return messages.joinToString(separator = "\u001F") { message ->
         listOf(

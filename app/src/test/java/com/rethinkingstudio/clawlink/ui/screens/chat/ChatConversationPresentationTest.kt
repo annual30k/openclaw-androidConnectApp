@@ -11,6 +11,42 @@ import org.junit.Test
 
 class ChatConversationPresentationTest {
     @Test
+    fun unpairedGatewayStateHidesCachedMessagesFromPreviousGateway() {
+        val cachedMessage = ChatMessage(
+            id = "cached-user-message",
+            role = MessageRole.user,
+            state = MessageState.completed,
+            content = "旧网关聊天记录"
+        )
+
+        val displayMessages = conversationDisplayMessagesForGatewayState(
+            hasSelectedGateway = false,
+            messages = listOf(cachedMessage),
+            showInvocationProcess = false
+        )
+
+        assertEquals(emptyList<ChatMessage>(), displayMessages)
+    }
+
+    @Test
+    fun pairedGatewayStateStillDisplaysCurrentGatewayMessages() {
+        val currentMessage = ChatMessage(
+            id = "current-user-message",
+            role = MessageRole.user,
+            state = MessageState.completed,
+            content = "当前网关聊天记录"
+        )
+
+        val displayMessages = conversationDisplayMessagesForGatewayState(
+            hasSelectedGateway = true,
+            messages = listOf(currentMessage),
+            showInvocationProcess = false
+        )
+
+        assertEquals(listOf(currentMessage), displayMessages)
+    }
+
+    @Test
     fun displayMessagesCoalescesDuplicateIdsBeforeLazyListRendering() {
         val local = ChatMessage(
             id = "user-1",
