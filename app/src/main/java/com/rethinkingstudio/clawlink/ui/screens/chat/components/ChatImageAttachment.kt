@@ -24,6 +24,7 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -214,6 +215,7 @@ internal fun AuthenticatedRemoteImage(
     val resolvedCacheKey = cacheKey ?: url
     var bitmap by remember(resolvedCacheKey, url) { mutableStateOf(RemoteImageCache.get(resolvedCacheKey)) }
     var didFail by remember(resolvedCacheKey, url) { mutableStateOf(false) }
+    var retryGeneration by remember(resolvedCacheKey, url) { mutableStateOf(0) }
     val displaySize = remember(bitmap, url, width, height) {
         val isFallback = width == 220.dp && height == 200.dp
         if (isFallback && bitmap != null) {
@@ -230,7 +232,7 @@ internal fun AuthenticatedRemoteImage(
             width to height
         }
     }
-    LaunchedEffect(resolvedCacheKey, url, accessToken) {
+    LaunchedEffect(resolvedCacheKey, url, accessToken, retryGeneration) {
         if (bitmap != null) return@LaunchedEffect
         didFail = false
         val result = withContext(Dispatchers.IO) { loadRemoteBitmap(url, accessToken, resolvedCacheKey) }
@@ -255,7 +257,11 @@ internal fun AuthenticatedRemoteImage(
                 Box(modifier = Modifier.fillMaxSize().background(Brush.verticalGradient(0f to Color.Transparent, 0.6f to Color.Transparent, 1f to Color.Black.copy(alpha = 0.12f))))
                 Box(modifier = Modifier.fillMaxSize().border(width = 1.dp, color = Color.White.copy(alpha = 0.07f), shape = RoundedCornerShape(cornerRadius)))
             } else {
-                ImageLoadingPlaceholder(isFailed = didFail, modifier = Modifier.fillMaxSize())
+                ImageLoadingPlaceholder(
+                    isFailed = didFail,
+                    modifier = Modifier.fillMaxSize(),
+                    onRetry = if (didFail) ({ retryGeneration += 1 }) else null
+                )
             }
         }
     }
@@ -290,14 +296,22 @@ private fun sanitizeImageUrl(url: String): String {
 }
 
 @Composable
-private fun ImageLoadingPlaceholder(isFailed: Boolean, modifier: Modifier = Modifier) {
+private fun ImageLoadingPlaceholder(
+    isFailed: Boolean,
+    modifier: Modifier = Modifier,
+    onRetry: (() -> Unit)? = null
+) {
     val infiniteTransition = rememberInfiniteTransition(label = "shimmer")
     val shimmerAlpha by infiniteTransition.animateFloat(initialValue = 0.4f, targetValue = 0.85f, animationSpec = infiniteRepeatable(animation = tween(900, easing = LinearEasing), repeatMode = RepeatMode.Reverse), label = "shimmerAlpha")
-    Box(modifier = modifier.background(if (isFailed) Color(0xFFF2F3F5) else Color(0xFFE8EAED).copy(alpha = if (isFailed) 1f else shimmerAlpha)), contentAlignment = Alignment.Center) {
+    val retryModifier = if (isFailed && onRetry != null) modifier.clickable(onClick = onRetry) else modifier
+    Box(modifier = retryModifier.background(if (isFailed) Color(0xFFF2F3F5) else Color(0xFFE8EAED).copy(alpha = if (isFailed) 1f else shimmerAlpha)), contentAlignment = Alignment.Center) {
         Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
             if (isFailed) {
                 Icon(Icons.Default.Image, contentDescription = null, tint = Color(0xFFA0A4AF), modifier = Modifier.size(28.dp))
                 Text(choose("Image load failed", "图片加载失败"), style = MaterialTheme.typography.labelSmall, color = Color(0xFFA0A4AF))
+                if (onRetry != null) {
+                    Text(choose("Tap to retry", "点击重试"), style = MaterialTheme.typography.labelSmall, color = ChatColors.linkBlue)
+                }
             } else {
                 CircularProgressIndicator(modifier = Modifier.size(22.dp), strokeWidth = 2.dp, color = ChatColors.linkBlue.copy(alpha = 0.72f))
             }
@@ -434,8 +448,9 @@ private fun ImagePageContent(
     val resolvedCacheKey = imageItem.cacheKey ?: imageItem.url
     var bitmap by remember(resolvedCacheKey, imageItem.url) { mutableStateOf(RemoteImageCache.get(resolvedCacheKey)) }
     var didFail by remember(resolvedCacheKey, imageItem.url) { mutableStateOf(false) }
+    var retryGeneration by remember(resolvedCacheKey, imageItem.url) { mutableStateOf(0) }
 
-    LaunchedEffect(resolvedCacheKey, imageItem.url, imageItem.accessToken) {
+    LaunchedEffect(resolvedCacheKey, imageItem.url, imageItem.accessToken, retryGeneration) {
         if (bitmap != null) return@LaunchedEffect
         didFail = false
         val result = withContext(Dispatchers.IO) {
@@ -455,10 +470,11 @@ private fun ImagePageContent(
             didFail -> Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(12.dp),
-                modifier = Modifier.pointerInput(Unit) { detectTapGestures(onTap = { onDismiss() }) }
+                modifier = Modifier.clickable { retryGeneration += 1 }
             ) {
                 Icon(Icons.Default.Image, contentDescription = null, tint = Color.White.copy(alpha = 0.80f), modifier = Modifier.size(42.dp))
                 Text(choose("Image load failed", "图片加载失败"), style = MaterialTheme.typography.bodyMedium, color = Color.White.copy(alpha = 0.74f))
+                Text(choose("Tap to retry", "点击重试"), style = MaterialTheme.typography.labelMedium, color = ChatColors.linkBlue)
             }
             else -> CircularProgressIndicator(modifier = Modifier.size(32.dp), color = Color.White.copy(alpha = 0.80f), strokeWidth = 2.5.dp)
         }

@@ -117,11 +117,11 @@ internal fun resolveFileDownloadUrl(
         ?: block.fileDownloadURLString?.trim()?.takeIf { it.isNotEmpty() }
     val fileId = block.fileId?.trim()?.takeIf { it.isNotEmpty() }
         ?: raw?.mediaUriFileId()
-    val shouldPreferFileEndpoint = fileId != null && raw?.let(::isDeviceLocalOrOpaqueFileReference) == true
-    val candidate = if (shouldPreferFileEndpoint) {
+    val candidate = if (fileId != null) {
+        // 历史附件有 fileId 时始终走当前 Relay 的鉴权端点，避免旧设备绝对地址导致跨设备失效。
         "/api/mobile/files/$fileId"
     } else {
-        raw ?: fileId?.let { "/api/mobile/files/$it" }
+        raw
     } ?: return null
     return resolveFileUrl(candidate, relayBaseUrl)
 }
@@ -136,14 +136,6 @@ private fun normalizeRelayHttpUrl(raw: String, relayBaseUrl: String): String {
     val query = sourceUri.rawQuery?.let { "?$it" }.orEmpty()
     val fragment = sourceUri.rawFragment?.let { "#$it" }.orEmpty()
     return "$base$path$query$fragment"
-}
-
-private fun isDeviceLocalOrOpaqueFileReference(raw: String): Boolean {
-    val trimmed = raw.trim()
-    return trimmed.startsWith("file://", ignoreCase = true) ||
-        trimmed.startsWith("media://", ignoreCase = true) ||
-        trimmed.startsWith("/") ||
-        trimmed.startsWith("content://", ignoreCase = true)
 }
 
 private fun String.mediaUriFileId(): String? {

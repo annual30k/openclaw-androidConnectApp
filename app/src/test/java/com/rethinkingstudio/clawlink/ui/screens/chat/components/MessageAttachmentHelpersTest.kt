@@ -26,6 +26,21 @@ class MessageAttachmentHelpersTest {
     }
 
     @Test
+    fun prefersCurrentRelayFileEndpointOverStaleAbsoluteUrlWhenFileIdExists() {
+        val block = RelayChatContentBlock(
+            type = "image",
+            fileId = "file_image_history",
+            fileName = "photo.jpg",
+            mimeType = "image/jpeg",
+            downloadUrl = "https://old-device.example/api/mobile/files/file_image_history"
+        )
+
+        val url = resolveFileDownloadUrl(block, relayBaseUrl = "https://relay.example.com")
+
+        assertEquals("https://relay.example.com/api/mobile/files/file_image_history", url)
+    }
+
+    @Test
     fun prefersRelayFileEndpointWhenBlockHasFileIdAndLocalHostPath() {
         val block = RelayChatContentBlock(
             type = "image",
