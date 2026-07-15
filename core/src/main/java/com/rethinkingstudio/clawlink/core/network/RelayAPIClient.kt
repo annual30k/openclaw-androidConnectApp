@@ -150,8 +150,20 @@ class RelayAPIClient(
         data class VerificationRequired(val email: String, val expiresAt: String?) : RegistrationResult()
     }
 
-    suspend fun register(name: String, email: String, password: String, deviceId: String): RegistrationResult {
-        val req = AuthRequest(name = name, email = email, password = password, deviceId = deviceId)
+    suspend fun register(
+        name: String,
+        email: String,
+        password: String,
+        deviceId: String,
+        legalConsent: LegalConsentRequest
+    ): RegistrationResult {
+        val req = AuthRequest(
+            name = name,
+            email = email,
+            password = password,
+            deviceId = deviceId,
+            legalConsent = legalConsent
+        )
         val response: RegisterResponse = request(APIEndpoints.Auth.register, req)
         val token = response.accessToken
         return if (!token.isNullOrBlank()) {

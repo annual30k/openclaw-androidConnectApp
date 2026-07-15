@@ -4,6 +4,7 @@ import com.rethinkingstudio.clawlink.core.domain.CredentialStore
 import com.rethinkingstudio.clawlink.core.models.SessionCredentials
 import com.rethinkingstudio.clawlink.core.network.RelayAPIClient
 import com.rethinkingstudio.clawlink.core.network.RelayAPIError
+import com.rethinkingstudio.clawlink.core.network.dto.LegalConsentRequest
 import com.rethinkingstudio.clawlink.core.state.LocalizedText.choose
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -76,7 +77,15 @@ class AuthStore(
         }
     }
 
-    suspend fun register(baseUrl: String, name: String, email: String, password: String, deviceId: String, isPrivateDeployment: Boolean = false): Boolean {
+    suspend fun register(
+        baseUrl: String,
+        name: String,
+        email: String,
+        password: String,
+        deviceId: String,
+        legalConsent: LegalConsentRequest,
+        isPrivateDeployment: Boolean = false
+    ): Boolean {
         val validationError = validateRegistration(name, email, password)
         if (validationError != null) {
             _state.value = _state.value.copy(errorMessage = validationError)
@@ -86,7 +95,7 @@ class AuthStore(
         _state.value = _state.value.copy(isLoading = true, errorMessage = null, suggestRegister = false)
         return try {
             apiClient.configure(SessionCredentials("", baseUrl))
-            when (val result = apiClient.register(name, email, password, deviceId)) {
+            when (val result = apiClient.register(name, email, password, deviceId, legalConsent)) {
                 is RelayAPIClient.RegistrationResult.Authenticated -> {
                     val creds = result.credentials
                     credentialStore.saveCredentials(creds)

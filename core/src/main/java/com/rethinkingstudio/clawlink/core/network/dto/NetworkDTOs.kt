@@ -11,6 +11,8 @@ import com.rethinkingstudio.clawlink.core.models.gateway.GatewaySummary
 import com.rethinkingstudio.clawlink.core.models.skills.SkillItem
 import com.rethinkingstudio.clawlink.core.models.tasks.TaskItem
 import kotlinx.serialization.KSerializer
+import kotlinx.serialization.EncodeDefault
+import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.descriptors.PrimitiveKind
@@ -48,9 +50,30 @@ data class AuthRequest(
     val email: String,
     val password: String,
     val deviceId: String,
+    @OptIn(ExperimentalSerializationApi::class)
+    @EncodeDefault(EncodeDefault.Mode.ALWAYS)
     val platform: String = "android",
-    val appVersion: String = "1.0.0"
+    val appVersion: String = "1.0.0",
+    val legalConsent: LegalConsentRequest? = null
 )
+
+@Serializable
+data class LegalConsentRequest(
+    val accepted: Boolean,
+    val termsVersion: String,
+    val privacyVersion: String
+) {
+    companion object {
+        const val CURRENT_TERMS_VERSION = "2026-07-14"
+        const val CURRENT_PRIVACY_VERSION = "2026-07-14"
+
+        fun currentAccepted() = LegalConsentRequest(
+            accepted = true,
+            termsVersion = CURRENT_TERMS_VERSION,
+            privacyVersion = CURRENT_PRIVACY_VERSION
+        )
+    }
+}
 
 @Serializable
 data class VerifyEmailRequest(

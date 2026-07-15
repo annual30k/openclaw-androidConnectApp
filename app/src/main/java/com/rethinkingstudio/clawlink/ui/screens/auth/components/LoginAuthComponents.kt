@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.text.ClickableText
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
@@ -33,6 +34,7 @@ import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -59,11 +61,15 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.rethinkingstudio.clawlink.R
 import com.rethinkingstudio.clawlink.core.state.LocalizedText.choose
 import com.rethinkingstudio.clawlink.core.state.auth.AuthStore
@@ -269,7 +275,99 @@ internal fun AuthSubmitButton(
 }
 
 @Composable
-internal fun AccountLoginSection(isLoading: Boolean) {
+internal fun LegalConsentRow(
+    accepted: Boolean,
+    onAcceptedChange: (Boolean) -> Unit,
+    onOpenTerms: () -> Unit,
+    onOpenPrivacy: () -> Unit
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Checkbox(
+            checked = accepted,
+            onCheckedChange = onAcceptedChange
+        )
+        val linkColor = MaterialTheme.colorScheme.primary
+        val copy = buildAnnotatedString {
+            append(choose("I have read and agree to ", "我已阅读并同意"))
+            pushStringAnnotation(tag = "terms", annotation = "terms")
+            pushStyle(SpanStyle(color = linkColor, fontWeight = FontWeight.SemiBold))
+            append(choose("User Agreement", "《用户协议》"))
+            pop()
+            pop()
+            append(choose(" and ", "和"))
+            pushStringAnnotation(tag = "privacy", annotation = "privacy")
+            pushStyle(SpanStyle(color = linkColor, fontWeight = FontWeight.SemiBold))
+            append(choose("Privacy Policy", "《隐私政策》"))
+            pop()
+            pop()
+            append(choose(".", "。"))
+        }
+        ClickableText(
+            text = copy,
+            modifier = Modifier.weight(1f),
+            style = MaterialTheme.typography.bodySmall.copy(
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                fontSize = if (com.rethinkingstudio.clawlink.core.state.LocalizedText.isChinese()) 12.sp else 9.sp
+            ),
+            maxLines = 1,
+            overflow = TextOverflow.Clip,
+            onClick = { offset ->
+                when {
+                    copy.getStringAnnotations("terms", offset, offset).isNotEmpty() -> onOpenTerms()
+                    copy.getStringAnnotations("privacy", offset, offset).isNotEmpty() -> onOpenPrivacy()
+                }
+            }
+        )
+    }
+}
+
+@Composable
+internal fun LegalLinksRow(
+    onOpenTerms: () -> Unit,
+    onOpenPrivacy: () -> Unit
+) {
+    val linkColor = MaterialTheme.colorScheme.primary
+    val copy = buildAnnotatedString {
+        pushStringAnnotation(tag = "terms", annotation = "terms")
+        pushStyle(SpanStyle(color = linkColor, fontWeight = FontWeight.SemiBold))
+        append(choose("User Agreement", "《用户协议》"))
+        pop()
+        pop()
+        append(choose(" and ", "和"))
+        pushStringAnnotation(tag = "privacy", annotation = "privacy")
+        pushStyle(SpanStyle(color = linkColor, fontWeight = FontWeight.SemiBold))
+        append(choose("Privacy Policy", "《隐私政策》"))
+        pop()
+        pop()
+    }
+    ClickableText(
+        text = copy,
+        modifier = Modifier.fillMaxWidth(),
+        style = MaterialTheme.typography.bodySmall.copy(
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center
+        ),
+        maxLines = 1,
+        overflow = TextOverflow.Clip,
+        onClick = { offset ->
+            when {
+                copy.getStringAnnotations("terms", offset, offset).isNotEmpty() -> onOpenTerms()
+                copy.getStringAnnotations("privacy", offset, offset).isNotEmpty() -> onOpenPrivacy()
+            }
+        }
+    )
+}
+
+@Composable
+internal fun AccountLoginSection(
+    isLoading: Boolean,
+    isRegisterMode: Boolean,
+    hasAcceptedLegal: Boolean
+) {
+    val canUseAccountLogin = canUseThirdPartyAuth(isLoading, isRegisterMode, hasAcceptedLegal)
     Column(
         modifier = Modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(12.dp),
@@ -282,15 +380,15 @@ internal fun AccountLoginSection(isLoading: Boolean) {
         }
         Surface(
             onClick = {},
-            enabled = !isLoading,
+            enabled = canUseAccountLogin,
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(18.dp),
-            color = Color.Black
+            color = if (canUseAccountLogin) Color.Black else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.12f)
         ) {
             Text(
                 choose("Sign in with Apple", "使用 Apple 登录"),
                 modifier = Modifier.padding(vertical = 16.dp),
-                color = Color.White,
+                color = if (canUseAccountLogin) Color.White else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f),
                 textAlign = TextAlign.Center,
                 fontWeight = FontWeight.SemiBold
             )

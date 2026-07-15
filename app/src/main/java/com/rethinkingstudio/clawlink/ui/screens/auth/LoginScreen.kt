@@ -77,7 +77,9 @@ import kotlinx.coroutines.launch
 @Composable
 fun LoginScreen(
     authStore: AuthStore,
-    onLoginSuccess: () -> Unit
+    onLoginSuccess: () -> Unit,
+    onOpenTerms: () -> Unit,
+    onOpenPrivacy: () -> Unit
 ) {
     val state by authStore.state.collectAsState()
     val context = LocalContext.current
@@ -94,6 +96,7 @@ fun LoginScreen(
     var showingMoreSettings by remember { mutableStateOf(false) }
     var showingForgotPassword by remember { mutableStateOf(false) }
     var resendCountdown by remember { mutableIntStateOf(0) }
+    var hasAcceptedLegal by remember { mutableStateOf(false) }
 
     val usesEmailVerification = isRegisterMode && !isPrivateDeployment
     val waitingForVerification = usesEmailVerification && state.pendingVerificationEmail != null
@@ -243,12 +246,13 @@ fun LoginScreen(
                                                     email = email,
                                                     password = password,
                                                     verificationCode = verificationCode,
+                                                    hasAcceptedLegal = hasAcceptedLegal,
                                                     onLoginSuccess = onLoginSuccess,
                                                     scope = scope
                                                 )
                                             }
                                         },
-                                        enabled = resendCountdown == 0
+                                        enabled = resendCountdown == 0 && hasAcceptedLegal
                                     ) {
                                         Text(if (resendCountdown > 0) choose("Resend in ${resendCountdown}s", "${resendCountdown} 秒后重发") else choose("Resend verification email", "重新发送验证邮件"))
                                     }
@@ -279,6 +283,20 @@ fun LoginScreen(
                             }
                         }
 
+                        if (isRegisterMode) {
+                            LegalConsentRow(
+                                accepted = hasAcceptedLegal,
+                                onAcceptedChange = { hasAcceptedLegal = it },
+                                onOpenTerms = onOpenTerms,
+                                onOpenPrivacy = onOpenPrivacy
+                            )
+                        } else {
+                            LegalLinksRow(
+                                onOpenTerms = onOpenTerms,
+                                onOpenPrivacy = onOpenPrivacy
+                            )
+                        }
+
                         AuthSubmitButton(
                             isLoading = state.isLoading,
                             isRegisterMode = isRegisterMode,
@@ -292,7 +310,8 @@ fun LoginScreen(
                                 name = name,
                                 email = email,
                                 password = password,
-                                verificationCode = verificationCode
+                                verificationCode = verificationCode,
+                                hasAcceptedLegal = hasAcceptedLegal
                             ),
                             onClick = {
                                 submitAuth(
@@ -306,6 +325,7 @@ fun LoginScreen(
                                     email = email,
                                     password = password,
                                     verificationCode = verificationCode,
+                                    hasAcceptedLegal = hasAcceptedLegal,
                                     onLoginSuccess = onLoginSuccess,
                                     scope = scope
                                 )
@@ -314,7 +334,11 @@ fun LoginScreen(
                     }
                 }
 
-                AccountLoginSection(isLoading = state.isLoading)
+                AccountLoginSection(
+                    isLoading = state.isLoading,
+                    isRegisterMode = isRegisterMode,
+                    hasAcceptedLegal = hasAcceptedLegal
+                )
 
                 TextButton(onClick = { showingMoreSettings = true }) {
                     Text(choose("More", "更多"), color = MaterialTheme.colorScheme.onSurfaceVariant)

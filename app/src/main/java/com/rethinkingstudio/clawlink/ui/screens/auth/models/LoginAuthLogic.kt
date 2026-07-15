@@ -68,6 +68,7 @@ import androidx.compose.ui.unit.dp
 import com.rethinkingstudio.clawlink.R
 import com.rethinkingstudio.clawlink.core.state.LocalizedText.choose
 import com.rethinkingstudio.clawlink.core.state.auth.AuthStore
+import com.rethinkingstudio.clawlink.core.network.dto.LegalConsentRequest
 import com.rethinkingstudio.clawlink.core.utils.MobileDeviceId
 import com.rethinkingstudio.clawlink.ui.components.ClawLinkCard
 import com.rethinkingstudio.clawlink.ui.components.ClawLinkScaffold
@@ -81,13 +82,24 @@ internal fun canSubmit(
     name: String,
     email: String,
     password: String,
-    verificationCode: String
+    verificationCode: String,
+    hasAcceptedLegal: Boolean
 ): Boolean {
     if (isLoading) return false
+    // 已有账号不重复确认；注册及验证码确认仍需当前版本的主动同意。
+    if (isRegisterMode && !hasAcceptedLegal) return false
     if (waitingForVerification) return verificationCode.trim().length == 6
     if (!isValidEmail(email) || password.isEmpty()) return false
     if (isRegisterMode && (name.trim().isEmpty() || password.length < 8)) return false
     return true
+}
+
+internal fun canUseThirdPartyAuth(
+    isLoading: Boolean,
+    isRegisterMode: Boolean,
+    hasAcceptedLegal: Boolean
+): Boolean {
+    return !isLoading && (!isRegisterMode || hasAcceptedLegal)
 }
 
 internal fun submitAuth(
@@ -101,14 +113,25 @@ internal fun submitAuth(
     email: String,
     password: String,
     verificationCode: String,
+    hasAcceptedLegal: Boolean,
     onLoginSuccess: () -> Unit,
     scope: kotlinx.coroutines.CoroutineScope
 ) {
     scope.launch {
         val deviceId = MobileDeviceId.resolve(context)
         val success = when {
-            waitingForVerification -> authStore.verifyRegistrationEmail(relayServer, verificationCode.trim(), deviceId)
-            isRegisterMode -> authStore.register(relayServer, name.trim(), email.trim(), password, deviceId, isPrivateDeployment)
+            waitingForVerification && hasAcceptedLegal -> authStore.verifyRegistrationEmail(relayServer, verificationCode.trim(), deviceId)
+            waitingForVerification -> false
+            isRegisterMode && hasAcceptedLegal -> authStore.register(
+                baseUrl = relayServer,
+                name = name.trim(),
+                email = email.trim(),
+                password = password,
+                deviceId = deviceId,
+                legalConsent = LegalConsentRequest.currentAccepted(),
+                isPrivateDeployment = isPrivateDeployment
+            )
+            isRegisterMode -> false
             else -> authStore.login(relayServer, email.trim(), password, deviceId)
         }
         if (success) onLoginSuccess()

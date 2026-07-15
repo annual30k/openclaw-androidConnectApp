@@ -25,6 +25,8 @@ import com.rethinkingstudio.clawlink.ui.screens.auth.LoginScreen
 import com.rethinkingstudio.clawlink.ui.screens.auth.PairingScreen
 import com.rethinkingstudio.clawlink.ui.screens.gateway.GatewayListScreen
 import com.rethinkingstudio.clawlink.ui.screens.main.MainScreen
+import com.rethinkingstudio.clawlink.ui.screens.legal.LegalDocumentScreen
+import com.rethinkingstudio.clawlink.ui.screens.legal.models.LegalDocumentType
 import com.rethinkingstudio.clawlink.ui.screens.model.ModelCatalogScreen
 import com.rethinkingstudio.clawlink.ui.screens.settings.SettingsScreen
 import com.rethinkingstudio.clawlink.ui.screens.settings.AdvancedScreen
@@ -56,6 +58,8 @@ object Routes {
     const val DOCTOR_FIX = "doctor_fix"
     const val MAINTENANCE_RESTART = "maintenance_restart"
     const val MAINTENANCE_REMOTE_RESTART = "maintenance_remote_restart"
+    const val TERMS = "terms"
+    const val PRIVACY = "privacy"
 }
 
 @Composable
@@ -150,6 +154,8 @@ fun AppNavigation(
         composable(Routes.LOGIN) {
             LoginScreen(
                 authStore = container.authStore,
+                onOpenTerms = { navController.navigate(Routes.TERMS) },
+                onOpenPrivacy = { navController.navigate(Routes.PRIVACY) },
                 onLoginSuccess = {
                     scope.launch {
                         welcomePrefs.edit().putBoolean("seen", true).apply()
@@ -161,6 +167,14 @@ fun AppNavigation(
                     }
                 }
             )
+        }
+
+        composable(Routes.TERMS) {
+            LegalDocumentScreen(type = LegalDocumentType.TERMS, onBack = { navController.popBackStack() })
+        }
+
+        composable(Routes.PRIVACY) {
+            LegalDocumentScreen(type = LegalDocumentType.PRIVACY, onBack = { navController.popBackStack() })
         }
 
         composable(Routes.PAIRING) {

@@ -22,6 +22,10 @@ sealed class RelayAPIError : Exception() {
                 "valid_email_required" -> LocalizedText.choose("Enter a valid email address.", "请输入有效邮箱地址。")
                 "password_too_short" -> LocalizedText.choose("Password must be at least 8 characters.", "密码至少需要 8 位。")
                 "email_already_registered" -> LocalizedText.choose("This email is already registered. Sign in instead.", "该邮箱已注册，请直接登录。")
+                "legal_consent_required" -> LocalizedText.choose(
+                    "Please read and agree to the User Agreement and Privacy Policy before registering.",
+                    "注册前请先阅读并同意《用户协议》和《隐私政策》。"
+                )
                 "email_verification_required" -> LocalizedText.choose("Verify your email before signing in.", "请先完成邮箱验证后再登录。")
                 "user_not_registered" -> LocalizedText.choose("This email is not registered. Register first.", "该邮箱尚未注册，请先注册。")
                 "invalid_credentials" -> remainingAttempts?.let {
