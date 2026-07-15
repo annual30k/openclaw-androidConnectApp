@@ -39,7 +39,7 @@ if [ ! -f "$APK_SOURCE" ]; then
 fi
 
 # Set destination details
-VERSION="1.0.4"
+VERSION="1.0.5"
 DATE=$(date +%Y%m%d)
 APK_DEST="dist/Claw-Link-${VERSION}-release-v2-${DATE}.apk"
 
