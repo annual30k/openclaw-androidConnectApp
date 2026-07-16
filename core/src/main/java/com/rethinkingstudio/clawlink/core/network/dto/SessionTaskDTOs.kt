@@ -58,6 +58,7 @@ data class TaskDetailResponse(
 
 @Serializable
 data class LogTailResponse(
+    val source: String? = null,
     val logPath: String? = null,
     val lines: List<String>,
     val totalLines: Int,
@@ -110,4 +111,3 @@ data class ApproveSensitiveActionResponse(
     val method: String,
     val expiresAt: String
 )
-

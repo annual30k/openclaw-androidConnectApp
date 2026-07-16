@@ -423,11 +423,12 @@ class RelayAPIClient(
 
     // ── Logs ─────────────────────────────────────────────────────────────
 
-    suspend fun fetchLogs(gatewayId: String, limit: Int = 200): LogTailResponse {
+    suspend fun fetchLogs(gatewayId: String, limit: Int = 300, source: String? = null): LogTailResponse {
         val endpoint = APIEndpoints.Mobile.Log.tail(gatewayId)
-        val url = buildUrl(endpoint) + (if (endpoint.queryItems.isEmpty()) "?" else "&") + "limit=$limit"
-        val response = httpClient.request(url) {
+        val response = httpClient.request(buildUrl(endpoint)) {
             method = HttpMethod.Get
+            parameter("limit", limit)
+            source?.let { parameter("source", it) }
             if (accessToken.isNotBlank()) header(HttpHeaders.Authorization, "Bearer $accessToken")
         }
         return response.body()
