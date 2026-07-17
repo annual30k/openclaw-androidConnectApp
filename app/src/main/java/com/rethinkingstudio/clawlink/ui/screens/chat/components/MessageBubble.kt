@@ -2,6 +2,7 @@ package com.rethinkingstudio.clawlink.ui.screens.chat.components
 
 import android.media.MediaPlayer
 import android.text.method.LinkMovementMethod
+import android.graphics.Paint
 import android.net.Uri
 import android.widget.Toast
 import android.widget.TextView
@@ -19,7 +20,6 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -47,6 +47,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -57,6 +58,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -80,6 +82,7 @@ import com.rethinkingstudio.clawlink.ui.screens.chat.isUserAuthoredMessage
 import java.io.File
 import java.net.HttpURLConnection
 import java.net.URL
+import kotlin.math.ceil
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -108,7 +111,11 @@ internal fun MessageBubble(
     } else emptyList()
     val fileBlocks = message.fileContentBlocks + syntheticFileBlocks
     val voiceBlocks = message.voiceContentBlocks
-    val rawDisplayText = if (syntheticFileBlocks.isNotEmpty()) "" else message.plainTextContent
+    val rawDisplayText = if (syntheticFileBlocks.isNotEmpty()) {
+        ""
+    } else {
+        coalescedMixedMediaDisplayText(message.plainTextContent, message.contentBlocks)
+    }
     val displayText = if (fileBlocks.isNotEmpty() || voiceBlocks.isNotEmpty()) {
         val trimmed = rawDisplayText.trim()
         val shouldSuppressFileText = fileBlocks.any { block ->
@@ -171,17 +178,42 @@ internal fun MessageBubble(
         BoxWithConstraints(modifier = Modifier.fillMaxWidth(), contentAlignment = if (isUser) Alignment.CenterEnd else Alignment.CenterStart) {
             val expandedBubbleWidth = mixedMediaBubbleWidth(maxWidth)
             val embeddedImageMaxWidth = maxOf(120.dp, expandedBubbleWidth - 32.dp)
+            val density = LocalDensity.current
+            val measuredTextWidth = remember(displayText, density) {
+                val paint = Paint().apply { textSize = with(density) { 13.sp.toPx() } }
+                val widestLinePx = displayText.lineSequence().maxOfOrNull(paint::measureText) ?: 0f
+                with(density) { ceil(widestLinePx.toDouble()).toFloat().toDp() }
+            }
+            val widestImageWidth = fileBlocks
+                .filter { it.isImageFileBlock }
+                .maxOfOrNull { imagePreviewDimensions(it, maxWidth = embeddedImageMaxWidth).first }
+                ?: 0.dp
+            val requiresFullContentWidth = voiceBlocks.isNotEmpty() || fileBlocks.any { !it.isImageFileBlock }
+            val adaptiveBubbleWidth = adaptiveMixedMediaBubbleWidth(
+                maximumWidth = expandedBubbleWidth,
+                contentWidths = listOf(
+                    120.dp,
+                    measuredTextWidth,
+                    widestImageWidth,
+                    if (requiresFullContentWidth) embeddedImageMaxWidth else 0.dp
+                )
+            )
             Surface(
                 color = if (isUser) ChatColors.userBubble else MaterialTheme.colorScheme.surface.copy(alpha = 0.96f),
                 shape = RoundedCornerShape(28.dp),
                 border = androidx.compose.foundation.BorderStroke(1.dp, if (isUser) Color.White.copy(alpha = 0.08f) else MaterialTheme.colorScheme.outline.copy(alpha = 0.12f)),
                 tonalElevation = 0.dp, shadowElevation = 0.dp,
-                modifier = if (useExpandedMixedMediaBubble) Modifier.width(expandedBubbleWidth) else Modifier.widthIn(max = 326.dp)
+                modifier = if (useExpandedMixedMediaBubble) {
+                    Modifier.width(adaptiveBubbleWidth)
+                } else {
+                    Modifier.widthIn(max = 326.dp)
+                }
             ) {
                 Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 13.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    voiceBlocks.forEach {
-                        VoiceBlock(
-                            it,
+                    voiceBlocks.forEachIndexed { index, block ->
+                        key(block.contentBlockId ?: block.stableAttachmentId ?: "legacy-voice-block-$index") {
+                            VoiceBlock(
+                            block,
                             isUser,
                             relayBaseUrl = relayBaseUrl,
                             accessToken = accessToken,
@@ -189,11 +221,13 @@ internal fun MessageBubble(
                             onVoicePlaybackStart = onVoicePlaybackStart,
                             gatewayId = gatewayId,
                             sessionKey = sessionKey
-                        )
+                            )
+                        }
                     }
-                    fileBlocks.forEach {
-                        FileBlock(
-                            it,
+                    fileBlocks.forEachIndexed { index, block ->
+                        key(block.contentBlockId ?: block.stableAttachmentId ?: "legacy-file-block-$index") {
+                            FileBlock(
+                            block,
                             isUser,
                             message.state,
                             relayBaseUrl = relayBaseUrl,
@@ -201,12 +235,13 @@ internal fun MessageBubble(
                             imageMaxWidth = if (useExpandedMixedMediaBubble) embeddedImageMaxWidth else 290.dp,
                             onImageClick = onImageClick,
                             onFileClick = onFileClick
-                        )
+                            )
+                        }
                     }
                     if (displayText.isNotEmpty()) {
                         MarkdownMessageText(
                             text = displayText,
-                            modifier = if (useExpandedMixedMediaBubble) Modifier.fillMaxWidth() else Modifier,
+                            modifier = Modifier,
                             textColor = if (isUser) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface,
                             linkColor = if (isUser) Color.White else MaterialTheme.colorScheme.primary,
                             textSizeSp = 13f,
@@ -292,9 +327,42 @@ internal fun shouldUseExpandedMixedMediaBubble(
     hasVoiceBlocks: Boolean
 ): Boolean = displayText.isNotBlank() && (hasFileBlocks || hasVoiceBlocks)
 
+internal fun coalescedMixedMediaDisplayText(
+    displayText: String,
+    contentBlocks: List<RelayChatContentBlock>
+): String {
+    val normalized = displayText.trim()
+    if (normalized.isEmpty() || contentBlocks.none { it.isFileBlock || it.isVoiceMessageBlock }) return normalized
+
+    val canonicalTextById = contentBlocks.mapNotNull { block ->
+        val id = block.contentBlockId?.trim()?.takeIf(String::isNotEmpty) ?: return@mapNotNull null
+        if (!block.isTextBlock) return@mapNotNull null
+        val text = block.text?.trim()?.takeIf(String::isNotEmpty) ?: return@mapNotNull null
+        id to text
+    }
+    canonicalTextById
+        .groupBy(keySelector = { it.second }, valueTransform = { it.first })
+        .filterValues { ids -> ids.distinct().size == 1 }
+        .keys
+        .forEach { canonical ->
+            for (count in 2..8) {
+                if (normalized == List(count) { canonical }.joinToString("\n\n") ||
+                    normalized == List(count) { canonical }.joinToString("\n")) {
+                    return canonical
+                }
+            }
+        }
+    return normalized
+}
+
 internal fun mixedMediaBubbleWidth(availableRowWidth: Dp): Dp {
     val usableWidth = (availableRowWidth - 54.dp).coerceAtLeast(0.dp)
     return minOf(usableWidth, 560.dp)
+}
+
+internal fun adaptiveMixedMediaBubbleWidth(maximumWidth: Dp, contentWidths: List<Dp>): Dp {
+    val contentWidth = contentWidths.maxOrNull() ?: 0.dp
+    return (contentWidth + 32.dp).coerceAtMost(maximumWidth).coerceAtLeast(0.dp)
 }
 
 @Composable

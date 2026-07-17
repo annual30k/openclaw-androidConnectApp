@@ -526,7 +526,7 @@ internal class ChatViewModel(
                 )
                 setUploadItemPhase(attachment.id, AttachmentUploadPhase.completed)
             }
-            if (trimmed.isNotBlank()) {
+            if (commandAttachments.isNotEmpty()) {
                 // Send direct attachment payloads with chat.send so agents do not depend on
                 // file event ordering before they receive the user message.
                 chatStore.sendMessage(

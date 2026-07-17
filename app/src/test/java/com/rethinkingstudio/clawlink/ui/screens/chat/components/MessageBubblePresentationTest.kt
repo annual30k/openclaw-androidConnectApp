@@ -3,6 +3,7 @@ package com.rethinkingstudio.clawlink.ui.screens.chat.components
 import com.rethinkingstudio.clawlink.core.models.chat.MessageRole
 import com.rethinkingstudio.clawlink.core.models.chat.MessageState
 import com.rethinkingstudio.clawlink.core.models.chat.ChatMessage
+import com.rethinkingstudio.clawlink.core.models.chat.RelayChatContentBlock
 import com.rethinkingstudio.clawlink.ui.screens.chat.isUserAuthoredMessage
 import com.rethinkingstudio.clawlink.ui.screens.chat.isLocalUserMessage
 import androidx.compose.ui.unit.dp
@@ -148,6 +149,40 @@ class MessageBubblePresentationTest {
         assertEquals(336.dp, mixedMediaBubbleWidth(390.dp))
         assertEquals(560.dp, mixedMediaBubbleWidth(728.dp))
         assertEquals(0.dp, mixedMediaBubbleWidth(44.dp))
+    }
+
+    @Test
+    fun adaptiveMixedMediaBubbleWidthUsesContentAndCapsAtMaximum() {
+        assertEquals(322.dp, adaptiveMixedMediaBubbleWidth(336.dp, listOf(94.dp, 290.dp)))
+        assertEquals(210.dp, adaptiveMixedMediaBubbleWidth(336.dp, listOf(178.dp)))
+        assertEquals(336.dp, adaptiveMixedMediaBubbleWidth(336.dp, listOf(420.dp)))
+    }
+
+    @Test
+    fun repeatedLegacyMediaProjectionUsesOneCanonicalPrompt() {
+        val blocks = listOf(
+            RelayChatContentBlock(type = "text", contentBlockId = "blk_prompt", text = "分析一下这个图片"),
+            RelayChatContentBlock(type = "image", contentBlockId = "blk_image", fileId = "file_image")
+        )
+
+        assertEquals(
+            "分析一下这个图片",
+            coalescedMixedMediaDisplayText(
+                List(4) { "分析一下这个图片" }.joinToString("\n\n"),
+                blocks
+            )
+        )
+    }
+
+    @Test
+    fun distinctStableRepeatedTextBlocksRemainVisible() {
+        val blocks = listOf(
+            RelayChatContentBlock(type = "text", contentBlockId = "blk_first", text = "再说一次"),
+            RelayChatContentBlock(type = "text", contentBlockId = "blk_second", text = "再说一次"),
+            RelayChatContentBlock(type = "image", contentBlockId = "blk_image", fileId = "file_image")
+        )
+
+        assertEquals("再说一次\n\n再说一次", coalescedMixedMediaDisplayText("再说一次\n\n再说一次", blocks))
     }
 
     @Test

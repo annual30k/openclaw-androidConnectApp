@@ -48,6 +48,7 @@ private fun topLevelFileContentBlock(obj: JsonObject): RelayChatContentBlock? {
 
     return RelayChatContentBlock(
         type = type,
+        contentBlockId = obj.string("contentBlockId", "content_block_id", "blockId", "block_id"),
         text = fileName,
         name = fileName,
         attachmentId = obj.string("attachmentId", "attachment_id"),
@@ -87,6 +88,7 @@ private fun parseContentBlock(element: JsonElement): RelayChatContentBlock? {
         }
         RelayChatContentBlock(
             type = type,
+            contentBlockId = obj.string("contentBlockId", "content_block_id", "blockId", "block_id"),
             text = obj["text"]?.jsonPrimitive?.content,
             name = obj["name"]?.jsonPrimitive?.content ?: obj["tool_name"]?.jsonPrimitive?.content ?: obj["tool"]?.jsonPrimitive?.content,
             attachmentId = obj.string("attachmentId", "attachment_id"),
@@ -154,6 +156,7 @@ private fun collectContentBlockArrays(
 }
 
 internal fun RelayChatContentBlock.signature(): String {
+    contentBlockId?.trim()?.takeIf { it.isNotEmpty() }?.let { return "block:$it" }
     return listOf(
         type,
         toolCallId.orEmpty(),

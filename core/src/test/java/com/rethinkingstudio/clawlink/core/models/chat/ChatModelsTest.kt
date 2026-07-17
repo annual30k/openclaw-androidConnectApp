@@ -175,6 +175,7 @@ class ChatModelsTest {
             """
             {
               "type": "voice",
+              "content_block_id": "blk_voice_1",
               "file_id": "file_voice_snake",
               "file_name": "reply.mp3",
               "mime_type": "audio/mpeg",
@@ -186,6 +187,7 @@ class ChatModelsTest {
         )
 
         assertTrue(block.isVoiceMessageBlock)
+        assertEquals("blk_voice_1", block.contentBlockId)
         assertEquals("file_voice_snake", block.fileId)
         assertEquals("reply.mp3", block.fileName)
         assertEquals("audio/mpeg", block.mimeType)

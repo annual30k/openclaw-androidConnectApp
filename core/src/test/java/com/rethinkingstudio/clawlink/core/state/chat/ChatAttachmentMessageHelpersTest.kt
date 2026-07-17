@@ -229,4 +229,18 @@ class ChatAttachmentMessageHelpersTest {
 
         assertEquals("昨天打完篮球小腿的前侧很痛这是怎么回事", blocks.single().text)
     }
+
+    @Test
+    fun coalescesLegacyMediaTextProjectionIntoCanonicalStableBlock() {
+        val blocks = sanitizeChatContentBlocks(
+            listOf(
+                RelayChatContentBlock(type = "text", text = "分析一下这个图片\n\n[media attached: /tmp/22.JPG (image/jpeg) | /tmp/22.JPG]"),
+                RelayChatContentBlock(type = "text", contentBlockId = "blk_prompt", text = "分析一下这个图片"),
+                RelayChatContentBlock(type = "image", contentBlockId = "blk_image", fileId = "file_image")
+            )
+        )
+
+        assertEquals(listOf("blk_prompt"), blocks.filter { it.isTextBlock }.map { it.contentBlockId })
+        assertEquals("file_image", blocks.first { it.isFileBlock }.fileId)
+    }
 }

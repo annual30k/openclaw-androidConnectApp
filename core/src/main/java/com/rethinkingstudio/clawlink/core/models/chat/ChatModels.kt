@@ -169,6 +169,9 @@ object RelayJSONValueSerializer : KSerializer<RelayJSONValue> {
 @Serializable
 data class RelayChatContentBlock(
     val type: String,
+    @OptIn(ExperimentalSerializationApi::class)
+    @JsonNames("content_block_id", "blockId", "block_id")
+    val contentBlockId: String? = null,
     val text: String? = null,
     val name: String? = null,
     @OptIn(ExperimentalSerializationApi::class)

@@ -264,9 +264,22 @@ internal fun sanitizeChatMessageText(text: String): String {
 }
 
 internal fun sanitizeChatContentBlocks(blocks: List<RelayChatContentBlock>): List<RelayChatContentBlock> {
-    return blocks.map { block ->
+    val sanitized = blocks.map { block ->
         val text = block.text ?: return@map block
         block.copy(text = sanitizeChatMessageText(text))
+    }
+    if (sanitized.none { it.isFileBlock || it.isVoiceMessageBlock }) return sanitized
+
+    val canonicalText = sanitized.mapNotNull { block ->
+        if (!block.isTextBlock || block.contentBlockId.isNullOrBlank()) return@mapNotNull null
+        block.text?.trim()?.takeIf(String::isNotEmpty)
+    }.toSet()
+    if (canonicalText.isEmpty()) return sanitized
+
+    return sanitized.filterNot { block ->
+        block.isTextBlock &&
+            block.contentBlockId.isNullOrBlank() &&
+            block.text?.trim()?.let(canonicalText::contains) == true
     }
 }
 

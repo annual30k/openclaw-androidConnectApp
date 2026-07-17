@@ -38,12 +38,21 @@ internal object ChatFileUtils {
         uri: Uri
     ): ComposerAttachmentDraft {
         val resolver = context.contentResolver
-        val fileName = normalizeComposerAttachmentFileName(
+        var fileName = normalizeComposerAttachmentFileName(
             queryDisplayName(context, uri) ?: uri.lastPathSegment ?: "attachment"
         )
-        val mimeType = resolver.getType(uri) ?: "application/octet-stream"
-        val bytes = resolver.openInputStream(uri)?.use { it.readBytes() }
+        var mimeType = resolver.getType(uri) ?: "application/octet-stream"
+        val originalBytes = resolver.openInputStream(uri)?.use { it.readBytes() }
             ?: throw IllegalStateException(choose("Unable to read selected file", "无法读取所选文件"))
+        val optimizedImage = if (isImageMimeType(mimeType) && !mimeType.equals("image/gif", ignoreCase = true)) {
+            optimizeChatImage(originalBytes)
+        } else null
+        val selectedOptimization = optimizedImage?.takeIf { it.bytes.size < originalBytes.size }
+        val bytes = selectedOptimization?.bytes ?: originalBytes
+        if (selectedOptimization != null) {
+            fileName = "${fileName.substringBeforeLast('.', fileName)}.${selectedOptimization.fileExtension}"
+            mimeType = selectedOptimization.mimeType
+        }
         
         val directory = File(context.cacheDir, "clawlink-compose-attachments").apply { mkdirs() }
         val targetFile = File(directory, "${UUID.randomUUID()}-$fileName")
@@ -100,6 +109,76 @@ internal object ChatFileUtils {
             return null
         }
         return options.outWidth to options.outHeight
+    }
+
+    private data class OptimizedChatImage(
+        val bytes: ByteArray,
+        val mimeType: String,
+        val fileExtension: String,
+    )
+
+    private fun optimizeChatImage(bytes: ByteArray, maxPixelSize: Int = 2_048): OptimizedChatImage? {
+        val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        BitmapFactory.decodeByteArray(bytes, 0, bytes.size, bounds)
+        if (bounds.outWidth <= 0 || bounds.outHeight <= 0) return null
+
+        var sampleSize = 1
+        while (maxOf(bounds.outWidth, bounds.outHeight) / sampleSize > maxPixelSize * 2) {
+            sampleSize *= 2
+        }
+        val decoded = BitmapFactory.decodeByteArray(
+            bytes,
+            0,
+            bytes.size,
+            BitmapFactory.Options().apply { inSampleSize = sampleSize }
+        ) ?: return null
+        // Bitmap.hasAlpha() only describes whether the pixel format can carry
+        // alpha. Many completely opaque PNGs report true and were therefore
+        // bypassing resize/JPEG compression. Preserve PNG only when pixels
+        // actually contain transparency.
+        val containsTransparency = bitmapContainsTransparency(decoded)
+        val longestSide = maxOf(decoded.width, decoded.height)
+        val output = if (longestSide > maxPixelSize) {
+            val scale = maxPixelSize.toFloat() / longestSide.toFloat()
+            Bitmap.createScaledBitmap(
+                decoded,
+                maxOf(1, (decoded.width * scale).toInt()),
+                maxOf(1, (decoded.height * scale).toInt()),
+                true
+            )
+        } else decoded
+        return try {
+            ByteArrayOutputStream().use { buffer ->
+                val format = if (containsTransparency) Bitmap.CompressFormat.PNG else Bitmap.CompressFormat.JPEG
+                val quality = if (containsTransparency) 100 else 82
+                if (!output.compress(format, quality, buffer)) {
+                    null
+                } else {
+                    OptimizedChatImage(
+                        bytes = buffer.toByteArray(),
+                        mimeType = if (containsTransparency) "image/png" else "image/jpeg",
+                        fileExtension = if (containsTransparency) "png" else "jpg",
+                    )
+                }
+            }
+        } finally {
+            if (output !== decoded) output.recycle()
+            decoded.recycle()
+        }
+    }
+
+    private fun bitmapContainsTransparency(bitmap: Bitmap): Boolean {
+        if (!bitmap.hasAlpha()) return false
+        val row = IntArray(bitmap.width)
+        for (y in 0 until bitmap.height) {
+            bitmap.getPixels(row, 0, bitmap.width, 0, y, bitmap.width, 1)
+            if (hasTransparentPixel(row)) return true
+        }
+        return false
+    }
+
+    internal fun hasTransparentPixel(pixels: IntArray): Boolean {
+        return pixels.any { pixel -> (pixel ushr 24) != 0xFF }
     }
 
     internal fun queryDisplayName(context: Context, uri: Uri): String? {

@@ -141,7 +141,7 @@ class ChatConversationPresentationTest {
     }
 
     @Test
-    fun displayMessagesCoalescesDuplicateImageNamesWhenOneFileIdIsMissing() {
+    fun displayMessagesPreservesDuplicateImageNamesWhenOneStableIdIsMissing() {
         val localPreview = ChatMessage(
             id = "assistant-run-1",
             role = MessageRole.assistant,
@@ -189,10 +189,9 @@ class ChatConversationPresentationTest {
             showInvocationProcess = false
         )
 
-        assertEquals(1, displayMessages.size)
-        assertEquals("assistant-run-1", displayMessages.single().id)
-        assertEquals("chatgpt image.png", displayMessages.single().contentBlocks.single().fileName)
-        assertEquals(1.0, displayMessages.single().sortTimestamp)
+        assertEquals(2, displayMessages.size)
+        assertEquals(listOf(localPreview.id, uploadedEcho.id), displayMessages.map { it.id })
+        assertEquals(listOf(1.0, 2.0), displayMessages.map { it.sortTimestamp })
     }
 
     @Test
@@ -249,7 +248,7 @@ class ChatConversationPresentationTest {
     }
 
     @Test
-    fun displayMessagesCoalescesLiveAndHistoryAssistantDuplicate() {
+    fun displayMessagesPreservesIdenticalNearbyAssistantMessagesWithoutCanonicalIdentity() {
         val liveAssistant = ChatMessage(
             id = "assistant-DA69CD14-756A-4114-9B81-E43686555BD4",
             role = MessageRole.assistant,
@@ -274,8 +273,7 @@ class ChatConversationPresentationTest {
             showInvocationProcess = false
         )
 
-        assertEquals(1, displayMessages.size)
-        assertEquals("history:assistant-1407", displayMessages.single().id)
+        assertEquals(listOf(liveAssistant.id, historyAssistant.id), displayMessages.map { it.id })
     }
 
     @Test

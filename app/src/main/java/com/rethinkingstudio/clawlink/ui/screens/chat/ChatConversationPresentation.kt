@@ -17,7 +17,6 @@ internal fun conversationDisplayMessages(
         .coalescedLocalUserAttachmentMessages()
         .coalescedSameTurnUserMediaMessages()
         .coalescedLocalUserLiveEchoes()
-        .coalescedDuplicateTextHistoryMessages()
         .coalescedDuplicateFileTransferMessages()
         .coalescedResolvedTransientAssistantPlaceholders()
         .coalescedDuplicateTransientAssistantPlaceholders()
@@ -380,65 +379,9 @@ private fun List<ChatMessage>.coalescedLocalUserLiveEchoes(): List<ChatMessage> 
     return filterIndexed { index, _ -> index !in liveEchoIndexesToDrop }
 }
 
-private fun List<ChatMessage>.coalescedDuplicateTextHistoryMessages(): List<ChatMessage> {
-    val output = mutableListOf<ChatMessage>()
-    val indexByKey = mutableMapOf<TextHistoryKey, Int>()
-    var didMerge = false
-
-    for (message in this) {
-        val key = message.textHistoryKey()
-        val duplicateIndex = key?.let { indexByKey[it] }
-        if (duplicateIndex == null || !output[duplicateIndex].isDuplicateTextHistoryMessage(message)) {
-            output += message
-            if (key != null) indexByKey[key] = output.lastIndex
-            continue
-        }
-
-        output[duplicateIndex] = preferredDuplicateTextMessage(output[duplicateIndex], message)
-        didMerge = true
-    }
-
-    return if (didMerge) output else this
-}
-
-private fun ChatMessage.isDuplicateTextHistoryMessage(other: ChatMessage): Boolean {
-    if (textHistoryKey() != other.textHistoryKey()) return false
-
-    val leftTimestamp = sortTimestamp
-    val rightTimestamp = other.sortTimestamp
-    return leftTimestamp != null &&
-        rightTimestamp != null &&
-        kotlin.math.abs(leftTimestamp - rightTimestamp) <= duplicateTextHistoryWindowSeconds
-}
-
-private fun preferredDuplicateTextMessage(existing: ChatMessage, incoming: ChatMessage): ChatMessage {
-    val preferred = if (incoming.id.startsWith("history:") && !existing.id.startsWith("history:")) {
-        incoming
-    } else {
-        existing
-    }
-    val fallback = if (preferred === existing) incoming else existing
-    return preferred.copy(
-        content = preferred.content.ifBlank { fallback.content },
-        contentBlocks = preferred.contentBlocks.ifEmpty { fallback.contentBlocks },
-        createdAt = preferred.createdAt.ifBlank { fallback.createdAt },
-        runId = preferred.runId.ifBlank { fallback.runId },
-        sortTimestamp = preferred.sortTimestamp ?: fallback.sortTimestamp,
-        seq = preferred.seq ?: fallback.seq,
-        turnSeq = preferred.turnSeq ?: fallback.turnSeq,
-        timelineStableKey = preferred.timelineStableKey.ifBlank { fallback.timelineStableKey },
-        timelineMessageId = preferred.timelineMessageId.ifBlank { fallback.timelineMessageId },
-        timelinePartId = preferred.timelinePartId.ifBlank { fallback.timelinePartId },
-        timelineOrderKey = preferred.timelineOrderKey.ifBlank { fallback.timelineOrderKey },
-        timelineIdentityKey = preferred.timelineIdentityKey.ifBlank { fallback.timelineIdentityKey },
-        timelineItemKind = preferred.timelineItemKind.ifBlank { fallback.timelineItemKind }
-    )
-}
-
 private fun List<ChatMessage>.coalescedDuplicateFileTransferMessages(): List<ChatMessage> {
     val output = mutableListOf<ChatMessage>()
     val stableIndexByKey = mutableMapOf<String, Int>()
-    val weakPreviewIndexByKey = mutableMapOf<String, Int>()
     var didMerge = false
 
     for (message in this) {
@@ -446,16 +389,10 @@ private fun List<ChatMessage>.coalescedDuplicateFileTransferMessages(): List<Cha
         val duplicateIndex = keys?.stableKey
             ?.let { stableIndexByKey[it] }
             ?.takeIf { output[it].isDuplicateFileTransferDisplayMessage(message) }
-            ?: keys?.weakKey
-                ?.let { weakPreviewIndexByKey[it] }
-                ?.takeIf { output[it].isDuplicateFileTransferDisplayMessage(message) }
 
         if (duplicateIndex == null) {
             output += message
             if (keys?.stableKey != null) stableIndexByKey[keys.stableKey] = output.lastIndex
-            if (keys?.weakKey != null && keys.hasMissingStableId) {
-                weakPreviewIndexByKey[keys.weakKey] = output.lastIndex
-            }
         } else {
             output[duplicateIndex] = mergeDuplicateFileTransferDisplayMessage(output[duplicateIndex], message)
             didMerge = true
@@ -719,13 +656,6 @@ private fun ChatMessage.sourceRunIds(): List<String> {
         .distinct()
 }
 
-private fun ChatMessage.textHistoryKey(): TextHistoryKey? {
-    if (contentBlocks.any { it.isTransferContentBlock || it.isToolCallBlock || it.isToolResultBlock }) return null
-    val normalizedContent = normalizedUserEchoContent(plainTextContent)
-    if (normalizedContent.isEmpty()) return null
-    return TextHistoryKey(role = role, content = normalizedContent)
-}
-
 private fun ChatMessage.fileTransferDisplayKeys(): FileTransferDisplayKeys? {
     if (runId.trim().startsWith("local-user-")) return null
     val transferBlocks = contentBlocks.filter { it.isTransferContentBlock }
@@ -740,23 +670,8 @@ private fun ChatMessage.fileTransferDisplayKeys(): FileTransferDisplayKeys? {
         null
     }
 
-    val weakParts = transferBlocks.mapNotNull { block ->
-        val name = normalizedAttachmentText(block.fileDisplayName)
-        if (name.isEmpty()) return@mapNotNull null
-        name
-    }
-    val weakKey = if (weakParts.size == transferBlocks.size) {
-        listOf(role.name, "weak", weakParts.sorted().joinToString(separator = "|"))
-            .joinToString(separator = "\u001E")
-    } else {
-        null
-    }
-
-    return FileTransferDisplayKeys(
-        stableKey = stableKey,
-        weakKey = weakKey,
-        hasMissingStableId = hasMissingStableId
-    )
+    // 缺少 attachmentId/fileId 时保留为独立消息；同名文件不能作为身份依据。
+    return FileTransferDisplayKeys(stableKey = stableKey)
 }
 
 private fun normalizedAttachmentText(value: String?): String {
@@ -798,22 +713,13 @@ private fun compareNormalizedText(left: String, right: String): Int {
     return normalizedLeft.compareTo(normalizedRight)
 }
 
-private const val duplicateTextHistoryWindowSeconds = 30.0
-
 private data class LocalUserEchoKey(
     val runId: String,
     val content: String
 )
 
-private data class TextHistoryKey(
-    val role: MessageRole,
-    val content: String
-)
-
 private data class FileTransferDisplayKeys(
-    val stableKey: String?,
-    val weakKey: String?,
-    val hasMissingStableId: Boolean
+    val stableKey: String?
 )
 
 private data class IndexedDisplayMessage(

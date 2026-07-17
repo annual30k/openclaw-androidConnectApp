@@ -45,6 +45,7 @@ import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.key
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -86,7 +87,11 @@ import kotlinx.coroutines.withContext
 internal fun StandaloneFileMessage(blocks: List<RelayChatContentBlock>, isUser: Boolean, messageState: MessageState, createdAt: String, relayBaseUrl: String, accessToken: String, onImageClick: (block: RelayChatContentBlock, url: String, fileName: String?) -> Unit = { _, _, _ -> }, onFileClick: (block: RelayChatContentBlock, url: String, fileName: String?) -> Unit = { _, _, _ -> }) {
     val maxContentWidth = if (blocks.any { it.isImageFileBlock }) 290.dp else 326.dp
     Column(modifier = Modifier.width(IntrinsicSize.Max).widthIn(max = maxContentWidth), verticalArrangement = Arrangement.spacedBy(8.dp), horizontalAlignment = if (isUser) Alignment.End else Alignment.Start) {
-        blocks.forEach { block -> FileBlock(block = block, isUser = isUser, messageState = messageState, standalone = true, relayBaseUrl = relayBaseUrl, accessToken = accessToken, onImageClick = onImageClick, onFileClick = onFileClick) }
+        blocks.forEachIndexed { index, block ->
+            key(block.contentBlockId ?: block.stableAttachmentId ?: "legacy-file-block-$index") {
+                FileBlock(block = block, isUser = isUser, messageState = messageState, standalone = true, relayBaseUrl = relayBaseUrl, accessToken = accessToken, onImageClick = onImageClick, onFileClick = onFileClick)
+            }
+        }
         MessageFooter(title = if (isUser) "You" else "ClawLink", createdAt = createdAt, isUser = false, modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp))
     }
 }
