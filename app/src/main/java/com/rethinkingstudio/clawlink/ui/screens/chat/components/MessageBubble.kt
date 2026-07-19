@@ -136,6 +136,7 @@ internal fun MessageBubble(
     val isStandaloneFileMessage = !isTool && displayText.isBlank() && fileBlocks.isNotEmpty() && voiceBlocks.isEmpty()
     val isStandaloneVoiceMessage = !isTool && displayText.isBlank() && voiceBlocks.isNotEmpty() && fileBlocks.isEmpty()
     val useExpandedMixedMediaBubble = shouldUseExpandedMixedMediaBubble(displayText, fileBlocks.isNotEmpty(), voiceBlocks.isNotEmpty())
+    val orderedMixedBlocks = orderedMixedContentBlocks(message.contentBlocks)
 
     Column(modifier = Modifier.fillMaxWidth(), horizontalAlignment = if (isUser) Alignment.End else Alignment.Start) {
         if (isTool) {
@@ -210,43 +211,66 @@ internal fun MessageBubble(
                 }
             ) {
                 Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 13.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    voiceBlocks.forEachIndexed { index, block ->
-                        key(block.contentBlockId ?: block.stableAttachmentId ?: "legacy-voice-block-$index") {
-                            VoiceBlock(
-                            block,
-                            isUser,
-                            relayBaseUrl = relayBaseUrl,
-                            accessToken = accessToken,
-                            readVoicePlaybackIdentifiers = readVoicePlaybackIdentifiers,
-                            onVoicePlaybackStart = onVoicePlaybackStart,
-                            gatewayId = gatewayId,
-                            sessionKey = sessionKey
-                            )
+                    if (orderedMixedBlocks.isNotEmpty()) {
+                        orderedMixedBlocks.forEachIndexed { index, block ->
+                            key(block.contentBlockId ?: block.stableAttachmentId ?: "legacy-mixed-content-block-$index") {
+                                when {
+                                    block.isVoiceMessageBlock -> VoiceBlock(
+                                        block,
+                                        isUser,
+                                        relayBaseUrl = relayBaseUrl,
+                                        accessToken = accessToken,
+                                        readVoicePlaybackIdentifiers = readVoicePlaybackIdentifiers,
+                                        onVoicePlaybackStart = onVoicePlaybackStart,
+                                        gatewayId = gatewayId,
+                                        sessionKey = sessionKey
+                                    )
+                                    block.isFileBlock -> FileBlock(
+                                        block,
+                                        isUser,
+                                        message.state,
+                                        relayBaseUrl = relayBaseUrl,
+                                        accessToken = accessToken,
+                                        imageMaxWidth = if (useExpandedMixedMediaBubble) embeddedImageMaxWidth else 290.dp,
+                                        onImageClick = onImageClick,
+                                        onFileClick = onFileClick
+                                    )
+                                    block.isTextBlock -> MixedContentMarkdownText(block.text.orEmpty(), isUser)
+                                }
+                            }
                         }
-                    }
-                    fileBlocks.forEachIndexed { index, block ->
-                        key(block.contentBlockId ?: block.stableAttachmentId ?: "legacy-file-block-$index") {
-                            FileBlock(
-                            block,
-                            isUser,
-                            message.state,
-                            relayBaseUrl = relayBaseUrl,
-                            accessToken = accessToken,
-                            imageMaxWidth = if (useExpandedMixedMediaBubble) embeddedImageMaxWidth else 290.dp,
-                            onImageClick = onImageClick,
-                            onFileClick = onFileClick
-                            )
+                    } else {
+                        voiceBlocks.forEachIndexed { index, block ->
+                            key(block.contentBlockId ?: block.stableAttachmentId ?: "legacy-voice-block-$index") {
+                                VoiceBlock(
+                                    block,
+                                    isUser,
+                                    relayBaseUrl = relayBaseUrl,
+                                    accessToken = accessToken,
+                                    readVoicePlaybackIdentifiers = readVoicePlaybackIdentifiers,
+                                    onVoicePlaybackStart = onVoicePlaybackStart,
+                                    gatewayId = gatewayId,
+                                    sessionKey = sessionKey
+                                )
+                            }
                         }
-                    }
-                    if (displayText.isNotEmpty()) {
-                        MarkdownMessageText(
-                            text = displayText,
-                            modifier = Modifier,
-                            textColor = if (isUser) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface,
-                            linkColor = if (isUser) Color.White else MaterialTheme.colorScheme.primary,
-                            textSizeSp = 13f,
-                            onDarkBackground = isUser
-                        )
+                        fileBlocks.forEachIndexed { index, block ->
+                            key(block.contentBlockId ?: block.stableAttachmentId ?: "legacy-file-block-$index") {
+                                FileBlock(
+                                    block,
+                                    isUser,
+                                    message.state,
+                                    relayBaseUrl = relayBaseUrl,
+                                    accessToken = accessToken,
+                                    imageMaxWidth = if (useExpandedMixedMediaBubble) embeddedImageMaxWidth else 290.dp,
+                                    onImageClick = onImageClick,
+                                    onFileClick = onFileClick
+                                )
+                            }
+                        }
+                        if (displayText.isNotEmpty()) {
+                            MixedContentMarkdownText(displayText, isUser)
+                        }
                     }
                     if (shouldShowInlineStreamingIndicator(message.role, message.state, displayText, fileBlocks.isNotEmpty(), voiceBlocks.isNotEmpty())) {
                         InlineStreamingIndicator()
@@ -258,6 +282,29 @@ internal fun MessageBubble(
             }
         }
     }
+}
+
+internal fun orderedMixedContentBlocks(
+    contentBlocks: List<RelayChatContentBlock>
+): List<RelayChatContentBlock> {
+    val visibleBlocks = contentBlocks.filter { block ->
+        block.isFileBlock || block.isVoiceMessageBlock || (block.isTextBlock && !block.text.isNullOrBlank())
+    }
+    val hasText = visibleBlocks.any { it.isTextBlock && !it.text.isNullOrBlank() }
+    val hasMedia = visibleBlocks.any { it.isFileBlock || it.isVoiceMessageBlock }
+    return if (hasText && hasMedia) visibleBlocks else emptyList()
+}
+
+@Composable
+private fun MixedContentMarkdownText(text: String, isUser: Boolean) {
+    MarkdownMessageText(
+        text = text,
+        modifier = Modifier,
+        textColor = if (isUser) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface,
+        linkColor = if (isUser) Color.White else MaterialTheme.colorScheme.primary,
+        textSizeSp = 13f,
+        onDarkBackground = isUser
+    )
 }
 
 private val protocolTypingMarkerDisplayRegex = Regex("^(?:\\[\\[clawlink:typing]]\\s*)+$")

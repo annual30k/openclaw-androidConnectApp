@@ -9,7 +9,7 @@ import org.junit.Test
 
 class FileTransferDTOsTest {
     @Test
-    fun fileUploadInitRequestSerializesSourceRunId() {
+    fun fileUploadInitRequestSerializesSourceRunIdAndIdempotencyKey() {
         val encoded = Json.encodeToString(
             FileUploadInitRequest(
                 sessionKey = "main",
@@ -17,11 +17,13 @@ class FileTransferDTOsTest {
                 mimeType = "application/pdf",
                 sizeBytes = 123,
                 sha256 = "abc",
-                sourceRunId = "client-run-file-1"
+                sourceRunId = "client-run-file-1",
+                idempotencyKey = "attachment-draft-1"
             )
         )
 
         val obj = Json.parseToJsonElement(encoded).jsonObject
         assertEquals("client-run-file-1", obj["sourceRunId"]?.jsonPrimitive?.content)
+        assertEquals("attachment-draft-1", obj["idempotencyKey"]?.jsonPrimitive?.content)
     }
 }

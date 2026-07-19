@@ -282,6 +282,50 @@ class ChatHistoryMergeHelpersTest {
     }
 
     @Test
+    fun sameFileMessageMatchesHistoricalAliasesOnlyWithExplicitProjection() {
+        val first = ChatMessage(
+            id = "first",
+            role = MessageRole.user,
+            state = MessageState.completed,
+            content = "look",
+            contentBlocks = listOf(RelayChatContentBlock(
+                type = "image",
+                attachmentId = "attachment-old-a",
+                fileId = "file-old-a",
+                fileName = "photo.png",
+                mimeType = "image/png",
+                sha256 = "same-digest",
+                sourceRunId = "run-1"
+            )),
+            runId = "file-file-old-a"
+        )
+        val duplicateAlias = ChatMessage(
+            id = "second",
+            role = MessageRole.user,
+            state = MessageState.completed,
+            content = "look",
+            contentBlocks = listOf(RelayChatContentBlock(
+                type = "image",
+                attachmentId = "attachment-old-b",
+                projectionOf = "attachment-old-a",
+                fileId = "file-old-b",
+                fileName = "photo.png",
+                mimeType = "image/png",
+                contentHash = "same-digest",
+                sourceRunId = "run-1"
+            )),
+            runId = "file-file-old-b"
+        )
+
+        assertTrue(sameFileMessage(first, duplicateAlias))
+        assertFalse(sameFileMessage(first, duplicateAlias.copy(
+            contentBlocks = duplicateAlias.contentBlocks.map {
+                it.copy(projectionOf = null, sourceRunId = "run-1")
+            }
+        )))
+    }
+
+    @Test
     fun chatHistoryWindowStateDefaultsToIdleEmptyWindow() {
         val state = ChatHistoryWindowState()
 

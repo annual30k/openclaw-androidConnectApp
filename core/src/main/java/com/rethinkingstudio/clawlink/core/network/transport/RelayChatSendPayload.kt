@@ -6,16 +6,20 @@ import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
 
 data class RelayChatSendAttachmentPayload(
+    val fileId: String,
     val fileName: String,
     val mimeType: String,
     val sizeBytes: Long,
-    val contentBase64: String
+    val sha256: String,
+    val sourceRunId: String?
 ) {
     fun toJsonObject(): JsonObject = buildJsonObject {
+        put("fileId", JsonPrimitive(fileId))
         put("fileName", JsonPrimitive(fileName))
         put("mimeType", JsonPrimitive(mimeType))
         put("sizeBytes", JsonPrimitive(sizeBytes))
-        put("content", JsonPrimitive(contentBase64))
+        put("sha256", JsonPrimitive(sha256))
+        sourceRunId?.trim()?.takeIf { it.isNotEmpty() }?.let { put("sourceRunId", JsonPrimitive(it)) }
     }
 }
 

@@ -157,6 +157,8 @@ internal fun makeFileContentBlock(
         fileName = record.fileName,
         mimeType = record.mimeType,
         sizeBytes = record.sizeBytes.coerceAtMost(Int.MAX_VALUE.toLong()).toInt(),
+        sha256 = record.sha256,
+        contentHash = record.sha256,
         durationMs = record.durationMs,
         imageWidth = record.imageWidth,
         imageHeight = record.imageHeight,

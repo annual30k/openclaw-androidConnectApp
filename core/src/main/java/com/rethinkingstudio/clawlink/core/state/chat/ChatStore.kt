@@ -567,6 +567,7 @@ class ChatStore(
         senderDisplayName: String? = null,
         clientCreatedAt: String? = null,
         sourceRunId: String? = null,
+        idempotencyKey: String,
         onProgress: ((Double) -> Unit)? = null
     ): RelayFileTransferItem {
         val sessionKey = _state.value.currentSessionKey
@@ -585,6 +586,7 @@ class ChatStore(
             senderDisplayName = senderDisplayName,
             clientCreatedAt = clientCreatedAt,
             sourceRunId = sourceRunId,
+            idempotencyKey = idempotencyKey,
             onProgress = onProgress
         )
     }

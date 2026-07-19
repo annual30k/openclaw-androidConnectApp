@@ -33,6 +33,22 @@ import java.time.Instant
 import java.util.Locale
 import java.util.UUID
 
+internal fun stableAttachmentClientRunId(
+    gatewayId: String,
+    sessionKey: String,
+    attachments: List<ComposerAttachmentDraft>
+): String {
+    val seed = buildString {
+        append("clawconnect-attachment-run-v1|")
+        append(gatewayId)
+        append('|')
+        append(sessionKey)
+        append('|')
+        append(attachments.joinToString("|") { it.id.lowercase(Locale.ROOT) })
+    }
+    return "attachment-${UUID.nameUUIDFromBytes(seed.toByteArray(Charsets.UTF_8))}"
+}
+
 /**
  * ViewModel for the Chat screen, managing local UI state and coordinating business logic.
  */
@@ -460,7 +476,7 @@ internal class ChatViewModel(
 
         isUploadingAttachment = true
         // 只要存在附件，本地上传占位和最终文件消息都必须挂到稳定 runId 上，不能只在“有文本”时分配。
-        val clientRunId = UUID.randomUUID().toString()
+        val clientRunId = stableAttachmentClientRunId(gatewayId, sessionKey, attachments)
         try {
             composerAttachmentUploadItems = attachments.map { attachment ->
                 ComposerAttachmentUploadItem(
@@ -480,8 +496,6 @@ internal class ChatViewModel(
                 sourceRunId = clientRunId,
                 messageSortBaseTimestamp = sendStartedAt
             )
-            composerAttachments = emptyList()
-
             val commandAttachments = mutableListOf<RelayChatSendAttachmentPayload>()
             val uploadedAttachmentBlocks = mutableListOf<RelayChatContentBlock>()
             attachments.forEachIndexed { index, attachment ->
@@ -515,7 +529,7 @@ internal class ChatViewModel(
                     sourceRunIdOverride = clientRunId,
                     attachmentIdOverride = attachment.id
                 )
-                makeRelayCommandAttachment(attachment)?.let { commandAttachments += it }
+                commandAttachments += makeRelayCommandAttachment(record)
                 chatStore.completeComposerAttachmentUploadMessage(
                     attachment = attachment,
                     record = record,
@@ -540,6 +554,9 @@ internal class ChatViewModel(
             }
 
             messageText = ""
+            // Keep the original drafts (and their stable IDs) until upload + chat.send
+            // succeeds so a retry replays the same Relay idempotency contract.
+            composerAttachments = emptyList()
             composerNotice = null
             if (composerAttachmentUploadItems.isNotEmpty() && composerAttachmentUploadItems.all { it.phase == AttachmentUploadPhase.completed }) {
                 scope.launch {
@@ -606,22 +623,21 @@ internal class ChatViewModel(
             senderDisplayName = senderDisplayName,
             clientCreatedAt = clientCreatedAt,
             sourceRunId = sourceRunId,
+            idempotencyKey = attachment.id,
             onProgress = onProgress
         )
     }
 
-    private suspend fun makeRelayCommandAttachment(attachment: ComposerAttachmentDraft): RelayChatSendAttachmentPayload? {
-        return withContext(Dispatchers.IO) {
-            runCatching {
-                val bytes = File(attachment.filePath).readBytes()
-                RelayChatSendAttachmentPayload(
-                    fileName = attachment.fileName,
-                    mimeType = attachment.mimeType,
-                    sizeBytes = attachment.sizeBytes,
-                    contentBase64 = Base64.encodeToString(bytes, Base64.NO_WRAP)
-                )
-            }.getOrNull()
-        }
+    private fun makeRelayCommandAttachment(record: RelayFileTransferItem): RelayChatSendAttachmentPayload {
+        // 上传成功后只发送 Relay canonical 文件身份，避免 Base64 二次传输与 Host 重复入库。
+        return RelayChatSendAttachmentPayload(
+            fileId = record.fileId,
+            fileName = record.fileName,
+            mimeType = record.mimeType,
+            sizeBytes = record.sizeBytes,
+            sha256 = record.sha256,
+            sourceRunId = record.sourceRunId
+        )
     }
 }
 

@@ -15,10 +15,12 @@ class RelayChatSendPayloadTest {
             content = "分析一下这个图片",
             attachments = listOf(
                 RelayChatSendAttachmentPayload(
+                    fileId = "file-photo",
                     fileName = "photo.jpg",
                     mimeType = "image/jpeg",
                     sizeBytes = 4,
-                    contentBase64 = "YWJjZA=="
+                    sha256 = "abc123",
+                    sourceRunId = "client-run-1"
                 )
             ),
             idempotencyKey = "client-run-1",
@@ -36,10 +38,13 @@ class RelayChatSendPayloadTest {
         assertEquals("client-run-1", params["idempotencyKey"]!!.jsonPrimitive.content)
 
         val attachment = params["attachments"]!!.jsonArray.single().jsonObject
+        assertEquals("file-photo", attachment["fileId"]!!.jsonPrimitive.content)
         assertEquals("photo.jpg", attachment["fileName"]!!.jsonPrimitive.content)
         assertEquals("image/jpeg", attachment["mimeType"]!!.jsonPrimitive.content)
         assertEquals("4", attachment["sizeBytes"]!!.jsonPrimitive.content)
-        assertEquals("YWJjZA==", attachment["content"]!!.jsonPrimitive.content)
+        assertEquals("abc123", attachment["sha256"]!!.jsonPrimitive.content)
+        assertEquals("client-run-1", attachment["sourceRunId"]!!.jsonPrimitive.content)
+        assertEquals(null, attachment["content"])
     }
 
     @Test

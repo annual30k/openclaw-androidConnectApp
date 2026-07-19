@@ -42,7 +42,8 @@ data class FileUploadInitRequest(
     val imageHeight: Int? = null,
     val senderDisplayName: String? = null,
     val clientCreatedAt: String? = null,
-    val sourceRunId: String? = null
+    val sourceRunId: String? = null,
+    val idempotencyKey: String
 )
 
 @Serializable

@@ -178,6 +178,9 @@ data class RelayChatContentBlock(
     @JsonNames("attachment_id")
     val attachmentId: String? = null,
     @OptIn(ExperimentalSerializationApi::class)
+    @JsonNames("projection_of")
+    val projectionOf: String? = null,
+    @OptIn(ExperimentalSerializationApi::class)
     @JsonNames("file_id")
     val fileId: String? = null,
     @OptIn(ExperimentalSerializationApi::class)
@@ -189,6 +192,10 @@ data class RelayChatContentBlock(
     @OptIn(ExperimentalSerializationApi::class)
     @JsonNames("size_bytes", "byte_size", "byteSize")
     val sizeBytes: Int? = null,
+    val sha256: String? = null,
+    @OptIn(ExperimentalSerializationApi::class)
+    @JsonNames("content_hash")
+    val contentHash: String? = null,
     @OptIn(ExperimentalSerializationApi::class)
     @JsonNames("duration_ms")
     val durationMs: Int? = null,

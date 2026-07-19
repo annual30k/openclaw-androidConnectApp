@@ -14,6 +14,16 @@ import org.junit.Test
 
 class MessageBubblePresentationTest {
     @Test
+    fun mixedTextAndImagePreserveCanonicalContentBlockOrder() {
+        val blocks = listOf(
+            RelayChatContentBlock(type = "text", text = "分析一下这个图片"),
+            RelayChatContentBlock(type = "image", attachmentId = "att-photo", fileId = "file-photo")
+        )
+
+        assertEquals(listOf("text", "image"), orderedMixedContentBlocks(blocks).map { it.type })
+    }
+
+    @Test
     fun userAuthoredMessageIgnoresSourceForBubbleOwnership() {
         val pcUserMessage = ChatMessage(
             id = "pc-user-1",
