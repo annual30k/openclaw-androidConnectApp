@@ -751,7 +751,7 @@
 
     <string name="chat_session_untitled">未命名会话</string>
 
-    <string name="chat_skill_auto_install_hint">不需要你手写技能内容，OpenClaw 会按固定模板自己完成。</string>
+    <string name="chat_skill_auto_install_hint">不需要你手写技能内容，宿主机助手会按固定模板自己完成。</string>
 
     <string name="chat_skill_installable">可安装的技能</string>
 

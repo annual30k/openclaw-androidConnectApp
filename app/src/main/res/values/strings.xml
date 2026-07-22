@@ -751,7 +751,7 @@ Tap the button below to refresh manually.</string>
 
     <string name="chat_session_untitled">Untitled session</string>
 
-    <string name="chat_skill_auto_install_hint">No need to write skill content manually. OpenClaw will complete it using a fixed template.</string>
+    <string name="chat_skill_auto_install_hint">No need to write skill content manually. The host assistant will complete it using a fixed template.</string>
 
     <string name="chat_skill_installable">Installable Skills</string>
 

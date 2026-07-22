@@ -43,6 +43,22 @@ sealed class RelayAPIError : Exception() {
                 } ?: LocalizedText.choose("Verification code is incorrect.", "验证码错误。")
                 "email_already_verified" -> LocalizedText.choose("This email is already verified. Sign in instead.", "该邮箱已验证，请直接登录。")
                 "verification_email_failed" -> LocalizedText.choose("Failed to send verification email. Try again later.", "验证码邮件发送失败，请稍后重试。")
+                "gateway_offline" -> LocalizedText.choose(
+                    "The host is offline. Start ClawConnect Agent and try again.",
+                    "宿主机未连接，请先启动 ClawConnect Agent 后重试。"
+                )
+                "gateway_unavailable" -> LocalizedText.choose(
+                    "The host connection is temporarily unavailable. Check ClawConnect Agent and try again.",
+                    "宿主机连接暂不可用，请检查 ClawConnect Agent 状态后重试。"
+                )
+                "timeout", "agent_timeout" -> LocalizedText.choose(
+                    "The host command timed out. Check the connection and try again.",
+                    "宿主机命令超时，请检查连接后重试。"
+                )
+                "host_error", "hermes_logs_read_failed" -> LocalizedText.choose(
+                    "The host command failed. Update and restart ClawConnect Agent, then try again.",
+                    "宿主机命令执行失败，请更新并重启 ClawConnect Agent 后重试。"
+                )
                 "not_found", "unknown_error" -> LocalizedText.choose(
                     "This Relay does not support password reset yet. Use the local relay or deploy the latest relay server.",
                     "当前 Relay 尚未支持重置密码，请切换到本地 Relay 或部署最新中继服务。"

@@ -1,6 +1,7 @@
 package com.rethinkingstudio.clawlink.ui.screens.chat
 
 import com.rethinkingstudio.clawlink.ui.screens.chat.components.SkillExpansionGuideFile
+import com.rethinkingstudio.clawlink.ui.screens.chat.components.SkillExpansionGuideAsr
 import com.rethinkingstudio.clawlink.ui.screens.chat.components.SkillExpansionScreen
 import com.rethinkingstudio.clawlink.ui.screens.chat.components.visibleSkillExpansionScreensForGateway
 import org.junit.Assert.assertFalse
@@ -8,6 +9,49 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class SkillExpansionFileTransferTest {
+    @Test
+    fun hermesAsrPromptIsPlatformAwareAndDoesNotUseOpenClawNaming() {
+        val prompt = SkillExpansionGuideAsr.installPromptForGateway(isHermesGateway = true)
+
+        assertTrue(prompt.length < 2_200)
+        assertTrue(prompt.contains("CLAWCONNECT_ASR_COMMAND"))
+        assertTrue(prompt.contains("原生 Windows（PowerShell）"))
+        assertTrue(prompt.contains("sensevoice-venv\\Scripts\\python.exe"))
+        assertTrue(prompt.contains("`py -0p`、`Get-Command`"))
+        assertTrue(prompt.contains("Python `tarfile` 解压"))
+        assertTrue(prompt.contains("平台选择硬门禁"))
+        assertTrue(prompt.contains("只根据原始 stdout 锁定平台"))
+        assertTrue(prompt.contains("macOS：用 `sw_vers`"))
+        assertTrue(prompt.contains("Linux/WSL：读取 `/etc/os-release`"))
+        assertTrue(prompt.contains("~/.clawconnect/sensevoice-venv/bin/python"))
+        assertTrue(prompt.contains("禁止在原生 Windows 后台使用 WSL 路径"))
+        assertTrue(prompt.contains("Windows Task Scheduler"))
+        assertTrue(prompt.contains("禁止 `uname`、`command -v`、`which`、`/proc`、`${'$'}SHELL`"))
+        assertTrue(prompt.contains("imageio-ffmpeg"))
+        assertTrue(prompt.contains("[IO.File]::Copy(${'$'}tempEnv, ${'$'}envFile, ${'$'}true)"))
+        assertTrue(prompt.contains("禁止 `Move-Item -Force`"))
+        assertTrue(prompt.contains("阶段回执协议（禁止静默执行）"))
+        assertTrue(prompt.contains("语音识别安装失败"))
+        assertTrue(prompt.contains("语音识别技能已安装，Hermes 保持在线。请发一条语音试试吧。"))
+        assertTrue(prompt.contains("宿主机链路已就绪，等待手机语音验证"))
+        assertTrue(SkillExpansionGuideAsr.steps[1].detail.contains("Windows：%USERPROFILE%\\.clawconnect\\.env"))
+        assertTrue(SkillExpansionGuideAsr.steps[1].detail.contains("macOS/Linux：~/.clawconnect/.env"))
+        assertTrue(prompt.contains("下一条 `chat.voice.send` 动态加载"))
+        assertFalse(prompt.contains("clawconnect restart-hermes"))
+        assertTrue(prompt.contains("clawconnect status --profile hermes"))
+        assertTrue(prompt.contains("配对安全边界（优先级最高）"))
+        assertTrue(prompt.contains("名称含 `reset`、`pair`、`uninstall`"))
+        assertTrue(prompt.contains("不得修改配对、Relay、Gateway ID 或凭据"))
+        assertTrue(prompt.contains("精确更新 `.clawconnect/.env` 中的 `CLAWCONNECT_ASR_COMMAND`"))
+        assertTrue(prompt.contains("不需要重启"))
+        assertTrue(prompt.contains("首个工具调用必须是只读的 `clawconnect status --profile hermes`"))
+        assertFalse(prompt.contains("openclaw", ignoreCase = true))
+        assertFalse(prompt.contains("clawconnect reset", ignoreCase = true))
+        assertFalse(prompt.contains("reset-hermes", ignoreCase = true))
+        assertFalse(prompt.contains("pair-hermes", ignoreCase = true))
+        assertFalse(prompt.contains("clawconnect stop", ignoreCase = true))
+    }
+
     @Test
     fun hermesShowsFileTransferSkillExpansion() {
         assertTrue(visibleSkillExpansionScreensForGateway(isHermesGateway = true).contains(SkillExpansionScreen.FILE_TRANSFER))

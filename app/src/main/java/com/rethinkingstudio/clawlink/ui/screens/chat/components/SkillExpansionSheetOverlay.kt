@@ -184,36 +184,48 @@ object SkillExpansionGuideFile {
 object SkillExpansionGuideAsr {
     val title get() = choose("Install voice recognition", "安装语音识别")
     val heroTitle get() = choose("Let the host recognize mobile voice", "让宿主机识别手机语音")
-    val heroSubtitle get() = choose("Install SenseVoice int8 on the host, write OPENCLAW_ASR_COMMAND, and verify real transcription.", "在宿主机安装 SenseVoice int8，写入 OPENCLAW_ASR_COMMAND，并验证真实转写。")
+    val heroSubtitle get() = choose("Install SenseVoice int8 on the host, write CLAWCONNECT_ASR_COMMAND, and verify real transcription.", "在宿主机安装 SenseVoice int8，写入 CLAWCONNECT_ASR_COMMAND，并验证真实转写。")
     val installButtonTitle get() = choose("Install voice recognition on host", "让宿主机安装语音识别")
-    val installPrompt = """
-    请在宿主机上安装并验证 ClawLink 的真实语音识别能力，不要使用测试假数据或硬编码返回值。目标是让手机发送 `chat.voice.send` 语音后，宿主机通过 `OPENCLAW_ASR_COMMAND` 转写成文字，再转发给当前网关聊天。
+    private val platformInstallSteps = """
+    执行框架（未规定的实现细节由你按宿主机环境自行决定）：
 
-    先判断当前助手类型：
-    - 如果是 OpenClaw，优先使用 OpenClaw 可用的 `skill-creator` 创建或更新 `clawlink-host-asr` 技能，位置放在 OpenClaw 的默认技能目录，不要写到 `~/.codex/skills`
-    - 如果是 Hermes Agent，优先使用 Hermes 自己的技能扩展/技能安装机制创建或更新同名技能；如果 Hermes 没有创建器，就直接完成宿主机安装和配置，并说明技能创建受限
+    1. 平台选择硬门禁：第一个工具调用只能执行本提示指定的 `clawconnect status --profile ...`，只根据原始 stdout 锁定平台。`Windows Task Scheduler`、盘符或 `.ps1` 表示原生 Windows，后续只用 PowerShell，禁止 `uname`、`command -v`、`which`、`/proc`、`${'$'}SHELL`、Bash/WSL；`launchd` 表示 macOS，`systemd`/Unix 路径表示 Linux。只有 status 明确显示 WSL 才选 WSL；无法判断就停止并报告。
 
-    真实安装步骤如下：
-    1. 检查 `python3`、`ffmpeg`、`curl` 是否可用。macOS 优先使用 Homebrew 安装缺失项：`brew install ffmpeg`。
-    2. 创建目录 `~/.clawconnect/bin` 和 `~/.clawconnect/models`，并创建隔离环境 `python3 -m venv ~/.clawconnect/sensevoice-venv`。
-    3. 在隔离环境中安装真实依赖：`~/.clawconnect/sensevoice-venv/bin/python -m pip install --upgrade pip setuptools wheel`，然后安装 `sherpa-onnx soundfile numpy`。
-    4. 下载官方 SenseVoice int8 模型 `sherpa-onnx-sense-voice-zh-en-ja-ko-yue-int8-2024-07-17.tar.bz2` 到 `~/.clawconnect/models` 并解压，确认目录里存在 `model.int8.onnx` 和 `tokens.txt`。
-    5. 创建可执行脚本 `~/.clawconnect/bin/transcribe-sensevoice-int8`。脚本入参为 `{file} {language} {mimeType}`，需要用 `ffmpeg` 把输入音频转成 16k 单声道 wav，再调用 `sherpa_onnx.OfflineRecognizer.from_sense_voice(..., use_itn=True)` 输出纯文本到 stdout。
-    6. 写入或更新 `~/.clawconnect/.env`，路径必须换成当前宿主机的真实绝对路径，例如：
-       `OPENCLAW_ASR_COMMAND=/Users/alex/.clawconnect/bin/transcribe-sensevoice-int8 {file} {language} {mimeType}`
-       `OPENCLAW_SENSEVOICE_MODEL_DIR=/Users/alex/.clawconnect/models/sherpa-onnx-sense-voice-zh-en-ja-ko-yue-int8-2024-07-17`
-       `OPENCLAW_SENSEVOICE_THREADS=2`
-    7. 分别根据当前网关重启服务：OpenClaw 用 `clawconnect restart-openclaw`，Hermes Agent 用 `clawconnect restart-hermes`。如果两者都在使用，就两个都重启。
-    8. 必须做真实验证：用一段真实音频文件或系统合成语音生成的音频跑 `~/.clawconnect/bin/transcribe-sensevoice-int8 <audio> zh-CN audio/mp4`，确认 stdout 是可读文本。不要只检查文件存在。
-    9. 完成后说明模型路径、脚本路径、当前生效的 `OPENCLAW_ASR_COMMAND`，并提示用户可以从手机直接发一条语音做端到端验证。
+    2. 配对安全边界（优先级最高）：只授权安装 ASR 依赖、模型、入口并精确更新 `.clawconnect/.env` 中的 `CLAWCONNECT_ASR_COMMAND`。禁止 restart/stop/reinstall 及名称含 `reset`、`pair`、`uninstall` 的命令；不得修改配对、Relay、Gateway ID 或凭据。遇到 `401`、`4401`、unauthorized、未配对或 Relay 离线立即停止。保留 `.env` 其他行；新配置由下一条 `chat.voice.send` 动态加载，不需要重启。
 
-    技能内容要明确：以后遇到 ClawLink 手机语音输入、`voice_asr_not_configured`、Hermes/OpenClaw 收不到语音转写时，优先检查并修复 `OPENCLAW_ASR_COMMAND` 这条宿主机 ASR 链路。
+    3. 平台关键点：
+    - 原生 Windows（PowerShell）：用 `${'$'}PSVersionTable`、`${'$'}env:USERPROFILE`、`py -0p`、`Get-Command` 探测；根目录 `%USERPROFILE%\.clawconnect`，优先独立 Python 3.11/3.12，venv 为 `sensevoice-venv\Scripts\python.exe`。ffmpeg 不可用可用 `imageio-ffmpeg`，模型用 Python `tarfile` 解压；`.env` 写成 UTF-8 无 BOM，经临时文件用 `[IO.File]::Copy(${'$'}tempEnv, ${'$'}envFile, ${'$'}true)` 覆盖，禁止 `Move-Item -Force`。
+    - macOS：用 `sw_vers` 确认环境，Homebrew 补工具，使用 `~/.clawconnect/sensevoice-venv/bin/python` 和 POSIX 入口。
+    - Linux/WSL：读取 `/etc/os-release`，用发行版包管理器补工具，使用同一 POSIX venv；禁止在原生 Windows 后台使用 WSL 路径。
+
+    4. 自主实施与验收：安装 `sherpa-onnx soundfile numpy` 和 SenseVoice int8 官方模型，确认 `model.int8.onnx`、`tokens.txt` 非空。入口接收 `{file} {language} {mimeType}`，经 ffmpeg 转 16 kHz 单声道；stdout 只输出识别文本，诊断写 stderr。用真实音频验证，禁止固定文本/mock，最后只读检查当前 profile status 和日志。
+
+    5. 阶段回执协议（禁止静默执行）：超过 30 秒的操作先回执。失败即停止并回复“语音识别安装失败”，附阶段、命令、退出码和原始错误；全部通过才回复安装成功并列出模型、入口、实际 `CLAWCONNECT_ASR_COMMAND` 和真实转写结果。手机尚未验证时明确写“宿主机链路已就绪，等待手机语音验证”。
     """.trimIndent()
+    val installPrompt = """
+    请在 OpenClaw 宿主机安装并验证 ClawLink ASR，使 `chat.voice.send` 经 `CLAWCONNECT_ASR_COMMAND` 转成文字并进入当前聊天。首个工具调用必须是只读的 `clawconnect status --profile openclaw`。可用 OpenClaw `skill-creator` 创建或更新 `clawlink-host-asr`，但不要写到 `~/.codex/skills`。
+
+    ${platformInstallSteps}
+
+    完成后再次只读检查 OpenClaw 在线，并提示用户从手机发送语音做端到端验证。
+    """.trimIndent()
+
+    val hermesInstallPrompt = """
+    请在 Hermes Agent 宿主机安装并验证 ClawLink ASR，使 `chat.voice.send` 经 `CLAWCONNECT_ASR_COMMAND` 转成文字并进入当前聊天。首个工具调用必须是只读的 `clawconnect status --profile hermes`。优先创建或更新 `clawlink-host-asr`；没有技能创建器时直接安装并如实说明。
+
+    ${platformInstallSteps}
+
+    完成后再次只读检查 Hermes 在线；全部通过才回复“语音识别技能已安装，Hermes 保持在线。请发一条语音试试吧。”
+    """.trimIndent()
+
+    fun installPromptForGateway(isHermesGateway: Boolean): String {
+        return if (isHermesGateway) hermesInstallPrompt else installPrompt
+    }
 
     val steps get() = listOf(
         SkillExpansionGuideStep("install-engine", 1, choose("Install recognition engine", "安装识别引擎"), choose("Install ffmpeg and sherpa-onnx, then download the real SenseVoice int8 model.", "先安装 ffmpeg、sherpa-onnx 等真实依赖，并下载真实 SenseVoice int8 模型。")),
-        SkillExpansionGuideStep("write-env", 2, choose("Write host config", "写入宿主机配置"), choose("Create the host transcription script and write OPENCLAW_ASR_COMMAND into ~/.clawconnect/.env.", "创建宿主机转写脚本，并把 OPENCLAW_ASR_COMMAND 写入 ~/.clawconnect/.env。")),
-        SkillExpansionGuideStep("verify-restart", 3, choose("Verify and restart", "验证并重启"), choose("Run the script against real audio, restart the selected gateway, then send voice from mobile to verify end to end.", "用真实音频跑脚本，重启当前网关，再从手机发送语音做端到端验证。"))
+        SkillExpansionGuideStep("write-env", 2, choose("Write host config", "写入宿主机配置"), choose("Create the host transcription entry and write CLAWCONNECT_ASR_COMMAND to the user config (Windows: %USERPROFILE%\\.clawconnect\\.env; macOS/Linux: ~/.clawconnect/.env).", "创建当前平台的转写入口，并把 CLAWCONNECT_ASR_COMMAND 写入用户配置（Windows：%USERPROFILE%\\.clawconnect\\.env；macOS/Linux：~/.clawconnect/.env）。")),
+        SkillExpansionGuideStep("verify-live", 3, choose("Verify live activation", "验证动态生效"), choose("Run the script against real audio, keep the gateway online, then send voice from mobile to verify end to end.", "用真实音频跑脚本，保持网关在线，再从手机发送语音做端到端验证。"))
     )
 }
 
@@ -296,13 +308,13 @@ fun SkillExpansionSheetOverlay(
                                 heroTitle = SkillExpansionGuideAsr.heroTitle,
                                 heroSubtitle = SkillExpansionGuideAsr.heroSubtitle,
                                 installButtonTitle = SkillExpansionGuideAsr.installButtonTitle,
-                                installPrompt = SkillExpansionGuideAsr.installPrompt,
+                                installPrompt = SkillExpansionGuideAsr.installPromptForGateway(isHermesGateway),
                                 steps = SkillExpansionGuideAsr.steps,
                                 symbol = Icons.Default.Mic,
                                 tint = Color(0xFFE0A52B),
                                 onBack = { currentScreen = SkillExpansionScreen.MENU },
                                 onInstall = {
-                                    onSendPrompt(SkillExpansionGuideAsr.installPrompt)
+                                    onSendPrompt(SkillExpansionGuideAsr.installPromptForGateway(isHermesGateway))
                                     onDismiss()
                                 }
                             )
