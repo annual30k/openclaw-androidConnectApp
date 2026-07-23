@@ -20,3 +20,6 @@ local.properties
 *.jks
 *.p12
 *.pfx
+
+pgyerApiKey.md
+
