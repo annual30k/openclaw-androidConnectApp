@@ -847,39 +847,6 @@ class TimelineReconcilerTest {
         assertEquals(listOf("z-first-assistant", "a-second-assistant"), ordered.map { it.id })
     }
 
-    @Ignore("Legacy assistant duplicate collapse by content/id mismatch was removed.")
-    @Test
-    fun historySnapshotCollapsesLiveAssistantDuplicateWithDifferentId() {
-        val existing = listOf(
-            ChatMessage(
-                id = "assistant-DA69CD14-756A-4114-9B81-E43686555BD4",
-                role = MessageRole.assistant,
-                state = MessageState.completed,
-                content = "pong 1407",
-                contentBlocks = listOf(RelayChatContentBlock(type = "text", text = "pong 1407")),
-                createdAt = "2026-06-09T08:00:00.000Z",
-                sortTimestamp = 1780992000.0
-            )
-        )
-        val result = reconcileTimeline(
-            existing = existing,
-            snapshot = TimelineSnapshotPage(
-                sessionKey = "main",
-                messages = listOf(
-                    TimelineSnapshotMessage(
-                        messageId = "history:assistant-1407",
-                        role = "assistant",
-                        messageState = "completed",
-                        createdAt = "2026-06-09T08:00:02.000Z",
-                        content = listOf(RelayChatContentBlock(type = "text", text = "pong 1407"))
-                    )
-                )
-            )
-        )
-
-        assertEquals(listOf("history:assistant-1407"), result.messages.map { it.id })
-    }
-
     @Test
     fun canonicalTimelineKeepsLocalUserBeforeMatchingPendingAssistantWhenUserTimestampMovesLater() {
         val messages = sortTimelineMessagesV3(
