@@ -235,7 +235,11 @@ internal fun MessageBubble(
                                         onImageClick = onImageClick,
                                         onFileClick = onFileClick
                                     )
-                                    block.isTextBlock -> MixedContentMarkdownText(block.text.orEmpty(), isUser)
+                                    block.isTextBlock -> MixedContentMarkdownText(
+                                        text = block.text.orEmpty(),
+                                        isUser = isUser,
+                                        isStreaming = message.state == MessageState.streaming
+                                    )
                                 }
                             }
                         }
@@ -269,7 +273,11 @@ internal fun MessageBubble(
                             }
                         }
                         if (displayText.isNotEmpty()) {
-                            MixedContentMarkdownText(displayText, isUser)
+                            MixedContentMarkdownText(
+                                text = displayText,
+                                isUser = isUser,
+                                isStreaming = message.state == MessageState.streaming
+                            )
                         }
                     }
                     if (shouldShowInlineStreamingIndicator(message.role, message.state, displayText, fileBlocks.isNotEmpty(), voiceBlocks.isNotEmpty())) {
@@ -296,14 +304,15 @@ internal fun orderedMixedContentBlocks(
 }
 
 @Composable
-private fun MixedContentMarkdownText(text: String, isUser: Boolean) {
+private fun MixedContentMarkdownText(text: String, isUser: Boolean, isStreaming: Boolean) {
     MarkdownMessageText(
         text = text,
         modifier = Modifier,
         textColor = if (isUser) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface,
         linkColor = if (isUser) Color.White else MaterialTheme.colorScheme.primary,
         textSizeSp = 13f,
-        onDarkBackground = isUser
+        onDarkBackground = isUser,
+        isStreaming = isStreaming
     )
 }
 

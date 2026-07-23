@@ -45,7 +45,10 @@ internal fun conversationStructureSignature(messages: List<ChatMessage>): String
             message.role.name,
             message.state.name,
             message.runId,
-            message.contentBlocks.hashCode().toString()
+            message.contentBlocks
+                .map(RelayChatContentBlock::displayStructureForStreaming)
+                .hashCode()
+                .toString()
         ).joinToString(separator = "\u001E")
     }
 }
@@ -83,10 +86,29 @@ internal fun shouldCoalesceChatDisplayUpdate(
     if (incomingTail.role != MessageRole.assistant) {
         return false
     }
-    if (currentTail.contentBlocks != incomingTail.contentBlocks) {
+    if (currentTail.displayStructureForStreaming() != incomingTail.displayStructureForStreaming()) {
         return false
     }
-    return currentTail.copy(content = incomingTail.content) == incomingTail
+    return currentTail.copy(
+        content = incomingTail.content,
+        contentBlocks = incomingTail.contentBlocks,
+        seq = incomingTail.seq
+    ) == incomingTail
+}
+
+private fun ChatMessage.displayStructureForStreaming(): ChatMessage {
+    return copy(
+        content = "",
+        contentBlocks = contentBlocks.map(RelayChatContentBlock::displayStructureForStreaming),
+        // Hermes message.part.delta 的 seq 会随正文增长；它不是可见列表结构。
+        seq = null
+    )
+}
+
+private fun RelayChatContentBlock.displayStructureForStreaming(): RelayChatContentBlock {
+    if (!isTextBlock) return this
+    // 只忽略文本块的增长字段；附件、工具和其他结构变化仍必须立即刷新。
+    return copy(text = null, contentHash = null)
 }
 
 private fun List<ChatMessage>.coalescedByCanonicalIdentity(): List<ChatMessage> {

@@ -6,6 +6,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithContentDescription
+import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.unit.IntOffset
@@ -13,6 +14,7 @@ import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import com.rethinkingstudio.clawlink.ui.screens.chat.VoiceInputPhase
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 
@@ -75,11 +77,31 @@ class ChatComposerDockTimelineUiTest {
         assertEquals(1, voiceCount)
     }
 
+    @Test
+    fun longModelNameDoesNotExpandModelPickerBeyondMaximumWidth() {
+        setComposer(
+            selectedModelText = "Xiaomi MiMo V2.5 Pro With A Very Long Variant Name",
+            showsOpenClawControls = true,
+            showsModelPicker = true
+        )
+
+        val width = composeRule.onNodeWithTag("composer_model_picker_button")
+            .fetchSemanticsNode()
+            .boundsInRoot
+            .width
+        val maximumWidth = with(composeRule.density) { 224.dp.toPx() }
+
+        assertTrue("Model picker width was $width px", width <= maximumWidth + 1f)
+    }
+
     private fun setComposer(
         messageText: String = "",
+        selectedModelText: String = "Hermes",
         isStreaming: Boolean = false,
         isStoppingRun: Boolean = false,
         canSendMessage: Boolean = false,
+        showsOpenClawControls: Boolean = false,
+        showsModelPicker: Boolean = false,
         onToggleVoiceMode: () -> Unit = {},
         onSend: () -> Unit = {},
         onAbort: () -> Unit = {}
@@ -90,14 +112,14 @@ class ChatComposerDockTimelineUiTest {
                     ComposerDock(
                         messageText = messageText,
                         onMessageTextChange = {},
-                        selectedModelText = "Hermes",
+                        selectedModelText = selectedModelText,
                         isStreaming = isStreaming,
                         isStoppingRun = isStoppingRun,
                         voiceMode = false,
                         voiceInputPhase = VoiceInputPhase.Idle,
                         voiceInputCancelPreview = false,
-                        showsOpenClawControls = false,
-                        showsModelPicker = false,
+                        showsOpenClawControls = showsOpenClawControls,
+                        showsModelPicker = showsModelPicker,
                         attachments = emptyList(),
                         isUploadingAttachment = false,
                         hasActiveSession = true,

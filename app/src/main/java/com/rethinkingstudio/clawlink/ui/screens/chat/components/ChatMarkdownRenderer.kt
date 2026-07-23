@@ -44,9 +44,24 @@ internal fun MarkdownMessageText(
     textColor: Color,
     linkColor: Color,
     textSizeSp: Float,
-    onDarkBackground: Boolean
+    onDarkBackground: Boolean,
+    isStreaming: Boolean = false
 ) {
-    val blocks = remember(text) { parseMarkdownBlocks(text) }
+    if (isStreaming) {
+        val decodedText = remember(text) { text.decodeEscapedMarkdownText() }
+        SelectionContainer {
+            Text(
+                text = decodedText,
+                modifier = modifier,
+                color = textColor,
+                fontSize = textSizeSp.sp,
+                lineHeight = (textSizeSp * 1.42f).sp
+            )
+        }
+        return
+    }
+
+    val blocks = remember(text) { AndroidMarkdownBlockCache.blocks(text) }
     SelectionContainer {
         Column(
             modifier = modifier,
@@ -83,6 +98,27 @@ internal fun MarkdownMessageText(
                 }
             }
         }
+    }
+}
+
+internal object AndroidMarkdownBlockCache {
+    private const val maxEntries = 96
+    private val entries = LinkedHashMap<String, List<AndroidMarkdownBlock>>(maxEntries, 0.75f, true)
+
+    @Synchronized
+    fun blocks(text: String): List<AndroidMarkdownBlock> {
+        entries[text]?.let { return it }
+        val parsed = parseMarkdownBlocks(text)
+        entries[text] = parsed
+        while (entries.size > maxEntries) {
+            entries.remove(entries.entries.first().key)
+        }
+        return parsed
+    }
+
+    @Synchronized
+    internal fun clearForTesting() {
+        entries.clear()
     }
 }
 

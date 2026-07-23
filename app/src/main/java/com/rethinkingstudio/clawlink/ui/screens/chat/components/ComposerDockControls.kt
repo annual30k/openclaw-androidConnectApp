@@ -81,6 +81,7 @@ internal fun DockPillButton(
     text: String,
     icon: ImageVector,
     enabled: Boolean,
+    modifier: Modifier = Modifier,
     trailingIcon: ImageVector? = null,
     iconTint: Color? = null,
     iconContainerColor: Color? = null,
@@ -92,7 +93,7 @@ internal fun DockPillButton(
     Surface(
         onClick = onClick, enabled = enabled, shape = RoundedCornerShape(999.dp),
         color = ChatColors.dockControl, border = BorderStroke(1.dp, ChatColors.dockBorder),
-        modifier = Modifier.alpha(if (enabled) 1f else 0.55f)
+        modifier = modifier.alpha(if (enabled) 1f else 0.55f)
     ) {
         Row(modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             if (iconContainerColor != null) {

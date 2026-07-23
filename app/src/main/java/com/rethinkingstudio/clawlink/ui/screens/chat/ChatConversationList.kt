@@ -2,10 +2,12 @@ package com.rethinkingstudio.clawlink.ui.screens.chat
 
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.runtime.Composable
@@ -56,6 +58,26 @@ internal fun ChatConversationList(
         )
     }
 
+    if (!hasSelectedGateway) {
+        // 未绑定状态不复用长会话 LazyColumn 的位置；旧 firstVisibleItemIndex 不能把引导卡留在视口外。
+        Column(
+            modifier = modifier
+                .pointerInput(onDismissKeyboard) {
+                    detectTapGestures(onTap = { onDismissKeyboard() })
+                }
+                .padding(top = 14.dp, bottom = 18.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            if (gatewayState.isLoading) {
+                ChatSessionLoadingCard()
+            } else {
+                UsageGuidePromptCard(onOpenUsageGuide = onOpenUsageGuide ?: onOpenSettings)
+                EmptyGatewayCard(onOpenSettings = onOpenSettings)
+            }
+        }
+        return
+    }
+
     val hasStreamingAssistantMessage = displayMessages.any {
         it.role == MessageRole.assistant && it.state == MessageState.streaming
     }
@@ -97,18 +119,7 @@ LazyColumn(
     contentPadding = PaddingValues(top = 14.dp, bottom = 18.dp),
     verticalArrangement = Arrangement.spacedBy(16.dp)
 ) {
-    if (!hasSelectedGateway && gatewayState.isLoading) {
-        item { ChatSessionLoadingCard() }
-    } else if (!hasSelectedGateway) {
-        item {
-            UsageGuidePromptCard(onOpenUsageGuide = onOpenUsageGuide ?: onOpenSettings)
-        }
-        item {
-            EmptyGatewayCard(onOpenSettings = onOpenSettings)
-        }
-    }
-
-    if (hasSelectedGateway && chatState.isLoading && displayMessages.isEmpty() && !chatState.isSwitchingSession) {
+    if (chatState.isLoading && displayMessages.isEmpty() && !chatState.isSwitchingSession) {
         item { ChatSessionLoadingCard() }
     }
 

@@ -803,6 +803,77 @@ class ChatConversationPresentationTest {
     }
 
     @Test
+    fun structureSignatureIgnoresHermesTextBlockProgress() {
+        val streaming = ChatMessage(
+            id = "assistant-streaming",
+            role = MessageRole.assistant,
+            state = MessageState.streaming,
+            content = "Hel",
+            contentBlocks = listOf(
+                RelayChatContentBlock(
+                    type = "text",
+                    contentBlockId = "assistant-part-1",
+                    text = "Hel",
+                    contentHash = "hash-hel"
+                )
+            ),
+            runId = "run-1",
+            seq = 10,
+            sortTimestamp = 2.0
+        )
+        val updatedStreaming = streaming.copy(
+            content = "Hello world",
+            contentBlocks = listOf(
+                RelayChatContentBlock(
+                    type = "text",
+                    contentBlockId = "assistant-part-1",
+                    text = "Hello world",
+                    contentHash = "hash-hello-world"
+                )
+            ),
+            seq = 11
+        )
+
+        assertEquals(
+            conversationStructureSignature(listOf(streaming)),
+            conversationStructureSignature(listOf(updatedStreaming))
+        )
+        assert(
+            shouldCoalesceChatDisplayUpdate(
+                ChatState(messages = listOf(streaming), isStreaming = true),
+                ChatState(messages = listOf(updatedStreaming), isStreaming = true)
+            )
+        )
+    }
+
+    @Test
+    fun streamingTextCoalescingDoesNotHideContentBlockIdentityChanges() {
+        val streaming = ChatMessage(
+            id = "assistant-streaming",
+            role = MessageRole.assistant,
+            state = MessageState.streaming,
+            content = "Hel",
+            contentBlocks = listOf(
+                RelayChatContentBlock(type = "text", contentBlockId = "part-1", text = "Hel")
+            ),
+            runId = "run-1"
+        )
+        val differentPart = streaming.copy(
+            content = "Hello",
+            contentBlocks = listOf(
+                RelayChatContentBlock(type = "text", contentBlockId = "part-2", text = "Hello")
+            )
+        )
+
+        assert(
+            !shouldCoalesceChatDisplayUpdate(
+                ChatState(messages = listOf(streaming), isStreaming = true),
+                ChatState(messages = listOf(differentPart), isStreaming = true)
+            )
+        )
+    }
+
+    @Test
     fun streamingTailSignatureTracksStreamingTextProgress() {
         val streaming = ChatMessage(
             id = "assistant-streaming",

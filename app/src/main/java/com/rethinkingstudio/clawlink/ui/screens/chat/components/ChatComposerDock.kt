@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -69,6 +70,7 @@ import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
@@ -96,6 +98,7 @@ private val composerInputActionButtonSize = 32.dp
 private val composerCompactInputHeight = composerControlButtonSize
 private val composerTwoLineInputHeight = 58.dp
 private val composerThreeLineInputHeight = 74.dp
+private val composerModelButtonMaxWidth = 224.dp
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -181,6 +184,9 @@ internal fun ComposerDock(
                                 text = selectedModelText,
                                 icon = Icons.Default.SmartToy,
                                 enabled = hasActiveSession,
+                                modifier = Modifier
+                                    .widthIn(max = composerModelButtonMaxWidth)
+                                    .testTag("composer_model_picker_button"),
                                 trailingIcon = Icons.Default.UnfoldMore,
                                 iconTint = Color(0xFF1C7A55),
                                 iconContainerColor = Color(0xFFBDEDD0),

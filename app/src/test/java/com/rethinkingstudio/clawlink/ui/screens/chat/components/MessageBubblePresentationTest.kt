@@ -9,10 +9,26 @@ import com.rethinkingstudio.clawlink.ui.screens.chat.isLocalUserMessage
 import androidx.compose.ui.unit.dp
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotSame
+import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class MessageBubblePresentationTest {
+    @Test
+    fun markdownBlockCacheIsContentExactAndCannotCrossMessageText() {
+        AndroidMarkdownBlockCache.clearForTesting()
+
+        val first = AndroidMarkdownBlockCache.blocks("**第一条**")
+        val repeated = AndroidMarkdownBlockCache.blocks("**第一条**")
+        val second = AndroidMarkdownBlockCache.blocks("**第二条**")
+
+        assertSame(first, repeated)
+        assertNotSame(first, second)
+        assertEquals(listOf(AndroidMarkdownBlock.Paragraph("**第一条**")), first)
+        assertEquals(listOf(AndroidMarkdownBlock.Paragraph("**第二条**")), second)
+    }
+
     @Test
     fun mixedTextAndImagePreserveCanonicalContentBlockOrder() {
         val blocks = listOf(
