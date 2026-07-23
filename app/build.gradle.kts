@@ -24,8 +24,8 @@ android {
         applicationId = "com.rethinkingstudio.clawlink"
         minSdk = 26
         targetSdk = 35
-        versionCode = 10
-        versionName = "1.0.9"
+        versionCode = 13
+        versionName = "1.0.10"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
