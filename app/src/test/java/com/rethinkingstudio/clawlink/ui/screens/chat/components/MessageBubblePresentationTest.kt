@@ -6,6 +6,7 @@ import com.rethinkingstudio.clawlink.core.models.chat.ChatMessage
 import com.rethinkingstudio.clawlink.core.models.chat.RelayChatContentBlock
 import com.rethinkingstudio.clawlink.ui.screens.chat.isUserAuthoredMessage
 import com.rethinkingstudio.clawlink.ui.screens.chat.isLocalUserMessage
+import com.rethinkingstudio.clawlink.ui.screens.chat.shouldAnimateConversationMessageEntry
 import androidx.compose.ui.unit.dp
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -27,6 +28,30 @@ class MessageBubblePresentationTest {
         assertNotSame(first, second)
         assertEquals(listOf(AndroidMarkdownBlock.Paragraph("**第一条**")), first)
         assertEquals(listOf(AndroidMarkdownBlock.Paragraph("**第二条**")), second)
+    }
+
+    @Test
+    fun plainTextAvoidsRichMarkdownRendererWhileStructuredMarkdownKeepsIt() {
+        assertFalse(requiresRichMarkdownRendering("PONG 🏓"))
+        assertFalse(requiresRichMarkdownRendering("WINDOWS_HERMES_E2E_0724 received."))
+        assertTrue(requiresRichMarkdownRendering("**完成**"))
+        assertTrue(requiresRichMarkdownRendering("- 第一项\n- 第二项"))
+        assertTrue(requiresRichMarkdownRendering("[查看详情](https://example.com)"))
+        assertTrue(requiresRichMarkdownRendering("| A | B |\n| --- | --- |\n| 1 | 2 |"))
+    }
+
+    @Test
+    fun historyRowsDoNotReplayEntryAnimation() {
+        assertFalse(
+            shouldAnimateConversationMessageEntry(
+                ChatMessage(id = "history-1", role = MessageRole.assistant, source = "history")
+            )
+        )
+        assertTrue(
+            shouldAnimateConversationMessageEntry(
+                ChatMessage(id = "live-1", role = MessageRole.assistant, source = "live")
+            )
+        )
     }
 
     @Test

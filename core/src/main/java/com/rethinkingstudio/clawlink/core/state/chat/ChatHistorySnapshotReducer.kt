@@ -1,6 +1,7 @@
 package com.rethinkingstudio.clawlink.core.state.chat
 
 import com.rethinkingstudio.clawlink.core.models.chat.ChatMessage
+import com.rethinkingstudio.clawlink.core.models.chat.MessageRole
 import com.rethinkingstudio.clawlink.core.models.chat.MessageState
 import com.rethinkingstudio.clawlink.core.network.dto.ChatHistoryResponse
 import kotlinx.serialization.json.JsonObject
@@ -18,9 +19,15 @@ internal fun reduceTimelineHistorySnapshot(
     currentMessages: List<ChatMessage>,
     currentSessionKey: String,
     timelineState: ChatTimelineState,
-    replaceExistingTimelineState: Boolean = false
+    replaceExistingTimelineState: Boolean = false,
+    activeStreamingMessageId: String? = null
 ): ChatHistorySnapshotReduction? {
     val snapshot = response.timelineSnapshot ?: return null
+    val authoritativePendingOverlay = if (replaceExistingTimelineState) {
+        activeStreamingHistoryOverlay(currentMessages, activeStreamingMessageId)
+    } else {
+        currentMessages
+    }
     val snapshotObject = snapshot as? JsonObject
     val isCanonicalTimelineV3 = snapshotObject?.let { obj ->
         obj["timelineProtocolVersion"]?.jsonPrimitive?.contentOrNull == "3" ||
@@ -40,11 +47,7 @@ internal fun reduceTimelineHistorySnapshot(
             ?.takeIf { it.messages.isNotEmpty() || it.deletedMessageIds.isNotEmpty() }
             ?.let { page ->
                 val baseMessages = if (replaceExistingTimelineState) {
-                    currentMessages.filter {
-                        it.state == MessageState.pending ||
-                            it.state == MessageState.streaming ||
-                            it.runId.startsWith("local-user-")
-                    }
+                    authoritativePendingOverlay
                 } else {
                     currentMessages
                 }
@@ -63,7 +66,14 @@ internal fun reduceTimelineHistorySnapshot(
     val events = TimelineEventLog.decodePayload(JsonObject(mapOf("timelineSnapshot" to snapshot)))
     if (events.isEmpty()) return null
     val baseState = if (replaceExistingTimelineState) {
-        ChatTimelineState()
+        ChatTimelineState(
+            messages = authoritativePendingOverlay,
+            activeRunId = authoritativePendingOverlay
+                .firstOrNull { it.role == MessageRole.assistant }
+                ?.runId
+                ?.trim()
+                ?.takeIf { it.isNotEmpty() }
+        )
     } else {
         timelineState.copy(messages = currentMessages)
     }
@@ -73,4 +83,35 @@ internal fun reduceTimelineHistorySnapshot(
         timelineState = reducedState,
         v3SessionKeys = emptySet()
     )
+}
+
+private fun activeStreamingHistoryOverlay(
+    currentMessages: List<ChatMessage>,
+    activeStreamingMessageId: String?
+): List<ChatMessage> {
+    val activeId = activeStreamingMessageId?.trim()?.takeIf { it.isNotEmpty() } ?: return emptyList()
+    val activeAssistant = currentMessages.firstOrNull { message ->
+        message.id == activeId &&
+            message.role == MessageRole.assistant &&
+            message.state in setOf(MessageState.pending, MessageState.streaming)
+    } ?: return emptyList()
+    val activeTurnId = normalizedHistoryOverlayTurnId(activeAssistant.runId)
+    return currentMessages.filter { message ->
+        message.id == activeId ||
+            (message.role == MessageRole.user &&
+                message.runId.trim().startsWith("local-user-") &&
+                normalizedHistoryOverlayTurnId(message.runId) == activeTurnId)
+    }
+}
+
+private fun normalizedHistoryOverlayTurnId(value: String): String {
+    var normalized = value.trim()
+        .removePrefix("local-user-")
+        .removePrefix("user-")
+        .trim()
+    normalized = normalized.replace(
+        Regex(":(user|assistant|tool|system|waiting)$", RegexOption.IGNORE_CASE),
+        ""
+    )
+    return normalized.trim()
 }

@@ -217,11 +217,8 @@ internal fun mergeCompletedAssistantFinalIntoCurrentMessages(
     ) {
         return null
     }
-    val candidateText = sanitizeChatMessageText(candidate.plainTextContent).trim()
-    if (candidateText.isBlank()) return null
-
     val messages = currentMessages.toMutableList()
-    val existingIndex = sameRunCompletedAssistantFinalIndex(messages, candidate, candidateText)
+    val existingIndex = sameIdentityCompletedAssistantFinalIndex(messages, candidate)
     if (existingIndex < 0) return null
 
     val existing = messages[existingIndex]
@@ -236,20 +233,23 @@ internal fun mergeCompletedAssistantFinalIntoCurrentMessages(
     return orderMessagesWithSourceRunAnchors(messages)
 }
 
-private fun sameRunCompletedAssistantFinalIndex(
+private fun sameIdentityCompletedAssistantFinalIndex(
     messages: List<ChatMessage>,
-    candidate: ChatMessage,
-    candidateText: String
+    candidate: ChatMessage
 ): Int {
-    if (candidate.runId.isBlank()) return -1
     return messages.indexOfFirst { existing ->
-        existing.id != candidate.id &&
-            existing.role == MessageRole.assistant &&
+        existing.role == MessageRole.assistant &&
             existing.state == MessageState.completed &&
-            existing.runId == candidate.runId &&
             isPlainAssistantTextMessage(existing) &&
-            sanitizeChatMessageText(existing.plainTextContent).trim() == candidateText
+            sameCompletedAssistantIdentity(existing, candidate)
     }
+}
+
+private fun sameCompletedAssistantIdentity(existing: ChatMessage, candidate: ChatMessage): Boolean {
+    if (existing.id.isNotBlank() && existing.id == candidate.id) return true
+    if (existing.timelineMessageId.isNotBlank() && existing.timelineMessageId == candidate.timelineMessageId) return true
+    return existing.timelineIdentityKey.isNotBlank() &&
+        existing.timelineIdentityKey == candidate.timelineIdentityKey
 }
 
 private fun isPlainAssistantTextMessage(message: ChatMessage): Boolean {

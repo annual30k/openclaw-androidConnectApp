@@ -430,7 +430,12 @@ private fun ChatStore.appendCompletedFinalMessage(
     scope: ChatEventScope
 ) {
     val eventSortTimestamp = eventTimestampMillis(obj)?.toDouble()?.div(1000.0)
-    val msgId = UUID.randomUUID().toString()
+    val msgId = legacyCompletedFinalMessageId(
+        runId = runId,
+        role = finalRole,
+        sourceRunId = sourceRunId,
+        contentBlocks = finalContentBlocks
+    )
     val msg = ChatMessage(
         id = msgId,
         role = finalRole,
@@ -440,6 +445,7 @@ private fun ChatStore.appendCompletedFinalMessage(
         createdAt = eventTimestampIso(obj),
         runId = runId,
         sortTimestamp = eventSortTimestamp ?: (System.currentTimeMillis() / 1000.0),
+        timelineMessageId = msgId,
         timelineOrderKey = sourceRunId
             ?.let { localTimelineOrderKey(it, 30, msgId) }
             .orEmpty(),
@@ -487,6 +493,24 @@ private fun ChatStore.appendCompletedFinalMessage(
         isStreaming = false
     )
     completeCurrentRun(runId, scope.runScope)
+}
+
+private fun legacyCompletedFinalMessageId(
+    runId: String,
+    role: MessageRole,
+    sourceRunId: String?,
+    contentBlocks: List<RelayChatContentBlock>
+): String {
+    val stableRunId = runId.trim().ifEmpty { sourceRunId?.trim().orEmpty() }
+    if (stableRunId.isEmpty()) return UUID.randomUUID().toString()
+    val attachmentIdentity = attachmentIdentityForOrder(contentBlocks)?.trim().orEmpty()
+    // legacy final 没有 canonical timeline event 时，也必须从协议身份生成稳定 messageId；
+    // 附件在同一 run 内可能有多条，因此额外使用明确的 attachment/file identity 区分。
+    return if (attachmentIdentity.isNotEmpty()) {
+        "${role.name}-$stableRunId-attachment-$attachmentIdentity"
+    } else {
+        "${role.name}-$stableRunId"
+    }
 }
 
 internal fun ChatStore.appendOrMergeRemoteUserMessage(

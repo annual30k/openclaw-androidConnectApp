@@ -986,6 +986,147 @@ class ChatHistoryMergeHelpersTest {
         }
     }
 
+    @Test
+    fun loadHistoryTimelineSnapshotDropsCompletedLocalEntriesMissingFromAuthoritativeSnapshot() = runBlocking {
+        val wsClient = RelayWebSocketClient()
+        try {
+            val store = ChatStore(
+                apiClient = RelayAPIClient(),
+                wsClient = wsClient,
+                notificationPort = object : NotificationPort {
+                    override fun showReplyNotification(sessionKey: String, title: String, body: String) = Unit
+                    override fun cancelNotification(id: Int) = Unit
+                    override fun cancelAll() = Unit
+                },
+                chatHistoryPageFetcher = { _, _, _, _, _ ->
+                    ChatHistoryResponse(
+                        items = emptyList(),
+                        timelineSnapshot = Json.parseToJsonElement(
+                            """
+                            {
+                              "protocolVersion": 2,
+                              "eventType": "history.snapshot.page",
+                              "gatewayId": "gw_1",
+                              "sessionKey": "main",
+                              "source": "history",
+                              "messages": [
+                                {
+                                  "turnId": "server-turn",
+                                  "runId": "server-turn",
+                                  "messageId": "server-user",
+                                  "role": "user",
+                                  "messageState": "completed",
+                                  "timelineOrderKey": "v1|00000000000000000002|10|000000|server-user",
+                                  "timelineIdentityKey": "message:user:server-user",
+                                  "timelineItemKind": "message:user",
+                                  "content": [{ "type": "text", "text": "kept" }]
+                                }
+                              ]
+                            }
+                            """.trimIndent()
+                        )
+                    )
+                }
+            )
+            val staleUser = ChatMessage(
+                id = "stale-local-user",
+                role = MessageRole.user,
+                state = MessageState.completed,
+                content = "internal cached turn",
+                runId = "local-user-stale-run",
+                timelineOrderKey = "local:stale-run:10",
+                timelineIdentityKey = "local:message:user:stale-run",
+                timelineItemKind = "message:user"
+            )
+            val staleAssistant = ChatMessage(
+                id = "stale-local-assistant",
+                role = MessageRole.assistant,
+                state = MessageState.completed,
+                content = "internal cached reply",
+                runId = "stale-run",
+                timelineOrderKey = "local:stale-run:50",
+                timelineIdentityKey = "local:message:assistant:stale-run",
+                timelineItemKind = "message:assistant"
+            )
+            store.setStateForTest(
+                ChatState(
+                    messages = listOf(staleUser, staleAssistant),
+                    currentGatewayId = "gw_1",
+                    currentSessionKey = "main"
+                )
+            )
+            store.setTimelineStateForTest(ChatTimelineState(messages = listOf(staleUser, staleAssistant)))
+
+            store.loadHistory("gw_1", "main", limit = 50)
+
+            assertEquals(listOf("server-user"), store.state.value.messages.map { it.id })
+        } finally {
+            wsClient.destroy()
+        }
+    }
+
+    @Test
+    fun loadHistoryTimelineSnapshotPreservesOnlyExplicitlyActiveStreamingTurn() = runBlocking {
+        val wsClient = RelayWebSocketClient()
+        try {
+            val store = ChatStore(
+                apiClient = RelayAPIClient(),
+                wsClient = wsClient,
+                notificationPort = object : NotificationPort {
+                    override fun showReplyNotification(sessionKey: String, title: String, body: String) = Unit
+                    override fun cancelNotification(id: Int) = Unit
+                    override fun cancelAll() = Unit
+                },
+                chatHistoryPageFetcher = { _, _, _, _, _ ->
+                    ChatHistoryResponse(
+                        items = emptyList(),
+                        timelineSnapshot = Json.parseToJsonElement(
+                            """
+                            {
+                              "protocolVersion": 2,
+                              "eventType": "history.snapshot.page",
+                              "gatewayId": "gw_1",
+                              "sessionKey": "main",
+                              "source": "history",
+                              "messages": []
+                            }
+                            """.trimIndent()
+                        )
+                    )
+                }
+            )
+            val localUser = ChatMessage(
+                id = "local-user-active",
+                role = MessageRole.user,
+                state = MessageState.completed,
+                content = "active prompt",
+                runId = "local-user-active-run"
+            )
+            val activeAssistant = buildLocalTextAssistantPlaceholderMessage(
+                id = "assistant-active-run",
+                clientRunId = "active-run",
+                sortTimestamp = 10.001
+            )
+            store.setStateForTest(
+                ChatState(
+                    messages = listOf(localUser, activeAssistant),
+                    currentGatewayId = "gw_1",
+                    currentSessionKey = "main",
+                    isStreaming = true
+                )
+            )
+            store.setTimelineStateForTest(ChatTimelineState(messages = listOf(localUser, activeAssistant)))
+            store.setStreamingMessageIdForTest(activeAssistant.id)
+
+            store.loadHistory("gw_1", "main", limit = 50)
+
+            assertEquals(listOf(localUser.id, activeAssistant.id), store.state.value.messages.map { it.id })
+            assertTrue(store.state.value.isStreaming)
+        } finally {
+            wsClient.destroy()
+        }
+    }
+
     @Ignore("Legacy voice transcript replacement by local matching was removed; Relay canonical order is required.")
     @Test
     fun loadHistoryTimelineSnapshotPreservesLocalVoiceBubbleOverHistoryTranscript() = runBlocking {

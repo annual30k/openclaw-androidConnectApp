@@ -25,6 +25,12 @@ class ChatStoreSessionTest {
     private val json = Json { ignoreUnknownKeys = true }
 
     @Test
+    fun historyPageSizeBoundsInitialRefreshWork() {
+        assertEquals(50, ChatStore.chatHistoryPageSize)
+        assertTrue(ChatStore.chatHistoryWindowMaxMessages > ChatStore.chatHistoryPageSize)
+    }
+
+    @Test
     fun newSessionCanUseExplicitMobileDraftKey() {
         val wsClient = RelayWebSocketClient()
         try {
@@ -68,6 +74,44 @@ class ChatStoreSessionTest {
             method.invoke(store, null)
 
             assertNull(store.state.value.errorMessage)
+        } finally {
+            wsClient.destroy()
+        }
+    }
+
+    @Test
+    fun repeatedLegacyAssistantFinalUsesStableRunMessageIdentity() {
+        val wsClient = RelayWebSocketClient()
+        try {
+            val store = ChatStore(
+                apiClient = RelayAPIClient(),
+                wsClient = wsClient,
+                notificationPort = object : NotificationPort {
+                    override fun showReplyNotification(sessionKey: String, title: String, body: String) = Unit
+                    override fun cancelNotification(id: Int) = Unit
+                    override fun cancelAll() = Unit
+                }
+            )
+            val payload = json.parseToJsonElement(
+                """
+                {
+                  "state": "final",
+                  "role": "assistant",
+                  "sessionKey": "main",
+                  "runId": "mobile-run-stable-final",
+                  "text": "stable reply"
+                }
+                """.trimIndent()
+            )
+
+            repeat(2) {
+                invokeHandleWsEvent(store, WsEvent(type = "event", event = "chat", payload = payload))
+            }
+
+            val messages = store.state.value.messages
+            assertEquals(1, messages.count { it.role == MessageRole.assistant })
+            assertEquals("assistant-mobile-run-stable-final", messages.single().id)
+            assertEquals("assistant-mobile-run-stable-final", messages.single().timelineMessageId)
         } finally {
             wsClient.destroy()
         }

@@ -348,15 +348,17 @@ internal object ChatTimelineReducer {
             timelineItemKind = event.timelineItemKind.orEmpty().ifBlank { existingMessage?.timelineItemKind.orEmpty() },
             timelineResolvesWaiting = event.timelineResolvesWaiting ?: existingMessage?.timelineResolvesWaiting
         )
+        val shouldRememberActiveRun = message.state == MessageState.streaming
         return copy(
             messages = orderMessagesWithSourceRunAnchors(anchoredMessagesForToolTurn(upsertToolMessage(message), event)),
-            activeRunId = event.runId ?: activeRunId,
-            activeRunsByTurnId = if (!event.turnId.isNullOrBlank() && !event.runId.isNullOrBlank()) {
+            // 工具终态只是结果更新；它可以保留既有 active run，但不能在 assistant/run 已终止后重新激活同一轮。
+            activeRunId = if (shouldRememberActiveRun) event.runId ?: activeRunId else activeRunId,
+            activeRunsByTurnId = if (shouldRememberActiveRun && !event.turnId.isNullOrBlank() && !event.runId.isNullOrBlank()) {
                 activeRunsByTurnId + (event.turnId to event.runId)
             } else {
                 activeRunsByTurnId
             },
-            activeTurnByRunId = if (!event.turnId.isNullOrBlank() && !event.runId.isNullOrBlank()) {
+            activeTurnByRunId = if (shouldRememberActiveRun && !event.turnId.isNullOrBlank() && !event.runId.isNullOrBlank()) {
                 activeTurnByRunId + (event.runId to event.turnId)
             } else {
                 activeTurnByRunId

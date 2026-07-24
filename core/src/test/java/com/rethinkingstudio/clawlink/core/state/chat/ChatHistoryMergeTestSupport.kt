@@ -42,6 +42,12 @@ internal fun ChatStore.setRunScopesForTest(scopes: LinkedHashMap<String, ChatRun
     value.putAll(scopes)
 }
 
+internal fun ChatStore.setStreamingMessageIdForTest(messageId: String?) {
+    val field = ChatStore::class.java.getDeclaredField("streamingMessageId")
+    field.isAccessible = true
+    field.set(this, messageId)
+}
+
 internal fun ChatStore.timelineStateForTest(): ChatTimelineState {
     val field = ChatStore::class.java.getDeclaredField("timelineState")
     field.isAccessible = true

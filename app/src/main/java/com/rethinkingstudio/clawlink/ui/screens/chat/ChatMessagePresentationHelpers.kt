@@ -89,8 +89,13 @@ internal fun ChatMessage.isLocalUserMessage(): Boolean {
 internal fun ConversationMessageEnterAnimation(
     isUserAuthoredMessage: Boolean,
     animationKey: String,
+    shouldAnimate: Boolean = true,
     content: @Composable () -> Unit
 ) {
+    if (!shouldAnimate) {
+        content()
+        return
+    }
     val density = LocalDensity.current
     val startOffsetPx = with(density) {
         val direction = if (isUserAuthoredMessage) 1 else -1
@@ -130,4 +135,8 @@ internal fun ConversationMessageEnterAnimation(
     ) {
         content()
     }
+}
+
+internal fun shouldAnimateConversationMessageEntry(message: ChatMessage): Boolean {
+    return message.source.trim().lowercase() != "history"
 }

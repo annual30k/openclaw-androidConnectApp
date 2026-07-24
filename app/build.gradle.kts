@@ -47,6 +47,11 @@ android {
     }
 
     buildTypes {
+        debug {
+            // 真机调试包与正式签名包并存，避免为安装本地代码而卸载并清空用户数据。
+            applicationIdSuffix = ".debug"
+            versionNameSuffix = "-debug"
+        }
         release {
             if (hasReleaseSigningConfig) {
                 signingConfig = signingConfigs.getByName("release")

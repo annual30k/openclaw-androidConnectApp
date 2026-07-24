@@ -47,8 +47,8 @@ internal fun MarkdownMessageText(
     onDarkBackground: Boolean,
     isStreaming: Boolean = false
 ) {
-    if (isStreaming) {
-        val decodedText = remember(text) { text.decodeEscapedMarkdownText() }
+    val decodedText = remember(text) { text.decodeEscapedMarkdownText() }
+    if (isStreaming || !requiresRichMarkdownRendering(decodedText)) {
         SelectionContainer {
             Text(
                 text = decodedText,
@@ -99,6 +99,33 @@ internal fun MarkdownMessageText(
             }
         }
     }
+}
+
+internal fun requiresRichMarkdownRendering(text: String): Boolean {
+    if (text.isBlank()) return false
+    val markdownSignals = "#*-+>|_`[<~"
+    if (text.none { it in markdownSignals } && !Regex("(?m)^\\s{0,3}\\d+\\.\\s+").containsMatchIn(text)) {
+        return false
+    }
+
+    val lines = text.replace("\r\n", "\n").replace('\r', '\n').lines()
+    if (lines.indices.any { index ->
+            val trimmed = lines[index].trim()
+            trimmed.startsWith("```") ||
+                parseMarkdownHeading(trimmed) != null ||
+                unorderedMarkdownItem(lines[index]) != null ||
+                orderedMarkdownItem(lines[index]) != null ||
+                blockquoteMarkdownLine(lines[index]) != null ||
+                trimmed.isMarkdownThematicBreak() ||
+                isMarkdownTableHeader(index, lines)
+        }
+    ) {
+        return true
+    }
+
+    return Regex("""(!?\[[^\]]+])\([^\s)]+(?:\s+\"[^\"]*\")?\)|`[^`]+`|\*\*[^*]+\*\*|__[^_]+__|~~[^~]+~~|<https?://[^>]+>|</?[A-Za-z][^>]*>""")
+        .containsMatchIn(text) ||
+        Regex("""(?<!\w)(\*|_)(?=\S).+?(?<=\S)\1(?!\w)""").containsMatchIn(text)
 }
 
 internal object AndroidMarkdownBlockCache {

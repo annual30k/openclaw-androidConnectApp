@@ -758,7 +758,7 @@ class ChatStore(
         const val hermesRealtimeFinalSyncRetryDelayMs = 30_000L
         const val hermesRealtimeFinalSyncSlowRetryDelayMs = 60_000L
         const val chatFinalSyncMaxAttempts = 60
-        const val chatHistoryPageSize = 500
+        const val chatHistoryPageSize = 50
         const val chatHistoryWindowMaxMessages = 500
         const val chatHistoryPendingResolveMaxPages = 5
         const val localUserEchoMergeWindowSeconds = 600.0

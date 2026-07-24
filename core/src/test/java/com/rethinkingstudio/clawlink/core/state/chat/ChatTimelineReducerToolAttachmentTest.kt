@@ -348,6 +348,39 @@ class ChatTimelineReducerToolAttachmentTest {
         assertEquals("Reading config", toolMessage.content)
         assertEquals("tool-1", toolMessage.contentBlocks.first().toolCallId)
         assertEquals("success", completed.toolsById.getValue("tool-1").state)
+        assertEquals("run-1", completed.activeRunId)
+    }
+
+    @Test
+    fun lateCompletedToolDoesNotReactivateTerminalRun() {
+        val completed = ChatTimelineReducer.reduce(
+            ChatTimelineState(),
+            event(
+                """
+                {
+                  "protocolVersion": 2,
+                  "eventId": "late-tool-success",
+                  "eventType": "tool.invocation.updated",
+                  "turnId": "turn-1",
+                  "runId": "run-1",
+                  "messageId": "tool-turn-1",
+                  "role": "tool",
+                  "messageState": "completed",
+                  "createdAt": "1970-01-01T00:03:20.003Z",
+                  "content": [
+                    { "type": "tool_result", "text": "Done", "name": "read_file", "toolCallId": "tool-1" }
+                  ],
+                  "toolInvocationId": "tool-1",
+                  "name": "read_file",
+                  "toolState": "success"
+                }
+                """.trimIndent()
+            )
+        )
+
+        assertNull(completed.activeRunId)
+        assertTrue(completed.activeRunsByTurnId.isEmpty())
+        assertTrue(completed.activeTurnByRunId.isEmpty())
     }
 
     @Test

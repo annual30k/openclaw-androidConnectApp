@@ -343,7 +343,8 @@ internal class ChatHistoryCoordinator(
             currentMessages = currentState.messages,
             currentSessionKey = currentState.currentSessionKey,
             timelineState = timelineState,
-            replaceExistingTimelineState = replaceExistingTimelineState
+            replaceExistingTimelineState = replaceExistingTimelineState,
+            activeStreamingMessageId = activeStreamingMessageId
         )
         val historyMessages = snapshotReduction?.messages ?: buildHistoryMessagesFromItems(response.items)
         val shouldUseAuthoritativeSnapshot = (replaceExistingTimelineState && response.timelineSnapshot != null) ||
@@ -390,10 +391,13 @@ internal class ChatHistoryCoordinator(
         response: ChatHistoryResponse,
         currentMessages: List<ChatMessage>
     ): Boolean {
-        val isCanonicalTimelineSnapshot = isCanonicalTimelineV3(response.timelineSnapshot)
+        // HTTP chat.history snapshots are authoritative for the requested newest window.
+        // Only the explicitly active streaming turn is overlaid by the snapshot reducer;
+        // completed local cache entries must not survive merely because the server no
+        // longer returns them (for example, filtered OpenClaw heartbeat artifacts).
+        if (response.timelineSnapshot != null) return true
         val shouldMergeCurrentLocalUsers = hasLocalUserMessagesNeedingHistoryMerge(currentMessages)
-        return isCanonicalTimelineSnapshot ||
-            (currentStreamingMessageId() == null && !shouldMergeCurrentLocalUsers)
+        return currentStreamingMessageId() == null && !shouldMergeCurrentLocalUsers
     }
 
     private fun trimToNewestHistoryWindow(

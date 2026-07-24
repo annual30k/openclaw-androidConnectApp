@@ -487,7 +487,7 @@ class ChatRealtimeMessageMergeHelpersTest {
     }
 
     @Test
-    fun mergesDuplicateCompletedAssistantFinalForSameRun() {
+    fun mergesDuplicateCompletedAssistantFinalForSameStableMessageIdentity() {
         val current = listOf(
             ChatMessage(
                 id = "user-1",
@@ -498,7 +498,7 @@ class ChatRealtimeMessageMergeHelpersTest {
                 sortTimestamp = 60.0
             ),
             ChatMessage(
-                id = "assistant-timeline",
+                id = "assistant-run-1",
                 role = MessageRole.assistant,
                 state = MessageState.completed,
                 content = "OK",
@@ -507,7 +507,7 @@ class ChatRealtimeMessageMergeHelpersTest {
             )
         )
         val legacyFinal = ChatMessage(
-            id = "assistant-legacy-final",
+            id = "assistant-run-1",
             role = MessageRole.assistant,
             state = MessageState.completed,
             content = "OK",
@@ -518,9 +518,31 @@ class ChatRealtimeMessageMergeHelpersTest {
         val merged = mergeCompletedAssistantFinalIntoCurrentMessages(current, legacyFinal)
 
         requireNotNull(merged)
-        assertEquals(listOf("user-1", "assistant-timeline"), merged.map { it.id })
+        assertEquals(listOf("user-1", "assistant-run-1"), merged.map { it.id })
         assertEquals(1, merged.count { it.role == MessageRole.assistant && it.content == "OK" })
         assertEquals(60.001, merged.last().sortTimestamp ?: -1.0, 0.0001)
+    }
+
+    @Test
+    fun doesNotMergeSameRunAssistantMessagesWithDifferentStableIdentities() {
+        val current = listOf(
+            ChatMessage(
+                id = "assistant-first",
+                role = MessageRole.assistant,
+                state = MessageState.completed,
+                content = "OK",
+                runId = "run-1"
+            )
+        )
+        val distinctFinal = ChatMessage(
+            id = "assistant-second",
+            role = MessageRole.assistant,
+            state = MessageState.completed,
+            content = "OK",
+            runId = "run-1"
+        )
+
+        assertEquals(null, mergeCompletedAssistantFinalIntoCurrentMessages(current, distinctFinal))
     }
 
     @Test
