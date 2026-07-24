@@ -8,7 +8,6 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
-import org.junit.Ignore
 import org.junit.Test
 
 class ChatTimelineReducerTest {
@@ -337,64 +336,6 @@ class ChatTimelineReducerTest {
         assertEquals("server-user-message", state.messages.first().timelineMessageId)
         assertEquals(1, state.messages.count { it.role == MessageRole.user })
         assertEquals("local-user-client-run-1", state.messages.first().runId)
-    }
-
-    @Test
-    fun delayedAssistantCompletionKeepsOriginalTurnOrderAheadOfLaterUser() {
-        val initial = ChatTimelineState(
-            messages = listOf(
-                ChatMessage(
-                    id = "local-user-hi",
-                    role = MessageRole.user,
-                    state = MessageState.completed,
-                    content = "Hi",
-                    runId = "local-user-run-hi",
-                    createdAt = "2026-06-22T02:06:00.000Z",
-                    timelineOrderKey = "local:run-hi:010-user",
-                    timelineIdentityKey = "local:run-hi:message:user:010-user",
-                    timelineItemKind = "message:user"
-                ),
-                ChatMessage(
-                    id = "local-user-ping",
-                    role = MessageRole.user,
-                    state = MessageState.completed,
-                    content = "Ping",
-                    runId = "local-user-run-ping",
-                    createdAt = "2026-06-22T02:08:00.000Z",
-                    timelineOrderKey = "v1|00000001782094080000|10|0000000000000001:part-text-1:local-user-ping|ping",
-                    timelineIdentityKey = "local:run-ping:message:user:010-user",
-                    timelineItemKind = "message:user"
-                )
-            )
-        )
-
-        val state = ChatTimelineReducer.reduce(
-            initial,
-            event(
-                """
-                {
-                  "protocolVersion": 2,
-                  "eventId": "evt-assistant-hi",
-                  "eventType": "message.completed",
-                  "turnId": "run-hi",
-                  "runId": "run-hi",
-                  "messageId": "assistant-run-hi",
-                  "role": "assistant",
-                  "createdAt": "2026-06-22T02:09:00.000Z",
-                  "content": [{ "type": "text", "text": "你好！有什么我能帮你的吗？" }],
-                  "timelineOrderKey": "v1|00000001782094140000|50|0000000000000001:part-text-1:assistant-run-hi|late",
-                  "timelineIdentityKey": "clawconnect:main:run-hi:message:assistant:assistant-run-hi",
-                  "timelineItemKind": "message:assistant",
-                  "timelineResolvesWaiting": true
-                }
-                """.trimIndent()
-            )
-        )
-
-        assertEquals(
-            listOf("local-user-hi", "assistant-run-hi", "local-user-ping"),
-            state.messages.map { it.id }
-        )
     }
 
     @Test
@@ -751,64 +692,4 @@ class ChatTimelineReducerTest {
         assertFalse(hasActiveVisibleTimelineRun(state, ordered))
     }
 
-    @Test
-    fun messageCompletedWithoutRunIdentityResolvesOldestPendingWaitingBubble() {
-        val messages = listOf(
-            ChatMessage(
-                id = "local-user-1",
-                role = MessageRole.user,
-                state = MessageState.completed,
-                content = "hi",
-                runId = "local-user-run-1",
-                sortTimestamp = 1.0
-            ),
-            ChatMessage(
-                id = "assistant-waiting-1",
-                role = MessageRole.assistant,
-                state = MessageState.streaming,
-                content = protocolTypingMarkerText,
-                runId = "run-1",
-                sortTimestamp = 1.001
-            ),
-            ChatMessage(
-                id = "local-user-2",
-                role = MessageRole.user,
-                state = MessageState.completed,
-                content = "你好",
-                runId = "local-user-run-2",
-                sortTimestamp = 2.0
-            ),
-            ChatMessage(
-                id = "assistant-waiting-2",
-                role = MessageRole.assistant,
-                state = MessageState.streaming,
-                content = protocolTypingMarkerText,
-                runId = "run-2",
-                sortTimestamp = 2.001
-            )
-        )
-
-        val state = ChatTimelineReducer.reduce(
-            ChatTimelineState(messages = messages),
-            event(
-                """
-                {
-                  "protocolVersion": 2,
-                  "eventId": "final-server-runless",
-                  "eventType": "message.completed",
-                  "messageId": "assistant-server",
-                  "role": "assistant",
-                  "content": [{ "type": "text", "text": "Hi! 有什么需要帮忙的吗?" }],
-                  "createdAt": "1970-01-01T00:00:01.500Z"
-                }
-                """.trimIndent()
-            )
-        )
-        val ordered = orderMessagesWithSourceRunAnchors(state.messages)
-
-        assertEquals(listOf("local-user-1", "assistant-server", "local-user-2", "assistant-waiting-2"), ordered.map { it.id })
-        assertEquals("run-1", ordered[1].runId)
-        assertEquals("Hi! 有什么需要帮忙的吗?", ordered[1].content)
-        assertEquals(MessageState.streaming, ordered[3].state)
-    }
 }

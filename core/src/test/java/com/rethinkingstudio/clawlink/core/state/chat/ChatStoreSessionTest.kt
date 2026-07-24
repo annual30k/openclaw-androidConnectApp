@@ -385,7 +385,7 @@ class ChatStoreSessionTest {
                 role = MessageRole.user,
                 state = MessageState.completed,
                 content = "发我截图",
-                runId = "local-user-turn-1",
+                runId = "local-user-run-1",
                 sortTimestamp = 200.0,
                 timelineOrderKey = localTimelineOrderKey("turn-1", 10, "user-1"),
                 timelineIdentityKey = localTimelineIdentityKey("message:user", "turn-1"),

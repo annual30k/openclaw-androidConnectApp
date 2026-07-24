@@ -109,7 +109,7 @@ internal object ChatTimelineReducer {
                     candidate.state == MessageState.streaming &&
                     candidate.runId == event.runId &&
                     isTransientAssistantPlaceholder(candidate)
-            } ?: singleUnresolvedTransientAssistantPlaceholder(turnId = event.turnId, runId = event.runId)
+            }
         } else {
             null
         }
@@ -250,24 +250,22 @@ internal object ChatTimelineReducer {
                 completedEventMatchesPlaceholder(candidate, event)
         }?.let { return it }
 
-        if (!event.clearsWaitingAssistant()) return null
-        return singleUnresolvedTransientAssistantPlaceholder(turnId = event.turnId, runId = event.runId)
-            ?: oldestUnresolvedTransientAssistantPlaceholder(turnId = event.turnId, runId = event.runId)
+        return null
     }
 
     private fun ChatTimelineState.applyRunTerminal(event: TimelineEvent.RunTerminal): ChatTimelineState {
         val turnId = event.turnId ?: event.runId?.let { activeTurnByRunId[it] }
         val runId = event.runId ?: turnId?.let { activeRunsByTurnId[it] }
         val hasExplicitScope = !turnId.isNullOrBlank() || !runId.isNullOrBlank()
-        val shouldClearActiveRunId = !hasExplicitScope || activeRunId == null || activeRunId == runId
+        val shouldClearActiveRunId = hasExplicitScope && (activeRunId == null || activeRunId == runId)
         val nextRunsByTurn = when {
-            !hasExplicitScope -> emptyMap()
+            !hasExplicitScope -> activeRunsByTurnId
             turnId != null -> activeRunsByTurnId - turnId
             runId != null -> activeRunsByTurnId.filterValues { activeRunId -> activeRunId != runId }
             else -> activeRunsByTurnId
         }
         val nextTurnByRun = when {
-            !hasExplicitScope -> emptyMap()
+            !hasExplicitScope -> activeTurnByRunId
             runId != null -> activeTurnByRunId - runId
             turnId != null -> activeTurnByRunId.filterValues { activeTurnId -> activeTurnId != turnId }
             else -> activeTurnByRunId
@@ -468,11 +466,6 @@ internal object ChatTimelineReducer {
                         excludingMessageId = item.messageId,
                         turnId = item.turnId,
                         runId = item.runId
-                    ) ?: nextState.matchingLocalUserByContent(
-                        excludingMessageId = item.messageId,
-                        turnId = item.turnId,
-                        runId = item.runId,
-                        content = message.content
                     )
                 } else {
                     null

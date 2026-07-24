@@ -5,10 +5,9 @@ import com.rethinkingstudio.clawlink.core.models.chat.RelayChatContentBlock
 import java.net.URLEncoder
 import java.nio.charset.StandardCharsets
 import java.security.MessageDigest
-import kotlin.math.floor
 
 internal enum class TimelineIdentitySource {
-    MessageId, Seq, RunPart, TurnPart, Client, Fallback
+    MessageId, Seq, RunPart, TurnPart, Client
 }
 
 internal data class TimelineStableIdentity(
@@ -52,7 +51,7 @@ internal fun stableTimelineKey(
     idempotencyKey: String? = null,
     createdAt: String? = null,
     contentHash: String? = null
-): TimelineStableIdentity {
+): TimelineStableIdentity? {
     val session = sessionKey.clean() ?: "main"
     messageId.clean()?.let {
         return TimelineStableIdentity("$session:message:${keyPart(it)}", TimelineIdentitySource.MessageId)
@@ -77,18 +76,12 @@ internal fun stableTimelineKey(
     if (clientKey != null) {
         return TimelineStableIdentity("$session:client:${keyPart(clientKey)}", TimelineIdentitySource.Client)
     }
-    val bucket = createdAt.clean()
-        ?.let { runCatching { java.time.Instant.parse(it).epochSecond }.getOrNull() }
-        ?.let { floor(it.toDouble()).toLong() }
-        ?: 0L
-    val hash = (contentHash.clean() ?: timelineContentHash(emptyList())).take(16)
-    return TimelineStableIdentity(
-        "$session:fallback:${keyPart(normalizedRole ?: "assistant")}:$bucket:$hash",
-        TimelineIdentitySource.Fallback
-    )
+    // Text, timestamps and content hashes are not message identity. Reject
+    // malformed rows instead of inventing a key that may collapse two events.
+    return null
 }
 
-internal fun stableTimelineKey(sessionKey: String, message: ChatMessage): TimelineStableIdentity {
+internal fun stableTimelineKey(sessionKey: String, message: ChatMessage): TimelineStableIdentity? {
     val session = sessionKey.clean() ?: "main"
     message.timelineStableKey.clean()?.let {
         return TimelineStableIdentity(it, TimelineIdentitySource.MessageId)

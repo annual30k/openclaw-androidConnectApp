@@ -30,7 +30,7 @@ internal fun reduceTimelineHistorySnapshot(
     }
     val snapshotObject = snapshot as? JsonObject
     val isCanonicalTimelineV3 = snapshotObject?.let { obj ->
-        obj["timelineProtocolVersion"]?.jsonPrimitive?.contentOrNull == "3" ||
+        obj["timelineProtocolVersion"]?.jsonPrimitive?.contentOrNull in setOf("3", "4") ||
             obj.containsKey("snapshotRevision") ||
             obj.containsKey("rangeStartCursor") ||
             obj.containsKey("rangeEndCursor") ||

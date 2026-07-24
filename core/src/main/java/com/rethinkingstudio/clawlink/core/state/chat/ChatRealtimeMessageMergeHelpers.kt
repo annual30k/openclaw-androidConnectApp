@@ -291,11 +291,9 @@ internal fun removeResolvedTransientAssistantPlaceholders(
 }
 
 private fun sameTurnResolvedTransientAssistantIds(messages: List<ChatMessage>): Set<String> {
-    val ordered = messages.sortedWith(
-        compareBy<ChatMessage> { it.sortTimestamp ?: Double.MAX_VALUE }
-            .thenBy { it.createdAt }
-            .thenBy { it.id }
-    )
+    // The reducer's queue order is the pending namespace authority. Display
+    // timestamps are metadata only and must never rebuild conversation order.
+    val ordered = messages
     return ordered.mapIndexedNotNull { index, message ->
         if (message.role != MessageRole.assistant ||
             message.state != MessageState.streaming ||

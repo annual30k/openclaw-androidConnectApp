@@ -187,11 +187,12 @@ internal fun timelineSnapshotMessageToChatMessage(
     }.toChatMessage()
 }
 
-private fun ChatMessage.toEntry(sessionKey: String, originalIndex: Int = 0): CanonicalTimelineEntry {
+private fun ChatMessage.toEntry(sessionKey: String, originalIndex: Int = 0): CanonicalTimelineEntry? {
     val canonicalIdentityKey = timelineIdentityKey.clean()
     val canonicalOrderKey = timelineOrderKey.clean()
     val identity = canonicalIdentityKey?.let { TimelineStableIdentity(it, TimelineIdentitySource.MessageId) }
         ?: stableTimelineKey(sessionKey, this)
+        ?: return null
     val canonicalContent = canonicalContentForTimelineEntry()
     return CanonicalTimelineEntry(
         originalIndex = originalIndex,
@@ -344,11 +345,6 @@ private fun compareEntries(left: CanonicalTimelineEntry, right: CanonicalTimelin
     if (leftOrderKey != null && rightOrderKey == null) return -1
     if (leftOrderKey == null && rightOrderKey != null) return 1
 
-    if (leftOrderKey == null && rightOrderKey == null && (left.isLocalOverlayEntry() || right.isLocalOverlayEntry())) {
-        val timestampCompare = compareNullableSortTimestamp(left.sortTimestamp, right.sortTimestamp)
-        if (timestampCompare != 0) return timestampCompare
-    }
-
     val inputCompare = left.originalIndex.compareTo(right.originalIndex)
     if (inputCompare != 0) return inputCompare
     return left.stableKey.compareTo(right.stableKey)
@@ -375,9 +371,8 @@ private fun localUserBeforeUnconfirmedOutput(
     if (leftOrderKey != null || rightOrderKey != null) return false
     if (left.role != MessageRole.user || right.role !in setOf(MessageRole.assistant, MessageRole.tool)) return false
     if (left.runId?.trim()?.startsWith("local-user-") != true) return false
-    val leftTimestamp = left.sortTimestamp ?: return false
-    val rightTimestamp = right.sortTimestamp ?: return false
-    return leftTimestamp <= rightTimestamp
+    return normalizedTurnIdentity(left).isNotEmpty() &&
+        normalizedTurnIdentity(left) == normalizedTurnIdentity(right)
 }
 
 private fun CanonicalTimelineEntry.isLocalOverlayEntry(): Boolean {
@@ -385,15 +380,6 @@ private fun CanonicalTimelineEntry.isLocalOverlayEntry(): Boolean {
         source.trim().equals("local", ignoreCase = true) ||
         runId?.trim()?.startsWith("local-user-") == true ||
         isTransientAssistantTimelinePlaceholder(this)
-}
-
-private fun compareNullableSortTimestamp(left: Double?, right: Double?): Int {
-    return when {
-        left != null && right != null && left != right -> left.compareTo(right)
-        left != null && right == null -> -1
-        left == null && right != null -> 1
-        else -> 0
-    }
 }
 
 private fun pendingWaitingOverlayOrder(left: CanonicalTimelineEntry, right: CanonicalTimelineEntry): Boolean {
@@ -451,18 +437,6 @@ private fun localPendingTimelineOrder(left: CanonicalTimelineEntry, right: Canon
             return true
         }
     }
-    // 本地 pending 只能在同一 turn 内把 user 锚到 assistant/tool 前。
-    // 跨 turn 的新 user 不能越过上一个仍未 canonical 化的 waiting，否则刚发送时会与刷新后的历史顺序不一致。
-    if (clientRunId.isNotEmpty() &&
-        relayTimelineOrderKey(left) == null &&
-        relayTimelineOrderKey(right) == null &&
-        right.role in setOf(MessageRole.assistant, MessageRole.tool) &&
-        left.sortTimestamp != null &&
-        right.sortTimestamp != null &&
-        left.sortTimestamp <= right.sortTimestamp
-    ) {
-        return true
-    }
     return clientRunId.isNotEmpty() &&
         right.role == MessageRole.assistant &&
         right.runId?.trim() == clientRunId
@@ -485,7 +459,7 @@ internal fun reconcileTimeline(
     snapshot: TimelineSnapshotPage
 ): TimelineReconcileResult {
     val (existingConfirmed, existingPending) = TimelinePendingOverlay.splitPending(existing)
-    val pendingEntries = (existingPending + pending).mapIndexed { index, message ->
+    val pendingEntries = (existingPending + pending).mapIndexedNotNull { index, message ->
         message.toEntry(snapshot.sessionKey, index)
     }
     val incoming = snapshot.messages.mapIndexedNotNull { index, message ->
@@ -506,7 +480,7 @@ private fun reconcileCanonicalTimeline(
     val range = snapshot.range
 
     existingConfirmed
-        .mapIndexed { index, message -> message.toEntry(snapshot.sessionKey, index) }
+        .mapIndexedNotNull { index, message -> message.toEntry(snapshot.sessionKey, index) }
         .filter { it.timelineIdentityKey.isNotBlank() && it.timelineItemKind.isNotBlank() && relayTimelineOrderKey(it) != null }
         .filter { range.isBounded && !range.contains(it.seq ?: it.conversationSeq) }
         .forEach { entry ->
@@ -618,7 +592,7 @@ private fun CanonicalTimelineEntry.isAssistantAnswerTimelineItem(): Boolean {
 
 internal fun sortTimelineMessagesV3(messages: List<ChatMessage>, sessionKey: String = "main"): List<ChatMessage> {
     return messages
-        .mapIndexed { index, message -> message.toEntry(sessionKey, index) }
+        .mapIndexedNotNull { index, message -> message.toEntry(sessionKey, index) }
         .sortedWith(::compareEntries)
         .map { it.toChatMessage() }
 }

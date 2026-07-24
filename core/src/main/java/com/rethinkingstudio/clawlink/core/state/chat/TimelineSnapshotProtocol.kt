@@ -7,7 +7,7 @@ import kotlinx.serialization.json.jsonPrimitive
 
 internal fun isCanonicalTimelineV3(snapshot: JsonElement?): Boolean {
     val obj = snapshot as? JsonObject ?: return false
-    return obj["timelineProtocolVersion"]?.jsonPrimitive?.contentOrNull == "3" ||
+    return obj["timelineProtocolVersion"]?.jsonPrimitive?.contentOrNull in setOf("3", "4") ||
         obj.containsKey("snapshotRevision") ||
         obj.containsKey("rangeStartCursor") ||
         obj.containsKey("rangeEndCursor") ||
