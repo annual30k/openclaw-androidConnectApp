@@ -39,7 +39,8 @@ if [ ! -f "$APK_SOURCE" ]; then
 fi
 
 # Set destination details
-VERSION="1.0.10"
+VERSION=$(grep -oE 'versionName = "[^"]+"' app/build.gradle.kts | cut -d'"' -f2)
+VERSION=${VERSION:-"1.0.11"}
 DATE=$(date +%Y%m%d)
 APK_DEST="dist/Claw-Link-${VERSION}-release-v2-${DATE}.apk"
 
