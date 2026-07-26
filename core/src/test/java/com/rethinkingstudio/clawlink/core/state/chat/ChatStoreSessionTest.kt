@@ -80,6 +80,71 @@ class ChatStoreSessionTest {
     }
 
     @Test
+    fun canonicalAgentToolEventUsesTimelineIdentityInsteadOfLegacyDuplicateProjection() {
+        val wsClient = RelayWebSocketClient()
+        try {
+            val store = ChatStore(
+                apiClient = RelayAPIClient(),
+                wsClient = wsClient,
+                notificationPort = object : NotificationPort {
+                    override fun showReplyNotification(sessionKey: String, title: String, body: String) = Unit
+                    override fun cancelNotification(id: Int) = Unit
+                    override fun cancelAll() = Unit
+                }
+            )
+            val legacyPayload = json.parseToJsonElement(
+                """
+                {
+                  "stream": "tool",
+                  "sessionKey": "main",
+                  "runId": "turn-canonical-1",
+                  "data": {
+                    "phase": "result",
+                    "toolCallId": "call-canonical-1",
+                    "name": "exec",
+                    "result": "done"
+                  }
+                }
+                """.trimIndent()
+            )
+            val payload = json.parseToJsonElement(
+                """
+                {
+                  "sessionKey": "main",
+                  "runId": "turn-canonical-1",
+                  "timelineEvents": [{
+                    "protocolVersion": 2,
+                    "eventId": "event-tool-canonical-1",
+                    "eventType": "tool.invocation.updated",
+                    "sessionKey": "main",
+                    "turnId": "turn-canonical-1",
+                    "runId": "turn-canonical-1",
+                    "messageId": "tool-call-canonical-1",
+                    "toolInvocationId": "call-canonical-1",
+                    "toolState": "success",
+                    "role": "tool",
+                    "content": [{"type":"tool_result","toolCallId":"call-canonical-1","text":"done"}],
+                    "timelineOrderKey": "v4|1|00000000000000000001|30|tool",
+                    "timelineIdentityKey": "v1|main|tool|call-canonical-1",
+                    "timelineItemKind": "tool"
+                  }]
+                }
+                """.trimIndent()
+            )
+
+            invokeHandleWsEvent(store, WsEvent(type = "event", event = "agent", payload = legacyPayload))
+            invokeHandleWsEvent(store, WsEvent(type = "event", event = "agent", payload = payload))
+
+            val tools = store.state.value.messages.filter { it.role == MessageRole.tool }
+            assertEquals(1, tools.size)
+            assertEquals("v1|main|tool|call-canonical-1", tools.single().timelineIdentityKey)
+            assertEquals("tool-call-canonical-1", tools.single().id)
+        } finally {
+            wsClient.destroy()
+        }
+    }
+
+    @Test
     fun repeatedLegacyAssistantFinalUsesStableRunMessageIdentity() {
         val wsClient = RelayWebSocketClient()
         try {

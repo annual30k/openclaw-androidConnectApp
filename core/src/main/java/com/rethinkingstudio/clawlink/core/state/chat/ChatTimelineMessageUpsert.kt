@@ -43,9 +43,18 @@ internal fun ChatTimelineState.upsertMessage(
 internal fun ChatTimelineState.upsertToolMessage(message: ChatMessage): List<ChatMessage> {
     // 工具消息优先使用 timelineIdentityKey；老事件没有该键时才退回到 tool role + message id 的明确身份。
     val identityKey = message.timelineIdentityKey.trim().takeIf { it.isNotEmpty() }
+    val canonicalToolCallId = identityKey
+        ?.substringAfter("|tool|", missingDelimiterValue = "")
+        ?.takeIf { it.isNotEmpty() }
     val index = messages.indexOfFirst { current ->
         if (identityKey != null) {
-            current.timelineIdentityKey == identityKey
+            current.timelineIdentityKey == identityKey ||
+                (current.timelineIdentityKey.isBlank() &&
+                    current.role == MessageRole.tool &&
+                    canonicalToolCallId != null &&
+                    (current.runId == canonicalToolCallId || current.contentBlocks.any { block ->
+                        block.toolCallId == canonicalToolCallId || block.toolUseId == canonicalToolCallId
+                    }))
         } else {
             current.role == MessageRole.tool && current.id == message.id
         }

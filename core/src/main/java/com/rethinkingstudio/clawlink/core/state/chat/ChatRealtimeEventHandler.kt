@@ -114,14 +114,10 @@ private fun ChatStore.applyTimelineEvents(events: List<TimelineEvent>) {
 }
 
 private fun ChatStore.handleAgentPayload(payload: JsonElement?) {
-    val obj = payload as? JsonObject ?: return
-    val payloadObj = obj["payload"]?.jsonObject ?: obj
-
-    ChatPayloadTool.extract(payloadObj)?.let { toolPayload ->
-        handleToolPayload(obj, payloadObj, toolPayload)
-        return
-    }
-
+    // Agent envelopes can carry protocol-v2 timeline events as well as legacy
+    // tool payloads. The shared handler must get first refusal so a canonical
+    // tool event is not projected once by the legacy parser and again by a
+    // later history snapshot.
     handleRealtimeChatPayload(payload)
 }
 

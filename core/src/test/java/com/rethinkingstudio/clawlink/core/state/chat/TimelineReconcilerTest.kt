@@ -102,6 +102,13 @@ class TimelineReconcilerTest {
     }
 
     @Test
+    fun canonicalToolAssistantFixtureObeysRelayOrderKey() {
+        val result = applyFixture("canonical_tool_assistant_authority.json")
+
+        assertEquals(listOf("assistant-authority", "tool-authority"), result.messages.map { it.id })
+    }
+
+    @Test
     fun canonicalTimelineUpsertsOnlyByIdentityAndSortsOnlyByOrderKey() {
         val existing = listOf(
             ChatMessage(
