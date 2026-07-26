@@ -19,8 +19,6 @@ if [ -z "$CLAWLINK_RELEASE_STORE_FILE" ] || [ -z "$CLAWLINK_RELEASE_STORE_PASSWO
 fi
 
 echo "Secrets successfully retrieved."
-echo "Keystore Path: $CLAWLINK_RELEASE_STORE_FILE"
-echo "Key Alias: $CLAWLINK_RELEASE_KEY_ALIAS"
 
 echo "=================================================="
 echo "Starting Gradle Release Build..."
@@ -40,7 +38,7 @@ fi
 
 # Set destination details
 VERSION=$(grep -oE 'versionName = "[^"]+"' app/build.gradle.kts | cut -d'"' -f2)
-VERSION=${VERSION:-"1.0.11"}
+VERSION=${VERSION:-"1.0.12"}
 DATE=$(date +%Y%m%d)
 APK_DEST="dist/Claw-Link-${VERSION}-release-v2-${DATE}.apk"
 
