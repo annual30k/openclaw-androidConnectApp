@@ -1090,61 +1090,6 @@ class ChatStoreSessionTest {
         }
     }
 
-    @Ignore("Legacy duplicate file identity coalescing before rendering was removed; relay canonical timeline owns slots.")
-    @Test
-    fun orderedMessagesCoalescesDuplicateFileIdentitiesBeforeRendering() {
-        val wsClient = RelayWebSocketClient()
-        try {
-            val store = ChatStore(
-                apiClient = RelayAPIClient(),
-                wsClient = wsClient,
-                notificationPort = object : NotificationPort {
-                    override fun showReplyNotification(sessionKey: String, title: String, body: String) = Unit
-                    override fun cancelNotification(id: Int) = Unit
-                    override fun cancelAll() = Unit
-                }
-            )
-            val imageBlock = RelayChatContentBlock(
-                type = "image",
-                fileId = "file-img-1",
-                fileName = "chatgpt image.png",
-                mimeType = "image/png",
-                sizeBytes = 2048,
-                imageWidth = 1024,
-                imageHeight = 1024,
-                downloadUrl = "/api/mobile/files/file-img-1"
-            )
-            val assistantImage = ChatMessage(
-                id = "assistant-run-1",
-                role = MessageRole.assistant,
-                state = MessageState.completed,
-                content = "chatgpt image.png",
-                contentBlocks = listOf(imageBlock),
-                runId = "run-1",
-                sortTimestamp = 100.0
-            )
-            val fileEcho = ChatMessage(
-                id = "file-file-img-1",
-                role = MessageRole.assistant,
-                state = MessageState.completed,
-                content = "chatgpt image.png",
-                contentBlocks = listOf(imageBlock),
-                runId = "file-file-img-1",
-                sortTimestamp = 101.0
-            )
-
-            val ordered = invokeOrderedMessages(store, listOf(assistantImage, fileEcho))
-
-            assertEquals(1, ordered.size)
-            assertEquals("assistant-run-1", ordered.single().id)
-            assertEquals("file-img-1", ordered.single().fileContentBlocks.single().fileId)
-            assertEquals(100.0, ordered.single().sortTimestamp ?: 0.0, 0.0001)
-        } finally {
-            wsClient.destroy()
-        }
-    }
-
-
     private fun currentTimelineState(store: ChatStore): ChatTimelineState {
         val field = ChatStore::class.java.getDeclaredField("timelineState")
         field.isAccessible = true

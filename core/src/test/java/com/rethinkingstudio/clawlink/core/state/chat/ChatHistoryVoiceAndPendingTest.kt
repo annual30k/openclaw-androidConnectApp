@@ -520,59 +520,10 @@ class ChatHistoryVoiceAndPendingTest {
         assertEquals(listOf("history-assistant"), merged.map { it.id })
     }
 
-    @Ignore("Legacy media-reference anchoring was removed; relay canonical timeline owns attachment position.")
-    @Test
-    fun anchorsHistoryMobileFileBeforeUserTextWhenTextContainsMediaReference() {
-        val messages = buildHistoryMessagesFromItems(
-            listOf(
-                ChatHistoryItem(
-                    id = "history-user",
-                    role = "user",
-                    content = JsonPrimitive(
-                        """
-                            分析一下这张照片
-
-                            [media attached: /Users/example/photo.jpg (image/jpeg) | /Users/example/photo.jpg]
-                        """.trimIndent()
-                    ),
-                    createdAt = "2026-05-24T10:00:00.000Z"
-                ),
-                ChatHistoryItem(
-                    id = "history-assistant",
-                    role = "assistant",
-                    content = JsonPrimitive("这是一张像素风图片。"),
-                    createdAt = "2026-05-24T10:00:02.000Z"
-                ),
-                ChatHistoryItem(
-                    id = "history-file",
-                    role = "user",
-                    content = JsonPrimitive("photo.jpg"),
-                    contentBlocks = listOf(
-                        RelayChatContentBlock(
-                            type = "image",
-                            fileId = "photo-1",
-                            fileName = "photo.jpg",
-                            mimeType = "image/jpeg",
-                            downloadUrl = "/api/mobile/files/photo-1"
-                        )
-                    ),
-                    createdAt = "2026-05-24T10:00:03.000Z"
-                )
-            )
-        )
-
-        val ordered = orderMessagesWithSourceRunAnchors(messages)
-
-        assertEquals(listOf("history-file", "history-assistant"), ordered.map { it.runId })
-        assertTrue((ordered[0].sortTimestamp ?: 0.0) < (ordered[1].sortTimestamp ?: 0.0))
-        assertEquals("分析一下这张照片", ordered[0].content)
-        assertEquals("/api/mobile/files/photo-1", ordered[0].fileContentBlocks.first().downloadUrl)
-    }
-
     @Ignore("Legacy internal continuation duplicate collapse was removed.")
     @Test
     fun dropsOpenClawInternalContinuationDuplicateUserPrompt() {
-        val messages = orderMessagesWithSourceRunAnchors(
+        val messages = orderTimelineMessages(
             listOf(
                 ChatMessage(
                     id = "history-voice-prompt",

@@ -591,8 +591,63 @@ private fun CanonicalTimelineEntry.isAssistantAnswerTimelineItem(): Boolean {
 }
 
 internal fun sortTimelineMessagesV3(messages: List<ChatMessage>, sessionKey: String = "main"): List<ChatMessage> {
-    return messages
-        .mapIndexedNotNull { index, message -> message.toEntry(sessionKey, index) }
+    val inputEntries = messages.mapIndexedNotNull { index, message -> message.toEntry(sessionKey, index) }
+    val canonicalEntries = inputEntries
+        .filter { relayTimelineOrderKey(it) != null }
         .sortedWith(::compareEntries)
-        .map { it.toChatMessage() }
+        .iterator()
+    val canonicalSlotted = inputEntries.map { entry ->
+        if (relayTimelineOrderKey(entry) == null) entry else canonicalEntries.next()
+    }
+    val userAnchored = moveLocalUsersBeforeMatchingOutputs(canonicalSlotted)
+    return moveWaitingAfterSameTurnOutputs(userAnchored).map { it.toChatMessage() }
+}
+
+private fun moveLocalUsersBeforeMatchingOutputs(
+    entries: List<CanonicalTimelineEntry>
+): List<CanonicalTimelineEntry> {
+    val result = entries.toMutableList()
+    val localUsers = entries.filter { it.role == MessageRole.user && relayTimelineOrderKey(it) == null }
+    localUsers.forEach { user ->
+        val userIndex = result.indexOfFirst { it.stableKey == user.stableKey && it.displayId == user.displayId }
+        val outputIndex = result.indexOfFirst { output -> localUserMatchesOutput(user, output) }
+        if (userIndex < 0 || outputIndex < 0 || outputIndex >= userIndex) return@forEach
+        result.removeAt(userIndex)
+        result.add(outputIndex, user)
+    }
+    return result
+}
+
+private fun localUserMatchesOutput(
+    user: CanonicalTimelineEntry,
+    output: CanonicalTimelineEntry
+): Boolean {
+    if (user.role != MessageRole.user || output.role !in setOf(MessageRole.assistant, MessageRole.tool)) return false
+    val userTurn = normalizedTurnIdentity(user)
+    return userTurn.isNotEmpty() && userTurn == normalizedTurnIdentity(output)
+}
+
+private fun moveWaitingAfterSameTurnOutputs(
+    entries: List<CanonicalTimelineEntry>
+): List<CanonicalTimelineEntry> {
+    val result = entries.toMutableList()
+    val waitingEntries = entries.filter(::isTransientAssistantTimelinePlaceholder)
+    waitingEntries.forEach { waiting ->
+        val waitingIndex = result.indexOfFirst {
+            it.stableKey == waiting.stableKey && it.displayId == waiting.displayId
+        }
+        if (waitingIndex < 0) return@forEach
+        val waitingTurn = normalizedTurnIdentity(waiting)
+        if (waitingTurn.isEmpty()) return@forEach
+        val lastOutputIndex = result.indices.lastOrNull { index ->
+            index != waitingIndex &&
+                result[index].role in setOf(MessageRole.assistant, MessageRole.tool) &&
+                !isTransientAssistantTimelinePlaceholder(result[index]) &&
+                normalizedTurnIdentity(result[index]) == waitingTurn
+        } ?: return@forEach
+        if (lastOutputIndex <= waitingIndex) return@forEach
+        result.removeAt(waitingIndex)
+        result.add(lastOutputIndex, waiting)
+    }
+    return result
 }

@@ -7,7 +7,7 @@ internal fun newestBoundedHistoryWindowMessages(
     maxMessages: Int
 ): List<ChatMessage> {
     if (maxMessages <= 0) return emptyList()
-    return orderMessagesWithSourceRunAnchors(messages).takeLast(maxMessages)
+    return orderTimelineMessages(messages).takeLast(maxMessages)
 }
 
 internal fun olderBoundedHistoryWindowMessages(
@@ -16,7 +16,7 @@ internal fun olderBoundedHistoryWindowMessages(
     shouldPreserveActiveMessage: (ChatMessage) -> Boolean
 ): List<ChatMessage> {
     if (maxMessages <= 0) return emptyList()
-    val ordered = orderMessagesWithSourceRunAnchors(messages)
+    val ordered = orderTimelineMessages(messages)
     if (ordered.size <= maxMessages) return ordered
 
     val oldestWindow = ordered.take(maxMessages)
@@ -31,6 +31,6 @@ internal fun olderBoundedHistoryWindowMessages(
     // 历史向上翻页时要优先保留仍在流式输出/等待同步的消息，避免窗口裁剪把活跃 run 移出 UI。
     val retainedOldestCount = (maxMessages - activeMessagesOutsideOldestWindow.size).coerceAtLeast(0)
     val retainedOldestWindow = oldestWindow.take(retainedOldestCount)
-    return orderMessagesWithSourceRunAnchors(retainedOldestWindow + activeMessagesOutsideOldestWindow)
+    return orderTimelineMessages(retainedOldestWindow + activeMessagesOutsideOldestWindow)
         .take(maxMessages)
 }

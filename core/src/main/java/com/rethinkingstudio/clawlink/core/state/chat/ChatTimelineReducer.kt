@@ -232,7 +232,7 @@ internal object ChatTimelineReducer {
         }
         val clearedRunsByTurn = activeRunsByTurnId.filterValues { activeRun -> activeRun !in runIdsToClear }
         return copy(
-            messages = orderMessagesWithSourceRunAnchors(anchoredMessagesForCompletedTurn(nextMessages, event)),
+            messages = orderTimelineMessages(anchoredMessagesForCompletedTurn(nextMessages, event)),
             activeRunId = if (activeRunId != null && activeRunId in runIdsToClear) null else activeRunId,
             activeRunsByTurnId = completedTurnId?.let { clearedRunsByTurn - it } ?: clearedRunsByTurn,
             activeTurnByRunId = activeTurnByRunId.filterKeys { activeRun -> activeRun !in runIdsToClear },
@@ -348,7 +348,7 @@ internal object ChatTimelineReducer {
         )
         val shouldRememberActiveRun = message.state == MessageState.streaming
         return copy(
-            messages = orderMessagesWithSourceRunAnchors(anchoredMessagesForToolTurn(upsertToolMessage(message), event)),
+            messages = orderTimelineMessages(anchoredMessagesForToolTurn(upsertToolMessage(message), event)),
             // 工具终态只是结果更新；它可以保留既有 active run，但不能在 assistant/run 已终止后重新激活同一轮。
             activeRunId = if (shouldRememberActiveRun) event.runId ?: activeRunId else activeRunId,
             activeRunsByTurnId = if (shouldRememberActiveRun && !event.turnId.isNullOrBlank() && !event.runId.isNullOrBlank()) {
@@ -523,7 +523,7 @@ internal object ChatTimelineReducer {
                 )
             }
         }
-        return nextState.copy(messages = orderMessagesWithSourceRunAnchors(nextState.messages))
+        return nextState.copy(messages = orderTimelineMessages(nextState.messages))
     }
 
     private fun ChatTimelineState.rememberEvent(event: TimelineEvent): ChatTimelineState {

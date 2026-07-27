@@ -42,7 +42,7 @@ internal fun mergeRemoteUserMessageIntoCurrentMessages(
             eventSortTimestamp = sortTimestamp
         )
     ) {
-        return orderMessagesWithSourceRunAnchors(messages)
+        return orderTimelineMessages(messages)
     }
 
     val localAttachmentIndex = messages.indexOfLast { message ->
@@ -75,7 +75,7 @@ internal fun mergeRemoteUserMessageIntoCurrentMessages(
             runId = existing.runId.takeIf { it.isNotBlank() } ?: incomingAttachmentCandidate.runId,
             sortTimestamp = existing.sortTimestamp ?: incomingAttachmentCandidate.sortTimestamp
         )
-        return orderMessagesWithSourceRunAnchors(messages)
+        return orderTimelineMessages(messages)
     }
 
     // 旧 Hermes echo 可能带 user-/local-user- 前缀；实时合并必须按稳定 turn identity 对齐本地气泡。
@@ -91,7 +91,7 @@ internal fun mergeRemoteUserMessageIntoCurrentMessages(
             state = MessageState.completed,
             contentBlocks = if (existing.contentBlocks.isEmpty()) contentBlocks else existing.contentBlocks
         )
-        return orderMessagesWithSourceRunAnchors(messages)
+        return orderTimelineMessages(messages)
     }
 
     val last = messages.lastOrNull()
@@ -139,7 +139,7 @@ internal fun mergeRemoteUserMessageIntoCurrentMessages(
             sortTimestamp = insertedAt
         )
     )
-    return orderMessagesWithSourceRunAnchors(messages)
+    return orderTimelineMessages(messages)
 }
 
 internal fun applyAssistantErrorToCurrentMessages(
@@ -169,7 +169,7 @@ internal fun applyAssistantErrorToCurrentMessages(
             runId = normalizedRunId ?: existing.runId,
             sortTimestamp = existing.sortTimestamp ?: sortTimestamp
         )
-        return orderMessagesWithSourceRunAnchors(messages)
+        return orderTimelineMessages(messages)
     }
 
     return currentMessages
@@ -230,7 +230,7 @@ internal fun mergeCompletedAssistantFinalIntoCurrentMessages(
         runId = existing.runId.ifBlank { candidate.runId },
         sortTimestamp = existing.sortTimestamp ?: candidate.sortTimestamp
     )
-    return orderMessagesWithSourceRunAnchors(messages)
+    return orderTimelineMessages(messages)
 }
 
 private fun sameIdentityCompletedAssistantFinalIndex(

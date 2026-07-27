@@ -10,6 +10,61 @@ import org.junit.Test
 
 class TimelineReconcilerMediaTextTest {
     @Test
+    fun preservesEitherRelayContentOrderWithoutTypePreference() {
+        val runId = "relay-output-order"
+        val user = ChatMessage(
+            id = "turn-user",
+            role = MessageRole.user,
+            state = MessageState.completed,
+            content = "发送输出",
+            contentBlocks = listOf(RelayChatContentBlock(type = "text", text = "发送输出")),
+            createdAt = "2026-07-27T16:56:00.000Z",
+            runId = runId,
+            timelineOrderKey = "v1|00000000000000000010|10|000000|turn-user",
+            timelineIdentityKey = "v1|main|message|user|turn-user",
+            timelineItemKind = "message:user"
+        )
+        val text = ChatMessage(
+            id = "text-output",
+            role = MessageRole.assistant,
+            state = MessageState.completed,
+            content = "输出完成",
+            contentBlocks = listOf(RelayChatContentBlock(type = "text", text = "输出完成")),
+            createdAt = "2026-07-27T16:56:03.000Z",
+            runId = runId,
+            timelineOrderKey = "v1|00000000000000000013|50|000000|text-output",
+            timelineIdentityKey = "v1|main|message|assistant|text-output",
+            timelineItemKind = "message:assistant"
+        )
+        val attachment = ChatMessage(
+            id = "attachment-output",
+            role = MessageRole.assistant,
+            state = MessageState.completed,
+            content = "output.png",
+            contentBlocks = listOf(
+                RelayChatContentBlock(
+                    type = "image",
+                    fileId = "file-output",
+                    fileName = "output.png",
+                    sourceRunId = runId
+                )
+            ),
+            createdAt = "2026-07-27T16:56:02.000Z",
+            runId = "file-output",
+            timelineOrderKey = "local:$runId:attachment",
+            timelineIdentityKey = "local:$runId:attachment:file-output",
+            timelineItemKind = "attachment"
+        )
+
+        listOf(
+            listOf(user, attachment, text),
+            listOf(user, text, attachment)
+        ).forEach { input ->
+            assertEquals(input.map { it.id }, sortTimelineMessagesV3(input, "main").map { it.id })
+        }
+    }
+
+    @Test
     fun confirmedImageUserKeepsPromptWhenTimelineIsResorted() {
         val prompt = "please describe this image"
         val user = ChatMessage(

@@ -115,7 +115,7 @@ class ChatStoreFileSocketEventTest {
     }
 
     @Test
-    fun relayFileSocketEventWithoutSourceRunAnchorsToCurrentPendingRun() {
+    fun relayFileSocketEventWithoutSourceRunAssociatesWithCurrentPendingRun() {
         val wsClient = RelayWebSocketClient()
         try {
             val store = ChatStore(

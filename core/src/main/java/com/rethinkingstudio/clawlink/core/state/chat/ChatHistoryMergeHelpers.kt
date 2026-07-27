@@ -259,7 +259,7 @@ private fun mergeCanonicalHistoryWithCurrentMessages(
     return sortTimelineMessagesV3(byIdentity.values.toList() + pendingOverlay)
 }
 
-internal fun orderMessagesWithSourceRunAnchors(messages: List<ChatMessage>): List<ChatMessage> {
+internal fun orderTimelineMessages(messages: List<ChatMessage>): List<ChatMessage> {
     return sortTimelineMessagesV3(messages)
 }
 

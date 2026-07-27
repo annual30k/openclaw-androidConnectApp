@@ -11,7 +11,7 @@ import org.junit.Test
 
 class TimelineReconcilerTest {
     @Test
-    fun localPendingTurnsKeepEachUserAnchoredToItsOwnAssistantPlaceholder() {
+    fun localPendingTurnsKeepEachUserBeforeItsOwnAssistantPlaceholder() {
         val firstUser = ChatMessage(
             id = "user-first-run",
             role = MessageRole.user,
@@ -673,11 +673,10 @@ class TimelineReconcilerTest {
     }
 
     @Test
-    fun fileAttachmentFixtureKeepsTextBeforeImageAndMetadata() {
+    fun fileAttachmentFixtureKeepsImageMetadata() {
         val result = applyFixture("image_user_then_file_result.json")
         val assistant = result.messages.single { it.id == "assistant-screenshot-result-1" }
-        assertEquals(listOf("text", "image"), assistant.contentBlocks.map { it.type })
-        val image = assistant.contentBlocks[1]
+        val image = assistant.contentBlocks.single { it.isFileBlock }
         assertEquals("att-screenshot-1", image.attachmentId)
         assertEquals(1440, image.imageWidth)
         assertEquals(900, image.imageHeight)

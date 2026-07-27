@@ -53,7 +53,7 @@ class ChatTimelineReducerHistorySnapshotTest {
                 """.trimIndent()
             )
         )
-        val ordered = orderMessagesWithSourceRunAnchors(state.messages)
+        val ordered = orderTimelineMessages(state.messages)
 
         assertEquals(listOf("local-user-new", "assistant-server"), ordered.map { it.id })
         assertEquals("", ordered.last().content)
@@ -105,7 +105,7 @@ class ChatTimelineReducerHistorySnapshotTest {
                 """.trimIndent()
             )
         )
-        val ordered = orderMessagesWithSourceRunAnchors(state.messages)
+        val ordered = orderTimelineMessages(state.messages)
 
         assertEquals(listOf("local-user-new", "assistant-relay-request-run"), ordered.map { it.id })
         assertEquals("QA908", ordered.last().content)
@@ -170,7 +170,7 @@ class ChatTimelineReducerHistorySnapshotTest {
             ),
             finalEvent
         )
-        val ordered = orderMessagesWithSourceRunAnchors(state.messages)
+        val ordered = orderTimelineMessages(state.messages)
 
         assertEquals(listOf("local-user-new", "assistant-server"), ordered.map { it.id })
         assertEquals("OK", ordered.last().content)
@@ -274,7 +274,7 @@ class ChatTimelineReducerHistorySnapshotTest {
                 """.trimIndent()
             )
         )
-        val ordered = orderMessagesWithSourceRunAnchors(state.messages)
+        val ordered = orderTimelineMessages(state.messages)
 
         assertEquals(
             listOf("local-user-old", "assistant-old-server", "user-new", "assistant-new-local"),

@@ -713,7 +713,7 @@ class ChatTimelineReducerToolAttachmentTest {
             )
         )
 
-        val ordered = orderMessagesWithSourceRunAnchors(state.messages)
+        val ordered = orderTimelineMessages(state.messages)
 
         assertEquals(
             listOf("user-old", "assistant-old", "local-user-new", "assistant-new"),
