@@ -11,56 +11,83 @@ import org.junit.Test
 class TimelineReconcilerMediaTextTest {
     @Test
     fun preservesEitherRelayContentOrderWithoutTypePreference() {
-        val runId = "relay-output-order"
-        val user = ChatMessage(
-            id = "turn-user",
-            role = MessageRole.user,
-            state = MessageState.completed,
-            content = "发送输出",
-            contentBlocks = listOf(RelayChatContentBlock(type = "text", text = "发送输出")),
-            createdAt = "2026-07-27T16:56:00.000Z",
-            runId = runId,
-            timelineOrderKey = "v1|00000000000000000010|10|000000|turn-user",
-            timelineIdentityKey = "v1|main|message|user|turn-user",
-            timelineItemKind = "message:user"
-        )
-        val text = ChatMessage(
-            id = "text-output",
-            role = MessageRole.assistant,
-            state = MessageState.completed,
-            content = "输出完成",
-            contentBlocks = listOf(RelayChatContentBlock(type = "text", text = "输出完成")),
-            createdAt = "2026-07-27T16:56:03.000Z",
-            runId = runId,
-            timelineOrderKey = "v1|00000000000000000013|50|000000|text-output",
-            timelineIdentityKey = "v1|main|message|assistant|text-output",
-            timelineItemKind = "message:assistant"
-        )
-        val attachment = ChatMessage(
-            id = "attachment-output",
-            role = MessageRole.assistant,
-            state = MessageState.completed,
-            content = "output.png",
-            contentBlocks = listOf(
-                RelayChatContentBlock(
-                    type = "image",
-                    fileId = "file-output",
-                    fileName = "output.png",
-                    sourceRunId = runId
-                )
-            ),
-            createdAt = "2026-07-27T16:56:02.000Z",
-            runId = "file-output",
-            timelineOrderKey = "local:$runId:attachment",
-            timelineIdentityKey = "local:$runId:attachment:file-output",
-            timelineItemKind = "attachment"
-        )
+        listOf(true, false).forEach { imageFirst ->
+            val suffix = if (imageFirst) "image-first" else "text-first"
+            val runId = "relay-output-$suffix"
+            val firstOutputOrder = "v4|0|00000000000000000017|50|1785145891100100:output|$suffix"
+            val secondOutputOrder = "v4|0|00000000000000000017|50|1785145893776024:output|$suffix"
+            val imageOrder = if (imageFirst) firstOutputOrder else secondOutputOrder
+            val textOrder = if (imageFirst) secondOutputOrder else firstOutputOrder
+            val user = TimelineSnapshotMessage(
+                messageId = "user-$suffix",
+                conversationSeq = 17,
+                seq = 17,
+                turnSeq = 1,
+                turnId = "turn-$suffix",
+                runId = runId,
+                role = "user",
+                messageState = "completed",
+                createdAt = "2026-07-27T09:51:30.000Z",
+                content = listOf(RelayChatContentBlock(type = "text", text = "发送截图")),
+                timelineOrderKey = "v4|0|00000000000000000017|10|1785145890000000:user|$suffix",
+                timelineIdentityKey = "v4|main|message|user|$suffix",
+                timelineItemKind = "message:user"
+            )
+            val image = TimelineSnapshotMessage(
+                messageId = "image-$suffix",
+                conversationSeq = 17,
+                seq = 17,
+                turnSeq = 2,
+                turnId = "turn-$suffix",
+                runId = runId,
+                role = "assistant",
+                messageState = "completed",
+                createdAt = "2026-07-27T09:51:31.100Z",
+                content = listOf(
+                    RelayChatContentBlock(
+                        type = "image",
+                        text = "desktop.png",
+                        fileId = "file-$suffix",
+                        fileName = "desktop.png",
+                        mimeType = "image/png",
+                        downloadUrl = "/api/mobile/files/file-$suffix"
+                    )
+                ),
+                timelineOrderKey = imageOrder,
+                timelineIdentityKey = "v4|main|attachment|assistant|$suffix",
+                timelineItemKind = "attachment"
+            )
+            val text = TimelineSnapshotMessage(
+                messageId = "text-$suffix",
+                conversationSeq = 17,
+                seq = 17,
+                turnSeq = 3,
+                turnId = "turn-$suffix",
+                runId = runId,
+                role = "assistant",
+                messageState = "completed",
+                createdAt = "2026-07-27T09:51:33.776Z",
+                content = listOf(RelayChatContentBlock(type = "text", text = "截图发送完成")),
+                timelineOrderKey = textOrder,
+                timelineIdentityKey = "v4|main|message|assistant|$suffix",
+                timelineItemKind = "message:assistant"
+            )
 
-        listOf(
-            listOf(user, attachment, text),
-            listOf(user, text, attachment)
-        ).forEach { input ->
-            assertEquals(input.map { it.id }, sortTimelineMessagesV3(input, "main").map { it.id })
+            val result = reconcileTimeline(
+                existing = emptyList(),
+                snapshot = TimelineSnapshotPage(
+                    sessionKey = "main",
+                    messages = listOf(text, user, image)
+                )
+            )
+            val ordered = sortTimelineMessagesV3(result.messages + result.pending, "main")
+            val expected = if (imageFirst) {
+                listOf("user-$suffix", "image-$suffix", "text-$suffix")
+            } else {
+                listOf("user-$suffix", "text-$suffix", "image-$suffix")
+            }
+
+            assertEquals(suffix, expected, ordered.map { it.timelineMessageId })
         }
     }
 

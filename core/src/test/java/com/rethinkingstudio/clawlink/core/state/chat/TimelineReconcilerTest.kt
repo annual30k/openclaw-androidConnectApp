@@ -6,7 +6,6 @@ import com.rethinkingstudio.clawlink.core.models.chat.MessageState
 import com.rethinkingstudio.clawlink.core.models.chat.RelayChatContentBlock
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
-import org.junit.Ignore
 import org.junit.Test
 
 class TimelineReconcilerTest {
@@ -69,30 +68,6 @@ class TimelineReconcilerTest {
             listOf("user-first-run", "assistant-first-run", "user-second-run", "assistant-second-run"),
             ordered.map { it.id }
         )
-    }
-
-    @Ignore("Legacy fixture expectations without canonical order keys were removed.")
-    @Test
-    fun sharedFixturesProduceExpectedStableKeysAndPendingOverlay() {
-        fixtureFiles().forEach { file ->
-            val fixture = parseFixture(file)
-            var messages = fixture.initialLocal
-            var pending = emptyList<ChatMessage>()
-            fixture.events.forEach { event ->
-                val result = reconcileTimeline(
-                    existing = messages,
-                    pending = pending,
-                    snapshot = event
-                )
-                messages = result.messages
-                pending = result.pending
-            }
-
-            val actualStableKeys = debugTimelineDump(messages, fixture.sessionKey)
-                .map { it.getValue("stableKey") }
-            assertEquals(file.name, fixture.expectedStableKeys, actualStableKeys)
-            assertEquals(file.name, fixture.expectedPendingCount, pending.size)
-        }
     }
 
     @Test
@@ -690,99 +665,6 @@ class TimelineReconcilerTest {
         assertEquals("https://relay.example/fresh", result.messages.single().contentBlocks.single().downloadUrl)
     }
 
-    @Ignore("Legacy seq ordering without canonical order keys is no longer supported.")
-    @Test
-    fun clockSkewFixtureOrdersByServerSeq() {
-        val result = applyFixture("client_clock_skew_ordering.json")
-        assertEquals(listOf("clock-user", "clock-assistant"), result.messages.map { it.id })
-    }
-
-    @Ignore("Legacy turnSeq ordering without canonical order keys is no longer supported.")
-    @Test
-    fun turnSeqKeepsTranscriptOrderWhenHistorySeqIsMissingAndTimestampsTie() {
-        val result = reconcileTimeline(
-            existing = emptyList(),
-            snapshot = TimelineSnapshotPage(
-                sessionKey = "main",
-                messages = listOf(
-                    TimelineSnapshotMessage(messageId = "u1", turnSeq = 1, role = "user", messageState = "completed", createdAt = "2026-06-07T12:00:00.000Z", content = listOf(RelayChatContentBlock(type = "text", text = "first question"))),
-                    TimelineSnapshotMessage(messageId = "a1", turnSeq = 2, role = "assistant", messageState = "completed", createdAt = "2026-06-07T12:00:00.000Z", content = listOf(RelayChatContentBlock(type = "text", text = "first answer"))),
-                    TimelineSnapshotMessage(messageId = "u2", turnSeq = 3, role = "user", messageState = "completed", createdAt = "2026-06-07T12:00:00.000Z", content = listOf(RelayChatContentBlock(type = "text", text = "second question"))),
-                    TimelineSnapshotMessage(messageId = "a2", turnSeq = 4, role = "assistant", messageState = "completed", createdAt = "2026-06-07T12:00:00.000Z", content = listOf(RelayChatContentBlock(type = "text", text = "second answer")))
-                )
-            )
-        )
-
-        assertEquals(listOf("u1", "a1", "u2", "a2"), result.messages.map { it.id })
-    }
-
-    @Ignore("Legacy seq-domain createdAt ordering was removed; Relay canonical order is required.")
-    @Test
-    fun mixedSeqDomainsUseCreatedAtOrder() {
-        val result = reconcileTimeline(
-            existing = emptyList(),
-            snapshot = TimelineSnapshotPage(
-                sessionKey = "main",
-                messages = listOf(
-                    TimelineSnapshotMessage(messageId = "user-1", seq = 1_780_769_608_135, role = "user", messageState = "completed", createdAt = "2026-06-06T18:13:28.135Z", content = listOf(RelayChatContentBlock(type = "text", text = "send screenshot"))),
-                    TimelineSnapshotMessage(messageId = "user-2", seq = 1_780_769_715_297, role = "user", messageState = "completed", createdAt = "2026-06-06T18:15:15.297Z", content = listOf(RelayChatContentBlock(type = "text", text = "send file"))),
-                    TimelineSnapshotMessage(messageId = "assistant-1", seq = 1_780_769_635_618_000, role = "assistant", messageState = "completed", createdAt = "2026-06-06T18:13:55.618Z", content = listOf(RelayChatContentBlock(type = "text", text = "done"))),
-                    TimelineSnapshotMessage(messageId = "assistant-2", seq = 1_780_769_773_636_000, role = "assistant", messageState = "completed", createdAt = "2026-06-06T18:16:13.636Z", content = listOf(RelayChatContentBlock(type = "text", text = "sent")))
-                )
-            )
-        )
-
-        assertEquals(listOf("user-1", "assistant-1", "user-2", "assistant-2"), result.messages.map { it.id })
-    }
-
-    @Ignore("Legacy conversationSeq-domain createdAt ordering was removed; Relay canonical order is required.")
-    @Test
-    fun mixedConversationSeqDomainsUseCreatedAtOrder() {
-        val result = reconcileTimeline(
-            existing = emptyList(),
-            snapshot = TimelineSnapshotPage(
-                sessionKey = "main",
-                messages = listOf(
-                    TimelineSnapshotMessage(
-                        messageId = "history-screenshot",
-                        conversationSeq = 8,
-                        seq = 8,
-                        turnSeq = 8,
-                        role = "assistant",
-                        messageState = "completed",
-                        createdAt = "2026-06-07T12:18:34.773Z",
-                        content = listOf(RelayChatContentBlock(type = "text", text = "截图好了，发给你"))
-                    ),
-                    TimelineSnapshotMessage(
-                        messageId = "user-capabilities",
-                        conversationSeq = 1_780_834_382_099_000,
-                        seq = 1_780_834_382_099_000,
-                        turnSeq = 1_780_834_382_099_000,
-                        role = "user",
-                        messageState = "completed",
-                        createdAt = "2026-06-07T12:13:02.099Z",
-                        content = listOf(RelayChatContentBlock(type = "text", text = "你可以做什么"))
-                    ),
-                    TimelineSnapshotMessage(
-                        messageId = "assistant-capabilities",
-                        conversationSeq = 1_780_834_382_107_001,
-                        seq = 1_780_834_382_107_001,
-                        turnSeq = 1_780_834_382_107_001,
-                        role = "assistant",
-                        messageState = "completed",
-                        createdAt = "2026-06-07T12:13:02.107Z",
-                        content = listOf(RelayChatContentBlock(type = "text", text = "我可以帮你做很多实际操作型任务。"))
-                    )
-                )
-            )
-        )
-
-        assertEquals(
-            listOf("user-capabilities", "assistant-capabilities", "history-screenshot"),
-            result.messages.map { it.id }
-        )
-    }
-
     @Test
     fun serverMessageIdAndConversationSeqAreAuthoritative() {
         val result = reconcileTimeline(
@@ -832,113 +714,6 @@ class TimelineReconcilerTest {
 
         assertEquals(listOf("srv_user_1", "srv_assistant_1"), result.messages.map { it.id })
         assertEquals(listOf(1L, 2L), result.messages.map { it.seq })
-    }
-
-    @Ignore("Legacy same-run ordering without canonical keys was removed; Relay canonical order is required.")
-    @Test
-    fun sameRunUserToolAssistantOrderWinsOverRegressedConversationSeq() {
-        val runId = "23F791B4-97CF-4CF5-BD00-21D947671505"
-        val result = reconcileTimeline(
-            existing = emptyList(),
-            snapshot = TimelineSnapshotPage(
-                sessionKey = "main",
-                messages = listOf(
-                    TimelineSnapshotMessage(
-                        messageId = "user-run",
-                        conversationSeq = 6,
-                        role = "user",
-                        messageState = "completed",
-                        runId = runId,
-                        turnId = runId,
-                        createdAt = "2026-06-11T06:45:18.574Z",
-                        content = listOf(RelayChatContentBlock(type = "text", text = "你好啊"))
-                    ),
-                    TimelineSnapshotMessage(
-                        messageId = "tool-run",
-                        conversationSeq = 4,
-                        role = "tool",
-                        messageState = "completed",
-                        runId = runId,
-                        turnId = runId,
-                        createdAt = "2026-06-11T06:45:32.709Z",
-                        content = listOf(RelayChatContentBlock(type = "tool_result", text = "memory_search", name = "memory_search", toolCallId = "call_1"))
-                    ),
-                    TimelineSnapshotMessage(
-                        messageId = "assistant-run",
-                        conversationSeq = 5,
-                        role = "assistant",
-                        messageState = "completed",
-                        runId = runId,
-                        turnId = runId,
-                        createdAt = "2026-06-11T06:45:39.080Z",
-                        content = listOf(RelayChatContentBlock(type = "text", text = "你好 Alex！👋 有什么需要帮忙的吗？"))
-                    )
-                )
-            )
-        )
-
-        assertEquals(listOf("user-run", "tool-run", "assistant-run"), result.messages.map { it.id })
-    }
-
-    @Ignore("Legacy ordinal seq reset ordering was removed; Relay canonical order is required.")
-    @Test
-    fun resetOrdinalSeqAcrossDistantTimestampsUsesCreatedAtOrder() {
-        val result = reconcileTimeline(
-            existing = emptyList(),
-            snapshot = TimelineSnapshotPage(
-                sessionKey = "main",
-                messages = listOf(
-                    TimelineSnapshotMessage(
-                        messageId = "new-user",
-                        seq = 1,
-                        role = "user",
-                        messageState = "completed",
-                        createdAt = "2026-06-09T08:00:00.000Z",
-                        content = listOf(RelayChatContentBlock(type = "text", text = "new question"))
-                    ),
-                    TimelineSnapshotMessage(
-                        messageId = "old-assistant",
-                        seq = 2,
-                        role = "assistant",
-                        messageState = "completed",
-                        createdAt = "2026-06-08T08:00:00.000Z",
-                        content = listOf(RelayChatContentBlock(type = "text", text = "old answer"))
-                    )
-                )
-            )
-        )
-
-        assertEquals(listOf("old-assistant", "new-user"), result.messages.map { it.id })
-    }
-
-    @Ignore("Legacy turnSeq resort without canonical order keys is no longer supported.")
-    @Test
-    fun convertedSnapshotMessagesKeepTurnSeqForLaterResort() {
-        val createdAt = "2026-06-09T08:00:00.000Z"
-        val first = timelineSnapshotMessageToChatMessage(
-            TimelineSnapshotMessage(
-                messageId = "z-first-assistant",
-                turnSeq = 1,
-                role = "assistant",
-                messageState = "completed",
-                createdAt = createdAt,
-                content = listOf(RelayChatContentBlock(type = "text", text = "first"))
-            )
-        )
-        val second = timelineSnapshotMessageToChatMessage(
-            TimelineSnapshotMessage(
-                messageId = "a-second-assistant",
-                turnSeq = 2,
-                role = "assistant",
-                messageState = "completed",
-                createdAt = createdAt,
-                content = listOf(RelayChatContentBlock(type = "text", text = "second"))
-            )
-        )
-
-        val ordered = sortTimelineMessagesV3(listOf(second, first))
-
-        assertEquals(listOf("z-first-assistant", "a-second-assistant"), ordered.map { it.id })
     }
 
     @Test
@@ -999,64 +774,6 @@ class TimelineReconcilerTest {
         )
 
         assertEquals(listOf("local-user-streaming-text", "assistant-streaming-text"), messages.map { it.id })
-    }
-
-    @Ignore("Legacy realtime seq ordering without canonical order keys is no longer supported.")
-    @Test
-    fun realtimeSeqKeepsInterleavedSendOrderWhenTimestampsTie() {
-        val createdAt = "2026-06-08T12:00:00.000Z"
-        val reduced = ChatTimelineReducer.reduceAll(
-            ChatTimelineState(),
-            listOf(
-                TimelineEvent.TurnUserCreated(
-                    eventId = "evt-user-1",
-                    turnId = "turn-1",
-                    runId = "turn-1",
-                    messageId = "user-1",
-                    content = listOf(RelayChatContentBlock(type = "text", text = "第一问")),
-                    createdAt = createdAt,
-                    seq = 1,
-                    turnSeq = 1
-                ),
-                TimelineEvent.MessageCompleted(
-                    eventId = "evt-assistant-1",
-                    turnId = "turn-1",
-                    messageId = "assistant-1",
-                    role = "assistant",
-                    runId = "turn-1",
-                    content = listOf(RelayChatContentBlock(type = "text", text = "第一答")),
-                    createdAt = createdAt,
-                    seq = 2,
-                    turnSeq = 2
-                ),
-                TimelineEvent.TurnUserCreated(
-                    eventId = "evt-user-2",
-                    turnId = "turn-2",
-                    runId = "turn-2",
-                    messageId = "user-2",
-                    content = listOf(RelayChatContentBlock(type = "text", text = "第二问")),
-                    createdAt = createdAt,
-                    seq = 3,
-                    turnSeq = 3
-                ),
-                TimelineEvent.MessageCompleted(
-                    eventId = "evt-assistant-2",
-                    turnId = "turn-2",
-                    messageId = "assistant-2",
-                    role = "assistant",
-                    runId = "turn-2",
-                    content = listOf(RelayChatContentBlock(type = "text", text = "第二答")),
-                    createdAt = createdAt,
-                    seq = 4,
-                    turnSeq = 4
-                )
-            )
-        )
-        val ordered = sortTimelineMessagesV3(reduced.messages)
-
-        assertEquals(listOf(1L, 2L, 3L, 4L), ordered.map { it.seq })
-        assertEquals(listOf(MessageRole.user, MessageRole.assistant, MessageRole.user, MessageRole.assistant), ordered.map { it.role })
-        assertEquals(listOf("第一问", "第一答", "第二问", "第二答"), ordered.map { it.content })
     }
 
     @Test
