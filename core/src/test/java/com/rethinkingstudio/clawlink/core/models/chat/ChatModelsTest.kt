@@ -263,6 +263,41 @@ class ChatModelsTest {
     }
 
     @Test
+    fun canonicalAssistantMessageDoesNotBecomeToolOnlyBecauseItContinuesWithToolCall() {
+        val message = ChatMessage(
+            id = "assistant-analysis-and-search",
+            role = MessageRole.assistant,
+            content = "这是一张标准证件照。关于蜘蛛侠图片，我来找找：",
+            contentBlocks = listOf(
+                RelayChatContentBlock(type = "text", text = "这是一张标准证件照。关于蜘蛛侠图片，我来找找："),
+                RelayChatContentBlock(type = "tool_call", name = "exec", toolCallId = "call-find-spider")
+            ),
+            timelineItemKind = "message:assistant"
+        )
+
+        assertFalse(message.hasToolContent)
+        assertTrue(message.shouldDisplayInChat(showInvocationProcess = false))
+    }
+
+    @Test
+    fun toolCallOnlyMessageDoesNotRenderAsBlankAssistantFromStaleCanonicalKind() {
+        val message = ChatMessage(
+            id = "assistant-tool-only",
+            role = MessageRole.assistant,
+            content = "{ \"command\": \"find spiderman.jpg\" }",
+            contentBlocks = listOf(
+                RelayChatContentBlock(type = "thinking"),
+                RelayChatContentBlock(type = "tool_call", name = "exec", toolCallId = "call-find-spider")
+            ),
+            timelineItemKind = "message:assistant"
+        )
+
+        assertTrue(message.hasToolContent)
+        assertFalse(message.shouldDisplayInChat(showInvocationProcess = false))
+        assertTrue(message.shouldDisplayInChat(showInvocationProcess = true))
+    }
+
+    @Test
     fun toolSummaryBlocksDecodeDetailMetadata() {
         val block = Json.decodeFromString<RelayChatContentBlock>(
             """

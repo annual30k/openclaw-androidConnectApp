@@ -453,8 +453,25 @@ data class ChatMessage(
     val toolContentBlocks: List<RelayChatContentBlock>
         get() = contentBlocks.filter { it.isToolCallBlock || it.isToolResultBlock }
 
+    private val hasCanonicalChatBody: Boolean
+        get() {
+            if (contentBlocks.isEmpty()) return content.trim().isNotEmpty()
+            return contentBlocks.any { block ->
+                block.isFileBlock ||
+                    block.isVoiceMessageBlock ||
+                    (block.isTextBlock && !block.text.isNullOrBlank())
+            }
+        }
+
     val hasToolContent: Boolean
-        get() = role == MessageRole.tool || toolContentBlocks.isNotEmpty()
+        get() {
+            if (role == MessageRole.tool) return true
+            return when (timelineItemKind.trim().lowercase()) {
+                "tool" -> true
+                "message:assistant", "message:user" -> toolContentBlocks.isNotEmpty() && !hasCanonicalChatBody
+                else -> toolContentBlocks.isNotEmpty()
+            }
+        }
 
     val fileContentBlocks: List<RelayChatContentBlock>
         get() = contentBlocks.filter { it.isFileBlock }

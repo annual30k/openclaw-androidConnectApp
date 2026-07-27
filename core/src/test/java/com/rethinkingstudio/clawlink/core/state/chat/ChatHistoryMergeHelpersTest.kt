@@ -30,6 +30,58 @@ import org.junit.Test
 
 class ChatHistoryMergeHelpersTest {
     @Test
+    fun canonicalAssistantTextWithTrailingToolCallKeepsAssistantRole() {
+        val messages = buildHistoryMessagesFromItems(
+            listOf(
+                ChatHistoryItem(
+                    id = "assistant-analysis-and-search",
+                    role = "assistant",
+                    content = JsonPrimitive("这是一张标准证件照。关于蜘蛛侠图片，我来找找："),
+                    contentBlocks = listOf(
+                        RelayChatContentBlock(type = "text", text = "这是一张标准证件照。关于蜘蛛侠图片，我来找找："),
+                        RelayChatContentBlock(type = "tool_call", name = "exec", toolCallId = "call-find-spider")
+                    ),
+                    createdAt = "2026-07-27T02:23:00Z",
+                    timelineOrderKey = "v4|0|00000000000000000010|50|assistant-analysis-and-search",
+                    timelineIdentityKey = "v1|main|message|assistant|assistant-analysis-and-search",
+                    timelineItemKind = "message:assistant"
+                )
+            )
+        )
+
+        assertEquals(1, messages.size)
+        assertEquals(MessageRole.assistant, messages.single().role)
+        assertFalse(messages.single().hasToolContent)
+        assertTrue(messages.single().shouldDisplayInChat(showInvocationProcess = false))
+    }
+
+    @Test
+    fun staleCanonicalAssistantToolCallOnlyHistoryBecomesToolInsteadOfBlankBubble() {
+        val messages = buildHistoryMessagesFromItems(
+            listOf(
+                ChatHistoryItem(
+                    id = "assistant-tool-only",
+                    role = "assistant",
+                    content = JsonPrimitive("{ \"command\": \"find spiderman.jpg\" }"),
+                    contentBlocks = listOf(
+                        RelayChatContentBlock(type = "thinking"),
+                        RelayChatContentBlock(type = "tool_call", name = "exec", toolCallId = "call-find-spider")
+                    ),
+                    createdAt = "2026-07-27T02:23:01Z",
+                    timelineOrderKey = "v4|0|00000000000000000012|30|assistant-tool-only",
+                    timelineIdentityKey = "v1|main|tool|call-find-spider",
+                    timelineItemKind = "message:assistant"
+                )
+            )
+        )
+
+        assertEquals(1, messages.size)
+        assertEquals(MessageRole.tool, messages.single().role)
+        assertFalse(messages.single().shouldDisplayInChat(showInvocationProcess = false))
+        assertTrue(messages.single().shouldDisplayInChat(showInvocationProcess = true))
+    }
+
+    @Test
     fun samePendingUploadMessageDoesNotGuessByFileMetadataAlone() {
         val pending = ChatMessage(
             id = "attachment-1",

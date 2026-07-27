@@ -11,6 +11,34 @@ import org.junit.Test
 
 class ChatConversationPresentationTest {
     @Test
+    fun completedToolResultHidesItsSeparateHistoryCallCard() {
+        val call = ChatMessage(
+            id = "tool-call-row",
+            role = MessageRole.tool,
+            contentBlocks = listOf(
+                RelayChatContentBlock(type = "tool_call", name = "image", toolCallId = "call-image")
+            ),
+            timelineIdentityKey = "source:8",
+            timelineOrderKey = "v4|0|00000000000000000008|30|call",
+            timelineItemKind = "tool"
+        )
+        val result = ChatMessage(
+            id = "tool-result-row",
+            role = MessageRole.tool,
+            content = "image inspected",
+            contentBlocks = listOf(
+                RelayChatContentBlock(type = "text", text = "image inspected", toolCallId = "call-image")
+            ),
+            timelineIdentityKey = "source:9",
+            timelineOrderKey = "v4|0|00000000000000000009|30|result",
+            timelineItemKind = "tool"
+        )
+
+        val displayMessages = conversationDisplayMessages(listOf(call, result), showInvocationProcess = true)
+
+        assertEquals(listOf("tool-result-row"), displayMessages.map { it.id })
+    }
+    @Test
     fun unpairedGatewayStateHidesCachedMessagesFromPreviousGateway() {
         val cachedMessage = ChatMessage(
             id = "cached-user-message",

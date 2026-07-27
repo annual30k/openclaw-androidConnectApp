@@ -162,6 +162,94 @@ class TimelineReconcilerTest {
     }
 
     @Test
+    fun transcriptResetUsesRelayGlobalOrderKeysAcrossOldAndNewSessions() {
+        fun message(
+            id: String,
+            role: String,
+            content: RelayChatContentBlock,
+            orderKey: String,
+            itemKind: String
+        ) = TimelineSnapshotMessage(
+            messageId = id,
+            role = role,
+            messageState = "completed",
+            createdAt = "2026-07-26T20:07:31.000Z",
+            content = listOf(content),
+            timelineOrderKey = orderKey,
+            timelineIdentityKey = "v1|main|$itemKind|$role|$id",
+            timelineItemKind = itemKind
+        )
+
+        val result = reconcileTimeline(
+            existing = emptyList(),
+            snapshot = TimelineSnapshotPage(
+                sessionKey = "main",
+                messages = listOf(
+                    message(
+                        "new-command",
+                        "user",
+                        RelayChatContentBlock(type = "text", text = "/new"),
+                        "v4|0|00004259300355960803|10|0000000000000001|new-command",
+                        "message:user"
+                    ),
+                    message(
+                        "old-water-assistant",
+                        "assistant",
+                        RelayChatContentBlock(type = "text", text = "water reading"),
+                        "v4|0|00000000000000000321|50|0000000000000008|old-water-assistant",
+                        "message:assistant"
+                    ),
+                    message(
+                        "old-hello",
+                        "user",
+                        RelayChatContentBlock(type = "text", text = "你好"),
+                        "v4|0|00000000000000000320|10|0000000000000001|old-hello",
+                        "message:user"
+                    ),
+                    message(
+                        "new-session",
+                        "assistant",
+                        RelayChatContentBlock(type = "text", text = "New session started."),
+                        "v4|0|00004259300355960804|50|0000000000000002|new-session",
+                        "message:assistant"
+                    ),
+                    message(
+                        "old-water-image",
+                        "user",
+                        RelayChatContentBlock(
+                            type = "image",
+                            attachmentId = "att-water",
+                            fileId = "water",
+                            downloadUrl = "/api/mobile/files/water"
+                        ),
+                        "v4|0|00000000000000000321|10|0000000000000009|old-water-image",
+                        "attachment"
+                    ),
+                    message(
+                        "old-reply",
+                        "assistant",
+                        RelayChatContentBlock(type = "text", text = "你好 Alex"),
+                        "v4|0|00000000000000000320|50|0000000000000004|old-reply",
+                        "message:assistant"
+                    )
+                )
+            )
+        )
+
+        assertEquals(
+            listOf(
+                "old-hello",
+                "old-reply",
+                "old-water-image",
+                "old-water-assistant",
+                "new-command",
+                "new-session"
+            ),
+            result.messages.map { it.id }
+        )
+    }
+
+    @Test
     fun fullCanonicalSnapshotDoesNotRetainExistingConfirmedMessagesMissingFromRelay() {
         val stale = ChatMessage(
             id = "stale-history",

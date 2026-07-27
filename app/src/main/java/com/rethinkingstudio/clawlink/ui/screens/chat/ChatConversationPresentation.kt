@@ -14,6 +14,7 @@ internal fun conversationDisplayMessages(
 ): List<ChatMessage> {
     return messages
         .coalescedByCanonicalIdentity()
+        .coalescedCompletedToolCallRows()
         .coalescedLocalUserAttachmentMessages()
         .coalescedSameTurnUserMediaMessages()
         .coalescedLocalUserLiveEchoes()
@@ -25,6 +26,32 @@ internal fun conversationDisplayMessages(
                 message.state == MessageState.streaming && message.role == MessageRole.assistant
         }
         .orderedForConversationDisplay()
+}
+
+// 同一稳定调用已有结果时只展示结果卡；不能按工具名或到达时间猜测配对关系。
+private fun List<ChatMessage>.coalescedCompletedToolCallRows(): List<ChatMessage> {
+    val completedToolCallIds = asSequence()
+        .filter { message ->
+            message.role == MessageRole.tool &&
+                message.contentBlocks.none { it.isToolCallBlock } &&
+                message.contentBlocks.any { !it.toolCallId.isNullOrBlank() || !it.toolUseId.isNullOrBlank() }
+        }
+        .flatMap { message -> message.toolCallIdentities().asSequence() }
+        .toSet()
+    if (completedToolCallIds.isEmpty()) return this
+
+    return filterNot { message ->
+        message.role == MessageRole.tool &&
+            message.contentBlocks.any { it.isToolCallBlock } &&
+            message.contentBlocks.none { it.isToolResultBlock } &&
+            message.toolCallIdentities().any(completedToolCallIds::contains)
+    }
+}
+
+private fun ChatMessage.toolCallIdentities(): List<String> {
+    return contentBlocks.flatMap { block -> listOf(block.toolCallId, block.toolUseId) }
+        .mapNotNull { value -> value?.trim()?.takeIf { it.isNotEmpty() } }
+        .distinct()
 }
 
 internal fun conversationDisplayMessagesForGatewayState(

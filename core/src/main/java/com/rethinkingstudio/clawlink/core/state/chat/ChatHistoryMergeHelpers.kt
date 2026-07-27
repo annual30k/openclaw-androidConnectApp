@@ -125,8 +125,19 @@ internal fun buildHistoryMessagesFromItems(items: List<ChatHistoryItem>): List<C
             return@mapIndexedNotNull null
         }
         val normalizedRole = normalizedMessageRole(item.role)
+        val canonicalItemKind = item.timelineItemKind?.trim()?.lowercase().orEmpty()
         val isToolRole = normalizedRole in listOf("tool", "toolresult")
-        val isToolHistory = isToolRole || sourceBlocks.any { it.isToolCallBlock || it.isToolResultBlock }
+        val hasCanonicalChatBody = sourceBlocks.any { block ->
+            block.isFileBlock ||
+                block.isVoiceMessageBlock ||
+                (block.isTextBlock && !block.text.isNullOrBlank())
+        }
+        val isToolHistory = when (canonicalItemKind) {
+            "message:assistant", "message:user" -> isToolRole ||
+                (sourceBlocks.any { it.isToolCallBlock || it.isToolResultBlock } && !hasCanonicalChatBody)
+            "tool" -> true
+            else -> isToolRole || sourceBlocks.any { it.isToolCallBlock || it.isToolResultBlock }
+        }
         val role = if (isToolHistory) {
             MessageRole.tool
         } else {
