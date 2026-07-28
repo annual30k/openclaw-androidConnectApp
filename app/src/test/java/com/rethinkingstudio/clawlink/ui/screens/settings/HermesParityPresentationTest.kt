@@ -102,6 +102,15 @@ class HermesParityPresentationTest {
     }
 
     @Test
+    fun usageGuideDisclosureStateTogglesPredictably() {
+        assertEquals("repair", toggledHelpFaq(null, "repair"))
+        assertEquals(null, toggledHelpFaq("repair", "repair"))
+        assertEquals("offline", toggledHelpFaq("repair", "offline"))
+        assertEquals(5, helpAgentMaxLines(isExpanded = false))
+        assertEquals(Int.MAX_VALUE, helpAgentMaxLines(isExpanded = true))
+    }
+
+    @Test
     fun hermesMaintenanceSuggestionUsesHermesBackupText() {
         assertEquals(R.string.maintenance_suggestion_body_hermes, maintenanceSuggestionBodyRes(GatewayType.hermes))
         assertEquals(R.string.maintenance_suggestion_body, maintenanceSuggestionBodyRes(GatewayType.openclaw))

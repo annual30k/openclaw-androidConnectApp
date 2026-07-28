@@ -75,13 +75,14 @@ fun ClawLinkCard(
     modifier: Modifier = Modifier,
     onClick: (() -> Unit)? = null,
     contentPadding: PaddingValues = PaddingValues(16.dp),
+    showsBorder: Boolean = true,
     content: @Composable ColumnScope.() -> Unit
 ) {
     val colors = CardDefaults.cardColors(
         containerColor = Color.Transparent,
         contentColor = MaterialTheme.colorScheme.onSurface
     )
-    val cardModifier = modifier
+    val cardModifierBase = modifier
         .shadow(
             elevation = 16.dp,
             shape = ClawLinkCardShape,
@@ -101,7 +102,11 @@ fun ClawLinkCard(
             ),
             shape = ClawLinkCardShape
         )
-        .border(0.8.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.14f), ClawLinkCardShape)
+    val cardModifier = if (showsBorder) {
+        cardModifierBase.border(0.8.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.14f), ClawLinkCardShape)
+    } else {
+        cardModifierBase
+    }
 
     if (onClick != null) {
         Card(

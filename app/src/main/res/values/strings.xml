@@ -140,6 +140,8 @@
     <string name="usage_guide_step_3_label_openclaw">Install OpenClaw Service</string>
     <string name="usage_guide_step_3_label_hermes">Install Hermes Service</string>
     <string name="usage_guide_step_3_label_status_all">Check All</string>
+    <string name="usage_guide_troubleshooting_title">Troubleshooting &amp; Advanced Configuration</string>
+    <string name="usage_guide_troubleshooting_subtitle">The three steps above are all most users need. Continue only if automatic detection fails or you use custom paths or ports.</string>
     <string name="usage_guide_step_4_title">Automatic Detection &amp; Fallback</string>
     <string name="usage_guide_step_4_desc">Standard OpenClaw and Hermes installations require no extra settings. Use the manual values below only for custom paths, custom ports, or when automatic detection fails.</string>
     <string name="usage_guide_auto_title">Automatic detection runs first</string>
@@ -172,6 +174,10 @@
     <string name="usage_guide_agent_title">Prefer not to configure it? Ask an Agent</string>
     <string name="usage_guide_agent_desc">Copy this prompt so an Agent reads the ClawConnect docs before configuring from detected values.</string>
     <string name="usage_guide_agent_copy">Copy prompt</string>
+    <string name="usage_guide_agent_expand">Show full prompt</string>
+    <string name="usage_guide_agent_collapse">Collapse prompt</string>
+    <string name="usage_guide_expand">Expand</string>
+    <string name="usage_guide_collapse">Collapse</string>
     <string name="usage_guide_agent_prompt" formatted="false">Please configure ClawConnect for me. First locate and read README.md or README.zh-CN.md in the ClawConnect installation or project directory, focusing on OpenClaw, Hermes, custom paths, ports, and .env configuration; use clawconnect --help only if the docs cannot be found. Then detect this system, the actual OpenClaw/Hermes installation method and location, data directories, configuration files, and active ports. Prefer ClawConnect automatic detection. Only modify ~/.clawconnect/.env on macOS/Linux or %USERPROFILE%\\.clawconnect\\.env on Windows when detection fails or a real custom value exists. Do not overwrite unrelated settings or print/expose secrets. Then run clawconnect install and clawconnect status-all, and report detected values, changes, and final status. Ask me before acting when information is uncertain; do not guess paths or ports.</string>
     <string name="usage_guide_manual_restart">After saving, run `clawconnect install` to refresh the background service, then use `clawconnect status-all` to confirm the detected paths and endpoints.</string>
     <string name="usage_guide_after_title">What\'s Next?</string>
@@ -1088,6 +1094,12 @@ Tap the button below to refresh manually.</string>
     <string name="settings_section_data">Data</string>
     <string name="settings_section_data_subtitle">Manage system logs and configuration data</string>
     <string name="advanced_title">Advanced</string>
+    <string name="advanced_section_connection">Connection Maintenance</string>
+    <string name="advanced_section_connection_detail">Manage the selected host connection and diagnostics</string>
+    <string name="advanced_section_data_display">Data &amp; Display</string>
+    <string name="advanced_section_data_display_detail">Review runtime data and control chat detail</string>
+    <string name="advanced_gateway_required_title">No Host Paired</string>
+    <string name="advanced_gateway_required_detail">Connection maintenance sends commands to a paired host. Pair a host in Settings first.</string>
     <string name="advanced_maintenance">Maintenance</string>
     <string name="advanced_repair">Repair</string>
     <string name="advanced_features">Features</string>

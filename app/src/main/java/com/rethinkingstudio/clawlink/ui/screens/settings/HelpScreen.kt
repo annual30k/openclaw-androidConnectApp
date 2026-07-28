@@ -1,7 +1,7 @@
 package com.rethinkingstudio.clawlink.ui.screens.settings
 
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -20,12 +20,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.rethinkingstudio.clawlink.R
@@ -38,6 +38,8 @@ fun HelpScreen(
 ) {
     val clipboardManager = LocalClipboardManager.current
     var showManualConfiguration by rememberSaveable { mutableStateOf(false) }
+    var expandedFaqId by rememberSaveable { mutableStateOf<String?>(null) }
+    var showFullAgentPrompt by rememberSaveable { mutableStateOf(false) }
     val openClawParameters = listOf(
         ConfigurationParameter("OPENCLAW_HOME", stringResource(R.string.usage_guide_param_openclaw_home_desc)),
         ConfigurationParameter("OPENCLAW_STATE_DIR", stringResource(R.string.usage_guide_param_openclaw_state_dir_desc)),
@@ -117,7 +119,6 @@ fun HelpScreen(
             // Step 1
             StepCard(
                 stepNumber = "01",
-                icon = Icons.Default.FileDownload,
                 title = stringResource(R.string.usage_guide_step_1_title),
                 description = stringResource(R.string.usage_guide_step_1_desc),
                 accentColor = Color(0xFF2E83EE)
@@ -132,7 +133,6 @@ fun HelpScreen(
             // Step 2
             StepCard(
                 stepNumber = "02",
-                icon = Icons.Default.QrCodeScanner,
                 title = stringResource(R.string.usage_guide_step_2_title),
                 description = stringResource(R.string.usage_guide_step_2_desc),
                 accentColor = Color(0xFF5DCF7A)
@@ -154,7 +154,6 @@ fun HelpScreen(
             // Step 3
             StepCard(
                 stepNumber = "03",
-                icon = Icons.Default.Bolt,
                 title = stringResource(R.string.usage_guide_step_3_title),
                 description = stringResource(R.string.usage_guide_step_3_desc),
                 accentColor = Color(0xFFF5A623)
@@ -173,10 +172,27 @@ fun HelpScreen(
                 }
             }
 
-            // Step 4: advanced fallback. Standard installations stay zero-config.
+            Column(
+                modifier = Modifier.padding(top = 10.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                Text(
+                    stringResource(R.string.usage_guide_troubleshooting_title),
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Text(
+                    stringResource(R.string.usage_guide_troubleshooting_subtitle),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    lineHeight = 17.sp
+                )
+            }
+
+            // Optional troubleshooting fallback. Standard installations stay zero-config.
             StepCard(
-                stepNumber = "04",
-                icon = Icons.Default.Settings,
+                stepNumber = null,
                 title = stringResource(R.string.usage_guide_step_4_title),
                 description = stringResource(R.string.usage_guide_step_4_desc),
                 accentColor = Color(0xFF2E83EE)
@@ -302,7 +318,7 @@ fun HelpScreen(
                 shape = RoundedCornerShape(24.dp),
                 color = MaterialTheme.colorScheme.surface,
                 modifier = Modifier.fillMaxWidth(),
-                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.32f))
+                shadowElevation = 2.dp
             ) {
                 Column(
                     modifier = Modifier.padding(20.dp),
@@ -335,38 +351,18 @@ fun HelpScreen(
                         modifier = Modifier.padding(vertical = 4.dp),
                         color = MaterialTheme.colorScheme.outline.copy(alpha = 0.16f)
                     )
-                    Column(
-                        verticalArrangement = Arrangement.spacedBy(14.dp)
-                    ) {
-                        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                            Text(
-                                stringResource(R.string.usage_guide_faq_repair_title),
-                                style = MaterialTheme.typography.bodySmall,
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.onSurface
-                            )
-                            Text(
-                                stringResource(R.string.usage_guide_faq_repair_desc),
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                lineHeight = 16.sp
-                            )
-                        }
-                        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                            Text(
-                                stringResource(R.string.usage_guide_faq_offline_title),
-                                style = MaterialTheme.typography.bodySmall,
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.onSurface
-                            )
-                            Text(
-                                stringResource(R.string.usage_guide_faq_offline_desc),
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                lineHeight = 16.sp
-                            )
-                        }
-                    }
+                    HelpFaqItem(
+                        title = stringResource(R.string.usage_guide_faq_repair_title),
+                        description = stringResource(R.string.usage_guide_faq_repair_desc),
+                        expanded = expandedFaqId == "repair",
+                        onToggle = { expandedFaqId = toggledHelpFaq(expandedFaqId, "repair") }
+                    )
+                    HelpFaqItem(
+                        title = stringResource(R.string.usage_guide_faq_offline_title),
+                        description = stringResource(R.string.usage_guide_faq_offline_desc),
+                        expanded = expandedFaqId == "offline",
+                        onToggle = { expandedFaqId = toggledHelpFaq(expandedFaqId, "offline") }
+                    )
                 }
             }
 
@@ -374,7 +370,7 @@ fun HelpScreen(
                 shape = RoundedCornerShape(20.dp),
                 color = MaterialTheme.colorScheme.surface,
                 modifier = Modifier.fillMaxWidth(),
-                border = BorderStroke(1.dp, Color(0xFF42B969).copy(alpha = 0.28f))
+                shadowElevation = 2.dp
             ) {
                 Column(
                     modifier = Modifier.padding(16.dp),
@@ -428,8 +424,24 @@ fun HelpScreen(
                             .padding(12.dp),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurface,
-                        lineHeight = 17.sp
+                        lineHeight = 17.sp,
+                        maxLines = helpAgentMaxLines(showFullAgentPrompt),
+                        overflow = TextOverflow.Ellipsis
                     )
+                    TextButton(
+                        onClick = { showFullAgentPrompt = !showFullAgentPrompt },
+                        modifier = Modifier.align(Alignment.End),
+                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp)
+                    ) {
+                        Text(
+                            stringResource(
+                                if (showFullAgentPrompt) R.string.usage_guide_agent_collapse
+                                else R.string.usage_guide_agent_expand
+                            ),
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
                 }
             }
 
@@ -443,6 +455,49 @@ private data class ConfigurationParameter(
     val description: String
 )
 
+internal fun toggledHelpFaq(current: String?, selected: String): String? =
+    if (current == selected) null else selected
+
+internal fun helpAgentMaxLines(isExpanded: Boolean): Int =
+    if (isExpanded) Int.MAX_VALUE else 5
+
+@Composable
+private fun HelpFaqItem(
+    title: String,
+    description: String,
+    expanded: Boolean,
+    onToggle: () -> Unit
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        TextButton(
+            onClick = onToggle,
+            modifier = Modifier.fillMaxWidth(),
+            contentPadding = PaddingValues(0.dp)
+        ) {
+            Text(
+                title,
+                modifier = Modifier.weight(1f),
+                style = MaterialTheme.typography.bodySmall,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            Text(
+                stringResource(if (expanded) R.string.usage_guide_collapse else R.string.usage_guide_expand),
+                style = MaterialTheme.typography.labelSmall,
+                color = Color(0xFF2E83EE)
+            )
+        }
+        if (expanded) {
+            Text(
+                description,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                lineHeight = 16.sp
+            )
+        }
+    }
+}
+
 @Composable
 private fun ParameterGuide(
     label: String,
@@ -453,7 +508,6 @@ private fun ParameterGuide(
     Surface(
         shape = RoundedCornerShape(16.dp),
         color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.28f),
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.26f)),
         modifier = Modifier.fillMaxWidth()
     ) {
         Column {
@@ -518,8 +572,7 @@ private fun ParameterGuide(
 
 @Composable
 private fun StepCard(
-    stepNumber: String,
-    icon: ImageVector,
+    stepNumber: String?,
     title: String,
     description: String,
     accentColor: Color,
@@ -529,64 +582,52 @@ private fun StepCard(
         shape = RoundedCornerShape(24.dp),
         color = MaterialTheme.colorScheme.surface,
         modifier = Modifier.fillMaxWidth(),
-        shadowElevation = 0.dp,
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.32f))
+        shadowElevation = 2.dp
     ) {
-        Row(modifier = Modifier.fillMaxWidth()) {
-            // Accent side bar
-            Box(
-                modifier = Modifier
-                    .width(4.dp)
-                    .fillMaxHeight()
-                    .align(Alignment.CenterVertically)
-                    .padding(vertical = 20.dp)
-                    .clip(RoundedCornerShape(99.dp))
-                    .background(accentColor)
-            )
-
-            Column(
-                modifier = Modifier
-                    .padding(20.dp)
-                    .weight(1f),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
+        Column(
+            modifier = Modifier.padding(20.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Row(
+                verticalAlignment = Alignment.Top,
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
+                if (stepNumber != null) {
                     Surface(
-                        shape = RoundedCornerShape(8.dp),
+                        shape = RoundedCornerShape(10.dp),
                         color = accentColor.copy(alpha = 0.1f),
-                        modifier = Modifier.size(36.dp, 24.dp)
+                        modifier = Modifier.height(40.dp).widthIn(min = 40.dp)
                     ) {
                         Box(contentAlignment = Alignment.Center) {
                             Text(
                                 stepNumber,
-                                style = MaterialTheme.typography.labelSmall,
-                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier.padding(horizontal = 8.dp),
+                                style = MaterialTheme.typography.labelMedium,
+                                fontWeight = FontWeight.Black,
                                 color = accentColor
                             )
                         }
                     }
-                    Icon(icon, null, tint = accentColor, modifier = Modifier.size(18.dp))
                 }
-
-                Text(
-                    title,
-                    style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.Black,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-
-                Text(
-                    description,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    lineHeight = 20.sp
-                )
-
-                content()
+                Column(
+                    modifier = Modifier.weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    Text(
+                        title,
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Black,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Text(
+                        description,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        lineHeight = 20.sp
+                    )
+                }
             }
+            content()
         }
     }
 }
@@ -642,18 +683,24 @@ private fun CodeBlock(
         Surface(
             shape = RoundedCornerShape(16.dp),
             color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.46f),
-            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.26f)),
             modifier = Modifier.fillMaxWidth()
         ) {
-            Text(
-                code,
-                modifier = Modifier.padding(16.dp),
-                style = MaterialTheme.typography.bodyMedium.copy(
-                    fontFamily = FontFamily.Monospace,
-                    fontWeight = FontWeight.Bold
-                ),
-                color = MaterialTheme.colorScheme.onSurface
-            )
+            Row(
+                modifier = Modifier
+                    .horizontalScroll(rememberScrollState())
+                    .padding(16.dp)
+            ) {
+                Text(
+                    code,
+                    style = MaterialTheme.typography.bodyMedium.copy(
+                        fontFamily = FontFamily.Monospace,
+                        fontWeight = FontWeight.Bold
+                    ),
+                    color = MaterialTheme.colorScheme.onSurface,
+                    maxLines = 1,
+                    softWrap = false
+                )
+            }
         }
     }
 }

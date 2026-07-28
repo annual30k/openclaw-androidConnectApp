@@ -140,6 +140,8 @@
     <string name="usage_guide_step_3_label_openclaw">安装 OpenClaw 后台服务</string>
     <string name="usage_guide_step_3_label_hermes">安装 Hermes 后台服务</string>
     <string name="usage_guide_step_3_label_status_all">检查全部</string>
+    <string name="usage_guide_troubleshooting_title">问题排查与高级配置</string>
+    <string name="usage_guide_troubleshooting_subtitle">大多数用户完成上面三步即可。仅在自动检测失败，或使用自定义路径、端口时继续查看。</string>
     <string name="usage_guide_step_4_title">自动检测与手动兜底</string>
     <string name="usage_guide_step_4_desc">标准安装的 OpenClaw 和 Hermes 无需额外设置。只有使用了自定义路径、自定义端口，或自动检测失败时，才需要下面的手动配置。</string>
     <string name="usage_guide_auto_title">始终优先自动检测</string>
@@ -172,6 +174,10 @@
     <string name="usage_guide_agent_title">不想手动配置？交给 Agent</string>
     <string name="usage_guide_agent_desc">复制下面的提示词，让 Agent 先阅读 ClawConnect 文档，再按检测结果配置。</string>
     <string name="usage_guide_agent_copy">复制提示词</string>
+    <string name="usage_guide_agent_expand">展开完整提示词</string>
+    <string name="usage_guide_agent_collapse">收起提示词</string>
+    <string name="usage_guide_expand">展开</string>
+    <string name="usage_guide_collapse">收起</string>
     <string name="usage_guide_agent_prompt" formatted="false">请帮我配置 ClawConnect。先在 ClawConnect 的安装目录或项目目录中查找并阅读 README.md 或 README.zh-CN.md，重点了解 OpenClaw、Hermes、自定义路径、端口和 .env 配置；找不到文档时再查看 clawconnect --help。然后检测本机系统、OpenClaw/Hermes 的实际安装方式、安装位置、数据目录、配置文件和正在使用的端口。优先使用 ClawConnect 自动检测，只有自动检测失败或确实存在自定义值时，才修改 macOS/Linux 的 ~/.clawconnect/.env 或 Windows 的 %USERPROFILE%\\.clawconnect\\.env。不要覆盖无关配置，不要输出或泄露密钥。完成后执行 clawconnect install 和 clawconnect status-all 验证，并告诉我检测结果、修改内容和最终状态；信息不确定时先询问我，不要猜测。</string>
     <string name="usage_guide_manual_restart">保存后执行 `clawconnect install` 刷新后台服务，再执行 `clawconnect status-all` 确认最终识别到的路径和连接地址。</string>
     <string name="usage_guide_after_title">完成后怎么用</string>
@@ -1087,6 +1093,12 @@
     <string name="settings_section_data">数据管理</string>
     <string name="settings_section_data_subtitle">管理系统日志及配置数据</string>
     <string name="advanced_title">高级设置</string>
+    <string name="advanced_section_connection">连接维护</string>
+    <string name="advanced_section_connection_detail">管理当前主机的连接与诊断</string>
+    <string name="advanced_section_data_display">数据与显示</string>
+    <string name="advanced_section_data_display_detail">查看运行数据并控制聊天内容密度</string>
+    <string name="advanced_gateway_required_title">当前没有绑定主机</string>
+    <string name="advanced_gateway_required_detail">连接维护需要向已绑定主机发送指令，请先在设置页完成主机配对。</string>
     <string name="advanced_maintenance">维护</string>
     <string name="advanced_repair">修复</string>
     <string name="advanced_features">特性</string>

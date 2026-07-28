@@ -25,6 +25,7 @@ import com.rethinkingstudio.clawlink.core.state.UserPreferencesStore
 import com.rethinkingstudio.clawlink.core.state.gateway.GatewayStore
 import com.rethinkingstudio.clawlink.ui.components.ClawLinkCard
 import com.rethinkingstudio.clawlink.ui.components.ClawLinkScaffold
+import com.rethinkingstudio.clawlink.ui.components.ClawLinkSectionHeader
 
 internal fun advancedRemoteRestartDetailRes(gatewayType: GatewayType?): Int {
     return if (gatewayType == GatewayType.hermes) {
@@ -54,6 +55,7 @@ fun AdvancedScreen(
     val isRecoveryActionEnabled = gatewayState.canExecuteRemoteHostAction
     val selectedGatewayType = gatewayState.selectedGateway?.gatewayType ?: GatewayType.openclaw
     val showsOpenClawFeatures = selectedGatewayType == GatewayType.openclaw
+    val hasBoundGateway = gatewayState.selectedGateway != null
 
     ClawLinkScaffold(
         topBar = {
@@ -82,7 +84,19 @@ fun AdvancedScreen(
                 .padding(horizontal = 20.dp, vertical = 8.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            ClawLinkCard(modifier = Modifier.fillMaxWidth()) {
+            ClawLinkSectionHeader(
+                title = stringResource(R.string.advanced_section_connection),
+                subtitle = stringResource(R.string.advanced_section_connection_detail)
+            )
+
+            if (!hasBoundGateway) {
+                AdvancedGatewayRequirementCard(
+                    title = stringResource(R.string.advanced_gateway_required_title),
+                    detail = stringResource(R.string.advanced_gateway_required_detail)
+                )
+            }
+
+            ClawLinkCard(modifier = Modifier.fillMaxWidth(), showsBorder = false) {
                 Column {
                     if (advancedShowsOnlineRestart(selectedGatewayType)) {
                         AdvancedFeatureRow(
@@ -114,12 +128,22 @@ fun AdvancedScreen(
                             onClick = onNavigateToDoctorFix
                         )
                     }
-                    HorizontalDivider(modifier = Modifier.padding(start = 64.dp), color = MaterialTheme.colorScheme.outline.copy(alpha = 0.16f))
+                }
+            }
+
+            ClawLinkSectionHeader(
+                title = stringResource(R.string.advanced_section_data_display),
+                subtitle = stringResource(R.string.advanced_section_data_display_detail)
+            )
+
+            ClawLinkCard(modifier = Modifier.fillMaxWidth(), showsBorder = false) {
+                Column {
                     AdvancedFeatureRow(
                         icon = Icons.Default.Terminal,
                         title = stringResource(R.string.advanced_logs),
                         detail = stringResource(R.string.advanced_logs_detail),
                         tint = Color(0xFF14B8A6),
+                        enabled = hasBoundGateway,
                         onClick = onNavigateToLogs
                     )
                     HorizontalDivider(modifier = Modifier.padding(start = 64.dp), color = MaterialTheme.colorScheme.outline.copy(alpha = 0.16f))
@@ -141,6 +165,7 @@ fun AdvancedScreen(
                         detail = stringResource(R.string.advanced_prefs_show_tools_detail),
                         tint = Color(0xFFF59E0B),
                         isOn = showsTools,
+                        enabled = hasBoundGateway,
                         onToggle = { prefsStore.setShowsToolInvocationProcess(it) }
                     )
                 }
@@ -215,11 +240,13 @@ private fun AdvancedToggleRow(
     detail: String,
     tint: Color,
     isOn: Boolean,
+    enabled: Boolean = true,
     onToggle: (Boolean) -> Unit
 ) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            .alpha(if (enabled) 1f else 0.38f)
             .padding(horizontal = 16.dp, vertical = 14.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(14.dp)
@@ -251,11 +278,61 @@ private fun AdvancedToggleRow(
 
         Switch(
             checked = isOn,
-            onCheckedChange = onToggle,
+            onCheckedChange = if (enabled) onToggle else null,
             colors = SwitchDefaults.colors(
                 checkedThumbColor = Color.White,
                 checkedTrackColor = MaterialTheme.colorScheme.primary
             )
         )
+    }
+}
+
+@Composable
+private fun AdvancedGatewayRequirementCard(
+    title: String,
+    detail: String
+) {
+    Surface(
+        shape = RoundedCornerShape(20.dp),
+        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.09f),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Row(
+            modifier = Modifier.padding(16.dp),
+            verticalAlignment = Alignment.Top,
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Surface(
+                shape = RoundedCornerShape(12.dp),
+                color = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
+                modifier = Modifier.size(36.dp)
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(
+                        Icons.Default.Dns,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
+            }
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                Text(
+                    title,
+                    style = MaterialTheme.typography.bodyLarge,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Text(
+                    detail,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    lineHeight = 16.sp
+                )
+            }
+        }
     }
 }

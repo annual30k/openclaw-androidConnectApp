@@ -1,5 +1,11 @@
 package com.rethinkingstudio.clawlink.ui.screens.chat.components
 
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -41,6 +47,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalDensity
@@ -78,6 +85,8 @@ internal fun GatewayItemCard(
     onSelectSession: (ChatSessionItem) -> Unit,
     onClick: () -> Unit
 ) {
+    val selectionBreathAlpha = rememberGatewaySelectionBreathAlpha(selected)
+    val cardShape = RoundedCornerShape(22.dp)
     val effectiveStatus = if (selected) {
         GatewayStore.aggregateStatusForChain(gateway, appRelayStatus)
     } else {
@@ -86,13 +95,31 @@ internal fun GatewayItemCard(
 
     Surface(
         onClick = onClick,
-        modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(22.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .then(
+                if (selected) {
+                    Modifier.shadow(
+                        elevation = selectionGlowElevation(selectionBreathAlpha),
+                        shape = cardShape,
+                        clip = false,
+                        ambientColor = GatewaySelectionBreathingStyle.skyBlue.copy(alpha = selectionBreathAlpha * 0.22f),
+                        spotColor = GatewaySelectionBreathingStyle.skyBlue.copy(alpha = selectionBreathAlpha * 0.26f)
+                    )
+                } else {
+                    Modifier
+                }
+            ),
+        shape = cardShape,
         color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = if (selected) 0.62f else 0.46f),
         shadowElevation = 0.dp,
         border = BorderStroke(
-            if (selected) 1.4.dp else 1.dp,
-            if (selected) ChatColors.selectionBlue else MaterialTheme.colorScheme.outline.copy(alpha = 0.12f)
+            if (selected) GatewaySelectionBreathingStyle.borderWidth else 1.dp,
+            if (selected) {
+                GatewaySelectionBreathingStyle.skyBlue.copy(alpha = selectionBreathAlpha)
+            } else {
+                MaterialTheme.colorScheme.outline.copy(alpha = 0.12f)
+            }
         )
     ) {
         Column(
@@ -174,4 +201,35 @@ internal fun GatewayItemCard(
             )
         }
     }
+}
+
+@Composable
+private fun rememberGatewaySelectionBreathAlpha(selected: Boolean): Float {
+    if (!selected) return GatewaySelectionBreathingStyle.minimumBorderAlpha
+    val transition = rememberInfiniteTransition(label = "gateway-selection-breath")
+    return transition.animateFloat(
+        initialValue = GatewaySelectionBreathingStyle.minimumBorderAlpha,
+        targetValue = GatewaySelectionBreathingStyle.maximumBorderAlpha,
+        animationSpec = infiniteRepeatable(
+            animation = tween(
+                durationMillis = GatewaySelectionBreathingStyle.halfCycleMillis,
+                easing = FastOutSlowInEasing
+            ),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "gateway-selection-border-alpha"
+    ).value
+}
+
+private fun selectionGlowElevation(borderAlpha: Float) =
+    (6f + 3f * ((borderAlpha - GatewaySelectionBreathingStyle.minimumBorderAlpha) /
+        (GatewaySelectionBreathingStyle.maximumBorderAlpha - GatewaySelectionBreathingStyle.minimumBorderAlpha)))
+        .dp
+
+internal object GatewaySelectionBreathingStyle {
+    val skyBlue = Color(0xFF70ADFA)
+    val borderWidth = 2.dp
+    const val halfCycleMillis = 1_200
+    const val minimumBorderAlpha = 0.62f
+    const val maximumBorderAlpha = 0.96f
 }
