@@ -47,11 +47,22 @@ private fun ChatTimelineState.matchingLocalUserIndex(
         val explicitIndex = messages.indexOfLast { message ->
             message.role == MessageRole.user &&
                 message.id != excludingMessageId &&
+                message.isLocalUserEchoCandidate() &&
                 normalizedTurnIdentity(message.runId) in incomingTurnIdentities
         }
         if (explicitIndex >= 0) return explicitIndex
     }
     return null
+}
+
+private fun ChatMessage.isLocalUserEchoCandidate(): Boolean {
+    if (role != MessageRole.user) return false
+    val hasConfirmedIdentity = timelineIdentityKey.trim().isNotEmpty() &&
+        !timelineIdentityKey.trim().startsWith("local:")
+    return source.trim().equals("local", ignoreCase = true) ||
+        timelineOrderKey.trim().startsWith("local:") ||
+        timelineIdentityKey.trim().startsWith("local:") ||
+        (!hasConfirmedIdentity && runId.trim().startsWith("local-user-"))
 }
 
 internal fun normalizedTurnIdentity(value: String?): String? {

@@ -10,9 +10,11 @@ internal fun ChatTimelineState.upsertMessage(
 ): List<ChatMessage> {
     // 时间线合并必须以协议身份键为准；缺少稳定 identityKey 时不做内容/位置猜测，避免吞掉同文案的独立消息。
     val identityKey = message.timelineIdentityKey.trim().takeIf { it.isNotEmpty() } ?: return messages
-    val index = messages.indexOfFirst { current ->
-        current.timelineIdentityKey == identityKey || (replaceMessageId != null && current.id == replaceMessageId)
-    }
+    val identityIndex = messages.indexOfFirst { current -> current.timelineIdentityKey == identityKey }
+    val replacementIndex = replaceMessageId?.let { replacementId ->
+        messages.indexOfFirst { current -> current.id == replacementId }
+    } ?: -1
+    val index = identityIndex.takeIf { it >= 0 } ?: replacementIndex
     if (index < 0 && insertBeforeMessageId != null) {
         val anchorIndex = messages.indexOfFirst { it.id == insertBeforeMessageId }
         if (anchorIndex >= 0) {
@@ -37,6 +39,11 @@ internal fun ChatTimelineState.upsertMessage(
             timelineResolvesWaiting = message.timelineResolvesWaiting ?: existing.timelineResolvesWaiting,
             source = message.source.ifBlank { existing.source }
         )
+        if (replacementIndex >= 0 && replacementIndex != index) {
+            // canonical identity 已存在时，replaceMessageId 指向的本地 user/waiting 仍必须被清理；
+            // 否则历史快照重放会因 exact identity 短路而永久保留重复行。
+            current.removeAt(replacementIndex)
+        }
     }
 }
 

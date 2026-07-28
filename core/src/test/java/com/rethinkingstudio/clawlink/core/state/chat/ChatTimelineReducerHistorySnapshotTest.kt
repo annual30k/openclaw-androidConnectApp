@@ -12,6 +12,65 @@ import org.junit.Test
 
 class ChatTimelineReducerHistorySnapshotTest {
     @Test
+    fun historySnapshotReplayRemovesPersistedLocalUserDuplicateWhenCanonicalRowAlreadyExists() {
+        val turnId = "android-client-run-relogin"
+        val canonicalIdentity = "v1|main|message|user|server-user"
+        val localDuplicate = ChatMessage(
+            id = "local-server-user",
+            role = MessageRole.user,
+            state = MessageState.completed,
+            content = "企业的注册资本是多少",
+            runId = turnId,
+            timelineOrderKey = "v4|1|00000000000000000014|10|local-user",
+            timelineIdentityKey = "v1|main|message|user|local-server-user",
+            timelineItemKind = "message:user",
+            source = "local"
+        )
+        val canonical = ChatMessage(
+            id = "server-user",
+            role = MessageRole.user,
+            state = MessageState.completed,
+            content = "企业的注册资本是多少",
+            runId = "$turnId:user",
+            timelineOrderKey = "v4|0|00000000000000000014|10|server-user",
+            timelineIdentityKey = canonicalIdentity,
+            timelineItemKind = "message:user",
+            source = "history"
+        )
+
+        val state = ChatTimelineReducer.reduce(
+            ChatTimelineState(messages = listOf(localDuplicate, canonical)),
+            event(
+                """
+                {
+                  "protocolVersion": 2,
+                  "eventId": "history-relogin-replay",
+                  "eventType": "history.snapshot.page",
+                  "messages": [
+                    {
+                      "turnId": "$turnId:user",
+                      "runId": "$turnId:user",
+                      "messageId": "server-user",
+                      "role": "user",
+                      "messageState": "completed",
+                      "timelineOrderKey": "v4|0|00000000000000000014|10|server-user",
+                      "timelineIdentityKey": "$canonicalIdentity",
+                      "timelineItemKind": "message:user",
+                      "source": "history",
+                      "content": [{ "type": "text", "text": "企业的注册资本是多少" }]
+                    }
+                  ]
+                }
+                """.trimIndent()
+            )
+        )
+
+        assertEquals(listOf("local-server-user"), state.messages.map { it.id })
+        assertEquals(listOf(canonicalIdentity), state.messages.map { it.timelineIdentityKey })
+        assertEquals("$turnId:user", state.messages.single().runId)
+    }
+
+    @Test
     fun emptyAssistantMessageCompletedClearsOptimisticAssistantPlaceholder() {
         val localUser = ChatMessage(
             id = "local-user-new",
