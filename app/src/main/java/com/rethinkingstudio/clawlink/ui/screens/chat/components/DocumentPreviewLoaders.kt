@@ -21,24 +21,45 @@ import java.net.HttpURLConnection
 import java.net.URL
 import kotlin.math.max
 
+internal class RemoteAttachmentExpiredException : java.io.IOException(
+    choose("The file has been cleaned from the server", "文件已被服务器清理")
+)
+
+internal fun isRemoteAttachmentExpiredResponse(statusCode: Int, errorBody: String): Boolean {
+    return statusCode == HttpURLConnection.HTTP_GONE || errorBody.contains("file_expired", ignoreCase = true)
+}
+
 internal fun downloadDocumentToCache(
     url: String,
     accessToken: String,
     cacheKey: String,
     fileName: String?
 ): File? {
-    RemoteAttachmentCache.cachedFile(cacheKey)?.let { return it }
+    RemoteAttachmentCache.localOriginal(cacheKey)?.let { return it }
+    RemoteAttachmentCache.cachedFile(cacheKey)?.let { cached ->
+        return RemoteAttachmentCache.persistLocalOriginal(cacheKey, fileName ?: cached.name, cached) ?: cached
+    }
     val conn = (URL(url).openConnection() as HttpURLConnection).apply {
         if (accessToken.isNotBlank()) setRequestProperty("Authorization", "Bearer $accessToken")
         connectTimeout = 15_000
         readTimeout = 30_000
         connect()
     }
-    val bytes = conn.inputStream.use { input ->
-        if (conn.responseCode !in 200..299) return null
-        input.readBytes()
+    val responseCode = conn.responseCode
+    if (responseCode !in 200..299) {
+        val errorBody = runCatching {
+            conn.errorStream?.bufferedReader()?.use { it.readText() }.orEmpty()
+        }.getOrDefault("")
+        if (isRemoteAttachmentExpiredResponse(responseCode, errorBody)) {
+            RemoteAttachmentCache.markServerExpired(cacheKey)
+            throw RemoteAttachmentExpiredException()
+        }
+        return null
     }
-    return RemoteAttachmentCache.put(cacheKey, fileName, bytes)
+    val bytes = conn.inputStream.use { input -> input.readBytes() }
+    // 用户成功下载的文件按消息提供的稳定 fileId/attachmentId 落为本地原件，
+    // 后续进程启动不再依赖可能已经过期的远端 URL。
+    return RemoteAttachmentCache.persistDownloadedOriginal(cacheKey, fileName, bytes)
 }
 
 internal fun loadPlainTextPreview(file: File): String {

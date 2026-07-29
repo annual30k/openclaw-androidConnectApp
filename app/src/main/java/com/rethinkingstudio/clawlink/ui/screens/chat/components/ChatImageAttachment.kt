@@ -83,6 +83,7 @@ import com.rethinkingstudio.clawlink.core.models.chat.RelayChatContentBlock
 import com.rethinkingstudio.clawlink.core.state.LocalizedText.choose
 import com.rethinkingstudio.clawlink.core.state.chat.RemoteImageCache
 import com.rethinkingstudio.clawlink.core.state.chat.RemoteImageSizeCache
+import com.rethinkingstudio.clawlink.core.state.chat.RemoteAttachmentCache
 import com.rethinkingstudio.clawlink.core.state.chat.chatImageCacheKey
 import com.rethinkingstudio.clawlink.ui.screens.chat.ChatColors
 import android.widget.Toast
@@ -215,6 +216,7 @@ internal fun AuthenticatedRemoteImage(
     val resolvedCacheKey = cacheKey ?: url
     var bitmap by remember(resolvedCacheKey, url) { mutableStateOf(RemoteImageCache.get(resolvedCacheKey)) }
     var didFail by remember(resolvedCacheKey, url) { mutableStateOf(false) }
+    var serverCleaned by remember(resolvedCacheKey, url) { mutableStateOf(RemoteAttachmentCache.isServerExpired(resolvedCacheKey)) }
     var retryGeneration by remember(resolvedCacheKey, url) { mutableStateOf(0) }
     val displaySize = remember(bitmap, url, width, height) {
         val isFallback = width == 220.dp && height == 200.dp
@@ -235,10 +237,14 @@ internal fun AuthenticatedRemoteImage(
     LaunchedEffect(resolvedCacheKey, url, accessToken, retryGeneration) {
         if (bitmap != null) return@LaunchedEffect
         didFail = false
+        if (serverCleaned) {
+            didFail = true
+            return@LaunchedEffect
+        }
         val result = withContext(Dispatchers.IO) { loadRemoteBitmap(url, accessToken, resolvedCacheKey) }
-        if (result != null) {
-            RemoteImageCache.put(resolvedCacheKey, result)
-            val ratio = result.width.toFloat() / result.height.toFloat()
+        if (result.bitmap != null) {
+            RemoteImageCache.put(resolvedCacheKey, result.bitmap)
+            val ratio = result.bitmap.width.toFloat() / result.bitmap.height.toFloat()
             val maxW = maxWidth
             val maxH = 400.dp
             val size = if (ratio >= 1f) maxW to (maxW / ratio).coerceIn(60.dp, maxH)
@@ -248,7 +254,9 @@ internal fun AuthenticatedRemoteImage(
             }
             RemoteImageSizeCache.put(resolvedCacheKey, size.first.value to size.second.value)
         }
-        bitmap = result; didFail = result == null
+        bitmap = result.bitmap
+        serverCleaned = result.serverCleaned
+        didFail = result.bitmap == null
     }
     Box(modifier = Modifier.width(displaySize.first).height(displaySize.second).clip(RoundedCornerShape(cornerRadius))) {
         Crossfade(targetState = bitmap, animationSpec = tween(220), label = "remote_img") { bmp ->
@@ -259,15 +267,28 @@ internal fun AuthenticatedRemoteImage(
             } else {
                 ImageLoadingPlaceholder(
                     isFailed = didFail,
+                    serverCleaned = serverCleaned,
                     modifier = Modifier.fillMaxSize(),
-                    onRetry = if (didFail) ({ retryGeneration += 1 }) else null
+                    onRetry = if (didFail && !serverCleaned) ({ retryGeneration += 1 }) else null
                 )
             }
         }
     }
 }
 
-private fun loadRemoteBitmap(url: String, accessToken: String, cacheKey: String): Bitmap? {
+private data class RemoteImageLoadResult(val bitmap: Bitmap?, val serverCleaned: Boolean)
+
+private fun loadRemoteBitmap(url: String, accessToken: String, cacheKey: String): RemoteImageLoadResult {
+    val localPath = when {
+        url.startsWith("file://", ignoreCase = true) -> url.removePrefix("file://")
+        url.startsWith("/") && !url.startsWith("/api/") -> url
+        else -> null
+    }
+    if (localPath != null) {
+        val localBitmap = File(localPath).takeIf { it.exists() }
+            ?.let { file -> BitmapFactory.decodeFile(file.absolutePath) }
+        return RemoteImageLoadResult(bitmap = localBitmap, serverCleaned = false)
+    }
     return runCatching {
         val req = URL(url).openConnection() as HttpURLConnection
         if (accessToken.isNotBlank()) req.setRequestProperty("Authorization", "Bearer $accessToken")
@@ -277,17 +298,24 @@ private fun loadRemoteBitmap(url: String, accessToken: String, cacheKey: String)
         val responseCode = req.responseCode
         val contentType = req.contentType.orEmpty()
         if (responseCode !in 200..299) {
+            val errorBody = runCatching {
+                req.errorStream?.bufferedReader()?.use { it.readText() }.orEmpty()
+            }.getOrDefault("")
+            if (isRemoteAttachmentExpiredResponse(responseCode, errorBody)) {
+                RemoteAttachmentCache.markServerExpired(cacheKey)
+                return@runCatching RemoteImageLoadResult(bitmap = null, serverCleaned = true)
+            }
             Log.w("ClawLinkImage", "download failed code=$responseCode contentType=$contentType key=${cacheKey.take(48)} url=${sanitizeImageUrl(url)}")
-            return@runCatching null
+            return@runCatching RemoteImageLoadResult(bitmap = null, serverCleaned = false)
         }
         val bitmap = req.inputStream.use { BitmapFactory.decodeStream(it) }
         if (bitmap == null) {
             Log.w("ClawLinkImage", "decode failed code=$responseCode contentType=$contentType key=${cacheKey.take(48)} url=${sanitizeImageUrl(url)}")
         }
-        bitmap
+        RemoteImageLoadResult(bitmap = bitmap, serverCleaned = false)
     }.onFailure { err ->
         Log.w("ClawLinkImage", "download exception key=${cacheKey.take(48)} url=${sanitizeImageUrl(url)} error=${err.javaClass.simpleName}: ${err.message}")
-    }.getOrNull()
+    }.getOrNull() ?: RemoteImageLoadResult(bitmap = null, serverCleaned = false)
 }
 
 private fun sanitizeImageUrl(url: String): String {
@@ -298,6 +326,7 @@ private fun sanitizeImageUrl(url: String): String {
 @Composable
 private fun ImageLoadingPlaceholder(
     isFailed: Boolean,
+    serverCleaned: Boolean = false,
     modifier: Modifier = Modifier,
     onRetry: (() -> Unit)? = null
 ) {
@@ -308,7 +337,11 @@ private fun ImageLoadingPlaceholder(
         Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
             if (isFailed) {
                 Icon(Icons.Default.Image, contentDescription = null, tint = Color(0xFFA0A4AF), modifier = Modifier.size(28.dp))
-                Text(choose("Image load failed", "图片加载失败"), style = MaterialTheme.typography.labelSmall, color = Color(0xFFA0A4AF))
+                Text(
+                    if (serverCleaned) choose("Removed from server", "文件已被服务器清理") else choose("Image load failed", "图片加载失败"),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = Color(0xFFA0A4AF)
+                )
                 if (onRetry != null) {
                     Text(choose("Tap to retry", "点击重试"), style = MaterialTheme.typography.labelSmall, color = ChatColors.linkBlue)
                 }
@@ -456,11 +489,11 @@ private fun ImagePageContent(
         val result = withContext(Dispatchers.IO) {
             loadRemoteBitmap(imageItem.url, imageItem.accessToken, resolvedCacheKey)
         }
-        if (result != null) {
-            RemoteImageCache.put(resolvedCacheKey, result)
+        if (result.bitmap != null) {
+            RemoteImageCache.put(resolvedCacheKey, result.bitmap)
         }
-        bitmap = result
-        didFail = result == null
+        bitmap = result.bitmap
+        didFail = result.bitmap == null
     }
 
     Box(modifier = modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -470,11 +503,17 @@ private fun ImagePageContent(
             didFail -> Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(12.dp),
-                modifier = Modifier.clickable { retryGeneration += 1 }
+                modifier = if (RemoteAttachmentCache.isServerExpired(resolvedCacheKey)) Modifier else Modifier.clickable { retryGeneration += 1 }
             ) {
                 Icon(Icons.Default.Image, contentDescription = null, tint = Color.White.copy(alpha = 0.80f), modifier = Modifier.size(42.dp))
-                Text(choose("Image load failed", "图片加载失败"), style = MaterialTheme.typography.bodyMedium, color = Color.White.copy(alpha = 0.74f))
-                Text(choose("Tap to retry", "点击重试"), style = MaterialTheme.typography.labelMedium, color = ChatColors.linkBlue)
+                Text(
+                    if (RemoteAttachmentCache.isServerExpired(resolvedCacheKey)) choose("The file has been cleaned from the server", "文件已被服务器清理") else choose("Image load failed", "图片加载失败"),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = Color.White.copy(alpha = 0.74f)
+                )
+                if (!RemoteAttachmentCache.isServerExpired(resolvedCacheKey)) {
+                    Text(choose("Tap to retry", "点击重试"), style = MaterialTheme.typography.labelMedium, color = ChatColors.linkBlue)
+                }
             }
             else -> CircularProgressIndicator(modifier = Modifier.size(32.dp), color = Color.White.copy(alpha = 0.80f), strokeWidth = 2.5.dp)
         }

@@ -13,8 +13,10 @@ import com.rethinkingstudio.clawlink.core.network.transport.RelayWebSocketClient
 import java.time.Instant
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.async
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeout
 import kotlinx.coroutines.yield
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
@@ -811,6 +813,80 @@ class ChatHistoryMergeHelpersTest {
         }
     }
 
+    @Test
+    fun loadOlderPrepareExitClearsOwnedLoadingAndAllowsNextPageAttempt() = runBlocking {
+        var fetchCount = 0
+        var responseReturned = false
+        var prepareAttemptCount = 0
+        lateinit var store: ChatStore
+        val wsClient = RelayWebSocketClient()
+        try {
+            store = ChatStore(
+                apiClient = RelayAPIClient(),
+                wsClient = wsClient,
+                notificationPort = object : NotificationPort {
+                    override fun showReplyNotification(sessionKey: String, title: String, body: String) = Unit
+                    override fun cancelNotification(id: Int) = Unit
+                    override fun cancelAll() = Unit
+                },
+                chatHistoryPageFetcher = { _, _, _, _, _ ->
+                    fetchCount += 1
+                    responseReturned = true
+                    ChatHistoryResponse(
+                        items = chatHistoryItems(1..1).map { item ->
+                            item.copy(
+                                timelineOrderKey = "main:0001",
+                                timelineIdentityKey = "main:assistant:history-1",
+                                timelineItemKind = "message:assistant"
+                            )
+                        },
+                        hasMore = true,
+                        nextCursor = "older:next"
+                    )
+                }
+            )
+            store.setStateForTest(
+                ChatState(
+                    currentGatewayId = "gw_1",
+                    currentSessionKey = "main",
+                    historyWindow = ChatHistoryWindowState(
+                        hasOlder = true,
+                        olderCursor = "older:start"
+                    )
+                )
+            )
+            store.historyPrepareAttemptHookForTest = {
+                prepareAttemptCount += 1
+                if (prepareAttemptCount == 1) {
+                    assertTrue("prepare 必须发生在 HTTP response 返回之后", responseReturned)
+                    // 精确模拟 response 返回后 websocket mutation 抢先提交，随后
+                    // scope generation 变化使 awaitHistoryPrepareReady 返回 false。
+                    store.noteCanonicalTimelineMutation()
+                    store.advanceTimelineScopeGeneration()
+                }
+            }
+
+            store.loadOlderHistory("gw_1", "main")
+
+            assertEquals(1, fetchCount)
+            assertFalse(store.state.value.historyWindow.isLoadingOlder)
+            assertEquals("older:start", store.state.value.historyWindow.olderCursor)
+
+            // 第一次请求的 finally 已释放 owner；同一游标可以立即再次翻页，
+            // 不会被遗留的 isLoadingOlder=true 永久冻结。
+            store.historyPrepareAttemptHookForTest = null
+            responseReturned = false
+            store.loadOlderHistory("gw_1", "main")
+
+            assertEquals(2, fetchCount)
+            assertFalse(store.state.value.historyWindow.isLoadingOlder)
+            assertEquals("older:next", store.state.value.historyWindow.olderCursor)
+            assertEquals(listOf("history-1"), store.state.value.messages.map { it.id })
+        } finally {
+            wsClient.destroy()
+        }
+    }
+
     @Ignore("Legacy non-canonical history failure cache behavior was removed; Relay canonical order is required.")
     @Test
     fun loadHistoryFailureKeepsExistingMessagesAndClearsLoading() = runBlocking {
@@ -888,6 +964,200 @@ class ChatHistoryMergeHelpersTest {
             assertEquals("session-b", state.currentSessionKey)
             assertTrue(state.isSwitchingSession)
             assertTrue(requests.isEmpty())
+        } finally {
+            wsClient.destroy()
+        }
+    }
+
+    @Test
+    fun historyResponseThatFinishesAfterSessionSwitchCannotPoisonTimelineReducerState() = runBlocking {
+        val requestStarted = CompletableDeferred<Unit>()
+        val releaseResponse = CompletableDeferred<Unit>()
+        val wsClient = RelayWebSocketClient()
+        try {
+            val store = ChatStore(
+                apiClient = RelayAPIClient(),
+                wsClient = wsClient,
+                notificationPort = object : NotificationPort {
+                    override fun showReplyNotification(sessionKey: String, title: String, body: String) = Unit
+                    override fun cancelNotification(id: Int) = Unit
+                    override fun cancelAll() = Unit
+                },
+                chatHistoryPageFetcher = { _, _, _, _, _ ->
+                    requestStarted.complete(Unit)
+                    releaseResponse.await()
+                    ChatHistoryResponse(
+                        items = emptyList(),
+                        timelineSnapshot = Json.parseToJsonElement(
+                            """
+                            {
+                              "timelineProtocolVersion": 3,
+                              "sessionKey": "session-a",
+                              "snapshotRevision": "7",
+                              "messages": [
+                                {
+                                  "messageId": "assistant-session-a",
+                                  "seq": 7,
+                                  "role": "assistant",
+                                  "messageState": "completed",
+                                  "timelineOrderKey": "session-a:0007",
+                                  "timelineIdentityKey": "session-a:assistant:7",
+                                  "timelineItemKind": "message:assistant",
+                                  "content": [{"type":"text","text":"stale"}]
+                                }
+                              ]
+                            }
+                            """.trimIndent()
+                        )
+                    )
+                }
+            )
+            store.setStateForTest(
+                ChatState(
+                    currentGatewayId = "gw_1",
+                    currentSessionKey = "session-a",
+                    sessions = listOf(
+                        ChatSessionItem("session-a", null),
+                        ChatSessionItem("session-b", null)
+                    )
+                )
+            )
+
+            val historyJob = async { store.loadHistory("gw_1", "session-a", limit = 100) }
+            requestStarted.await()
+            store.selectSession("session-b")
+            releaseResponse.complete(Unit)
+            historyJob.await()
+
+            assertEquals("session-b", store.state.value.currentSessionKey)
+            assertTrue(store.state.value.messages.isEmpty())
+            assertTrue(store.timelineState.messages.isEmpty())
+        } finally {
+            wsClient.destroy()
+        }
+    }
+
+    @Test
+    fun prepareConflictWaitsForStreamingSignalAndReusesReturnedResponse() = runBlocking {
+        val prepareConflictObserved = CompletableDeferred<Unit>()
+        var fetchCount = 0
+        var prepareAttemptCount = 0
+        lateinit var store: ChatStore
+        val wsClient = RelayWebSocketClient()
+        try {
+            store = ChatStore(
+                apiClient = RelayAPIClient(),
+                wsClient = wsClient,
+                notificationPort = object : NotificationPort {
+                    override fun showReplyNotification(sessionKey: String, title: String, body: String) = Unit
+                    override fun cancelNotification(id: Int) = Unit
+                    override fun cancelAll() = Unit
+                },
+                chatHistoryPageFetcher = { _, _, _, _, _ ->
+                    fetchCount += 1
+                    ChatHistoryResponse(
+                        items = chatHistoryItems(1..1).map { item ->
+                            item.copy(
+                                timelineOrderKey = "main:0001",
+                                timelineIdentityKey = "main:assistant:history-1",
+                                timelineItemKind = "message:assistant"
+                            )
+                        }
+                    )
+                }
+            )
+            store.historyPrepareAttemptHookForTest = {
+                prepareAttemptCount += 1
+                if (prepareAttemptCount == 1) {
+                    store.setStateForTest(store.state.value.copy(isStreaming = true))
+                    store.noteCanonicalTimelineMutation()
+                    prepareConflictObserved.complete(Unit)
+                }
+            }
+            store.setStateForTest(ChatState(currentGatewayId = "gw_1", currentSessionKey = "main"))
+
+            val historyJob = async { store.loadHistory("gw_1", "main", limit = 100) }
+            withTimeout(3_000L) { prepareConflictObserved.await() }
+
+            // response 已经在内存中；streaming 未结束前不重算、不重复 HTTP。
+            assertEquals(1, fetchCount)
+            assertTrue(store.state.value.isLoading)
+            store.setStateForTest(store.state.value.copy(isStreaming = false))
+            withTimeout(3_000L) { historyJob.await() }
+
+            assertFalse(store.state.value.isLoading)
+            assertFalse(store.state.value.isSwitchingSession)
+            assertEquals(1, fetchCount)
+            assertEquals(2, prepareAttemptCount)
+            assertEquals(
+                "state=${store.state.value}",
+                listOf("history-1"),
+                store.state.value.messages.map { it.id }
+            )
+        } finally {
+            wsClient.destroy()
+        }
+    }
+
+    @Test
+    fun helloDuringInFlightReconcileQueuesExactlyOneFollowUpWithoutTimer() = runBlocking {
+        val firstFetchStarted = CompletableDeferred<Unit>()
+        val releaseFirstFetch = CompletableDeferred<Unit>()
+        val secondFetchStarted = CompletableDeferred<Unit>()
+        var fetchCount = 0
+        var prepareCount = 0
+        val wsClient = RelayWebSocketClient()
+        try {
+            val store = ChatStore(
+                apiClient = RelayAPIClient(),
+                wsClient = wsClient,
+                notificationPort = object : NotificationPort {
+                    override fun showReplyNotification(sessionKey: String, title: String, body: String) = Unit
+                    override fun cancelNotification(id: Int) = Unit
+                    override fun cancelAll() = Unit
+                },
+                chatHistoryPageFetcher = { _, _, _, _, _ ->
+                    fetchCount += 1
+                    if (fetchCount == 1) {
+                        firstFetchStarted.complete(Unit)
+                        releaseFirstFetch.await()
+                    } else if (fetchCount == 2) {
+                        secondFetchStarted.complete(Unit)
+                    }
+                    ChatHistoryResponse(
+                        items = chatHistoryItems(1..1).map { item ->
+                            item.copy(
+                                timelineOrderKey = "main:0001",
+                                timelineIdentityKey = "main:assistant:history-1",
+                                timelineItemKind = "message:assistant"
+                            )
+                        }
+                    )
+                }
+            )
+            store.historyPrepareAttemptHookForTest = { prepareCount += 1 }
+            store.setStateForTest(ChatState(currentGatewayId = "gw_1", currentSessionKey = "main"))
+
+            store.requestCanonicalHistoryReconcileAfterHello()
+            withTimeout(3_000L) { firstFetchStarted.await() }
+
+            // 对账进行中收到多个真实 hello/ready，pending 状态只保留一次补跑。
+            repeat(3) { store.requestCanonicalHistoryReconcileAfterHello() }
+            releaseFirstFetch.complete(Unit)
+
+            withTimeout(3_000L) { secondFetchStarted.await() }
+            withTimeout(3_000L) {
+                while (prepareCount < 2 || store.state.value.messages.map { it.id } != listOf("history-1")) {
+                    yield()
+                }
+            }
+            assertEquals(2, fetchCount)
+            assertEquals(2, prepareCount)
+            assertEquals(
+                "prepareCount=$prepareCount state=${store.state.value}",
+                listOf("history-1"),
+                store.state.value.messages.map { it.id }
+            )
         } finally {
             wsClient.destroy()
         }

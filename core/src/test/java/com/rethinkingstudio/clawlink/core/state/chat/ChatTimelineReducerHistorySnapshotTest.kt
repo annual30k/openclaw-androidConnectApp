@@ -238,6 +238,73 @@ class ChatTimelineReducerHistorySnapshotTest {
     }
 
     @Test
+    fun legacyFileReplayCannotDuplicateOrReorderCanonicalAttachments() {
+        val runId = "run-five-images"
+        val events = (1..5).flatMap { index ->
+            val canonical = event(
+                """
+                {
+                  "protocolVersion": 2,
+                  "eventId": "canonical-attachment-$index",
+                  "eventType": "message.completed",
+                  "turnId": "$runId",
+                  "runId": "$runId",
+                  "messageId": "attachment-message-$index",
+                  "role": "assistant",
+                  "content": [{
+                    "type": "image",
+                    "attachmentId": "attachment-$index",
+                    "fileId": "file-$index",
+                    "fileName": "image-$index.jpg",
+                    "mimeType": "image/jpeg"
+                  }],
+                  "timelineOrderKey": "v4|0|0000000000000000001$index|30|attachment-$index",
+                  "timelineIdentityKey": "v1|main|attachment|assistant|attachment-$index",
+                  "timelineItemKind": "attachment",
+                  "timelineResolvesWaiting": false
+                }
+                """.trimIndent()
+            )
+            val legacyReplay = event(
+                """
+                {
+                  "protocolVersion": 2,
+                  "eventId": "legacy-attachment-$index",
+                  "eventType": "message.completed",
+                  "turnId": "$runId",
+                  "runId": "$runId",
+                  "messageId": "attachment-message-$index",
+                  "role": "assistant",
+                  "content": [{
+                    "type": "image",
+                    "attachmentId": "attachment-$index",
+                    "fileId": "file-$index",
+                    "fileName": "image-$index.jpg",
+                    "mimeType": "image/jpeg"
+                  }],
+                  "timelineOrderKey": "local:$runId:030-attachment:file-$index",
+                  "timelineIdentityKey": "local:$runId:attachment:attachment-$index",
+                  "timelineItemKind": "attachment",
+                  "timelineResolvesWaiting": false
+                }
+                """.trimIndent()
+            )
+            listOf(canonical, legacyReplay)
+        }
+
+        val state = ChatTimelineReducer.reduceAll(ChatTimelineState(), events)
+        val ordered = orderTimelineMessages(state.messages)
+
+        assertEquals(5, ordered.size)
+        assertEquals((1..5).map { "attachment-message-$it" }, ordered.map { it.id })
+        assertEquals(
+            (1..5).map { "v1|main|attachment|assistant|attachment-$it" },
+            ordered.map { it.timelineIdentityKey }
+        )
+        assertTrue(ordered.all { !it.timelineOrderKey.startsWith("local:") })
+    }
+
+    @Test
     fun staleActiveRunWithoutStreamingMessageIsNotAVisibleRun() {
         val state = ChatTimelineState(
             activeRunId = "stale-run",

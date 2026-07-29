@@ -212,9 +212,16 @@ internal object ChatTimelineReducer {
         )
         val messageForUpsert = message
         val nextParts = messagePartsById + (event.messageId to TimelineMessageParts(event.turnId, mapOf("text" to content)))
+        val replacesExistingIdentity = existing != null &&
+            existing.timelineIdentityKey.isNotBlank() &&
+            existing.timelineIdentityKey != messageForUpsert.timelineIdentityKey
         val upsertedMessages = upsertMessage(
             messageForUpsert,
-            replaceMessageId = if (existing == null && sameRunAssistant?.id != messageForUpsert.id) sameRunAssistant?.id else null
+            replaceMessageId = when {
+                replacesExistingIdentity -> existing?.id
+                existing == null && sameRunAssistant?.id != messageForUpsert.id -> sameRunAssistant?.id
+                else -> null
+            }
         )
         val nextMessages = if (clearsWaitingAssistant) {
             upsertedMessages.filterNot { candidate ->

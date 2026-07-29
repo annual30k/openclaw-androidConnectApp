@@ -72,8 +72,11 @@ import com.rethinkingstudio.clawlink.core.models.chat.MessageState
 import com.rethinkingstudio.clawlink.core.models.chat.RelayChatContentBlock
 import com.rethinkingstudio.clawlink.core.state.LocalizedText.choose
 import com.rethinkingstudio.clawlink.core.state.chat.RemoteAttachmentCache
+import com.rethinkingstudio.clawlink.core.state.chat.RemoteImageCache
 import com.rethinkingstudio.clawlink.core.state.chat.chatAttachmentCacheKey
 import com.rethinkingstudio.clawlink.core.state.chat.chatImageCacheKey
+import com.rethinkingstudio.clawlink.core.state.chat.isExplicitAttachmentExpiredState
+import com.rethinkingstudio.clawlink.core.state.chat.resolveAttachmentAvailability
 import com.rethinkingstudio.clawlink.ui.screens.chat.ChatColors
 import com.rethinkingstudio.clawlink.ui.screens.chat.formatChatTimestamp
 import java.io.File
@@ -112,7 +115,27 @@ internal fun FileBlock(block: RelayChatContentBlock, isUser: Boolean, messageSta
             else -> null
         }
     }
-    val downloadUrl = if (localFilePath == null) resolveFileDownloadUrl(block, relayBaseUrl, rawDownloadUrl) else null
+    val attachmentCacheKey = block.chatAttachmentCacheKey()
+    val cachedLocalFile = attachmentCacheKey
+        ?.let { RemoteAttachmentCache.cachedFile(it) }
+        ?.takeIf { it.exists() }
+    val localThumbnail = block.chatImageCacheKey()
+        ?.let { RemoteImageCache.cachedFile(it) }
+        ?.takeIf { it.exists() }
+    val resolvedRemoteUrl = resolveFileDownloadUrl(block, relayBaseUrl, rawDownloadUrl)
+        ?.takeUnless { candidate -> candidate == localFilePath }
+    val availability = resolveAttachmentAvailability(
+        hasLocalOriginal = localFilePath != null,
+        hasLocalCachedCopy = cachedLocalFile != null,
+        hasLocalThumbnail = localThumbnail != null,
+        hasRemoteReference = resolvedRemoteUrl != null,
+        expiresAt = block.expiresAt,
+        serverReportedExpired =
+            attachmentCacheKey?.let(RemoteAttachmentCache::isServerExpired) == true ||
+                isExplicitAttachmentExpiredState(block.transferState, block.status)
+    )
+    val downloadUrl = resolvedRemoteUrl?.takeIf { availability.shouldAttemptRemoteDownload }
+    val localOpenPath = localFilePath ?: cachedLocalFile?.absolutePath
     val isStandaloneUserFile = isUser && standalone
     val isUploadCard = isUploadingState || block.status?.contains("上传中") == true || block.status?.contains("uploading", ignoreCase = true) == true
     val primaryText = when {
@@ -141,10 +164,8 @@ internal fun FileBlock(block: RelayChatContentBlock, isUser: Boolean, messageSta
     }
     if (block.isImageFileBlock) {
         val dimensions = imagePreviewDimensions(block, maxWidth = imageMaxWidth)
-        val cachedLocalImagePath = block.chatAttachmentCacheKey()
-            ?.let { RemoteAttachmentCache.cachedFile(it) }
-            ?.takeIf { it.exists() }
-            ?.absolutePath
+        val cachedLocalImagePath = cachedLocalFile?.absolutePath ?: localThumbnail?.absolutePath
+        val imageOpenReference = localFilePath ?: cachedLocalImagePath ?: downloadUrl
         Box(
             modifier = Modifier
                 .width(dimensions.first)
@@ -152,7 +173,7 @@ internal fun FileBlock(block: RelayChatContentBlock, isUser: Boolean, messageSta
         ) {
             when {
                 localFilePath != null -> {
-                    Box(modifier = downloadUrl?.let { url -> Modifier.clickable { onImageClick(block, url, block.fileDisplayName) } } ?: Modifier) {
+                    Box(modifier = imageOpenReference?.let { reference -> Modifier.clickable { onImageClick(block, reference, block.fileDisplayName) } } ?: Modifier) {
                         LocalAttachmentImagePreview(
                             filePath = localFilePath,
                             width = dimensions.first,
@@ -163,7 +184,7 @@ internal fun FileBlock(block: RelayChatContentBlock, isUser: Boolean, messageSta
                     }
                 }
                 cachedLocalImagePath != null -> {
-                    Box(modifier = downloadUrl?.let { url -> Modifier.clickable { onImageClick(block, url, block.fileDisplayName) } } ?: Modifier) {
+                    Box(modifier = imageOpenReference?.let { reference -> Modifier.clickable { onImageClick(block, reference, block.fileDisplayName) } } ?: Modifier) {
                         LocalAttachmentImagePreview(
                             filePath = cachedLocalImagePath,
                             width = dimensions.first,
@@ -191,6 +212,9 @@ internal fun FileBlock(block: RelayChatContentBlock, isUser: Boolean, messageSta
                         Column(modifier = Modifier.padding(13.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                             Text(block.fileDisplayName ?: block.text ?: stringResource(R.string.chat_attachment), maxLines = 1, overflow = TextOverflow.Ellipsis, fontWeight = FontWeight.SemiBold, color = primaryText, style = MaterialTheme.typography.bodySmall)
                             Text(fileSubtitle(block), maxLines = 2, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.labelSmall.copy(fontFamily = FontFamily.Monospace), color = secondaryText)
+                            if (availability.source == com.rethinkingstudio.clawlink.core.state.chat.AttachmentSource.SERVER_CLEANED) {
+                                Text(choose("The file has been cleaned from the server", "文件已被服务器清理"), style = MaterialTheme.typography.labelSmall, color = secondaryText)
+                            }
                         }
                     }
                 }
@@ -209,7 +233,8 @@ internal fun FileBlock(block: RelayChatContentBlock, isUser: Boolean, messageSta
         return
     }
 
-    Surface(onClick = { downloadUrl?.let { onFileClick(block, it, block.fileDisplayName) } }, enabled = downloadUrl != null, shape = RoundedCornerShape(18.dp), color = background, border = androidx.compose.foundation.BorderStroke(1.dp, border), modifier = if (standalone) Modifier.widthIn(max = 326.dp) else Modifier.fillMaxWidth()) {
+    val fileOpenReference = localOpenPath ?: downloadUrl
+    Surface(onClick = { fileOpenReference?.let { onFileClick(block, it, block.fileDisplayName) } }, enabled = fileOpenReference != null, shape = RoundedCornerShape(18.dp), color = background, border = androidx.compose.foundation.BorderStroke(1.dp, border), modifier = if (standalone) Modifier.widthIn(max = 326.dp) else Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.fillMaxWidth().padding(13.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Row(verticalAlignment = Alignment.Top, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 Surface(
@@ -235,9 +260,13 @@ internal fun FileBlock(block: RelayChatContentBlock, isUser: Boolean, messageSta
                         }
                     }
                 }
-                if (downloadUrl != null && !isUploadCard) { Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null, modifier = Modifier.padding(top = 5.dp).size(15.dp), tint = secondaryText) }
+                if (fileOpenReference != null && !isUploadCard) { Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null, modifier = Modifier.padding(top = 5.dp).size(15.dp), tint = secondaryText) }
             }
-            block.expiresAt?.takeIf { it.isNotBlank() }?.let { Text(choose("Expires $it", "有效期至 $it"), maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.labelSmall, color = secondaryText) }
+            if (availability.source == com.rethinkingstudio.clawlink.core.state.chat.AttachmentSource.SERVER_CLEANED) {
+                Text(choose("The file has been cleaned from the server", "文件已被服务器清理"), maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.labelSmall, color = secondaryText)
+            } else if (localOpenPath == null) {
+                block.expiresAt?.takeIf { it.isNotBlank() }?.let { Text(choose("Expires $it", "有效期至 $it"), maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.labelSmall, color = secondaryText) }
+            }
         }
     }
 }

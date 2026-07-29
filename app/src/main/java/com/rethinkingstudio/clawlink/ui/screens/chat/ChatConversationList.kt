@@ -21,14 +21,19 @@ import androidx.compose.ui.unit.dp
 import com.rethinkingstudio.clawlink.core.models.chat.MessageRole
 import com.rethinkingstudio.clawlink.core.models.chat.MessageState
 import com.rethinkingstudio.clawlink.core.state.chat.ChatStore
+import com.rethinkingstudio.clawlink.core.state.chat.RemoteAttachmentCache
+import com.rethinkingstudio.clawlink.core.state.chat.RemoteImageCache
 import com.rethinkingstudio.clawlink.core.state.chat.chatAttachmentCacheKey
 import com.rethinkingstudio.clawlink.core.state.chat.chatImageCacheKey
+import com.rethinkingstudio.clawlink.core.state.chat.isExplicitAttachmentExpiredState
+import com.rethinkingstudio.clawlink.core.state.chat.resolveAttachmentAvailability
 import com.rethinkingstudio.clawlink.ui.screens.chat.components.ChatSessionLoadingCard
 import com.rethinkingstudio.clawlink.ui.screens.chat.components.EmptyGatewayCard
 import com.rethinkingstudio.clawlink.ui.screens.chat.components.MessageBubble
 import com.rethinkingstudio.clawlink.ui.screens.chat.components.ThinkingRow
 import com.rethinkingstudio.clawlink.ui.screens.chat.components.UsageGuidePromptCard
 import com.rethinkingstudio.clawlink.ui.screens.chat.components.resolveFileDownloadUrl
+import java.io.File
 
 @Composable
 internal fun ChatConversationList(
@@ -154,9 +159,39 @@ LazyColumn(
                         msg.contentBlocks.filter { it.isImageFileBlock }.mapNotNull { b ->
                             val rawUrl = b.preferredImagePreviewURLString?.trim()?.takeIf { it.isNotEmpty() }
                             val resolvedUrl = resolveFileDownloadUrl(b, chatStore.relayBaseUrl, rawUrl)
-                            if (resolvedUrl != null) {
+                            val rawLocalPath = rawUrl?.let { reference ->
+                                when {
+                                    reference.startsWith("file://", ignoreCase = true) -> reference.removePrefix("file://")
+                                    reference.startsWith("/") && !reference.startsWith("/api/") -> reference
+                                    else -> null
+                                }
+                            }?.takeIf { File(it).exists() }
+                            val attachmentKey = b.chatAttachmentCacheKey()
+                            val cachedLocalPath = attachmentKey
+                                ?.let(RemoteAttachmentCache::cachedFile)
+                                ?.takeIf { it.exists() }
+                                ?.absolutePath
+                            val thumbnailPath = b.chatImageCacheKey()
+                                ?.let(RemoteImageCache::cachedFile)
+                                ?.takeIf { it.exists() }
+                                ?.absolutePath
+                            val availability = resolveAttachmentAvailability(
+                                hasLocalOriginal = rawLocalPath != null,
+                                hasLocalCachedCopy = cachedLocalPath != null,
+                                hasLocalThumbnail = thumbnailPath != null,
+                                hasRemoteReference = resolvedUrl != null,
+                                expiresAt = b.expiresAt,
+                                serverReportedExpired =
+                                    attachmentKey?.let(RemoteAttachmentCache::isServerExpired) == true ||
+                                        isExplicitAttachmentExpiredState(b.transferState, b.status)
+                            )
+                            val displayReference = rawLocalPath
+                                ?: cachedLocalPath
+                                ?: thumbnailPath
+                                ?: resolvedUrl?.takeIf { availability.shouldAttemptRemoteDownload }
+                            if (displayReference != null) {
                                 ChatImageItem(
-                                    url = resolvedUrl,
+                                    url = displayReference,
                                     accessToken = chatStore.accessToken,
                                     fileName = b.fileDisplayName ?: b.fileName,
                                     cacheKey = b.chatImageCacheKey()

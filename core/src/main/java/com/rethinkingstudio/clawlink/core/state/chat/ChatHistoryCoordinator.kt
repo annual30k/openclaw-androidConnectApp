@@ -8,6 +8,7 @@ import com.rethinkingstudio.clawlink.core.network.dto.ChatHistoryResponse
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import java.util.concurrent.atomic.AtomicLong
 
 internal class ChatHistoryCoordinator(
     private val apiClient: RelayAPIClient,
@@ -22,11 +23,24 @@ internal class ChatHistoryCoordinator(
     private val clearStreamingPointersIfResolved: (List<ChatMessage>) -> Unit,
     private val orderedMessages: (List<ChatMessage>) -> List<ChatMessage>,
     private val persistSelectedSession: (String, String) -> Unit,
+    private val currentScopeGeneration: () -> Long,
+    private val currentMutationRevision: () -> Long,
+    private val noteCanonicalMutation: () -> Unit,
+    private val persistTimelineState: (ChatTimelineState, List<ChatMessage>) -> Unit,
+    private val reconcileOutbox: (List<ChatMessage>) -> Unit,
+    private val canAcceptSnapshotVersion: (TimelineSnapshotVersion) -> Boolean,
+    private val recordSnapshotVersion: (TimelineSnapshotVersion) -> Unit,
+    private val awaitHistoryPrepareReady: suspend (Long, Long) -> Boolean,
+    private val historyPrepareAttemptHook: (() -> Unit)?,
     private val needsChatFinalSync: (String, ChatRunScope) -> Boolean,
     private val pageSize: Int,
     private val windowMaxMessages: Int,
     private val pendingResolveMaxPages: Int
 ) {
+    private val requestSequence = AtomicLong(0L)
+    private val latestNewestRequestByScope = mutableMapOf<String, Long>()
+    private val latestOlderRequestByScope = mutableMapOf<String, Long>()
+
     private enum class HistoryWindowMode {
         NEWEST,
         OLDER
@@ -55,6 +69,12 @@ internal class ChatHistoryCoordinator(
         if (hasActiveScope && !matchesRequestedChatScope(initialState, normalizedGatewayId, normalizedSessionKey)) {
             return
         }
+        val requestGeneration = currentScopeGeneration()
+        val requestId = requestSequence.incrementAndGet()
+        val requestScopeKey = "$normalizedGatewayId\u0000$normalizedSessionKey"
+        synchronized(latestNewestRequestByScope) {
+            latestNewestRequestByScope[requestScopeKey] = requestId
+        }
         setState(
             initialState.copy(
                 currentGatewayId = normalizedGatewayId,
@@ -72,23 +92,47 @@ internal class ChatHistoryCoordinator(
             ) {
                 fetchChatHistoryPage(normalizedGatewayId, normalizedSessionKey, limit)
             }
-            val currentBeforeHistory = getState()
-            val prepared = prepareHistoryMerge(
-                response = response,
-                currentState = currentBeforeHistory,
-                timelineState = getTimelineState(),
-                knownV3Sessions = v3Sessions.toSet(),
-                activeStreamingMessageId = currentStreamingMessageId(),
-                trackedPendingAssistantMessageIds = trackedPendingAssistantMessageIds(currentBeforeHistory.messages),
-                replaceExistingTimelineState = shouldReplaceTimelineState(
+            if (!canCommitNewestRequest(
+                    gatewayId = normalizedGatewayId,
+                    sessionKey = normalizedSessionKey,
+                    generation = requestGeneration,
+                    requestScopeKey = requestScopeKey,
+                    requestId = requestId
+                )
+            ) return
+            val snapshotPage = response.timelineSnapshot?.let(TimelineSnapshotPage::fromJsonElement)
+            if (snapshotPage != null && !sameSessionKey(snapshotPage.sessionKey, normalizedSessionKey)) return
+            val incomingSnapshotVersion = timelineSnapshotVersion(snapshotPage)
+            if (!canAcceptSnapshotVersion(incomingSnapshotVersion)) return
+            while (canCommitNewestRequest(
+                    gatewayId = normalizedGatewayId,
+                    sessionKey = normalizedSessionKey,
+                    generation = requestGeneration,
+                    requestScopeKey = requestScopeKey,
+                    requestId = requestId
+                )
+            ) {
+                val (prepared, preparedMutationRevision) = prepareStableHistoryMerge(
                     response = response,
-                    currentMessages = currentBeforeHistory.messages
-                ),
-                windowMode = HistoryWindowMode.NEWEST
-            )
-            val current = getState()
-            applySnapshotReduction(prepared.snapshotReduction)
-            if (matchesRequestedChatScope(current, normalizedGatewayId, normalizedSessionKey)) {
+                    windowMode = HistoryWindowMode.NEWEST,
+                    expectedGeneration = requestGeneration
+                ) ?: return
+                val current = getState()
+                val requestStillCurrent = canCommitNewestRequest(
+                    gatewayId = normalizedGatewayId,
+                    sessionKey = normalizedSessionKey,
+                    generation = requestGeneration,
+                    requestScopeKey = requestScopeKey,
+                    requestId = requestId
+                )
+                if (!requestStillCurrent) return
+                if (currentMutationRevision() != preparedMutationRevision) {
+                    if (!awaitHistoryPrepareReady(requestGeneration, currentMutationRevision())) return
+                    continue
+                }
+                // reducer 接触 timelineState 前必须完成 scope/generation/request/revision 四重校验，
+                // 防止迟到响应污染下一个会话的 reducer 初始状态。
+                applySnapshotReduction(prepared.snapshotReduction)
                 setState(
                     current.copy(
                         messages = prepared.orderedMessages,
@@ -110,11 +154,22 @@ internal class ChatHistoryCoordinator(
                 clearStreamingPointersIfResolved(prepared.orderedMessages)
                 val updatedTimelineState = getTimelineState().copy(messages = prepared.orderedMessages)
                 setTimelineState(updatedTimelineState)
-                persistOrClearTimelineSnapshot(updatedTimelineState, prepared.orderedMessages)
+                recordSnapshotVersion(incomingSnapshotVersion)
+                reconcileOutbox(prepared.orderedMessages)
+                noteCanonicalMutation()
+                persistTimelineState(updatedTimelineState, prepared.orderedMessages)
+                break
             }
         } catch (e: CancellationException) {
             val currentState = getState()
-            if (matchesRequestedChatScope(currentState, normalizedGatewayId, normalizedSessionKey)) {
+            if (canCommitNewestRequest(
+                    gatewayId = normalizedGatewayId,
+                    sessionKey = normalizedSessionKey,
+                    generation = requestGeneration,
+                    requestScopeKey = requestScopeKey,
+                    requestId = requestId
+                )
+            ) {
                 setState(
                     currentState.copy(
                         isLoading = false,
@@ -126,7 +181,14 @@ internal class ChatHistoryCoordinator(
             throw e
         } catch (e: Exception) {
             val currentState = getState()
-            if (!matchesRequestedChatScope(currentState, normalizedGatewayId, normalizedSessionKey)) {
+            if (!canCommitNewestRequest(
+                    gatewayId = normalizedGatewayId,
+                    sessionKey = normalizedSessionKey,
+                    generation = requestGeneration,
+                    requestScopeKey = requestScopeKey,
+                    requestId = requestId
+                )
+            ) {
                 return
             }
             val shouldSuppressError = isTransientLoadFailure(e)
@@ -144,6 +206,31 @@ internal class ChatHistoryCoordinator(
                     )
                 )
             )
+        } finally {
+            // revision 过期、prepare 冲突或 scope 校验失败等提前返回路径，
+            // 都必须关闭由当前请求持有的 loading 状态。
+            if (canCommitNewestRequest(
+                    gatewayId = normalizedGatewayId,
+                    sessionKey = normalizedSessionKey,
+                    generation = requestGeneration,
+                    requestScopeKey = requestScopeKey,
+                    requestId = requestId
+                )
+            ) {
+                val currentState = getState()
+                if (currentState.isLoading || currentState.isSwitchingSession) {
+                    setState(
+                        currentState.copy(
+                            isLoading = false,
+                            isSwitchingSession = false,
+                            historyWindow = currentState.historyWindow.copy(
+                                isLoadingOlder = false,
+                                isCatchingUp = false
+                            )
+                        )
+                    )
+                }
+            }
         }
     }
 
@@ -164,6 +251,12 @@ internal class ChatHistoryCoordinator(
         ) {
             return
         }
+        val requestGeneration = currentScopeGeneration()
+        val requestId = requestSequence.incrementAndGet()
+        val requestScopeKey = "$normalizedGatewayId\u0000$normalizedSessionKey"
+        synchronized(latestOlderRequestByScope) {
+            latestOlderRequestByScope[requestScopeKey] = requestId
+        }
 
         setState(current.copy(historyWindow = window.copy(isLoadingOlder = true)))
         try {
@@ -178,53 +271,62 @@ internal class ChatHistoryCoordinator(
                     "older"
                 )
             }
-            val latest = getState()
-            if (latest.currentGatewayId != normalizedGatewayId ||
-                !sameSessionKey(latest.currentSessionKey, normalizedSessionKey)
+            if (currentScopeGeneration() != requestGeneration ||
+                !matchesRequestedChatScope(getState(), normalizedGatewayId, normalizedSessionKey)
             ) {
                 return
             }
-            val prepared = prepareHistoryMerge(
-                response = response,
-                currentState = latest,
-                timelineState = getTimelineState(),
-                knownV3Sessions = v3Sessions.toSet(),
-                activeStreamingMessageId = currentStreamingMessageId(),
-                trackedPendingAssistantMessageIds = trackedPendingAssistantMessageIds(latest.messages),
-                windowMode = HistoryWindowMode.OLDER
-            )
-            applySnapshotReduction(prepared.snapshotReduction)
-            setState(
-                latest.copy(
-                    messages = prepared.orderedMessages,
-                    historyWindow = latest.historyWindow.copy(
-                        isLoadingOlder = false,
-                        hasOlder = response.hasMore,
-                        olderCursor = response.nextCursor,
-                        newestCursor = response.newestCursor ?: latest.historyWindow.newestCursor,
-                        loadedMessageCount = prepared.orderedMessages.size
-                    ),
-                    isStreaming = prepared.hasActiveStreaming,
-                    isStoppingRun = if (prepared.hasActiveStreaming) latest.isStoppingRun else false
-                )
-            )
-            clearStreamingPointersIfResolved(prepared.orderedMessages)
-        } catch (e: CancellationException) {
-            val latest = getState()
-            if (latest.currentGatewayId == normalizedGatewayId &&
-                sameSessionKey(latest.currentSessionKey, normalizedSessionKey)
+            while (currentScopeGeneration() == requestGeneration &&
+                matchesRequestedChatScope(getState(), normalizedGatewayId, normalizedSessionKey)
             ) {
-                setState(latest.copy(historyWindow = latest.historyWindow.copy(isLoadingOlder = false)))
+                val (prepared, preparedMutationRevision) = prepareStableHistoryMerge(
+                    response = response,
+                    windowMode = HistoryWindowMode.OLDER,
+                    replaceExistingTimelineState = false,
+                    expectedGeneration = requestGeneration
+                ) ?: return
+                val latest = getState()
+                if (currentScopeGeneration() != requestGeneration ||
+                    !matchesRequestedChatScope(latest, normalizedGatewayId, normalizedSessionKey)
+                ) return
+                if (currentMutationRevision() != preparedMutationRevision) {
+                    if (!awaitHistoryPrepareReady(requestGeneration, currentMutationRevision())) return
+                    continue
+                }
+                applySnapshotReduction(prepared.snapshotReduction)
+                setState(
+                    latest.copy(
+                        messages = prepared.orderedMessages,
+                        historyWindow = latest.historyWindow.copy(
+                            isLoadingOlder = false,
+                            hasOlder = response.hasMore,
+                            olderCursor = response.nextCursor,
+                            newestCursor = response.newestCursor ?: latest.historyWindow.newestCursor,
+                            loadedMessageCount = prepared.orderedMessages.size
+                        ),
+                        isStreaming = prepared.hasActiveStreaming,
+                        isStoppingRun = if (prepared.hasActiveStreaming) latest.isStoppingRun else false
+                    )
+                )
+                clearStreamingPointersIfResolved(prepared.orderedMessages)
+                val updatedTimelineState = getTimelineState().copy(messages = prepared.orderedMessages)
+                setTimelineState(updatedTimelineState)
+                reconcileOutbox(prepared.orderedMessages)
+                noteCanonicalMutation()
+                persistTimelineState(updatedTimelineState, prepared.orderedMessages)
+                break
             }
+        } catch (e: CancellationException) {
+            closeOlderLoadingIfOwned(normalizedGatewayId, normalizedSessionKey, requestScopeKey, requestId)
             throw e
         } catch (e: Exception) {
-            val latest = getState()
-            if (latest.currentGatewayId == normalizedGatewayId &&
-                sameSessionKey(latest.currentSessionKey, normalizedSessionKey)
-            ) {
-                setState(latest.copy(historyWindow = latest.historyWindow.copy(isLoadingOlder = false)))
-            }
+            closeOlderLoadingIfOwned(normalizedGatewayId, normalizedSessionKey, requestScopeKey, requestId)
             logWarning("Older chat history load failed for $normalizedGatewayId/$normalizedSessionKey", e)
+        } finally {
+            // generation 变化会让 prepare/await 提前退出，但 loading owner 仍然
+            // 必须释放；只按 request owner + 当前显示 scope 收口，避免旧请求
+            // 误清一个已经接管同 scope 的新翻页请求。
+            closeOlderLoadingIfOwned(normalizedGatewayId, normalizedSessionKey, requestScopeKey, requestId)
         }
     }
 
@@ -237,6 +339,7 @@ internal class ChatHistoryCoordinator(
         val normalizedGatewayId = gatewayId.trim()
         val normalizedSessionKey = normalizeSessionKey(sessionKey)
         if (normalizedGatewayId.isBlank() || normalizedSessionKey.isBlank()) return
+        val requestGeneration = currentScopeGeneration()
         var cursor: String? = null
         var pageCount = 0
         try {
@@ -260,25 +363,40 @@ internal class ChatHistoryCoordinator(
                     )
                 }
                 val current = getState()
-                if (current.currentGatewayId != normalizedGatewayId ||
+                if (currentScopeGeneration() != requestGeneration ||
+                    current.currentGatewayId != normalizedGatewayId ||
                     !sameSessionKey(current.currentSessionKey, normalizedSessionKey)
                 ) {
                     return
                 }
-                val prepared = prepareHistoryMerge(
+                var preparedAtRevision = prepareStableHistoryMerge(
                     response = response,
-                    currentState = current,
-                    timelineState = getTimelineState(),
-                    knownV3Sessions = v3Sessions.toSet(),
-                    activeStreamingMessageId = currentStreamingMessageId(),
-                    trackedPendingAssistantMessageIds = trackedPendingAssistantMessageIds(current.messages),
-                    windowMode = HistoryWindowMode.NEWEST
-                )
+                    windowMode = HistoryWindowMode.NEWEST,
+                    replaceExistingTimelineState = false,
+                    expectedGeneration = requestGeneration
+                ) ?: return
+                while (currentMutationRevision() != preparedAtRevision.second) {
+                    if (!awaitHistoryPrepareReady(requestGeneration, currentMutationRevision())) return
+                    if (currentScopeGeneration() != requestGeneration ||
+                        !matchesRequestedChatScope(getState(), normalizedGatewayId, normalizedSessionKey)
+                    ) return
+                    preparedAtRevision = prepareStableHistoryMerge(
+                        response = response,
+                        windowMode = HistoryWindowMode.NEWEST,
+                        replaceExistingTimelineState = false,
+                        expectedGeneration = requestGeneration
+                    ) ?: return
+                }
+                val (prepared, _) = preparedAtRevision
+                if (currentScopeGeneration() != requestGeneration ||
+                    !matchesRequestedChatScope(getState(), normalizedGatewayId, normalizedSessionKey)
+                ) return
+                val latest = getState()
                 applySnapshotReduction(prepared.snapshotReduction)
                 setState(
-                    current.copy(
+                    latest.copy(
                         messages = prepared.orderedMessages,
-                        historyWindow = current.historyWindow.copy(
+                        historyWindow = latest.historyWindow.copy(
                             isCatchingUp = true,
                             hasOlder = response.hasMore,
                             olderCursor = response.nextCursor,
@@ -286,10 +404,15 @@ internal class ChatHistoryCoordinator(
                             loadedMessageCount = prepared.orderedMessages.size
                         ),
                         isStreaming = prepared.hasActiveStreaming,
-                        isStoppingRun = if (prepared.hasActiveStreaming) current.isStoppingRun else false
+                        isStoppingRun = if (prepared.hasActiveStreaming) latest.isStoppingRun else false
                     )
                 )
                 clearStreamingPointersIfResolved(prepared.orderedMessages)
+                val updatedTimelineState = getTimelineState().copy(messages = prepared.orderedMessages)
+                setTimelineState(updatedTimelineState)
+                reconcileOutbox(prepared.orderedMessages)
+                noteCanonicalMutation()
+                persistTimelineState(updatedTimelineState, prepared.orderedMessages)
                 logDebug("Silent chat final sync merged page ${pageCount + 1} with ${response.items.size} history items")
                 pageCount += 1
                 cursor = response.nextCursor
@@ -326,6 +449,75 @@ internal class ChatHistoryCoordinator(
         if (reduction == null) return
         setTimelineState(reduction.timelineState)
         v3Sessions.addAll(reduction.v3SessionKeys)
+    }
+
+    private fun canCommitNewestRequest(
+        gatewayId: String,
+        sessionKey: String,
+        generation: Long,
+        requestScopeKey: String,
+        requestId: Long
+    ): Boolean {
+        val isLatest = synchronized(latestNewestRequestByScope) {
+            latestNewestRequestByScope[requestScopeKey] == requestId
+        }
+        return isLatest &&
+            currentScopeGeneration() == generation &&
+            matchesRequestedChatScope(getState(), gatewayId, sessionKey)
+    }
+
+    private fun closeOlderLoadingIfOwned(
+        gatewayId: String,
+        sessionKey: String,
+        requestScopeKey: String,
+        requestId: Long
+    ) {
+        synchronized(latestOlderRequestByScope) {
+            if (latestOlderRequestByScope[requestScopeKey] != requestId) return
+            val latest = getState()
+            if (matchesRequestedChatScope(latest, gatewayId, sessionKey) &&
+                latest.historyWindow.isLoadingOlder
+            ) {
+                setState(latest.copy(historyWindow = latest.historyWindow.copy(isLoadingOlder = false)))
+            }
+            latestOlderRequestByScope.remove(requestScopeKey)
+        }
+    }
+
+    private suspend fun prepareStableHistoryMerge(
+        response: ChatHistoryResponse,
+        windowMode: HistoryWindowMode,
+        replaceExistingTimelineState: Boolean? = null,
+        expectedGeneration: Long
+    ): Pair<PreparedHistoryMerge, Long>? {
+        while (currentScopeGeneration() == expectedGeneration) {
+            val revisionBefore = currentMutationRevision()
+            val current = getState()
+            val prepared = prepareHistoryMerge(
+                response = response,
+                currentState = current,
+                timelineState = getTimelineState(),
+                knownV3Sessions = v3Sessions.toSet(),
+                activeStreamingMessageId = currentStreamingMessageId(),
+                trackedPendingAssistantMessageIds = trackedPendingAssistantMessageIds(current.messages),
+                replaceExistingTimelineState = replaceExistingTimelineState
+                    ?: shouldReplaceTimelineState(
+                        response = response,
+                        currentMessages = current.messages
+                    ),
+                windowMode = windowMode
+            )
+            historyPrepareAttemptHook?.invoke()
+            if (currentMutationRevision() == revisionBefore) {
+                return prepared to revisionBefore
+            }
+            val conflictedRevision = currentMutationRevision()
+            // 契约：HTTP response 已经返回后绝不因本地流式 mutation 丢弃，也
+            // 不重新请求网络。等待 StateFlow 明确报告 streaming 结束（或 scope
+            // generation 变化），再用同一 response 和新的 revision 重新 prepare。
+            if (!awaitHistoryPrepareReady(expectedGeneration, conflictedRevision)) return null
+        }
+        return null
     }
 
     private suspend fun prepareHistoryMerge(

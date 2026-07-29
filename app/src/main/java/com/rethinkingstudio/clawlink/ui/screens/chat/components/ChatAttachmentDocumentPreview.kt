@@ -123,6 +123,7 @@ internal fun DocumentFullscreenOverlay(
     var showTopMenu by remember(resolvedCacheKey) { mutableStateOf(false) }
     var isLoading by remember(resolvedCacheKey) { mutableStateOf(true) }
     var didFail by remember(resolvedCacheKey) { mutableStateOf(false) }
+    var serverCleaned by remember(resolvedCacheKey) { mutableStateOf(RemoteAttachmentCache.isServerExpired(resolvedCacheKey)) }
     var localFile by remember(resolvedCacheKey) { mutableStateOf(RemoteAttachmentCache.cachedFile(resolvedCacheKey)) }
     var textPreview by remember(resolvedCacheKey) { mutableStateOf<String?>(null) }
     var docxPreview by remember(resolvedCacheKey) { mutableStateOf<String?>(null) }
@@ -131,10 +132,15 @@ internal fun DocumentFullscreenOverlay(
     LaunchedEffect(resolvedCacheKey, url, accessToken, fileName) {
         isLoading = true
         didFail = false
+        serverCleaned = RemoteAttachmentCache.isServerExpired(resolvedCacheKey)
         try {
             val downloaded = withContext(Dispatchers.IO) {
                 if (localFile?.exists() == true) {
-                    localFile
+                    RemoteAttachmentCache.persistLocalOriginal(
+                        resolvedCacheKey,
+                        fileName ?: localFile?.name,
+                        localFile!!
+                    ) ?: localFile
                 } else {
                     downloadDocumentToCache(
                         url = url,
@@ -174,6 +180,9 @@ internal fun DocumentFullscreenOverlay(
                     withContext(Dispatchers.IO) { loadLegacyPresentationMarkdownPreview(file) }
                 }
             }
+        } catch (_: RemoteAttachmentExpiredException) {
+            serverCleaned = true
+            didFail = true
         } catch (_: Exception) {
             didFail = true
         } finally {
@@ -188,6 +197,13 @@ internal fun DocumentFullscreenOverlay(
             .background(Color(0xFFF7F8FA))
     ) {
         when {
+            serverCleaned -> {
+                UnsupportedDocumentPreview(
+                    fileName = fileName,
+                    onDismiss = onDismiss,
+                    reason = choose("The file has been cleaned from the server", "文件已被服务器清理")
+                )
+            }
             didFail -> {
                 UnsupportedDocumentPreview(
                     fileName = fileName,
@@ -408,7 +424,8 @@ private fun DocumentLoadingPreview(title: String, isLoading: Boolean) {
 @Composable
 internal fun UnsupportedDocumentPreview(
     fileName: String?,
-    onDismiss: () -> Unit
+    onDismiss: () -> Unit,
+    reason: String = choose("Native preview is not supported for this file type.", "这个文件类型暂不支持原生预览")
 ) {
     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
         Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -426,7 +443,7 @@ internal fun UnsupportedDocumentPreview(
                 overflow = TextOverflow.Ellipsis
             )
             Text(
-                text = choose("Native preview is not supported for this file type.", "这个文件类型暂不支持原生预览"),
+                text = reason,
                 style = MaterialTheme.typography.bodySmall,
                 color = Color(0xFF6B7280)
             )

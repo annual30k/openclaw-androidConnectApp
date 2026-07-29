@@ -93,12 +93,21 @@ internal fun ensureDocumentFile(
     fileName: String?
 ): File? {
     localFile?.takeIf { it.exists() }?.let { return it }
-    return downloadDocumentToCache(
-        url = url,
-        accessToken = accessToken,
-        cacheKey = cacheKey,
-        fileName = fileName
-    ) ?: RemoteAttachmentCache.cachedFile(cacheKey)
+    return try {
+        downloadDocumentToCache(
+            url = url,
+            accessToken = accessToken,
+            cacheKey = cacheKey,
+            fileName = fileName
+        ) ?: RemoteAttachmentCache.cachedFile(cacheKey)
+    } catch (_: RemoteAttachmentExpiredException) {
+        Toast.makeText(
+            context,
+            choose("The file has been cleaned from the server", "文件已被服务器清理"),
+            Toast.LENGTH_SHORT
+        ).show()
+        null
+    }
 }
 
 internal fun resolveDocumentMimeType(fileName: String?, mimeType: String?): String {

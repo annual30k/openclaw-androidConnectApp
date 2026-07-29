@@ -17,6 +17,11 @@ import com.rethinkingstudio.clawlink.core.state.auth.AuthStore
 import com.rethinkingstudio.clawlink.core.state.backup.BackupStore
 import com.rethinkingstudio.clawlink.core.state.chat.ChatStore
 import com.rethinkingstudio.clawlink.core.state.chat.ChatSessionSelectionStore
+import com.rethinkingstudio.clawlink.core.state.chat.RemoteAttachmentCache
+import com.rethinkingstudio.clawlink.core.state.chat.RemoteImageCache
+import com.rethinkingstudio.clawlink.core.state.chat.RemoteImageSizeCache
+import com.rethinkingstudio.clawlink.core.state.chat.TimelinePersistenceMiddleware
+import com.rethinkingstudio.clawlink.core.state.chat.VoicePlaybackReadStore
 import com.rethinkingstudio.clawlink.core.state.gateway.GatewayStore
 import com.rethinkingstudio.clawlink.core.state.model.ModelStore
 import com.rethinkingstudio.clawlink.core.state.skill.SkillStore
@@ -113,6 +118,15 @@ class SecureCredentialStore(private val context: Context) : CredentialStore {
 }
 
 class AppContainer(context: Context) {
+    init {
+        // ChatScreen 冷启动前必须初始化进程级存储，消除旧实现中 hydrate 与 connect 的启动竞争。
+        RemoteImageSizeCache.init(context.applicationContext)
+        RemoteImageCache.init(context.applicationContext)
+        RemoteAttachmentCache.init(context.applicationContext)
+        VoicePlaybackReadStore.init(context.applicationContext)
+        TimelinePersistenceMiddleware.init(context.applicationContext)
+    }
+
     val credentialStore: CredentialStore = SecureCredentialStore(context)
     val apiClient: RelayAPIClient = RelayAPIClient()
     val wsClient: RelayWebSocketClient = RelayWebSocketClient()

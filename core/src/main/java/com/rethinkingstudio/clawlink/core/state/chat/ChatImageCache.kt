@@ -4,6 +4,7 @@ import android.content.Context
 import android.content.SharedPreferences
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.util.AtomicFile
 import androidx.collection.LruCache
 import com.rethinkingstudio.clawlink.core.models.chat.RelayChatContentBlock
 import java.io.File
@@ -11,7 +12,7 @@ import java.security.MessageDigest
 import java.util.concurrent.ConcurrentHashMap
 
 object RemoteImageCache {
-    private const val CACHE_DIR_NAME = "clawlink_chat_remote_images"
+    private const val CACHE_DIR_NAME = "clawlink_chat_image_thumbnails"
     private const val CACHE_FILE_SUFFIX = ".png"
     private val cache = LruCache<String, Bitmap>(64)
     private val initializedContexts = ConcurrentHashMap.newKeySet<String>()
@@ -37,8 +38,8 @@ object RemoteImageCache {
         val file = cacheFileForKey(key) ?: return
         runCatching {
             file.parentFile?.mkdirs()
-            file.outputStream().use { output ->
-                bitmap.compress(Bitmap.CompressFormat.PNG, 100, output)
+            atomicWrite(file) { output ->
+                check(bitmap.compress(Bitmap.CompressFormat.PNG, 100, output))
             }
         }
     }
@@ -88,7 +89,9 @@ object RemoteImageCache {
 
     private fun baseCacheDir(): File? {
         val context = appContext ?: return null
-        return File(context.cacheDir, CACHE_DIR_NAME)
+        // 缩略图属于持久附件记录，存入 filesDir 后不会因进程退出或普通 cache 淘汰而消失，
+        // 即使服务端原文件已清理，仍可展示本地缩略图。
+        return File(context.filesDir, CACHE_DIR_NAME)
     }
 
     private fun sessionScopeKey(gatewayId: String, sessionKey: String): String? {
@@ -120,6 +123,9 @@ object RemoteAttachmentCache {
     private const val CACHE_FILE_SUFFIX = ".bin"
     private const val META_PREFS = "clawlink_chat_remote_file_meta"
     private const val EXT_PREFIX = "ext:"
+    private const val LOCAL_EXT_PREFIX = "local-ext:"
+    private const val SERVER_EXPIRED_PREFIX = "server-expired:"
+    private const val LOCAL_DIR_NAME = "clawlink_chat_local_files"
     private val initializedContexts = ConcurrentHashMap.newKeySet<String>()
     @Volatile private var appContext: Context? = null
     @Volatile private var prefs: SharedPreferences? = null
@@ -133,6 +139,7 @@ object RemoteAttachmentCache {
     }
 
     fun cachedFile(key: String): File? {
+        localOriginal(key)?.let { return it }
         val file = cacheFileForKey(key, extensionForKey(key))
         if (file?.exists() == true) return file
         return cacheDirectory()?.listFiles()?.firstOrNull { candidate ->
@@ -140,20 +147,69 @@ object RemoteAttachmentCache {
         }
     }
 
+    fun localOriginal(key: String): File? {
+        val file = localFileForKey(key, prefs?.getString(localExtensionPrefsKey(key), null))
+        if (file?.exists() == true) return file
+        return localDirectory()?.listFiles()?.firstOrNull { candidate ->
+            candidate.nameWithoutExtension == sha256(key)
+        }
+    }
+
+    fun persistLocalOriginal(key: String, fileName: String?, source: File): File? {
+        if (!source.exists() || !source.isFile) return null
+        val target = localFileForKey(key, extensionFromName(fileName)) ?: return null
+        return runCatching {
+            target.parentFile?.mkdirs()
+            if (source.canonicalPath != target.canonicalPath) {
+                val written = atomicWrite(target) { output ->
+                    source.inputStream().use { input -> input.copyTo(output) }
+                }
+                if (!written) return@runCatching null
+            }
+            prefs?.edit()
+                ?.putString(localExtensionPrefsKey(key), target.extension.ifBlank { "bin" })
+                ?.commit()
+            target
+        }.getOrNull()?.takeIf { it.exists() }
+    }
+
+    fun persistDownloadedOriginal(key: String, fileName: String?, bytes: ByteArray): File? {
+        val target = localFileForKey(key, extensionFromName(fileName)) ?: return null
+        return runCatching {
+            target.parentFile?.mkdirs()
+            if (!atomicWrite(target) { output -> output.write(bytes) }) return@runCatching null
+            prefs?.edit()
+                ?.putString(localExtensionPrefsKey(key), target.extension.ifBlank { "bin" })
+                ?.commit()
+            target
+        }.getOrNull()?.takeIf { it.exists() }
+    }
+
+    fun markServerExpired(key: String) {
+        prefs?.edit()?.putBoolean(serverExpiredPrefsKey(key), true)?.apply()
+    }
+
+    fun isServerExpired(key: String): Boolean = prefs?.getBoolean(serverExpiredPrefsKey(key), false) == true
+
     fun put(key: String, fileName: String?, bytes: ByteArray): File? {
         val file = cacheFileForKey(key, extensionFromName(fileName))
         if (file == null) return null
         runCatching {
             file.parentFile?.mkdirs()
-            file.outputStream().use { output -> output.write(bytes) }
+            if (!atomicWrite(file) { output -> output.write(bytes) }) return@runCatching
             prefs?.edit()?.putString(extensionPrefsKey(key), file.extension.ifBlank { "bin" })?.apply()
         }
         return file.takeIf { it.exists() }
     }
 
     fun remove(key: String) {
-        cachedFile(key)?.delete()
-        prefs?.edit()?.remove(extensionPrefsKey(key))?.apply()
+        cacheFileForKey(key, extensionForKey(key))?.delete()
+        localOriginal(key)?.delete()
+        prefs?.edit()
+            ?.remove(extensionPrefsKey(key))
+            ?.remove(localExtensionPrefsKey(key))
+            ?.remove(serverExpiredPrefsKey(key))
+            ?.apply()
         cacheDirectory()?.listFiles()?.filter { it.nameWithoutExtension == sha256(key) }?.forEach { it.delete() }
     }
 
@@ -165,6 +221,12 @@ object RemoteAttachmentCache {
             sharedPrefs.all.keys
                 .filter { it.startsWith(EXT_PREFIX + cachePrefix) }
                 .forEach { editor.remove(it) }
+            sharedPrefs.all.keys
+                .filter {
+                    it.startsWith(LOCAL_EXT_PREFIX + cachePrefix) ||
+                        it.startsWith(SERVER_EXPIRED_PREFIX + cachePrefix)
+                }
+                .forEach { editor.remove(it) }
             editor.apply()
         }
         cacheDirectory()?.listFiles()?.filter { candidate ->
@@ -172,6 +234,7 @@ object RemoteAttachmentCache {
         }?.forEach { it.delete() }
         val scopeDir = cacheScopeDir(scopeKey)
         scopeDir.deleteRecursively()
+        localScopeDir(scopeKey).deleteRecursively()
     }
 
     private fun cacheFileForKey(key: String, extension: String?): File? {
@@ -187,6 +250,24 @@ object RemoteAttachmentCache {
         return File(context.cacheDir, CACHE_DIR_NAME)
     }
 
+    private fun localFileForKey(key: String, extension: String?): File? {
+        val baseDir = localDirectory() ?: return null
+        val scopeKey = sessionScopeKeyFromCacheKey(key)
+        val scopeDir = if (scopeKey != null) localScopeDir(scopeKey) else File(baseDir, "global")
+        val suffix = extension?.takeIf { it.isNotBlank() }?.let { ".$it" } ?: CACHE_FILE_SUFFIX
+        return File(scopeDir, "${sha256(key)}$suffix")
+    }
+
+    private fun localDirectory(): File? {
+        val context = appContext ?: return null
+        return File(context.filesDir, LOCAL_DIR_NAME)
+    }
+
+    private fun localScopeDir(scopeKey: String): File {
+        val baseDir = localDirectory() ?: error("RemoteAttachmentCache not initialized")
+        return File(baseDir, sha256(scopeKey))
+    }
+
     private fun cacheScopeDir(scopeKey: String): File {
         val baseDir = cacheDirectory() ?: error("RemoteAttachmentCache not initialized")
         return File(baseDir, sha256(scopeKey))
@@ -197,6 +278,8 @@ object RemoteAttachmentCache {
     }
 
     private fun extensionPrefsKey(key: String): String = "$EXT_PREFIX$key"
+    private fun localExtensionPrefsKey(key: String): String = "$LOCAL_EXT_PREFIX$key"
+    private fun serverExpiredPrefsKey(key: String): String = "$SERVER_EXPIRED_PREFIX$key"
 
     private fun extensionFromName(fileName: String?): String? {
         val normalized = fileName?.substringAfterLast('.', missingDelimiterValue = "")?.trim()?.lowercase().orEmpty()
@@ -320,10 +403,25 @@ fun RelayChatContentBlock.chatImageScopeKey(): String? {
 
 fun RelayChatContentBlock.chatImageAssetKey(): String? {
     return fileId?.trim()?.takeIf { it.isNotEmpty() }
+        ?: attachmentId?.trim()?.takeIf { it.isNotEmpty() }
         ?: fileDownloadURLString?.trim()?.takeIf { it.isNotEmpty() }
         ?: downloadPath?.trim()?.takeIf { it.isNotEmpty() }
 }
 
 fun RelayChatContentBlock.chatAttachmentCacheKey(): String? {
     return chatImageCacheKey()
+}
+
+private fun atomicWrite(file: File, writer: (java.io.FileOutputStream) -> Unit): Boolean {
+    val atomicFile = AtomicFile(file)
+    var output: java.io.FileOutputStream? = null
+    return try {
+        output = atomicFile.startWrite()
+        writer(output)
+        atomicFile.finishWrite(output)
+        true
+    } catch (_: Exception) {
+        output?.let(atomicFile::failWrite)
+        false
+    }
 }

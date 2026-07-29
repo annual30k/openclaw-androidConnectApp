@@ -43,6 +43,9 @@ internal suspend fun ChatStore.loadSessionsForGateway(gatewayId: String): Boolea
             historyWindow = if (isNewGateway || selected != current) ChatHistoryWindowState() else currentState.historyWindow,
             errorMessage = null
         )
+        if (isNewGateway || selected != current) {
+            advanceTimelineScopeGeneration()
+        }
         return true
     } catch (e: CancellationException) {
         val currentState = _state.value
@@ -91,6 +94,7 @@ internal fun ChatStore.beginGatewaySwitchSelection(gatewayId: String) {
         historyWindow = ChatHistoryWindowState(),
         errorMessage = null
     )
+    advanceTimelineScopeGeneration()
     clearActiveRunState(clearStoppedRuns = true)
 }
 
@@ -109,6 +113,7 @@ internal fun ChatStore.selectChatSession(sessionKey: String) {
         historyWindow = ChatHistoryWindowState(),
         errorMessage = null
     )
+    advanceTimelineScopeGeneration()
     clearActiveRunState(clearStoppedRuns = false)
 }
 
@@ -133,6 +138,7 @@ internal fun ChatStore.createChatSession(sessionKey: String? = null): String {
         historyWindow = ChatHistoryWindowState(),
         errorMessage = null
     )
+    advanceTimelineScopeGeneration()
     current.currentGatewayId?.let { gatewayId ->
         persistSelectedSession(gatewayId, key)
     }
@@ -148,6 +154,8 @@ internal fun ChatStore.clearChatMessages() {
         isStreaming = false,
         historyWindow = ChatHistoryWindowState()
     )
+    activeTimelinePersistenceScope()?.let(TimelinePersistenceMiddleware::clearSnapshot)
+    advanceTimelineScopeGeneration()
     clearActiveRunState(clearStoppedRuns = true)
 }
 

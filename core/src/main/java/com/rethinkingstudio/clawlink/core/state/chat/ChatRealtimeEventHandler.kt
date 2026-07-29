@@ -110,7 +110,9 @@ private fun ChatStore.applyTimelineEvents(events: List<TimelineEvent>) {
         isStoppingRun = if (hasActiveVisibleRun) _state.value.isStoppingRun else false
     )
     clearStreamingPointersIfResolved(ordered)
-    persistOrClearTimelineSnapshot(timelineState, ordered)
+    noteCanonicalTimelineMutation()
+    reconcileTimelineOutbox(ordered)
+    persistCurrentTimelineSnapshot(timelineState, ordered)
 }
 
 private fun ChatStore.handleAgentPayload(payload: JsonElement?) {

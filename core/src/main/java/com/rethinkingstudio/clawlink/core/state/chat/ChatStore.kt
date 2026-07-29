@@ -30,6 +30,8 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
@@ -47,6 +49,17 @@ internal typealias ChatHistoryPageFetcher = suspend (
     cursor: String?,
     direction: String
 ) -> ChatHistoryResponse
+
+private data class TimelineMutationSignal(
+    val generation: Long,
+    val revision: Long
+)
+
+private data class CanonicalHistoryReconcileRequest(
+    val gatewayId: String,
+    val sessionKey: String,
+    val generation: Long
+)
 
 class ChatStore(
     internal val apiClient: RelayAPIClient,
@@ -69,8 +82,20 @@ class ChatStore(
     internal val abortRequestIds = mutableSetOf<String>()
     internal val locallyStoppedRunIds = mutableSetOf<String>()
     private val chatFinalSyncJobs = mutableMapOf<String, Job>()
+    private val timelineMutationSignal = MutableStateFlow(TimelineMutationSignal(0L, 0L))
+    private val canonicalHistoryReconcileLock = Any()
+    private var pendingCanonicalHistoryReconcile: CanonicalHistoryReconcileRequest? = null
+    private var canonicalHistoryReconcileInFlight = false
     internal var ignoreRunlessStoppedEventsUntilMs: Long = 0
     internal var timelineState = ChatTimelineState()
+    internal var timelineScopeGeneration: Long = 0L
+        private set
+    internal var timelineMutationRevision: Long = 0L
+        private set
+    internal var timelineSnapshotRevision: String? = null
+    internal var timelineHighWatermark: Long? = null
+    internal val timelineOutbox = linkedMapOf<String, TimelineOutboxEntry>()
+    internal var historyPrepareAttemptHookForTest: (() -> Unit)? = null
     private val v3Sessions = mutableSetOf<String>()
     private val historyCoordinator = ChatHistoryCoordinator(
         apiClient = apiClient,
@@ -85,6 +110,28 @@ class ChatStore(
         clearStreamingPointersIfResolved = ::clearStreamingPointersIfResolved,
         orderedMessages = ::orderedMessages,
         persistSelectedSession = ::persistSelectedSession,
+        currentScopeGeneration = { timelineScopeGeneration },
+        currentMutationRevision = { timelineMutationRevision },
+        noteCanonicalMutation = ::noteCanonicalTimelineMutation,
+        persistTimelineState = { nextTimelineState, messages ->
+            persistCurrentTimelineSnapshot(nextTimelineState, messages)
+        },
+        reconcileOutbox = ::reconcileTimelineOutbox,
+        canAcceptSnapshotVersion = { incoming ->
+            shouldAcceptTimelineSnapshotVersion(
+                current = TimelineSnapshotVersion(timelineSnapshotRevision, timelineHighWatermark),
+                incoming = incoming
+            )
+        },
+        recordSnapshotVersion = { incoming ->
+            timelineSnapshotRevision = incoming.revision ?: timelineSnapshotRevision
+            timelineHighWatermark = maxOf(
+                timelineHighWatermark ?: Long.MIN_VALUE,
+                incoming.highWatermark ?: Long.MIN_VALUE
+            ).takeUnless { it == Long.MIN_VALUE }
+        },
+        awaitHistoryPrepareReady = ::awaitHistoryPrepareReady,
+        historyPrepareAttemptHook = { historyPrepareAttemptHookForTest?.invoke() },
         needsChatFinalSync = ::needsChatFinalSync,
         pageSize = chatHistoryPageSize,
         windowMaxMessages = chatHistoryWindowMaxMessages,
@@ -116,13 +163,30 @@ class ChatStore(
         val hasActiveVisibleRun: Boolean
     )
 
-    suspend fun rehydrateTimelineState() {
+    suspend fun rehydrateTimelineState(gatewayId: String, sessionKey: String) {
+        val expectedScope = activeTimelinePersistenceScope(gatewayId, sessionKey) ?: return
+        val expectedGeneration = timelineScopeGeneration
+        val expectedMutationRevision = timelineMutationRevision
         // 启动页会在主线程进入这里；SharedPreferences + JSON 反序列化 + 排序必须放到后台，
         // 否则大历史会话会把首屏聊天页卡在 Compose 主线程上。
-        val prepared = withContext(Dispatchers.IO) {
-            val restored = TimelinePersistenceMiddleware.restoreSnapshot() ?: return@withContext null
-            prepareTimelineRehydration(restored, _state.value.currentSessionKey)
+        val restoredSnapshot = withContext(Dispatchers.IO) {
+            TimelinePersistenceMiddleware.restoreSnapshot(expectedScope)
         } ?: return
+        val prepared = withContext(Dispatchers.Default) {
+            prepareTimelineRehydration(restoredSnapshot.restoredTimelineState(), expectedScope.sessionKey)
+        }
+        // 磁盘恢复可能晚于网关/会话切换、WebSocket 事件、本地发送或历史提交；
+        // 迟到的旧磁盘快照绝不能覆盖更新的内存时间线。
+        if (!isCurrentTimelineScope(expectedScope) ||
+            timelineScopeGeneration != expectedGeneration ||
+            timelineMutationRevision != expectedMutationRevision
+        ) {
+            return
+        }
+        timelineOutbox.clear()
+        restoredSnapshot.outbox.forEach { entry -> timelineOutbox[entry.idempotencyKey] = entry }
+        timelineSnapshotRevision = restoredSnapshot.snapshotRevision
+        timelineHighWatermark = restoredSnapshot.highWatermark
         applyPreparedTimelineRehydration(prepared)
     }
 
@@ -149,10 +213,150 @@ class ChatStore(
             isStreaming = prepared.hasActiveVisibleRun,
             isStoppingRun = if (prepared.hasActiveVisibleRun) _state.value.isStoppingRun else false
         )
+        val currentGatewayId = _state.value.currentGatewayId?.trim().orEmpty()
+        val currentSessionKey = normalizeSessionKey(_state.value.currentSessionKey)
+        prepared.orderedMessages
+            .filter { message -> message.role == MessageRole.assistant && message.state == MessageState.streaming }
+            .forEach { message ->
+                val restoredRunId = message.runId.trim().takeIf { it.isNotEmpty() } ?: message.id
+                val restoredRunScope = ChatRunScope(
+                    gatewayId = currentGatewayId,
+                    sessionKey = currentSessionKey,
+                    assistantMessageId = message.id,
+                    triggeringUserMessageId = triggeringUserMessageIdBefore(message, prepared.orderedMessages)
+                )
+                rememberRunScope(restoredRunId, restoredRunScope)
+                timelineOutbox[restoredRunId]?.let { outbox -> rememberRunScope(outbox.requestId, restoredRunScope) }
+                streamingMessageId = message.id
+                streamingContent.clear()
+                streamingContent.append(message.content)
+            }
+        noteCanonicalTimelineMutation()
+    }
+
+    internal fun activeTimelinePersistenceScope(
+        gatewayId: String? = _state.value.currentGatewayId,
+        sessionKey: String = _state.value.currentSessionKey
+    ): TimelinePersistenceScope? {
+        val normalizedGatewayId = gatewayId?.trim().orEmpty()
+        if (normalizedGatewayId.isBlank() || apiClient.baseUrl.isBlank() || apiClient.accessToken.isBlank()) return null
+        return timelinePersistenceScope(
+            baseUrl = apiClient.baseUrl,
+            accessToken = apiClient.accessToken,
+            gatewayId = normalizedGatewayId,
+            sessionKey = sessionKey
+        )
+    }
+
+    internal fun isCurrentTimelineScope(scope: TimelinePersistenceScope): Boolean {
+        return activeTimelinePersistenceScope() == scope.normalized()
+    }
+
+    internal fun advanceTimelineScopeGeneration() {
+        timelineScopeGeneration += 1L
+        timelineMutationRevision += 1L
+        timelineMutationSignal.value = TimelineMutationSignal(
+            generation = timelineScopeGeneration,
+            revision = timelineMutationRevision
+        )
+        timelineSnapshotRevision = null
+        timelineHighWatermark = null
+        timelineOutbox.clear()
+    }
+
+    internal fun noteCanonicalTimelineMutation() {
+        timelineMutationRevision += 1L
+        timelineMutationSignal.value = TimelineMutationSignal(
+            generation = timelineScopeGeneration,
+            revision = timelineMutationRevision
+        )
     }
 
     private fun handleWsEvent(event: WsEvent) {
+        if (event.type.equals("hello", ignoreCase = true) ||
+            event.type.equals("ready", ignoreCase = true) ||
+            event.event.equals("hello", ignoreCase = true) ||
+            event.event.equals("ready", ignoreCase = true)
+        ) {
+            requestCanonicalHistoryReconcileAfterHello()
+        }
         handleRealtimeWsEvent(event)
+    }
+
+    internal fun requestCanonicalHistoryReconcileAfterHello() {
+        val current = _state.value
+        val gatewayId = current.currentGatewayId?.trim().orEmpty()
+        val sessionKey = normalizeSessionKey(current.currentSessionKey)
+        if (gatewayId.isBlank() || sessionKey.isBlank()) return
+        val request = CanonicalHistoryReconcileRequest(
+            gatewayId = gatewayId,
+            sessionKey = sessionKey,
+            generation = timelineScopeGeneration
+        )
+        val shouldStart = synchronized(canonicalHistoryReconcileLock) {
+            pendingCanonicalHistoryReconcile = request
+            if (canonicalHistoryReconcileInFlight) {
+                false
+            } else {
+                canonicalHistoryReconcileInFlight = true
+                true
+            }
+        }
+        if (shouldStart) scope.launch { drainCanonicalHistoryReconciles() }
+    }
+
+    private suspend fun drainCanonicalHistoryReconciles() {
+        try {
+            while (true) {
+                val request = synchronized(canonicalHistoryReconcileLock) {
+                    pendingCanonicalHistoryReconcile?.also {
+                        pendingCanonicalHistoryReconcile = null
+                    }
+                } ?: return
+                if (timelineScopeGeneration != request.generation ||
+                    !matchesCurrentStoreScope(request.gatewayId, request.sessionKey)
+                ) continue
+                // Relay 的 hello/ready 是 session 注册完成后的确定性屏障。
+                // 只在真实协议事件后读取权威 HTTP 历史，不用 socket open
+                // 或定时器猜测注册是否完成，也不猜测连续 seq 区间。
+                historyCoordinator.loadHistory(
+                    gatewayId = request.gatewayId,
+                    sessionKey = request.sessionKey,
+                    limit = chatHistoryPageSize,
+                    keepSwitchingOverlay = false
+                )
+            }
+        } finally {
+            val shouldRestart = synchronized(canonicalHistoryReconcileLock) {
+                canonicalHistoryReconcileInFlight = false
+                if (pendingCanonicalHistoryReconcile != null) {
+                    canonicalHistoryReconcileInFlight = true
+                    true
+                } else {
+                    false
+                }
+            }
+            if (shouldRestart) scope.launch { drainCanonicalHistoryReconciles() }
+        }
+    }
+
+    private suspend fun awaitHistoryPrepareReady(
+        expectedGeneration: Long,
+        conflictedRevision: Long
+    ): Boolean {
+        val signal = timelineMutationSignal
+            .combine(_state) { mutation, state -> mutation to state.isStreaming }
+            .first { (mutation, isStreaming) ->
+                mutation.generation != expectedGeneration ||
+                    (mutation.revision >= conflictedRevision && !isStreaming)
+            }
+            .first
+        return signal.generation == expectedGeneration
+    }
+
+    private fun matchesCurrentStoreScope(gatewayId: String, sessionKey: String): Boolean {
+        val current = _state.value
+        return current.currentGatewayId == gatewayId && sameSessionKey(current.currentSessionKey, sessionKey)
     }
 
     private fun handleChatPayload(payload: JsonElement?) {
@@ -216,7 +420,8 @@ class ChatStore(
                 .filterKeys { activeRunId -> activeRunId !in runIdsToClear }
                 .filterValues { turnId -> turnId !in turnIdsToClear }
         )
-        persistOrClearTimelineSnapshot(timelineState, ordered)
+        noteCanonicalTimelineMutation()
+        persistCurrentTimelineSnapshot(timelineState, ordered)
     }
 
     internal fun scheduleChatFinalSync(runId: String, runScope: ChatRunScope?, attempt: Int = 0) {
@@ -322,7 +527,8 @@ class ChatStore(
 
     internal fun resetCurrentTimelineScope() {
         timelineState = ChatTimelineState()
-        TimelinePersistenceMiddleware.clearSnapshot()
+        timelineOutbox.clear()
+        noteCanonicalTimelineMutation()
     }
 
     internal fun clearStreamingPointersIfResolved(messages: List<ChatMessage>) {
@@ -520,7 +726,8 @@ class ChatStore(
     internal fun syncTimelineMessagesSnapshot(messages: List<ChatMessage>) {
         val snapshotMessages = canonicalizeMessagesForTimelineSnapshot(messages)
         timelineState = timelineState.copy(messages = snapshotMessages)
-        persistOrClearTimelineSnapshot(timelineState, snapshotMessages)
+        noteCanonicalTimelineMutation()
+        persistCurrentTimelineSnapshot(timelineState, snapshotMessages)
     }
 
     fun sendMessage(
@@ -640,6 +847,7 @@ class ChatStore(
         val token = apiClient.accessToken
         if (url.isNotBlank() && token.isNotBlank()) {
             wsClient.connect(url, token)
+            replayPendingTimelineOutbox()
             schedulePendingFinalSyncsForCurrentSession()
         }
     }

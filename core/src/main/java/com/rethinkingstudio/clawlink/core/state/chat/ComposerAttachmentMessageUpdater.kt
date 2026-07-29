@@ -236,10 +236,10 @@ internal object ComposerAttachmentMessageUpdater {
         if (attachmentCacheKey != null) {
             runCatching {
                 if (attachmentFile.exists()) {
-                    RemoteAttachmentCache.put(
+                    RemoteAttachmentCache.persistLocalOriginal(
                         key = attachmentCacheKey,
                         fileName = attachment.fileName,
-                        bytes = attachmentFile.readBytes()
+                        source = attachmentFile
                     )
                 }
             }

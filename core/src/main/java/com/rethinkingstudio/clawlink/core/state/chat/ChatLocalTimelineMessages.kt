@@ -54,17 +54,23 @@ internal fun shouldPersistTimelineSnapshot(
     return snapshotMessages.any { it.hasRestorableLocalTimelineIdentity() }
 }
 
-internal fun persistOrClearTimelineSnapshot(
+internal fun ChatStore.persistCurrentTimelineSnapshot(
     timelineState: ChatTimelineState,
-    messages: List<ChatMessage>
-) {
+    messages: List<ChatMessage>,
+    durablePendingOverlay: Boolean = false
+): Boolean {
     val snapshotMessages = canonicalizeMessagesForTimelineSnapshot(messages)
-    // 仅附件发送没有 assistant streaming run，但当前本地消息仍需跨进程恢复，不能因为“无活跃运行”就清空快照。
-    if (shouldPersistTimelineSnapshot(timelineState, snapshotMessages)) {
-        TimelinePersistenceMiddleware.persistSnapshot(timelineState.copy(messages = snapshotMessages))
-    } else {
-        TimelinePersistenceMiddleware.clearSnapshot()
-    }
+    val persistenceScope = activeTimelinePersistenceScope() ?: return false
+    // 同时保留已确认 canonical 窗口和本地 overlay；进程重启可先渲染最后一个内部一致状态，
+    // 再由权威历史刷新完成收敛。
+    return TimelinePersistenceMiddleware.persistSnapshot(
+        scope = persistenceScope,
+        state = timelineState.copy(messages = snapshotMessages),
+        outbox = timelineOutbox.values.toList(),
+        snapshotRevision = timelineSnapshotRevision,
+        highWatermark = timelineHighWatermark,
+        durablePendingOverlay = durablePendingOverlay
+    )
 }
 
 internal fun buildLocalTextAssistantPlaceholderMessage(

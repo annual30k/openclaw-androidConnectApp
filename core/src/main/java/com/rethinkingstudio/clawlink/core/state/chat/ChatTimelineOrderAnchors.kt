@@ -7,26 +7,26 @@ internal fun ChatTimelineState.completedAssistantOrderKey(
     event: TimelineEvent.MessageCompleted,
     existing: ChatMessage?
 ): String? {
-    if (!event.clearsWaitingAssistant()) return null
-    event.timelineOrderKey
-        ?.trim()
-        ?.takeIf { it.isNotEmpty() && !it.startsWith("local:") }
-        ?.let { return it }
-    existing?.timelineOrderKey
-        ?.trim()
-        ?.takeIf { it.isNotEmpty() && !it.startsWith("local:") }
-        ?.let { return it }
-    return null
+    return preferredTimelineField(event.timelineOrderKey, existing?.timelineOrderKey)
 }
 
 internal fun completedAssistantIdentityKey(
     event: TimelineEvent.MessageCompleted,
     existing: ChatMessage?
 ): String? {
-    return event.timelineIdentityKey?.trim()?.takeIf { it.isNotEmpty() }
-        ?: existing?.timelineIdentityKey?.trim()?.takeIf { it.isNotEmpty() }
+    return preferredTimelineField(event.timelineIdentityKey, existing?.timelineIdentityKey)
         ?: event.runId?.trim()?.takeIf { it.isNotEmpty() }?.let { "local:$it:message:assistant:030-assistant" }
         ?: event.turnId?.trim()?.takeIf { it.isNotEmpty() }?.let { "local:$it:message:assistant:030-assistant" }
+}
+
+private fun preferredTimelineField(incoming: String?, existing: String?): String? {
+    val incomingValue = incoming?.trim()?.takeIf { it.isNotEmpty() }
+    val existingValue = existing?.trim()?.takeIf { it.isNotEmpty() }
+    // canonical chat 与旧 file envelope 重放同一附件时，不能让后到的 local 键降级权威身份与顺序。
+    return incomingValue?.takeUnless { it.startsWith("local:") }
+        ?: existingValue?.takeUnless { it.startsWith("local:") }
+        ?: incomingValue
+        ?: existingValue
 }
 
 internal fun completedAssistantItemKind(

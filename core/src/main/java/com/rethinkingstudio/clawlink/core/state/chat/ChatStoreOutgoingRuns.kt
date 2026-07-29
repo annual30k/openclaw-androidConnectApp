@@ -3,6 +3,7 @@ package com.rethinkingstudio.clawlink.core.state.chat
 import com.rethinkingstudio.clawlink.core.models.chat.RelayChatContentBlock
 import com.rethinkingstudio.clawlink.core.network.transport.RelayChatSendAttachmentPayload
 import com.rethinkingstudio.clawlink.core.network.transport.VoiceSendAudioPayload
+import com.rethinkingstudio.clawlink.core.state.LocalizedText.choose
 import java.util.UUID
 
 internal fun ChatStore.sendTextOutgoingRun(
@@ -45,7 +46,41 @@ internal fun ChatStore.sendTextOutgoingRun(
         activeRunsByTurnId = timelineState.activeRunsByTurnId + (resolvedClientRunId to resolvedClientRunId),
         activeTurnByRunId = timelineState.activeTurnByRunId + (resolvedClientRunId to resolvedClientRunId)
     )
-    TimelinePersistenceMiddleware.persistSnapshot(timelineState)
+    timelineOutbox[resolvedClientRunId] = TimelineOutboxEntry(
+        kind = TimelineOutboxKind.TEXT,
+        clientMessageId = resolvedClientRunId,
+        idempotencyKey = resolvedClientRunId,
+        requestId = requestId,
+        content = content,
+        attachments = commandAttachments.map { attachment ->
+            TimelineOutboxAttachment(
+                fileId = attachment.fileId,
+                fileName = attachment.fileName,
+                mimeType = attachment.mimeType,
+                sizeBytes = attachment.sizeBytes,
+                sha256 = attachment.sha256,
+                sourceRunId = attachment.sourceRunId
+            )
+        },
+        createdAtEpochMs = System.currentTimeMillis()
+    )
+    noteCanonicalTimelineMutation()
+    // WebSocket 命令发出前必须完成持久写；重放复用完全相同的 client/idempotency/request 标识，
+    // 由服务端进行确定性去重。
+    if (!persistCurrentTimelineSnapshot(
+            timelineState,
+            _state.value.messages,
+            durablePendingOverlay = true
+        )
+    ) {
+        _state.value = _state.value.copy(
+            errorMessage = choose(
+                "Message was not sent because local recovery storage is unavailable.",
+                "本地恢复存储暂不可用，消息尚未发送。"
+            )
+        )
+        return
+    }
     scheduleChatFinalSync(resolvedClientRunId, draft.runScope)
     wsClient.sendChatMessage(
         gatewayId = gatewayId,
@@ -93,7 +128,36 @@ internal fun ChatStore.sendVoiceOutgoingRun(
         activeRunsByTurnId = timelineState.activeRunsByTurnId + (clientRunId to clientRunId),
         activeTurnByRunId = timelineState.activeTurnByRunId + (clientRunId to clientRunId)
     )
-    TimelinePersistenceMiddleware.persistSnapshot(timelineState)
+    timelineOutbox[clientRunId] = TimelineOutboxEntry(
+        kind = TimelineOutboxKind.VOICE,
+        clientMessageId = clientRunId,
+        idempotencyKey = clientRunId,
+        requestId = requestId,
+        voice = TimelineOutboxVoice(
+            fileName = audio.fileName,
+            mimeType = audio.mimeType,
+            sizeBytes = audio.sizeBytes,
+            contentBase64 = audio.contentBase64,
+            message = message,
+            languageHint = languageHint
+        ),
+        createdAtEpochMs = System.currentTimeMillis()
+    )
+    noteCanonicalTimelineMutation()
+    if (!persistCurrentTimelineSnapshot(
+            timelineState,
+            _state.value.messages,
+            durablePendingOverlay = true
+        )
+    ) {
+        _state.value = _state.value.copy(
+            errorMessage = choose(
+                "Voice message was not sent because local recovery storage is unavailable.",
+                "本地恢复存储暂不可用，语音消息尚未发送。"
+            )
+        )
+        return
+    }
     scheduleChatFinalSync(clientRunId, draft.runScope)
     wsClient.sendVoiceMessage(
         gatewayId = gatewayId,
@@ -104,6 +168,75 @@ internal fun ChatStore.sendVoiceOutgoingRun(
         idempotencyKey = clientRunId,
         requestId = requestId
     )
+}
+
+internal fun ChatStore.replayPendingTimelineOutbox() {
+    val persistenceScope = activeTimelinePersistenceScope() ?: return
+    if (!isCurrentTimelineScope(persistenceScope)) return
+    if (!TimelinePersistenceMiddleware.persistOutbox(
+            persistenceScope,
+            timelineOutbox.values.toList(),
+            timelineState.messages
+        )
+    ) return
+    timelineOutbox.values.toList().forEach { entry ->
+        when (entry.kind) {
+            TimelineOutboxKind.TEXT -> wsClient.sendChatMessage(
+                gatewayId = persistenceScope.gatewayId,
+                sessionKey = persistenceScope.sessionKey,
+                content = entry.content,
+                attachments = entry.attachments.map { attachment ->
+                    RelayChatSendAttachmentPayload(
+                        fileId = attachment.fileId,
+                        fileName = attachment.fileName,
+                        mimeType = attachment.mimeType,
+                        sizeBytes = attachment.sizeBytes,
+                        sha256 = attachment.sha256,
+                        sourceRunId = attachment.sourceRunId
+                    )
+                },
+                idempotencyKey = entry.idempotencyKey,
+                requestId = entry.requestId
+            )
+            TimelineOutboxKind.VOICE -> entry.voice?.let { voice ->
+                val contentBase64 = TimelinePersistenceMiddleware.resolveVoiceContentBase64(
+                    persistenceScope,
+                    voice
+                ) ?: return@let
+                wsClient.sendVoiceMessage(
+                    gatewayId = persistenceScope.gatewayId,
+                    sessionKey = persistenceScope.sessionKey,
+                    audio = VoiceSendAudioPayload(
+                        fileName = voice.fileName,
+                        mimeType = voice.mimeType,
+                        sizeBytes = voice.sizeBytes,
+                        contentBase64 = contentBase64
+                    ),
+                    message = voice.message,
+                    languageHint = voice.languageHint,
+                    idempotencyKey = entry.idempotencyKey,
+                    requestId = entry.requestId
+                )
+            }
+        }
+    }
+}
+
+internal fun ChatStore.reconcileTimelineOutbox(messages: List<com.rethinkingstudio.clawlink.core.models.chat.ChatMessage>) {
+    if (timelineOutbox.isEmpty()) return
+    val acknowledgedKeys = timelineOutbox.keys.filter { idempotencyKey ->
+        messages.any { message ->
+            val isCanonical = !message.timelineOrderKey.startsWith("local:") &&
+                !message.timelineIdentityKey.startsWith("local:")
+            isCanonical && listOf(
+                message.runId,
+                message.timelineIdentityKey,
+                message.timelineStableKey,
+                message.timelineMessageId
+            ).any { candidate -> candidate.contains(idempotencyKey) }
+        }
+    }
+    acknowledgedKeys.forEach(timelineOutbox::remove)
 }
 
 internal fun ChatStore.sendSlashCommand(gatewayId: String, command: String) {

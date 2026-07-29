@@ -49,9 +49,6 @@ import com.rethinkingstudio.clawlink.core.models.chat.MessageState
 import com.rethinkingstudio.clawlink.core.models.gateway.GatewayType
 import com.rethinkingstudio.clawlink.core.state.LocalizedText.choose
 import com.rethinkingstudio.clawlink.core.state.chat.ChatStore
-import com.rethinkingstudio.clawlink.core.state.chat.RemoteAttachmentCache
-import com.rethinkingstudio.clawlink.core.state.chat.RemoteImageCache
-import com.rethinkingstudio.clawlink.core.state.chat.RemoteImageSizeCache
 import com.rethinkingstudio.clawlink.core.state.chat.visibleContextUsageLine
 import com.rethinkingstudio.clawlink.core.state.gateway.GatewayStore
 import com.rethinkingstudio.clawlink.core.state.model.ModelStore
@@ -207,6 +204,9 @@ fun ChatScreen(
             GatewayHistoryRequestDecision.StartLoad -> Unit
         }
         try {
+            // 冷启动/切会话固定为一条确定链路：精确 scope 本地缓存 → 实时缓冲/连接 → 权威历史对账。
+            chatStore.rehydrateTimelineState(request.gatewayId, request.sessionKey)
+            chatStore.connectWebSocket()
             chatStore.loadHistory(
                 request.gatewayId,
                 request.sessionKey,
@@ -223,15 +223,6 @@ fun ChatScreen(
         if (statusAlertMessage == null) {
             dismissedStatusAlertMessage = null
         }
-    }
-
-    LaunchedEffect(context) {
-        RemoteImageSizeCache.init(context.applicationContext)
-        RemoteImageCache.init(context.applicationContext)
-        RemoteAttachmentCache.init(context.applicationContext)
-        com.rethinkingstudio.clawlink.core.state.chat.VoicePlaybackReadStore.init(context.applicationContext)
-        com.rethinkingstudio.clawlink.core.state.chat.TimelinePersistenceMiddleware.init(context.applicationContext)
-        chatStore.rehydrateTimelineState()
     }
 
     DisposableEffect(viewModel) {
@@ -286,7 +277,6 @@ fun ChatScreen(
             activeGatewaySwitchId = gatewayId
             try {
                 chatStore.beginGatewaySwitch(gatewayId)
-                chatStore.connectWebSocket()
                 val provisionalSessionKey = chatStore.state.value.currentSessionKey.ifBlank { "main" }
                 val keepSwitchingOverlay = gatewaySwitchHistoryBlocksOverlay(selectedGatewayType)
                 if (provisionalSessionKey.isNotBlank()) {
