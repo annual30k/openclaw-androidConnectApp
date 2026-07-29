@@ -206,6 +206,7 @@ class MessageBubblePresentationTest {
     fun adaptiveMixedMediaBubbleWidthUsesContentAndCapsAtMaximum() {
         assertEquals(322.dp, adaptiveMixedMediaBubbleWidth(336.dp, listOf(94.dp, 290.dp)))
         assertEquals(210.dp, adaptiveMixedMediaBubbleWidth(336.dp, listOf(178.dp)))
+        assertEquals(128.dp, adaptiveMixedMediaBubbleWidth(326.dp, listOf(20.dp, 96.dp)))
         assertEquals(336.dp, adaptiveMixedMediaBubbleWidth(336.dp, listOf(420.dp)))
     }
 

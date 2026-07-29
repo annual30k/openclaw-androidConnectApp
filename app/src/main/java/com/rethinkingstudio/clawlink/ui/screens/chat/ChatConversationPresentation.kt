@@ -274,30 +274,80 @@ private fun ChatMessage.sameTurnUserMediaScore(): Int {
 }
 
 private fun ChatMessage.mergedSameTurnUserMediaMessage(group: List<ChatMessage>): ChatMessage {
+    val textSource = preferredSameTurnUserTextSource(group)
     return copy(
-        content = preferredSameTurnUserMediaContent(group),
-        contentBlocks = mergedSameTurnUserMediaBlocks(group)
+        content = textSource?.sameTurnUserTextContent().orEmpty(),
+        contentBlocks = mergedSameTurnUserMediaBlocks(group, textSource)
     )
 }
 
-private fun preferredSameTurnUserMediaContent(group: List<ChatMessage>): String {
-    val attachmentLabels = group.flatMap { message ->
-        message.contentBlocks
-            .filter { it.isTransferContentBlock }
-            .flatMap { block -> listOf(block.fileDisplayName, block.name, block.text) }
-            .mapNotNull { value -> normalizedUserEchoContent(value.orEmpty()).lowercase().takeIf { it.isNotEmpty() } }
-    }.toSet()
+private fun ChatMessage.preferredSameTurnUserTextSource(group: List<ChatMessage>): ChatMessage? {
+    if (canonicalSameTurnUserTextBlocks().isNotEmpty()) return this
     return group
-        .asSequence()
-        .map { it.plainTextContent.trim() }
-        .firstOrNull { text ->
-            text.isNotEmpty() && text.lowercase() !in attachmentLabels
+        .filter { message ->
+            message.preferredSameTurnUserTextBlocks().isNotEmpty() ||
+                (message.contentBlocks.none { it.isTransferContentBlock } && message.content.trim().isNotEmpty())
         }
-        ?: group.firstOrNull()?.plainTextContent?.trim().orEmpty()
+        .maxWithOrNull(
+            compareBy<ChatMessage> { it.sameTurnUserTextSourceScore() }
+                .thenBy { it.timelineOrderKey }
+                .thenBy { it.timelineIdentityKey }
+                .thenBy { it.id }
+        )
+        ?: takeIf { content.trim().isNotEmpty() }
 }
 
-private fun ChatMessage.mergedSameTurnUserMediaBlocks(group: List<ChatMessage>): List<RelayChatContentBlock> {
-    val merged = contentBlocks.toMutableList()
+private fun ChatMessage.sameTurnUserTextSourceScore(): Int {
+    var score = 0
+    if (canonicalSameTurnUserTextBlocks().isNotEmpty()) score += 100
+    if (contentBlocks.none { it.isTransferContentBlock }) score += 20
+    if (source.trim().equals("history", ignoreCase = true)) score += 10
+    if (timelineIdentityKey.isNotBlank() && !timelineIdentityKey.startsWith("local:")) score += 5
+    if (seq != null || turnSeq != null) score += 2
+    return score
+}
+
+private fun ChatMessage.preferredSameTurnUserTextBlocks(): List<RelayChatContentBlock> {
+    val renderable = contentBlocks.filter { block -> block.isTextBlock && !block.text.isNullOrBlank() }
+    val canonical = canonicalSameTurnUserTextBlocks()
+    return canonical.ifEmpty { renderable }
+}
+
+private fun ChatMessage.canonicalSameTurnUserTextBlocks(): List<RelayChatContentBlock> {
+    return contentBlocks.filter { block ->
+        block.isTextBlock && !block.text.isNullOrBlank() && !block.contentBlockId.isNullOrBlank()
+    }
+}
+
+private fun ChatMessage.sameTurnUserTextContent(): String {
+    return preferredSameTurnUserTextBlocks()
+        .mapNotNull { block -> block.text?.trim()?.takeIf { it.isNotEmpty() } }
+        .joinToString("\n\n")
+        .ifBlank { content.trim() }
+}
+
+private fun ChatMessage.mergedSameTurnUserMediaBlocks(
+    group: List<ChatMessage>,
+    textSource: ChatMessage?
+): List<RelayChatContentBlock> {
+    val selectedTextBlocks = textSource?.preferredSameTurnUserTextBlocks().orEmpty()
+    val merged = if (textSource === this) {
+        val selectedCanonicalIds = selectedTextBlocks
+            .mapNotNull { block -> block.contentBlockId?.trim()?.takeIf { it.isNotEmpty() } }
+            .toSet()
+        contentBlocks.filter { block ->
+            !block.isTextBlock ||
+                selectedCanonicalIds.isEmpty() ||
+                block.contentBlockId?.trim().orEmpty() in selectedCanonicalIds
+        }.toMutableList()
+    } else {
+        val projectedTextBlocks = selectedTextBlocks.ifEmpty {
+            textSource?.content?.trim()?.takeIf { it.isNotEmpty() }
+                ?.let { text -> listOf(RelayChatContentBlock(type = "text", text = text)) }
+                .orEmpty()
+        }
+        (projectedTextBlocks + contentBlocks.filterNot { it.isTextBlock }).toMutableList()
+    }
     group.forEach { message ->
         message.contentBlocks.forEach { block ->
             if (message === this && block in contentBlocks) return@forEach
@@ -311,14 +361,6 @@ private fun ChatMessage.mergedSameTurnUserMediaBlocks(group: List<ChatMessage>):
                     merged += block
                 }
                 return@forEach
-            }
-
-            if (block.isTextBlock) {
-                val text = normalizedUserEchoContent(block.text.orEmpty())
-                val hasTextBlock = merged.any { existing ->
-                    existing.isTextBlock && normalizedUserEchoContent(existing.text.orEmpty()) == text
-                }
-                if (text.isNotEmpty() && !hasTextBlock) merged += block
             }
         }
     }

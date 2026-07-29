@@ -2,7 +2,6 @@ package com.rethinkingstudio.clawlink.ui.screens.chat.components
 
 import android.media.MediaPlayer
 import android.text.method.LinkMovementMethod
-import android.graphics.Paint
 import android.net.Uri
 import android.widget.Toast
 import android.widget.TextView
@@ -20,6 +19,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -62,6 +62,8 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -82,7 +84,6 @@ import com.rethinkingstudio.clawlink.ui.screens.chat.isUserAuthoredMessage
 import java.io.File
 import java.net.HttpURLConnection
 import java.net.URL
-import kotlin.math.ceil
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -179,26 +180,56 @@ internal fun MessageBubble(
         BoxWithConstraints(modifier = Modifier.fillMaxWidth(), contentAlignment = if (isUser) Alignment.CenterEnd else Alignment.CenterStart) {
             val expandedBubbleWidth = mixedMediaBubbleWidth(maxWidth)
             val embeddedImageMaxWidth = maxOf(120.dp, expandedBubbleWidth - 32.dp)
-            val density = LocalDensity.current
-            val measuredTextWidth = remember(displayText, density) {
-                val paint = Paint().apply { textSize = with(density) { 13.sp.toPx() } }
-                val widestLinePx = displayText.lineSequence().maxOfOrNull(paint::measureText) ?: 0f
-                with(density) { ceil(widestLinePx.toDouble()).toFloat().toDp() }
-            }
-            val widestImageWidth = fileBlocks
-                .filter { it.isImageFileBlock }
-                .maxOfOrNull { imagePreviewDimensions(it, maxWidth = embeddedImageMaxWidth).first }
-                ?: 0.dp
-            val requiresFullContentWidth = voiceBlocks.isNotEmpty() || fileBlocks.any { !it.isImageFileBlock }
-            val adaptiveBubbleWidth = adaptiveMixedMediaBubbleWidth(
-                maximumWidth = expandedBubbleWidth,
-                contentWidths = listOf(
-                    120.dp,
-                    measuredTextWidth,
-                    widestImageWidth,
-                    if (requiresFullContentWidth) embeddedImageMaxWidth else 0.dp
+            val footerTitle = if (isUser) "You" else "ClawLink"
+            val adaptiveBubbleWidth = if (useExpandedMixedMediaBubble) {
+                val density = LocalDensity.current
+                val textMeasurer = rememberTextMeasurer()
+                val measuredTextWidth = remember(displayText, textMeasurer, density) {
+                    val widestLinePx = displayText.lineSequence().maxOfOrNull { line ->
+                        textMeasurer.measure(
+                            text = line,
+                            style = TextStyle(fontSize = 13.sp),
+                            softWrap = false,
+                            maxLines = 1
+                        ).size.width
+                    } ?: 0
+                    with(density) {
+                        widestLinePx.toDp() + if (displayText.isBlank()) 0.dp else 2.dp
+                    }
+                }
+                val formattedTimestamp = formatChatTimestamp(message.createdAt)
+                val measuredFooterWidth = remember(footerTitle, formattedTimestamp, textMeasurer, density) {
+                    val footerStyle = TextStyle(fontSize = 10.sp, fontWeight = FontWeight.Medium)
+                    val titleWidthPx = textMeasurer.measure(
+                        text = footerTitle,
+                        style = footerStyle,
+                        softWrap = false,
+                        maxLines = 1
+                    ).size.width
+                    val timestampWidthPx = textMeasurer.measure(
+                        text = formattedTimestamp,
+                        style = footerStyle,
+                        softWrap = false,
+                        maxLines = 1
+                    ).size.width
+                    with(density) { (titleWidthPx + timestampWidthPx).toDp() + 16.dp }
+                }
+                val widestImageWidth = fileBlocks
+                    .filter { it.isImageFileBlock }
+                    .maxOfOrNull { imagePreviewDimensions(it, maxWidth = embeddedImageMaxWidth).first }
+                    ?: 0.dp
+                val requiresFullContentWidth = voiceBlocks.isNotEmpty() || fileBlocks.any { !it.isImageFileBlock }
+                adaptiveMixedMediaBubbleWidth(
+                    maximumWidth = expandedBubbleWidth,
+                    contentWidths = listOf(
+                        measuredTextWidth,
+                        measuredFooterWidth,
+                        120.dp,
+                        widestImageWidth,
+                        if (requiresFullContentWidth) embeddedImageMaxWidth else 0.dp
+                    )
                 )
-            )
+            } else 0.dp
             Surface(
                 color = if (isUser) ChatColors.userBubble else MaterialTheme.colorScheme.surface.copy(alpha = 0.96f),
                 shape = RoundedCornerShape(28.dp),
@@ -207,7 +238,7 @@ internal fun MessageBubble(
                 modifier = if (useExpandedMixedMediaBubble) {
                     Modifier.width(adaptiveBubbleWidth)
                 } else {
-                    Modifier.widthIn(max = 326.dp)
+                    Modifier.width(IntrinsicSize.Max).widthIn(max = 326.dp)
                 }
             ) {
                 Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 13.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -284,7 +315,12 @@ internal fun MessageBubble(
                         InlineStreamingIndicator()
                     }
                     if (shouldShowMessageFooter(message.role, message.state, displayText, fileBlocks.isNotEmpty(), voiceBlocks.isNotEmpty(), isTool)) {
-                        MessageFooter(title = if (isUser) "You" else "ClawLink", createdAt = message.createdAt, isUser = isUser)
+                        MessageFooter(
+                            title = footerTitle,
+                            createdAt = message.createdAt,
+                            isUser = isUser,
+                            fillsAvailableWidth = true
+                        )
                     }
                 }
             }
@@ -422,11 +458,21 @@ internal fun adaptiveMixedMediaBubbleWidth(maximumWidth: Dp, contentWidths: List
 }
 
 @Composable
-internal fun MessageFooter(title: String, createdAt: String, isUser: Boolean, modifier: Modifier = Modifier) {
-    Row(modifier = modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+internal fun MessageFooter(
+    title: String,
+    createdAt: String,
+    isUser: Boolean,
+    modifier: Modifier = Modifier,
+    fillsAvailableWidth: Boolean = false
+) {
+    // 气泡本身先按正文/媒体/最小 footer 宽度收缩；footer 再在该宽度内两端对齐。
+    Row(
+        modifier = if (fillsAvailableWidth) modifier.fillMaxWidth() else modifier,
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = if (fillsAvailableWidth) Arrangement.SpaceBetween else Arrangement.spacedBy(16.dp)
+    ) {
         val footerColor = if (isUser) Color.White.copy(alpha = 0.72f) else ChatColors.secondaryText
         Text(title, style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp), color = footerColor, fontWeight = FontWeight.Medium)
-        Spacer(Modifier.weight(1f))
         Text(formatChatTimestamp(createdAt), style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp), color = footerColor, fontWeight = FontWeight.Medium)
     }
 }

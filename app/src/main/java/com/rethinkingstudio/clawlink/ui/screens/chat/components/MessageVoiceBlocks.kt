@@ -116,7 +116,8 @@ internal fun StandaloneVoiceMessage(
             title = if (isUser) "You" else "ClawLink",
             createdAt = createdAt,
             isUser = false,
-            modifier = Modifier.padding(horizontal = 4.dp)
+            modifier = Modifier.padding(horizontal = 4.dp),
+            fillsAvailableWidth = true
         )
     }
 }

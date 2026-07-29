@@ -256,7 +256,11 @@ private fun ChatMessage.canonicalContentForTimelineEntry(): List<RelayChatConten
     if (sanitizedText == null) return sanitizedBlocks
     if (sanitizedBlocks.isEmpty()) return listOf(RelayChatContentBlock(type = "text", text = sanitizedText))
     if (role != MessageRole.user) return sanitizedBlocks
-    if (sanitizedBlocks.any { it.isTextBlock && sanitizeChatMessageText(it.text.orEmpty()) == sanitizedText }) {
+    // Structured text blocks are authoritative. `content` is only their display projection and,
+    // for mixed text/media messages, may also contain the attachment label. Promoting that
+    // projection back into a new text block on every reconciliation makes the message grow
+    // exponentially across refreshes.
+    if (sanitizedBlocks.any { it.isTextBlock && !it.text.isNullOrBlank() }) {
         return sanitizedBlocks
     }
     if (sanitizedText.isAttachmentLabelFor(sanitizedBlocks)) return sanitizedBlocks

@@ -358,6 +358,12 @@ class TimelinePersistenceMiddlewareTest {
         assertFalse(diskJson.contains("voice-1"))
     }
 
+    @Test
+    fun oversizedTimelineSnapshotIsRejectedBeforeJsonDecoding() {
+        assertTrue(TimelinePersistenceMiddleware.isSnapshotFileSizeAllowed(16L * 1024L * 1024L))
+        assertFalse(TimelinePersistenceMiddleware.isSnapshotFileSizeAllowed(16L * 1024L * 1024L + 1L))
+    }
+
     private fun jwtToken(payload: String, signature: String): String {
         fun encode(value: String): String = Base64.getUrlEncoder()
             .withoutPadding()

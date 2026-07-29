@@ -489,6 +489,114 @@ class ChatConversationPresentationTest {
     }
 
     @Test
+    fun displayMessagesUsesOneCanonicalTextProjectionForIosImageTurn() {
+        val runId = "attachment-ios-image"
+        val prompt = "分析一下这张图"
+        val fileName = "album-B4358473-17EA-46AB-9319-B041A422E3C9.jpg"
+        val media = ChatMessage(
+            id = "user-ios-image",
+            role = MessageRole.user,
+            state = MessageState.completed,
+            content = "$prompt\n\n$fileName\n\n$prompt",
+            contentBlocks = listOf(
+                RelayChatContentBlock(type = "text", text = "$prompt\n\n$fileName\n\n$prompt"),
+                RelayChatContentBlock(type = "text", text = "$prompt\n\n$fileName"),
+                RelayChatContentBlock(type = "text", contentBlockId = "blk_prompt", text = prompt),
+                RelayChatContentBlock(
+                    type = "image",
+                    contentBlockId = "blk_image",
+                    attachmentId = "att_image",
+                    fileId = "file_image",
+                    fileName = fileName,
+                    text = fileName,
+                    mimeType = "image/jpeg",
+                    downloadUrl = "/api/mobile/files/file_image",
+                    sourceRunId = runId
+                )
+            ),
+            runId = "local-user-$runId",
+            timelineOrderKey = "v1|00000000000000000059|40|000000|file_image",
+            timelineIdentityKey = "v1|main|message|user|srv_ios_image",
+            timelineItemKind = "message:user",
+            source = "local"
+        )
+        val historyEcho = ChatMessage(
+            id = "history-ios-image",
+            role = MessageRole.user,
+            state = MessageState.completed,
+            content = prompt,
+            contentBlocks = listOf(
+                RelayChatContentBlock(type = "text", contentBlockId = "blk_history_prompt", text = prompt)
+            ),
+            runId = "$runId:user",
+            timelineOrderKey = "v1|00000000000000000059|10|000000|history-ios-image",
+            timelineIdentityKey = "v1|main|message|user|srv_history_ios_image",
+            timelineItemKind = "message:user",
+            source = "history"
+        )
+
+        val visible = conversationDisplayMessages(
+            messages = listOf(historyEcho, media),
+            showInvocationProcess = true
+        ).single()
+
+        assertEquals("user-ios-image", visible.id)
+        assertEquals(prompt, visible.content)
+        assertEquals(listOf("blk_prompt"), visible.contentBlocks.filter { it.isTextBlock }.map { it.contentBlockId })
+        assertEquals(listOf("blk_image"), visible.contentBlocks.filter { it.isFileBlock }.map { it.contentBlockId })
+    }
+
+    @Test
+    fun displayMessagesPrefersCanonicalHistoryPromptOverUnkeyedMediaLabel() {
+        val runId = "attachment-ios-file-label"
+        val prompt = "分析一下这张图"
+        val fileName = "album-ios.jpg"
+        val historyPrompt = ChatMessage(
+            id = "history-ios-file-label",
+            role = MessageRole.user,
+            state = MessageState.completed,
+            content = prompt,
+            contentBlocks = listOf(
+                RelayChatContentBlock(type = "text", contentBlockId = "blk_history_prompt", text = prompt)
+            ),
+            runId = "$runId:user",
+            timelineOrderKey = "v1|00000000000000000060|10|000000|history-ios-file-label",
+            timelineIdentityKey = "v1|main|message|user|srv_history_ios_file_label",
+            timelineItemKind = "message:user",
+            source = "history"
+        )
+        val media = ChatMessage(
+            id = "media-ios-file-label",
+            role = MessageRole.user,
+            state = MessageState.completed,
+            content = fileName,
+            contentBlocks = listOf(
+                RelayChatContentBlock(type = "text", text = fileName),
+                RelayChatContentBlock(
+                    type = "image",
+                    contentBlockId = "blk_image",
+                    fileId = "file_image",
+                    fileName = fileName,
+                    text = fileName,
+                    sourceRunId = runId
+                )
+            ),
+            runId = "local-user-$runId",
+            timelineOrderKey = "v1|00000000000000000060|40|000000|file_image",
+            timelineIdentityKey = "v1|main|attachment|user|file_image",
+            timelineItemKind = "attachment",
+            source = "local"
+        )
+
+        val visible = conversationDisplayMessages(listOf(historyPrompt, media), true).single()
+
+        assertEquals("media-ios-file-label", visible.id)
+        assertEquals(prompt, visible.content)
+        assertEquals(listOf("blk_history_prompt"), visible.contentBlocks.filter { it.isTextBlock }.map { it.contentBlockId })
+        assertEquals(listOf("blk_image"), visible.contentBlocks.filter { it.isFileBlock }.map { it.contentBlockId })
+    }
+
+    @Test
     fun displayMessagesKeepsCompletedMobileAttachmentSeparateWithoutSharedRunIdentity() {
         val localPrompt = ChatMessage(
             id = "local-user-waterfall",
@@ -809,7 +917,8 @@ class ChatConversationPresentationTest {
         )
 
         assertEquals(listOf("local-user-image-prompt"), displayMessages.map { it.id })
-        assertEquals(listOf("file-dinner"), displayMessages.single().contentBlocks.map { it.fileId })
+        assertEquals(listOf(prompt), displayMessages.single().contentBlocks.filter { it.isTextBlock }.map { it.text })
+        assertEquals(listOf("file-dinner"), displayMessages.single().fileContentBlocks.map { it.fileId })
     }
 
     @Test

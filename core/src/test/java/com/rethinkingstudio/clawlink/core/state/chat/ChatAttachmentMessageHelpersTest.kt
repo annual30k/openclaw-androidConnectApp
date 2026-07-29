@@ -243,4 +243,28 @@ class ChatAttachmentMessageHelpersTest {
         assertEquals(listOf("blk_prompt"), blocks.filter { it.isTextBlock }.map { it.contentBlockId })
         assertEquals("file_image", blocks.first { it.isFileBlock }.fileId)
     }
+
+    @Test
+    fun dropsAllUnidentifiedTextProjectionsWhenCanonicalMediaTextExists() {
+        val prompt = "分析一下这张图"
+        val fileName = "album-B4358473-17EA-46AB-9319-B041A422E3C9.jpg"
+        val blocks = sanitizeChatContentBlocks(
+            listOf(
+                RelayChatContentBlock(type = "text", text = "$prompt\n\n$fileName\n\n$prompt"),
+                RelayChatContentBlock(type = "text", text = "$prompt\n\n$fileName"),
+                RelayChatContentBlock(type = "text", contentBlockId = "blk_prompt", text = prompt),
+                RelayChatContentBlock(
+                    type = "image",
+                    contentBlockId = "blk_image",
+                    attachmentId = "att_image",
+                    fileId = "file_image",
+                    fileName = fileName,
+                    text = fileName
+                )
+            )
+        )
+
+        assertEquals(listOf("blk_prompt"), blocks.filter { it.isTextBlock }.map { it.contentBlockId })
+        assertEquals(listOf("blk_image"), blocks.filter { it.isFileBlock }.map { it.contentBlockId })
+    }
 }

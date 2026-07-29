@@ -84,6 +84,15 @@ class TimelineReconcilerTest {
     }
 
     @Test
+    fun iosMixedMediaProjectionFixtureKeepsOnlyStableTextAndImageBlocks() {
+        val message = applyFixture("ios_mixed_media_projection_replay.json").messages.single()
+
+        assertEquals("分析一下这张图", message.content)
+        assertEquals(listOf("blk-ios-image-prompt"), message.contentBlocks.filter { it.isTextBlock }.map { it.contentBlockId })
+        assertEquals(listOf("blk-ios-image-file"), message.fileContentBlocks.map { it.contentBlockId })
+    }
+
+    @Test
     fun canonicalTimelineUpsertsOnlyByIdentityAndSortsOnlyByOrderKey() {
         val existing = listOf(
             ChatMessage(

@@ -95,7 +95,13 @@ internal fun StandaloneFileMessage(blocks: List<RelayChatContentBlock>, isUser: 
                 FileBlock(block = block, isUser = isUser, messageState = messageState, standalone = true, relayBaseUrl = relayBaseUrl, accessToken = accessToken, onImageClick = onImageClick, onFileClick = onFileClick)
             }
         }
-        MessageFooter(title = if (isUser) "You" else "ClawLink", createdAt = createdAt, isUser = false, modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp))
+        MessageFooter(
+            title = if (isUser) "You" else "ClawLink",
+            createdAt = createdAt,
+            isUser = false,
+            modifier = Modifier.padding(horizontal = 4.dp),
+            fillsAvailableWidth = true
+        )
     }
 }
 

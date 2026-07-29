@@ -272,16 +272,16 @@ internal fun sanitizeChatContentBlocks(blocks: List<RelayChatContentBlock>): Lis
     }
     if (sanitized.none { it.isFileBlock || it.isVoiceMessageBlock }) return sanitized
 
-    val canonicalText = sanitized.mapNotNull { block ->
-        if (!block.isTextBlock || block.contentBlockId.isNullOrBlank()) return@mapNotNull null
-        block.text?.trim()?.takeIf(String::isNotEmpty)
-    }.toSet()
-    if (canonicalText.isEmpty()) return sanitized
+    val hasCanonicalTextBlock = sanitized.any { block ->
+        block.isTextBlock &&
+            !block.contentBlockId.isNullOrBlank() &&
+            !block.text.isNullOrBlank()
+    }
+    if (!hasCanonicalTextBlock) return sanitized
 
     return sanitized.filterNot { block ->
         block.isTextBlock &&
-            block.contentBlockId.isNullOrBlank() &&
-            block.text?.trim()?.let(canonicalText::contains) == true
+            block.contentBlockId.isNullOrBlank()
     }
 }
 

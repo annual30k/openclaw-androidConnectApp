@@ -157,6 +157,7 @@ object TimelinePersistenceMiddleware {
     private const val LEGACY_V7_SCHEMA_VERSION = 7
     private const val OUTBOX_SCHEMA_VERSION = 1
     private const val SNAPSHOT_MAX_CONFIRMED_MESSAGES = 500
+    private const val SNAPSHOT_MAX_FILE_BYTES = 16L * 1024L * 1024L
     @Volatile private var legacyV7Prefs: SharedPreferences? = null
     @Volatile private var outboxPrefs: SharedPreferences? = null
     @Volatile private var snapshotDirectory: File? = null
@@ -248,6 +249,7 @@ object TimelinePersistenceMiddleware {
         expectedScope: TimelinePersistenceScope
     ): TimelineSessionSnapshot? {
         if (!expectedScope.isValid()) return null
+        if (!isSnapshotFileSizeAllowed(raw.length.toLong())) return null
         return try {
             val envelope = json.decodeFromString(TimelineSnapshotEnvelope.serializer(), raw)
             envelope.snapshot
@@ -444,11 +446,20 @@ object TimelinePersistenceMiddleware {
     private fun readSnapshotFile(scope: TimelinePersistenceScope): TimelineSessionSnapshot? {
         val target = snapshotFile(scope) ?: return null
         if (!target.exists()) return null
-        val raw = runCatching { AtomicFile(target).readFully().toString(Charsets.UTF_8) }.getOrNull()
+        val atomicFile = AtomicFile(target)
+        if (!isSnapshotFileSizeAllowed(target.length())) {
+            atomicFile.delete()
+            return null
+        }
+        val raw = runCatching { atomicFile.readFully().toString(Charsets.UTF_8) }.getOrNull()
             ?: return null
         return decodeSnapshot(raw, scope).also { decoded ->
-            if (decoded == null) target.delete()
+            if (decoded == null) atomicFile.delete()
         }
+    }
+
+    internal fun isSnapshotFileSizeAllowed(byteCount: Long): Boolean {
+        return byteCount in 0..SNAPSHOT_MAX_FILE_BYTES
     }
 
     private fun restoreAndMigrateV7Snapshot(

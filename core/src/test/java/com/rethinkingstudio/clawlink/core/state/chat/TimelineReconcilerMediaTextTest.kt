@@ -198,4 +198,42 @@ class TimelineReconcilerMediaTextTest {
         assertTrue(user.contentBlocks.first().isTextBlock)
         assertEquals("file-1", user.fileContentBlocks.single().fileId)
     }
+
+    @Test
+    fun canonicalMixedMediaMessageRemainsIdempotentAcrossRepeatedSorting() {
+        val prompt = "分析一下这张图"
+        val fileName = "album-B4358473-17EA-46AB-9319-B041A422E3C9.jpg"
+        val message = ChatMessage(
+            id = "user-ios-image",
+            role = MessageRole.user,
+            state = MessageState.completed,
+            content = "$prompt\n\n$fileName",
+            contentBlocks = listOf(
+                RelayChatContentBlock(type = "text", contentBlockId = "blk_prompt", text = prompt),
+                RelayChatContentBlock(
+                    type = "image",
+                    contentBlockId = "blk_image",
+                    attachmentId = "att_image",
+                    fileId = "file_image",
+                    fileName = fileName,
+                    text = fileName,
+                    sourceRunId = "attachment-ios-image"
+                )
+            ),
+            runId = "local-user-attachment-ios-image",
+            timelineOrderKey = "local:attachment-ios-image:010-user",
+            timelineIdentityKey = "v1|main|message|user|srv_ios_image",
+            timelineItemKind = "message:user",
+            source = "local"
+        )
+
+        val sorted = (1..20).fold(listOf(message)) { messages, _ ->
+            sortTimelineMessagesV3(messages, "main")
+        }.single()
+
+        assertEquals(prompt, sorted.content)
+        assertEquals(listOf("blk_prompt", "blk_image"), sorted.contentBlocks.map { it.contentBlockId })
+        assertEquals(listOf(prompt), sorted.contentBlocks.filter { it.isTextBlock }.map { it.text })
+        assertEquals("file_image", sorted.fileContentBlocks.single().fileId)
+    }
 }
