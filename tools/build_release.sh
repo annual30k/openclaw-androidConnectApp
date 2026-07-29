@@ -38,7 +38,7 @@ fi
 
 # Set destination details
 VERSION=$(grep -oE 'versionName = "[^"]+"' app/build.gradle.kts | cut -d'"' -f2)
-VERSION=${VERSION:-"1.0.13"}
+VERSION=${VERSION:-"1.0.14"}
 DATE=$(date +%Y%m%d)
 APK_DEST="dist/Claw-Link-${VERSION}-release-v2-${DATE}.apk"
 
