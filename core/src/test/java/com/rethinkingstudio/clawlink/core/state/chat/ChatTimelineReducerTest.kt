@@ -138,6 +138,61 @@ class ChatTimelineReducerTest {
     }
 
     @Test
+    fun historyUserWinsOverReplayedRelayProjectionForSameStableTurn() {
+        val stableRunId = "wx_1785218318879_xwwecjao"
+        val initial = ChatTimelineState(
+            messages = listOf(
+                ChatMessage(
+                    id = "6781ef37",
+                    role = MessageRole.user,
+                    state = MessageState.completed,
+                    content = "福建省农业融资担保有限公司的注册资金是多少",
+                    contentBlocks = listOf(
+                        RelayChatContentBlock(type = "text", text = "福建省农业融资担保有限公司的注册资金是多少")
+                    ),
+                    runId = "$stableRunId:user",
+                    sortTimestamp = 1.0,
+                    seq = 14,
+                    turnSeq = 14,
+                    timelineMessageId = "6781ef37",
+                    timelineOrderKey = "v1|00000000000000000014|10|000000|6781ef37",
+                    timelineIdentityKey = "v1|main|message|user|srv-history-user",
+                    timelineItemKind = "message:user",
+                    source = "history"
+                )
+            )
+        )
+
+        val state = ChatTimelineReducer.reduce(
+            initial,
+            event(
+                """
+                {
+                  "protocolVersion": 2,
+                  "eventId": "evt-old-relay-replay",
+                  "eventType": "turn.user.created",
+                  "turnId": "$stableRunId",
+                  "runId": "$stableRunId",
+                  "messageId": "user-$stableRunId",
+                  "source": "local",
+                  "createdAt": "2026-07-28T05:58:38.000Z",
+                  "timelineOrderKey": "v1|00000000000000000028|10|000000|user-$stableRunId",
+                  "timelineIdentityKey": "v1|main|message|user|srv-old-replay-user",
+                  "timelineItemKind": "message:user",
+                  "content": [{ "type": "text", "text": "福建省农业融资担保有限公司的注册资金是多少" }]
+                }
+                """.trimIndent()
+            )
+        )
+
+        assertEquals(1, state.messages.size)
+        assertEquals("6781ef37", state.messages.single().id)
+        assertEquals("history", state.messages.single().source)
+        assertEquals("v1|main|message|user|srv-history-user", state.messages.single().timelineIdentityKey)
+        assertEquals(14L, state.messages.single().turnSeq)
+    }
+
+    @Test
     fun turnUserCreatedReplacesLocalImageUserMessageForSameTurn() {
         val localImageBlock = RelayChatContentBlock(
             type = "file",

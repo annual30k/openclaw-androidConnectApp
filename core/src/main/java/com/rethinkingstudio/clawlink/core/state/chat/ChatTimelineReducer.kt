@@ -43,12 +43,14 @@ internal object ChatTimelineReducer {
             event.turnId.takeIf { it.isNotBlank() },
             event.runId?.takeIf { it.isNotBlank() }
         ).mapNotNull { normalizedTurnIdentity(it) }.toSet()
-        val localIndex = messages.indexOfFirst { message ->
+        val equivalentIndexes = messages.indices.filter { index ->
+            val message = messages[index]
             message.role == MessageRole.user &&
                 normalizedTurnIdentity(message.runId) in incomingTurnIdentities
         }
-            .takeIf { it >= 0 }
-        val existing = localIndex?.let(messages::getOrNull)
+        // 稳定 turn 正常只对应一条可见 user 消息；冲突超过一条时不按文案、时间或数组位置猜测。
+        val equivalentIndex = equivalentIndexes.singleOrNull()
+        val existing = equivalentIndex?.let(messages::getOrNull)
         val message = ChatMessage(
             id = event.messageId,
             role = MessageRole.user,
@@ -71,9 +73,11 @@ internal object ChatTimelineReducer {
             timelineResolvesWaiting = event.timelineResolvesWaiting,
             source = event.source.orEmpty()
         )
-        if (localIndex == null || localIndex < 0) return copy(messages = messages + message)
-        val mergedMessage = existing?.let { mergeLocalUserMessage(local = it, incoming = message) } ?: message
-        return copy(messages = messages.toMutableList().also { it[localIndex] = mergedMessage })
+        if (equivalentIndex == null || equivalentIndex < 0) return copy(messages = messages + message)
+        val preferredMessage = existing?.let {
+            preferredEquivalentUserMessage(existing = it, incoming = message)
+        } ?: message
+        return copy(messages = messages.toMutableList().also { it[equivalentIndex] = preferredMessage })
     }
 
     private fun ChatTimelineState.applyPartDelta(event: TimelineEvent.MessagePartDelta): ChatTimelineState {

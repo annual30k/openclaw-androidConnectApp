@@ -3,6 +3,20 @@ package com.rethinkingstudio.clawlink.core.state.chat
 import com.rethinkingstudio.clawlink.core.models.chat.ChatMessage
 import com.rethinkingstudio.clawlink.core.models.chat.RelayChatContentBlock
 
+internal fun preferredEquivalentUserMessage(existing: ChatMessage, incoming: ChatMessage): ChatMessage {
+    if (userProjectionAuthority(incoming) < userProjectionAuthority(existing)) return existing
+    return mergeLocalUserMessage(local = existing, incoming = incoming)
+}
+
+private fun userProjectionAuthority(message: ChatMessage): Int {
+    var score = 0
+    if (message.source.trim().equals("history", ignoreCase = true)) score += 100
+    if (message.timelineIdentityKey.isNotBlank() && !message.timelineIdentityKey.startsWith("local:")) score += 20
+    if (message.timelineOrderKey.isNotBlank() && !message.timelineOrderKey.startsWith("local:")) score += 10
+    if (message.seq != null || message.turnSeq != null) score += 5
+    return score
+}
+
 internal fun mergeLocalUserMessage(local: ChatMessage, incoming: ChatMessage): ChatMessage {
     val mergedBlocks = mergedLocalUserContentBlocks(local = local, incoming = incoming)
     return incoming.copy(
