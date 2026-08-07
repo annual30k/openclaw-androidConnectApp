@@ -246,13 +246,19 @@ private fun mergeCanonicalHistoryWithCurrentMessages(
         .mapNotNull { it.canonicalTurnIdentity() }
         .toSet()
     val pendingOverlay = currentMessages.filter { message ->
+        val isQueuedLocalUser = message.role == MessageRole.user &&
+            message.deliveryState.equals("queued", ignoreCase = true) &&
+            message.runId.startsWith("local-user-")
         (!message.hasCanonicalTimelineOrder || message.hasLocalTimelineOrder) &&
             shouldPreserveCurrentMessageAcrossHistoryRefresh(
                 message = message,
                 currentStreamingMessageId = currentStreamingMessageId,
                 isTrackedPendingAssistantMessageId = isTrackedPendingAssistantMessageId
             ) &&
-            message.canonicalTurnIdentity()?.let { pendingTurnIds.isEmpty() || it in pendingTurnIds } ?: true &&
+            // 排队消息属于尚未激活的未来 turn，不能用“当前正在回复的 turn”过滤；
+            // 它只允许由相同稳定 turn 的 canonical 用户消息确认后移除。
+            (isQueuedLocalUser ||
+                (message.canonicalTurnIdentity()?.let { pendingTurnIds.isEmpty() || it in pendingTurnIds } ?: true)) &&
             message.canonicalTurnIdentity()?.let { it !in canonicalUserTurnIds } ?: true
     }
 

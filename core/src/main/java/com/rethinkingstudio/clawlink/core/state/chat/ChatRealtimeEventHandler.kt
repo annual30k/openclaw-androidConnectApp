@@ -113,6 +113,7 @@ private fun ChatStore.applyTimelineEvents(events: List<TimelineEvent>) {
     noteCanonicalTimelineMutation()
     reconcileTimelineOutbox(ordered)
     persistCurrentTimelineSnapshot(timelineState, ordered)
+    scheduleQueuedTimelineOutboxDrain()
 }
 
 private fun ChatStore.handleAgentPayload(payload: JsonElement?) {

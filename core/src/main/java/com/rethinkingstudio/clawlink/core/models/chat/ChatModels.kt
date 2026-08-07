@@ -437,7 +437,10 @@ data class ChatMessage(
     val timelineIdentityKey: String = "",
     val timelineItemKind: String = "",
     val timelineResolvesWaiting: Boolean? = null,
-    val source: String = ""
+    val source: String = "",
+    val deliveryState: String = "",
+    val clientMessageText: String? = null,
+    val queuePosition: Long? = null
 ) {
     val plainTextContent: String
         get() {
@@ -515,6 +518,8 @@ data class ChatMessage(
     fun shouldDisplayInChat(
         showInvocationProcess: Boolean
     ): Boolean {
+        // 排队消息只在输入区上方的队列面板展示，真正激活发送后才进入聊天时间线。
+        if (role == MessageRole.user && deliveryState.trim().equals("queued", ignoreCase = true)) return false
         val isStreamingAssistantPlaceholder = role == MessageRole.assistant && state == MessageState.streaming
         if (isProtocolTypingMarkerText(plainTextContent) && !isStreamingAssistantPlaceholder) return false
         if (role == MessageRole.assistant &&

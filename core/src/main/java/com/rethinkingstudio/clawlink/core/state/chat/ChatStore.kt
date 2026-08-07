@@ -95,6 +95,9 @@ class ChatStore(
     internal var timelineSnapshotRevision: String? = null
     internal var timelineHighWatermark: Long? = null
     internal val timelineOutbox = linkedMapOf<String, TimelineOutboxEntry>()
+    // 队列激活是一个跨多个内存状态与持久化快照的原子事务；所有触发入口必须共用同一把锁，
+    // 避免终态事件、历史恢复和重连在 IO 线程池上并发激活同一条或相邻两条消息。
+    internal val queuedTimelineOutboxDrainLock = Any()
     internal var historyPrepareAttemptHookForTest: (() -> Unit)? = null
     private val v3Sessions = mutableSetOf<String>()
     private val historyCoordinator = ChatHistoryCoordinator(
@@ -184,7 +187,10 @@ class ChatStore(
             return
         }
         timelineOutbox.clear()
-        restoredSnapshot.outbox.forEach { entry -> timelineOutbox[entry.idempotencyKey] = entry }
+        restoredSnapshot.outbox.forEach { restoredEntry ->
+            val entry = restoredEntry.copy(clientMessageId = restoredEntry.clientMessageId.trim())
+            timelineOutbox[entry.idempotencyKey] = entry
+        }
         timelineSnapshotRevision = restoredSnapshot.snapshotRevision
         timelineHighWatermark = restoredSnapshot.highWatermark
         applyPreparedTimelineRehydration(prepared)
@@ -207,15 +213,17 @@ class ChatStore(
     }
 
     internal fun applyPreparedTimelineRehydration(prepared: PreparedTimelineRehydration) {
-        timelineState = prepared.timelineState
+        val restoredMessages = orderedMessages(prepared.orderedMessages)
+        val hasActiveVisibleRun = hasActiveVisibleTimelineRun(prepared.timelineState, restoredMessages)
+        timelineState = prepared.timelineState.copy(messages = restoredMessages)
         _state.value = _state.value.copy(
-            messages = prepared.orderedMessages,
-            isStreaming = prepared.hasActiveVisibleRun,
-            isStoppingRun = if (prepared.hasActiveVisibleRun) _state.value.isStoppingRun else false
+            messages = restoredMessages,
+            isStreaming = hasActiveVisibleRun,
+            isStoppingRun = if (hasActiveVisibleRun) _state.value.isStoppingRun else false
         )
         val currentGatewayId = _state.value.currentGatewayId?.trim().orEmpty()
         val currentSessionKey = normalizeSessionKey(_state.value.currentSessionKey)
-        prepared.orderedMessages
+        restoredMessages
             .filter { message -> message.role == MessageRole.assistant && message.state == MessageState.streaming }
             .forEach { message ->
                 val restoredRunId = message.runId.trim().takeIf { it.isNotEmpty() } ?: message.id
@@ -223,7 +231,7 @@ class ChatStore(
                     gatewayId = currentGatewayId,
                     sessionKey = currentSessionKey,
                     assistantMessageId = message.id,
-                    triggeringUserMessageId = triggeringUserMessageIdBefore(message, prepared.orderedMessages)
+                    triggeringUserMessageId = triggeringUserMessageIdBefore(message, restoredMessages)
                 )
                 rememberRunScope(restoredRunId, restoredRunScope)
                 timelineOutbox[restoredRunId]?.let { outbox -> rememberRunScope(outbox.requestId, restoredRunScope) }
@@ -232,6 +240,7 @@ class ChatStore(
                 streamingContent.append(message.content)
             }
         noteCanonicalTimelineMutation()
+        scheduleQueuedTimelineOutboxDrain()
     }
 
     internal fun activeTimelinePersistenceScope(
@@ -373,7 +382,8 @@ class ChatStore(
 
     internal fun orderedMessages(messages: List<ChatMessage>): List<ChatMessage> {
         val sessionKey = _state.value.currentSessionKey
-        return sortTimelineMessagesV3(removeResolvedTransientAssistantPlaceholders(messages), sessionKey)
+        val withQueuedOutbox = restoreQueuedTimelineOutboxMessages(messages, timelineOutbox.values)
+        return sortTimelineMessagesV3(removeResolvedTransientAssistantPlaceholders(withQueuedOutbox), sessionKey)
     }
 
     internal fun orderMessagesForRealtime(messages: List<ChatMessage>): List<ChatMessage> {
@@ -384,6 +394,14 @@ class ChatStore(
         cancelChatFinalSync(runScope)
         markTimelineRunResolved(runId, runScope)
         forgetRunScope(runId, runScope)
+        scheduleQueuedTimelineOutboxDrain()
+    }
+
+    internal fun scheduleQueuedTimelineOutboxDrain() {
+        scope.launch {
+            kotlinx.coroutines.yield()
+            drainQueuedTimelineOutbox()
+        }
     }
 
     private fun markTimelineRunResolved(runId: String, runScope: ChatRunScope?) {

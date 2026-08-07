@@ -12,6 +12,59 @@ import org.junit.Test
 
 class ChatTimelineReducerTest {
     @Test
+    fun activeMessageCompletionKeepsRunLockedUntilTerminalEvent() {
+        val initial = ChatTimelineState(
+            messages = listOf(
+                ChatMessage(
+                    id = "waiting-client-run",
+                    role = MessageRole.assistant,
+                    state = MessageState.streaming,
+                    content = "[[clawlink:typing]]",
+                    contentBlocks = listOf(RelayChatContentBlock(type = "text", text = "[[clawlink:typing]]")),
+                    runId = "client-run"
+                )
+            ),
+            activeRunId = "client-run",
+            activeRunsByTurnId = mapOf("client-run" to "client-run"),
+            activeTurnByRunId = mapOf("client-run" to "client-run")
+        )
+        val completion = event(
+            """
+            {
+              "protocolVersion": 2,
+              "eventId": "evt-active-completion",
+              "eventType": "message.completed",
+              "turnId": "client-run",
+              "runId": "host-run",
+              "runState": "active",
+              "messageId": "assistant-active",
+              "role": "assistant",
+              "content": [{ "type": "text", "text": "阶段结果" }]
+            }
+            """.trimIndent()
+        )
+
+        val active = ChatTimelineReducer.reduce(initial, completion)
+
+        assertTrue(active.hasActiveRun)
+        assertEquals("host-run", active.activeRunId)
+        assertEquals(mapOf("client-run" to "host-run"), active.activeRunsByTurnId)
+        assertEquals("阶段结果", active.messages.last().content)
+
+        val terminal = ChatTimelineReducer.reduce(
+            active,
+            TimelineEvent.RunTerminal(
+                eventId = "evt-active-terminal",
+                turnId = "client-run",
+                runId = "host-run",
+                status = "completed"
+            )
+        )
+
+        assertFalse(terminal.hasActiveRun)
+    }
+
+    @Test
     fun liveUserTurnKeepsRemoteRunIdentityAndSource() {
         val event = requireNotNull(
             TimelineEventLog.decodeEvent(

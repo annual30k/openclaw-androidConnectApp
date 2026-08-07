@@ -20,6 +20,9 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Ignore
 import org.junit.Test
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
 
 class ChatStoreSessionTest {
     private val json = Json { ignoreUnknownKeys = true }
@@ -1085,6 +1088,387 @@ class ChatStoreSessionTest {
             val ordered = invokeOrderedMessages(store, listOf(localUser, serverEcho))
 
             assertEquals(listOf("user-client-run", "server-user-message"), ordered.map { it.id })
+        } finally {
+            wsClient.destroy()
+        }
+    }
+
+    @Test
+    fun followUpQueueSupportsReorderRemoveAndDrainsExactlyOnePerTerminalRun() {
+        val wsClient = RelayWebSocketClient()
+        try {
+            val store = ChatStore(
+                apiClient = RelayAPIClient(),
+                wsClient = wsClient,
+                notificationPort = object : NotificationPort {
+                    override fun showReplyNotification(sessionKey: String, title: String, body: String) = Unit
+                    override fun cancelNotification(id: Int) = Unit
+                    override fun cancelAll() = Unit
+                }
+            )
+            setChatState(
+                store,
+                ChatState(currentGatewayId = "gateway-1", currentSessionKey = "main")
+            )
+
+            store.sendTextOutgoingRun("first", "gateway-1", emptyList(), emptyList(), emptyList(), "run-1")
+            store.sendTextOutgoingRun("second", "gateway-1", emptyList(), emptyList(), emptyList(), "run-2")
+            store.sendTextOutgoingRun("third", "gateway-1", emptyList(), emptyList(), emptyList(), "run-3")
+            store.sendTextOutgoingRun("fourth", "gateway-1", emptyList(), emptyList(), emptyList(), "run-4")
+
+            assertEquals(listOf(false, true, true, true), store.timelineOutbox.values.map { it.queued })
+            assertEquals(
+                listOf("", "queued", "queued", "queued"),
+                store.state.value.messages.filter { it.role == MessageRole.user }.map { it.deliveryState }
+            )
+            assertFalse(store.state.value.messages.single { it.id == "user-run-2" }.shouldDisplayInChat(false))
+
+            store.moveQueuedMessage("user-run-3", -1)
+            store.removeQueuedMessage("user-run-2")
+
+            assertEquals(listOf("run-3", "run-4"), store.timelineOutbox.values
+                .filter { it.queued }
+                .sortedBy { it.queuePosition }
+                .map { it.clientMessageId })
+            assertEquals(listOf("third", "fourth"), store.state.value.messages
+                .filter { it.deliveryState == "queued" }
+                .sortedBy { it.queuePosition }
+                .map { it.clientMessageText })
+            assertFalse(store.state.value.messages.any { it.id == "user-run-2" })
+
+            setChatState(store, store.state.value.copy(isStreaming = false))
+            setCurrentTimelineState(
+                store,
+                currentTimelineState(store).copy(
+                    activeRunId = null,
+                    activeRunsByTurnId = emptyMap(),
+                    activeTurnByRunId = emptyMap()
+                )
+            )
+            store.drainQueuedTimelineOutbox()
+
+            assertEquals(listOf(false, false, true), store.timelineOutbox.values.map { it.queued })
+            assertTrue(store.state.value.isStreaming)
+            assertEquals("", store.state.value.messages.single { it.id == "user-run-3" }.deliveryState)
+            assertEquals("queued", store.state.value.messages.single { it.id == "user-run-4" }.deliveryState)
+            assertEquals("user-run-3", store.state.value.messages.filter { it.role == MessageRole.user }.last().id)
+
+            setChatState(store, store.state.value.copy(isStreaming = false))
+            setCurrentTimelineState(
+                store,
+                currentTimelineState(store).copy(
+                    activeRunId = null,
+                    activeRunsByTurnId = emptyMap(),
+                    activeTurnByRunId = emptyMap()
+                )
+            )
+            store.drainQueuedTimelineOutbox()
+
+            assertEquals(listOf(false, false, false), store.timelineOutbox.values.map { it.queued })
+            assertEquals("", store.state.value.messages.single { it.id == "user-run-4" }.deliveryState)
+            assertEquals("user-run-4", store.state.value.messages.filter { it.role == MessageRole.user }.last().id)
+        } finally {
+            wsClient.destroy()
+        }
+    }
+
+    @Test
+    fun followUpQueueKeepsRepeatedTextAsDistinctStableTurns() {
+        val wsClient = RelayWebSocketClient()
+        try {
+            val store = ChatStore(
+                apiClient = RelayAPIClient(),
+                wsClient = wsClient,
+                notificationPort = object : NotificationPort {
+                    override fun showReplyNotification(sessionKey: String, title: String, body: String) = Unit
+                    override fun cancelNotification(id: Int) = Unit
+                    override fun cancelAll() = Unit
+                }
+            )
+            setChatState(
+                store,
+                ChatState(currentGatewayId = "gateway-1", currentSessionKey = "main")
+            )
+
+            store.sendTextOutgoingRun("hold", "gateway-1", emptyList(), emptyList(), emptyList(), "run-hold")
+            store.sendTextOutgoingRun("same follow-up", "gateway-1", emptyList(), emptyList(), emptyList(), "run-same-1")
+            store.sendTextOutgoingRun("same follow-up", "gateway-1", emptyList(), emptyList(), emptyList(), "run-same-2")
+
+            val queuedEntries = store.timelineOutbox.values
+                .filter { it.queued }
+                .sortedBy { it.queuePosition }
+            assertEquals(listOf("same follow-up", "same follow-up"), queuedEntries.map { it.content })
+            assertEquals(listOf("run-same-1", "run-same-2"), queuedEntries.map { it.idempotencyKey })
+            assertEquals(2, queuedEntries.map { it.idempotencyKey }.distinct().size)
+            assertEquals(
+                listOf("user-run-same-1", "user-run-same-2"),
+                store.state.value.messages
+                    .filter { it.deliveryState == "queued" }
+                    .sortedBy { it.queuePosition }
+                    .map { it.id }
+            )
+
+            setChatState(store, store.state.value.copy(isStreaming = false))
+            setCurrentTimelineState(
+                store,
+                currentTimelineState(store).copy(
+                    activeRunId = null,
+                    activeRunsByTurnId = emptyMap(),
+                    activeTurnByRunId = emptyMap()
+                )
+            )
+            store.drainQueuedTimelineOutbox()
+            assertEquals(false, store.timelineOutbox.getValue("run-same-1").queued)
+            assertEquals(true, store.timelineOutbox.getValue("run-same-2").queued)
+
+            setChatState(store, store.state.value.copy(isStreaming = false))
+            setCurrentTimelineState(
+                store,
+                currentTimelineState(store).copy(
+                    activeRunId = null,
+                    activeRunsByTurnId = emptyMap(),
+                    activeTurnByRunId = emptyMap()
+                )
+            )
+            store.drainQueuedTimelineOutbox()
+            assertEquals(false, store.timelineOutbox.getValue("run-same-2").queued)
+            assertEquals(
+                listOf("same follow-up", "same follow-up"),
+                store.state.value.messages
+                    .filter { it.role == MessageRole.user && it.content == "same follow-up" }
+                    .map { it.content }
+            )
+        } finally {
+            wsClient.destroy()
+        }
+    }
+
+    @Test
+    fun staleActiveRunMetadataDoesNotQueueOrBlockMessagesAfterVisibleReplyEnds() {
+        val wsClient = RelayWebSocketClient()
+        try {
+            val store = ChatStore(
+                apiClient = RelayAPIClient(),
+                wsClient = wsClient,
+                notificationPort = object : NotificationPort {
+                    override fun showReplyNotification(sessionKey: String, title: String, body: String) = Unit
+                    override fun cancelNotification(id: Int) = Unit
+                    override fun cancelAll() = Unit
+                }
+            )
+            setChatState(
+                store,
+                ChatState(currentGatewayId = "gateway-1", currentSessionKey = "main")
+            )
+
+            store.sendTextOutgoingRun("active", "gateway-1", emptyList(), emptyList(), emptyList(), "run-active")
+            store.sendTextOutgoingRun("queued", "gateway-1", emptyList(), emptyList(), emptyList(), "run-queued")
+
+            val completedMessages = store.state.value.messages.mapNotNull { message ->
+                when {
+                    message.id == "assistant-run-active" -> null
+                    message.id == "user-run-active" -> message
+                    else -> message
+                }
+            }
+            // 模拟终态已结束可见回复，但旧协议映射尚未带齐 client runId，留下 stale active-run 元数据。
+            setChatState(store, store.state.value.copy(messages = completedMessages, isStreaming = false))
+
+            store.drainQueuedTimelineOutbox()
+
+            assertFalse(store.timelineOutbox.getValue("run-queued").queued)
+            assertEquals("", store.state.value.messages.single { it.id == "user-run-queued" }.deliveryState)
+
+            setChatState(
+                store,
+                store.state.value.copy(
+                    messages = store.state.value.messages.filterNot { it.id == "assistant-run-queued" },
+                    isStreaming = false
+                )
+            )
+            store.sendTextOutgoingRun("direct", "gateway-1", emptyList(), emptyList(), emptyList(), "run-direct")
+
+            assertFalse(store.timelineOutbox.getValue("run-direct").queued)
+            assertEquals("", store.state.value.messages.single { it.id == "user-run-direct" }.deliveryState)
+        } finally {
+            wsClient.destroy()
+        }
+    }
+
+    @Test
+    fun missingQueuedOverlayIsRecoveredFromDurableOutboxBeforeFifoDrain() {
+        val wsClient = RelayWebSocketClient()
+        try {
+            val store = ChatStore(
+                apiClient = RelayAPIClient(),
+                wsClient = wsClient,
+                notificationPort = object : NotificationPort {
+                    override fun showReplyNotification(sessionKey: String, title: String, body: String) = Unit
+                    override fun cancelNotification(id: Int) = Unit
+                    override fun cancelAll() = Unit
+                }
+            )
+            setChatState(
+                store,
+                ChatState(currentGatewayId = "gateway-1", currentSessionKey = "main")
+            )
+
+            store.sendTextOutgoingRun("active", "gateway-1", emptyList(), emptyList(), emptyList(), "run-active")
+            store.sendTextOutgoingRun("queue-1", "gateway-1", emptyList(), emptyList(), emptyList(), "run-queue-1")
+            store.sendTextOutgoingRun("queue-2", "gateway-1", emptyList(), emptyList(), emptyList(), "run-queue-2")
+            store.sendTextOutgoingRun("queue-3", "gateway-1", emptyList(), emptyList(), emptyList(), "run-queue-3")
+
+            // 模拟旧实现的历史刷新：第一条 UI overlay 被覆盖，但 durable outbox 仍完整。
+            setChatState(
+                store,
+                store.state.value.copy(
+                    messages = store.state.value.messages.filterNot { it.id == "user-run-queue-1" },
+                    isStreaming = false
+                )
+            )
+            setCurrentTimelineState(
+                store,
+                currentTimelineState(store).copy(
+                    activeRunId = null,
+                    activeRunsByTurnId = emptyMap(),
+                    activeTurnByRunId = emptyMap()
+                )
+            )
+
+            store.drainQueuedTimelineOutbox()
+
+            assertTrue(store.timelineOutbox.containsKey("run-queue-1"))
+            assertFalse(store.timelineOutbox.getValue("run-queue-1").queued)
+            assertTrue(store.timelineOutbox.getValue("run-queue-2").queued)
+            assertTrue(store.timelineOutbox.getValue("run-queue-3").queued)
+            assertEquals("", store.state.value.messages.single { it.id == "user-run-queue-1" }.deliveryState)
+            assertEquals(
+                listOf("queue-2", "queue-3"),
+                store.state.value.messages
+                    .filter { it.deliveryState == "queued" }
+                    .sortedBy { it.queuePosition }
+                    .map { it.clientMessageText }
+            )
+        } finally {
+            wsClient.destroy()
+        }
+    }
+
+    @Test
+    fun concurrentQueueDrainActivatesExactlyOneTurn() {
+        val wsClient = RelayWebSocketClient()
+        val executor = Executors.newFixedThreadPool(8)
+        try {
+            val store = ChatStore(
+                apiClient = RelayAPIClient(),
+                wsClient = wsClient,
+                notificationPort = object : NotificationPort {
+                    override fun showReplyNotification(sessionKey: String, title: String, body: String) = Unit
+                    override fun cancelNotification(id: Int) = Unit
+                    override fun cancelAll() = Unit
+                }
+            )
+            val queuedMessages = (1..8).map { index ->
+                val runId = "concurrent-$index"
+                store.timelineOutbox[runId] = TimelineOutboxEntry(
+                    kind = TimelineOutboxKind.TEXT,
+                    clientMessageId = runId,
+                    idempotencyKey = runId,
+                    requestId = runId,
+                    content = "queued-$index",
+                    createdAtEpochMs = index.toLong(),
+                    queued = true,
+                    queuePosition = index.toLong()
+                )
+                buildQueuedTimelineOutboxUserMessage(store.timelineOutbox.getValue(runId))
+            }
+            setChatState(
+                store,
+                ChatState(
+                    currentGatewayId = "gateway-1",
+                    currentSessionKey = "main",
+                    messages = queuedMessages,
+                    isStreaming = false
+                )
+            )
+
+            val ready = CountDownLatch(8)
+            val start = CountDownLatch(1)
+            val finished = CountDownLatch(8)
+            repeat(8) {
+                executor.execute {
+                    ready.countDown()
+                    start.await()
+                    store.drainQueuedTimelineOutbox()
+                    finished.countDown()
+                }
+            }
+            assertTrue(ready.await(2, TimeUnit.SECONDS))
+            start.countDown()
+            assertTrue(finished.await(5, TimeUnit.SECONDS))
+
+            assertEquals(1, store.timelineOutbox.values.count { !it.queued })
+            assertEquals(7, store.timelineOutbox.values.count { it.queued })
+            assertTrue(store.state.value.isStreaming)
+        } finally {
+            executor.shutdownNow()
+            wsClient.destroy()
+        }
+    }
+
+    @Test
+    fun invalidQueuedHeadIsMarkedFailedAndDoesNotBlockNextTurn() {
+        val wsClient = RelayWebSocketClient()
+        try {
+            val store = ChatStore(
+                apiClient = RelayAPIClient(),
+                wsClient = wsClient,
+                notificationPort = object : NotificationPort {
+                    override fun showReplyNotification(sessionKey: String, title: String, body: String) = Unit
+                    override fun cancelNotification(id: Int) = Unit
+                    override fun cancelAll() = Unit
+                }
+            )
+            val invalidEntry = TimelineOutboxEntry(
+                kind = TimelineOutboxKind.TEXT,
+                clientMessageId = "   ",
+                idempotencyKey = "invalid-head",
+                requestId = "invalid-head",
+                content = "recover me",
+                createdAtEpochMs = 1L,
+                queued = true,
+                queuePosition = 1L
+            )
+            val validEntry = TimelineOutboxEntry(
+                kind = TimelineOutboxKind.TEXT,
+                clientMessageId = "valid-next",
+                idempotencyKey = "valid-next",
+                requestId = "valid-next",
+                content = "send next",
+                createdAtEpochMs = 2L,
+                queued = true,
+                queuePosition = 2L
+            )
+            store.timelineOutbox[invalidEntry.idempotencyKey] = invalidEntry
+            store.timelineOutbox[validEntry.idempotencyKey] = validEntry
+            setChatState(
+                store,
+                ChatState(
+                    currentGatewayId = "gateway-1",
+                    currentSessionKey = "main",
+                    messages = listOf(buildQueuedTimelineOutboxUserMessage(validEntry)),
+                    isStreaming = false
+                )
+            )
+
+            store.drainQueuedTimelineOutbox()
+
+            assertFalse(store.timelineOutbox.containsKey(invalidEntry.idempotencyKey))
+            assertFalse(store.timelineOutbox.getValue(validEntry.idempotencyKey).queued)
+            assertTrue(store.state.value.messages.any { message ->
+                message.deliveryState == "failed" && message.content == "recover me"
+            })
+            assertEquals("", store.state.value.messages.single { it.id == "user-valid-next" }.deliveryState)
         } finally {
             wsClient.destroy()
         }

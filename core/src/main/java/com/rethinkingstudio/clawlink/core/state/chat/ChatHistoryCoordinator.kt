@@ -133,13 +133,15 @@ internal class ChatHistoryCoordinator(
                 // reducer 接触 timelineState 前必须完成 scope/generation/request/revision 四重校验，
                 // 防止迟到响应污染下一个会话的 reducer 初始状态。
                 applySnapshotReduction(prepared.snapshotReduction)
+                val committedMessages = orderedMessages(prepared.orderedMessages)
+                val hasActiveStreaming = hasActiveStreamingMessage(committedMessages)
                 setState(
                     current.copy(
-                        messages = prepared.orderedMessages,
+                        messages = committedMessages,
                         isLoading = false,
                         isSwitchingSession = false,
-                        isStreaming = prepared.hasActiveStreaming,
-                        isStoppingRun = if (prepared.hasActiveStreaming) current.isStoppingRun else false,
+                        isStreaming = hasActiveStreaming,
+                        isStoppingRun = if (hasActiveStreaming) current.isStoppingRun else false,
                         errorMessage = null,
                         historyWindow = current.historyWindow.copy(
                             isLoadingOlder = false,
@@ -147,17 +149,17 @@ internal class ChatHistoryCoordinator(
                             hasOlder = response.hasMore,
                             olderCursor = response.nextCursor,
                             newestCursor = response.newestCursor,
-                            loadedMessageCount = prepared.orderedMessages.size
+                            loadedMessageCount = committedMessages.size
                         )
                     )
                 )
-                clearStreamingPointersIfResolved(prepared.orderedMessages)
-                val updatedTimelineState = getTimelineState().copy(messages = prepared.orderedMessages)
+                clearStreamingPointersIfResolved(committedMessages)
+                val updatedTimelineState = getTimelineState().copy(messages = committedMessages)
                 setTimelineState(updatedTimelineState)
                 recordSnapshotVersion(incomingSnapshotVersion)
-                reconcileOutbox(prepared.orderedMessages)
+                reconcileOutbox(committedMessages)
                 noteCanonicalMutation()
-                persistTimelineState(updatedTimelineState, prepared.orderedMessages)
+                persistTimelineState(updatedTimelineState, committedMessages)
                 break
             }
         } catch (e: CancellationException) {
@@ -294,26 +296,28 @@ internal class ChatHistoryCoordinator(
                     continue
                 }
                 applySnapshotReduction(prepared.snapshotReduction)
+                val committedMessages = orderedMessages(prepared.orderedMessages)
+                val hasActiveStreaming = hasActiveStreamingMessage(committedMessages)
                 setState(
                     latest.copy(
-                        messages = prepared.orderedMessages,
+                        messages = committedMessages,
                         historyWindow = latest.historyWindow.copy(
                             isLoadingOlder = false,
                             hasOlder = response.hasMore,
                             olderCursor = response.nextCursor,
                             newestCursor = response.newestCursor ?: latest.historyWindow.newestCursor,
-                            loadedMessageCount = prepared.orderedMessages.size
+                            loadedMessageCount = committedMessages.size
                         ),
-                        isStreaming = prepared.hasActiveStreaming,
-                        isStoppingRun = if (prepared.hasActiveStreaming) latest.isStoppingRun else false
+                        isStreaming = hasActiveStreaming,
+                        isStoppingRun = if (hasActiveStreaming) latest.isStoppingRun else false
                     )
                 )
-                clearStreamingPointersIfResolved(prepared.orderedMessages)
-                val updatedTimelineState = getTimelineState().copy(messages = prepared.orderedMessages)
+                clearStreamingPointersIfResolved(committedMessages)
+                val updatedTimelineState = getTimelineState().copy(messages = committedMessages)
                 setTimelineState(updatedTimelineState)
-                reconcileOutbox(prepared.orderedMessages)
+                reconcileOutbox(committedMessages)
                 noteCanonicalMutation()
-                persistTimelineState(updatedTimelineState, prepared.orderedMessages)
+                persistTimelineState(updatedTimelineState, committedMessages)
                 break
             }
         } catch (e: CancellationException) {
@@ -393,26 +397,28 @@ internal class ChatHistoryCoordinator(
                 ) return
                 val latest = getState()
                 applySnapshotReduction(prepared.snapshotReduction)
+                val committedMessages = orderedMessages(prepared.orderedMessages)
+                val hasActiveStreaming = hasActiveStreamingMessage(committedMessages)
                 setState(
                     latest.copy(
-                        messages = prepared.orderedMessages,
+                        messages = committedMessages,
                         historyWindow = latest.historyWindow.copy(
                             isCatchingUp = true,
                             hasOlder = response.hasMore,
                             olderCursor = response.nextCursor,
                             newestCursor = response.newestCursor ?: current.historyWindow.newestCursor,
-                            loadedMessageCount = prepared.orderedMessages.size
+                            loadedMessageCount = committedMessages.size
                         ),
-                        isStreaming = prepared.hasActiveStreaming,
-                        isStoppingRun = if (prepared.hasActiveStreaming) latest.isStoppingRun else false
+                        isStreaming = hasActiveStreaming,
+                        isStoppingRun = if (hasActiveStreaming) latest.isStoppingRun else false
                     )
                 )
-                clearStreamingPointersIfResolved(prepared.orderedMessages)
-                val updatedTimelineState = getTimelineState().copy(messages = prepared.orderedMessages)
+                clearStreamingPointersIfResolved(committedMessages)
+                val updatedTimelineState = getTimelineState().copy(messages = committedMessages)
                 setTimelineState(updatedTimelineState)
-                reconcileOutbox(prepared.orderedMessages)
+                reconcileOutbox(committedMessages)
                 noteCanonicalMutation()
-                persistTimelineState(updatedTimelineState, prepared.orderedMessages)
+                persistTimelineState(updatedTimelineState, committedMessages)
                 logDebug("Silent chat final sync merged page ${pageCount + 1} with ${response.items.size} history items")
                 pageCount += 1
                 cursor = response.nextCursor

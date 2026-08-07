@@ -505,6 +505,60 @@ class ChatHistoryMergeHelpersTest {
     }
 
     @Test
+    fun canonicalHistoryRefreshKeepsEveryQueuedFutureTurnWhileCurrentTurnIsActive() {
+        val activeUser = ChatMessage(
+            id = "user-active-run",
+            role = MessageRole.user,
+            content = "active",
+            runId = "local-user-active-run",
+            sortTimestamp = 100.0,
+            timelineOrderKey = "local:active-run|10|user-active-run",
+            timelineIdentityKey = "local:message:user:active-run",
+            timelineItemKind = "message:user"
+        )
+        val waiting = ChatMessage(
+            id = "assistant-active-run",
+            role = MessageRole.assistant,
+            state = MessageState.streaming,
+            content = protocolTypingMarkerText,
+            runId = "active-run",
+            sortTimestamp = 100.001,
+            timelineOrderKey = "local:active-run|20|assistant-active-run",
+            timelineIdentityKey = "local:waiting:active-run",
+            timelineItemKind = "waiting"
+        )
+        val queued = (1L..3L).map { position ->
+            val runId = "queued-run-$position"
+            ChatMessage(
+                id = "user-$runId",
+                role = MessageRole.user,
+                content = "queued-$position",
+                runId = "local-user-$runId",
+                sortTimestamp = 100.0 + position,
+                timelineOrderKey = "local:$runId|10|user-$runId",
+                timelineIdentityKey = "local:message:user:$runId",
+                timelineItemKind = "message:user",
+                deliveryState = "queued",
+                clientMessageText = "queued-$position",
+                queuePosition = position
+            )
+        }
+
+        val merged = mergeHistoryWithCurrentMessages(
+            historyMessages = emptyList(),
+            currentMessages = listOf(activeUser, waiting) + queued,
+            currentStreamingMessageId = waiting.id,
+            isTrackedPendingAssistantMessageId = { it == waiting.id }
+        )
+
+        assertEquals(
+            listOf(activeUser.id, waiting.id) + queued.map { it.id },
+            merged.map { it.id }
+        )
+        assertEquals(listOf(1L, 2L, 3L), merged.filter { it.deliveryState == "queued" }.map { it.queuePosition })
+    }
+
+    @Test
     fun canonicalHistoryRefreshUsesRelayAsOnlyCompletedSource() {
         val staleCompleted = canonicalMessage(
             id = "stale-assistant",

@@ -232,7 +232,7 @@ internal fun ComposerDock(
                             RoundIconButton(Icons.Default.Add, stringResource(R.string.chat_attachment), enabled = canEditComposer, onClick = onOpenAttachment)
                         }
                         val hasDraft = messageText.isNotBlank() || attachments.isNotEmpty()
-                        val showRunStop = isStreaming
+                        val showRunStop = isStreaming && !hasDraft
                         val estimatedLineCount = estimateComposerLineCount(messageText)
                         val visibleLineCount = estimatedLineCount.coerceIn(1, 3)
                         val isMultilineComposer = estimatedLineCount > 1
@@ -246,9 +246,9 @@ internal fun ComposerDock(
                         val inputActionAlignment = if (isMultilineComposer) Alignment.BottomEnd else Alignment.CenterEnd
                         val textTrailingPadding = if (showExpandedComposerButton) 86.dp else 44.dp
                         val inputActionEnabled = when {
+                            hasDraft -> canSendMessage && !isUploadingAttachment
                             isStoppingRun -> false
                             showRunStop -> true
-                            hasDraft -> canSendMessage && !isUploadingAttachment
                             else -> canEditComposer
                         }
                         Box(
@@ -261,6 +261,7 @@ internal fun ComposerDock(
                                 onValueChange = onMessageTextChange,
                                 modifier = Modifier
                                     .fillMaxSize()
+                                    .testTag("composer_message_input")
                                     .onFocusChanged { focusState ->
                                         onTextFieldFocusChanged(focusState.isFocused)
                                     },
@@ -331,6 +332,17 @@ internal fun ComposerDock(
                                         .padding(top = 8.dp, end = 12.dp)
                                 )
                             }
+                        }
+                        if (isStreaming && hasDraft) {
+                            ComposerInputActionButton(
+                                enabled = !isStoppingRun,
+                                isStreaming = true,
+                                isStoppingRun = isStoppingRun,
+                                hasDraft = false,
+                                onVoice = onToggleVoiceMode,
+                                onSend = onSend,
+                                onAbort = onAbort
+                            )
                         }
                     }
                 }
@@ -413,10 +425,11 @@ private fun ExpandedComposerSheet(
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val hasDraft = messageText.isNotBlank() || attachments.isNotEmpty()
+    val showRunStop = isStreaming && !hasDraft
     val inputActionEnabled = when {
-        isStoppingRun -> false
-        isStreaming -> true
         hasDraft -> canSendMessage && !isUploadingAttachment
+        isStoppingRun -> false
+        showRunStop -> true
         else -> canEditComposer
     }
     ModalBottomSheet(
@@ -508,9 +521,21 @@ private fun ExpandedComposerSheet(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Spacer(Modifier.weight(1f))
+                if (isStreaming && hasDraft) {
+                    ComposerInputActionButton(
+                        enabled = !isStoppingRun,
+                        isStreaming = true,
+                        isStoppingRun = isStoppingRun,
+                        hasDraft = false,
+                        onVoice = onToggleVoiceMode,
+                        onSend = onSend,
+                        onAbort = onAbort
+                    )
+                    Spacer(Modifier.width(10.dp))
+                }
                 ComposerInputActionButton(
                     enabled = inputActionEnabled,
-                    isStreaming = isStreaming,
+                    isStreaming = showRunStop,
                     isStoppingRun = isStoppingRun,
                     hasDraft = hasDraft,
                     onVoice = onToggleVoiceMode,

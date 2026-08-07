@@ -87,7 +87,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 @Composable
-internal fun StandaloneFileMessage(blocks: List<RelayChatContentBlock>, isUser: Boolean, messageState: MessageState, createdAt: String, relayBaseUrl: String, accessToken: String, onImageClick: (block: RelayChatContentBlock, url: String, fileName: String?) -> Unit = { _, _, _ -> }, onFileClick: (block: RelayChatContentBlock, url: String, fileName: String?) -> Unit = { _, _, _ -> }) {
+internal fun StandaloneFileMessage(blocks: List<RelayChatContentBlock>, isUser: Boolean, messageState: MessageState, deliveryState: String = "", createdAt: String, relayBaseUrl: String, accessToken: String, onImageClick: (block: RelayChatContentBlock, url: String, fileName: String?) -> Unit = { _, _, _ -> }, onFileClick: (block: RelayChatContentBlock, url: String, fileName: String?) -> Unit = { _, _, _ -> }) {
     val maxContentWidth = if (blocks.any { it.isImageFileBlock }) 290.dp else 326.dp
     Column(modifier = Modifier.width(IntrinsicSize.Max).widthIn(max = maxContentWidth), verticalArrangement = Arrangement.spacedBy(8.dp), horizontalAlignment = if (isUser) Alignment.End else Alignment.Start) {
         blocks.forEachIndexed { index, block ->
@@ -99,6 +99,7 @@ internal fun StandaloneFileMessage(blocks: List<RelayChatContentBlock>, isUser: 
             title = if (isUser) "You" else "ClawLink",
             createdAt = createdAt,
             isUser = false,
+            deliveryState = deliveryState,
             modifier = Modifier.padding(horizontal = 4.dp),
             fillsAvailableWidth = true
         )

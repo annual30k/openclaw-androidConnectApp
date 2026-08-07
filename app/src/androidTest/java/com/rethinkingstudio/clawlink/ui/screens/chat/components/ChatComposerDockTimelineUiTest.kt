@@ -3,12 +3,17 @@ package com.rethinkingstudio.clawlink.ui.screens.chat.components
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.width
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
@@ -68,6 +73,63 @@ class ChatComposerDockTimelineUiTest {
     }
 
     @Test
+    fun streamingReplyAcceptsDraftAndInvokesFollowUpSend() {
+        var sendCount = 0
+        composeRule.setContent {
+            var draft by remember { mutableStateOf("") }
+            MaterialTheme {
+                Box(Modifier.width(390.dp)) {
+                    ComposerDock(
+                        messageText = draft,
+                        onMessageTextChange = { draft = it },
+                        selectedModelText = "Hermes",
+                        isStreaming = true,
+                        isStoppingRun = false,
+                        voiceMode = false,
+                        voiceInputPhase = VoiceInputPhase.Idle,
+                        voiceInputCancelPreview = false,
+                        showsOpenClawControls = false,
+                        showsModelPicker = false,
+                        attachments = emptyList(),
+                        isUploadingAttachment = false,
+                        hasActiveSession = true,
+                        canEditComposer = true,
+                        canSendMessage = true,
+                        showAttachmentMenu = false,
+                        onDismissAttachmentMenu = {},
+                        attachmentButtonPosition = IntOffset.Zero,
+                        attachmentButtonSize = IntSize.Zero,
+                        onAttachmentButtonPositionChanged = {},
+                        onAttachmentButtonSizeChanged = {},
+                        onPickFiles = {},
+                        onPickAlbum = {},
+                        onPickCamera = {},
+                        onRemoveAttachment = {},
+                        onOpenModelPicker = {},
+                        onShowSkillSheet = {},
+                        onOpenAttachment = {},
+                        onToggleVoiceMode = {},
+                        onBeginVoiceInputHold = {},
+                        onEndVoiceInputHold = {},
+                        onCancelVoiceInput = {},
+                        onVoiceInputCancelPreviewChange = {},
+                        onSend = { sendCount++ },
+                        onAbort = {}
+                    )
+                }
+            }
+        }
+
+        composeRule.onNodeWithTag("composer_message_input").performTextInput("follow-up")
+
+        assertHasContentDescription("Send", "发送")
+        assertHasContentDescription("Stop", "停止")
+        clickFirstContentDescription("Send", "发送")
+
+        assertEquals(1, sendCount)
+    }
+
+    @Test
     fun idleActionInvokesVoice() {
         var voiceCount = 0
         setComposer(onToggleVoiceMode = { voiceCount++ })
@@ -99,6 +161,7 @@ class ChatComposerDockTimelineUiTest {
         selectedModelText: String = "Hermes",
         isStreaming: Boolean = false,
         isStoppingRun: Boolean = false,
+        canEditComposer: Boolean = !isStoppingRun,
         canSendMessage: Boolean = false,
         showsOpenClawControls: Boolean = false,
         showsModelPicker: Boolean = false,
@@ -123,7 +186,7 @@ class ChatComposerDockTimelineUiTest {
                         attachments = emptyList(),
                         isUploadingAttachment = false,
                         hasActiveSession = true,
-                        canEditComposer = !isStreaming && !isStoppingRun,
+                        canEditComposer = canEditComposer,
                         canSendMessage = canSendMessage,
                         showAttachmentMenu = false,
                         onDismissAttachmentMenu = {},

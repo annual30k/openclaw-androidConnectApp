@@ -183,6 +183,9 @@ class TimelinePersistenceMiddlewareTest {
             id = "local-message",
             role = MessageRole.user,
             content = "pending",
+            deliveryState = "queued",
+            clientMessageText = "queued command",
+            queuePosition = 7L,
             timelineOrderKey = "local:client-1|10|local-message",
             timelineIdentityKey = "local:user:client-1",
             timelineItemKind = "message"
@@ -193,7 +196,9 @@ class TimelinePersistenceMiddlewareTest {
             idempotencyKey = "client-1",
             requestId = "client-1",
             content = "pending",
-            createdAtEpochMs = 100L
+            createdAtEpochMs = 100L,
+            queued = true,
+            queuePosition = 7L
         )
 
         val snapshot = TimelinePersistenceMiddleware.buildSnapshot(
@@ -212,6 +217,8 @@ class TimelinePersistenceMiddlewareTest {
         assertEquals(listOf(confirmed), decoded.confirmedMessages)
         assertEquals(listOf(pending), decoded.pendingMessages)
         assertEquals(listOf(outbox), decoded.outbox)
+        assertEquals(7L, decoded.pendingMessages.single().queuePosition)
+        assertEquals(7L, decoded.outbox.single().queuePosition)
         assertEquals("revision-9", decoded.snapshotRevision)
         assertEquals(41L, decoded.highWatermark)
     }

@@ -6,6 +6,141 @@ import com.rethinkingstudio.clawlink.core.network.transport.VoiceSendAudioPayloa
 import com.rethinkingstudio.clawlink.core.state.LocalizedText.choose
 import java.util.UUID
 
+internal fun ChatStore.drainQueuedTimelineOutbox() {
+    synchronized(queuedTimelineOutboxDrainLock) {
+        drainQueuedTimelineOutboxLocked()
+    }
+}
+
+private fun ChatStore.drainQueuedTimelineOutboxLocked() {
+    if (hasActiveReplyForOutgoingQueue()) return
+    val gatewayId = _state.value.currentGatewayId?.trim().orEmpty()
+    val sessionKey = normalizeSessionKey(_state.value.currentSessionKey)
+    if (gatewayId.isBlank() || sessionKey.isBlank()) return
+    val entry = orderedQueuedTimelineOutboxEntries().firstOrNull() ?: return
+    if (entry.kind != TimelineOutboxKind.TEXT) return
+    val clientMessageId = entry.clientMessageId.trim()
+    if (clientMessageId.isEmpty()) {
+        failUnrestorableQueuedTimelineOutboxEntry(entry)
+        drainQueuedTimelineOutboxLocked()
+        return
+    }
+
+    // outbox 是排队身份与顺序的持久化权威；即使旧历史刷新曾吞掉 UI overlay，
+    // 激活前也必须先按稳定 clientMessageId 恢复，绝不能删除尚未发送的 durable entry。
+    val messages = orderedMessages(_state.value.messages).toMutableList()
+    val userIndex = messages.indexOfFirst { message ->
+        message.id == "user-$clientMessageId" ||
+            message.runId == "local-user-$clientMessageId"
+    }
+    if (userIndex < 0) {
+        failUnrestorableQueuedTimelineOutboxEntry(entry, messages)
+        drainQueuedTimelineOutboxLocked()
+        return
+    }
+
+    val userMessage = messages.removeAt(userIndex)
+    val activatedAtEpochMs = System.currentTimeMillis()
+    val activatedUserMessage = userMessage.copy(
+        deliveryState = "",
+        clientMessageText = entry.content,
+        queuePosition = null,
+        sortTimestamp = activatedAtEpochMs / 1000.0
+    )
+    // 激活时把队列项移动到当前时间线尾部；后续激活的旧队列项不能插回已发送消息之前。
+    messages += activatedUserMessage
+    val assistantMessageId = "assistant-$clientMessageId"
+    val assistantMessage = buildLocalTextAssistantPlaceholderMessage(
+        id = assistantMessageId,
+        clientRunId = entry.idempotencyKey,
+        sortTimestamp = maxOf(
+            activatedAtEpochMs / 1000.0,
+            (activatedUserMessage.sortTimestamp ?: 0.0) + 0.001
+        )
+    )
+    messages.removeAll { message -> message.id == assistantMessageId }
+    messages += assistantMessage
+    val runScope = ChatRunScope(
+        gatewayId = gatewayId,
+        sessionKey = sessionKey,
+        assistantMessageId = assistantMessageId,
+        triggeringUserMessageId = activatedUserMessage.id
+    )
+    streamingMessageId = assistantMessageId
+    streamingContent.setLength(0)
+    streamingContent.append(assistantMessage.content)
+    rememberRunScope(entry.idempotencyKey, runScope)
+    rememberRunScope(entry.requestId, runScope)
+    timelineOutbox[entry.idempotencyKey] = entry.copy(queued = false, queuePosition = null)
+    _state.value = _state.value.copy(
+        messages = orderedMessages(messages),
+        isStreaming = true,
+        isStoppingRun = false
+    )
+    timelineState = timelineState.copy(
+        messages = _state.value.messages,
+        activeRunId = entry.idempotencyKey,
+        activeRunsByTurnId = timelineState.activeRunsByTurnId + (entry.idempotencyKey to entry.idempotencyKey),
+        activeTurnByRunId = timelineState.activeTurnByRunId + (entry.idempotencyKey to entry.idempotencyKey)
+    )
+    noteCanonicalTimelineMutation()
+    if (!persistCurrentTimelineSnapshot(timelineState, _state.value.messages, durablePendingOverlay = true)) {
+        _state.value = _state.value.copy(
+            errorMessage = choose(
+                "Queued message recovery state could not be saved.",
+                "排队消息的恢复状态暂时无法保存。"
+            )
+        )
+    }
+    scheduleChatFinalSync(entry.idempotencyKey, runScope)
+    wsClient.sendChatMessage(
+        gatewayId = gatewayId,
+        sessionKey = sessionKey,
+        content = entry.content,
+        attachments = entry.attachments.map { attachment ->
+            RelayChatSendAttachmentPayload(
+                fileId = attachment.fileId,
+                fileName = attachment.fileName,
+                mimeType = attachment.mimeType,
+                sizeBytes = attachment.sizeBytes,
+                sha256 = attachment.sha256,
+                sourceRunId = attachment.sourceRunId
+            )
+        },
+        idempotencyKey = entry.idempotencyKey,
+        requestId = entry.requestId
+    )
+}
+
+private fun ChatStore.failUnrestorableQueuedTimelineOutboxEntry(
+    entry: TimelineOutboxEntry,
+    currentMessages: List<com.rethinkingstudio.clawlink.core.models.chat.ChatMessage> = _state.value.messages
+) {
+    val clientMessageId = entry.clientMessageId.trim()
+    timelineOutbox.remove(entry.idempotencyKey)
+    val failedMessage = buildQueuedTimelineOutboxUserMessage(entry).copy(
+        deliveryState = "failed",
+        queuePosition = null
+    )
+    val retainedMessages = currentMessages.filterNot { message ->
+        message.deliveryState.equals("queued", ignoreCase = true) &&
+            (queuedClientMessageId(message) == clientMessageId ||
+                message.id == "user-$clientMessageId" ||
+                message.runId == "local-user-$clientMessageId")
+    } + failedMessage
+    val ordered = orderedMessages(retainedMessages)
+    _state.value = _state.value.copy(
+        messages = ordered,
+        errorMessage = choose(
+            "A queued message could not be restored. It was marked failed and the remaining queue will continue.",
+            "一条排队消息无法恢复，已标记失败，其余队列将继续发送。"
+        )
+    )
+    timelineState = timelineState.copy(messages = ordered)
+    noteCanonicalTimelineMutation()
+    persistCurrentTimelineSnapshot(timelineState, ordered, durablePendingOverlay = true)
+}
+
 internal fun ChatStore.sendTextOutgoingRun(
     content: String,
     gatewayId: String,
@@ -14,6 +149,7 @@ internal fun ChatStore.sendTextOutgoingRun(
     commandAttachments: List<RelayChatSendAttachmentPayload>,
     clientRunId: String? = null
 ) {
+    val queueBehindActiveRun = hasActiveReplyForOutgoingQueue()
     val sessionKey = _state.value.currentSessionKey
     if (sessionKey.isBlank()) return
 
@@ -28,6 +164,55 @@ internal fun ChatStore.sendTextOutgoingRun(
         attachmentIds = attachmentIds,
         attachmentBlocks = attachmentBlocks
     )
+    val queuePosition = if (queueBehindActiveRun) nextQueuedTimelineOutboxPosition() else null
+    val outboxEntry = TimelineOutboxEntry(
+        kind = TimelineOutboxKind.TEXT,
+        clientMessageId = resolvedClientRunId,
+        idempotencyKey = resolvedClientRunId,
+        requestId = requestId,
+        content = content,
+        attachments = commandAttachments.map { attachment ->
+            TimelineOutboxAttachment(
+                fileId = attachment.fileId,
+                fileName = attachment.fileName,
+                mimeType = attachment.mimeType,
+                sizeBytes = attachment.sizeBytes,
+                sha256 = attachment.sha256,
+                sourceRunId = attachment.sourceRunId
+            )
+        },
+        createdAtEpochMs = System.currentTimeMillis(),
+        queued = queueBehindActiveRun,
+        queuePosition = queuePosition
+    )
+
+    if (queueBehindActiveRun) {
+        val queuedMessages = draft.messages
+            .filterNot { message -> message.id == draft.assistantMessage.id }
+            .map { message ->
+                if (message.id == draft.userMessage.id) {
+                    message.copy(
+                        deliveryState = "queued",
+                        clientMessageText = content,
+                        queuePosition = queuePosition
+                    )
+                } else {
+                    message
+                }
+            }
+        timelineOutbox[resolvedClientRunId] = outboxEntry
+        persistSelectedSession(gatewayId, sessionKey)
+        _state.value = _state.value.copy(messages = orderedMessages(queuedMessages))
+        timelineState = timelineState.copy(messages = _state.value.messages)
+        noteCanonicalTimelineMutation()
+        persistCurrentTimelineSnapshot(
+            timelineState,
+            _state.value.messages,
+            durablePendingOverlay = true
+        )
+        scheduleQueuedTimelineOutboxDrain()
+        return
+    }
 
     streamingMessageId = draft.runScope.assistantMessageId
     streamingContent.setLength(0)
@@ -46,24 +231,7 @@ internal fun ChatStore.sendTextOutgoingRun(
         activeRunsByTurnId = timelineState.activeRunsByTurnId + (resolvedClientRunId to resolvedClientRunId),
         activeTurnByRunId = timelineState.activeTurnByRunId + (resolvedClientRunId to resolvedClientRunId)
     )
-    timelineOutbox[resolvedClientRunId] = TimelineOutboxEntry(
-        kind = TimelineOutboxKind.TEXT,
-        clientMessageId = resolvedClientRunId,
-        idempotencyKey = resolvedClientRunId,
-        requestId = requestId,
-        content = content,
-        attachments = commandAttachments.map { attachment ->
-            TimelineOutboxAttachment(
-                fileId = attachment.fileId,
-                fileName = attachment.fileName,
-                mimeType = attachment.mimeType,
-                sizeBytes = attachment.sizeBytes,
-                sha256 = attachment.sha256,
-                sourceRunId = attachment.sourceRunId
-            )
-        },
-        createdAtEpochMs = System.currentTimeMillis()
-    )
+    timelineOutbox[resolvedClientRunId] = outboxEntry
     noteCanonicalTimelineMutation()
     // WebSocket 命令发出前必须完成持久写；重放复用完全相同的 client/idempotency/request 标识，
     // 由服务端进行确定性去重。
@@ -92,12 +260,112 @@ internal fun ChatStore.sendTextOutgoingRun(
     )
 }
 
+fun ChatStore.moveQueuedMessage(messageId: String, offset: Int) {
+    if (offset == 0) return
+    val queuedEntries = orderedQueuedTimelineOutboxEntries().toMutableList()
+    val sourceIndex = queuedEntries.indexOfFirst { entry -> queuedEntryMatchesMessage(entry, messageId) }
+    if (sourceIndex < 0) return
+    val destinationIndex = sourceIndex + offset
+    if (destinationIndex !in queuedEntries.indices) return
+
+    val moved = queuedEntries.removeAt(sourceIndex)
+    queuedEntries.add(destinationIndex, moved)
+    val basePosition = queuedEntries.minOfOrNull(::effectiveQueuedTimelineOutboxPosition) ?: 0L
+    queuedEntries.forEachIndexed { index, entry ->
+        timelineOutbox[entry.idempotencyKey] = entry.copy(queuePosition = basePosition + index.toLong())
+    }
+    val positionByClientMessageId = queuedEntries.mapIndexedNotNull { index, entry ->
+        normalizedQueuedEntryClientMessageId(entry)?.let { clientMessageId ->
+            clientMessageId to (basePosition + index.toLong())
+        }
+    }.toMap()
+    val messages = _state.value.messages.map { message ->
+        val clientMessageId = queuedClientMessageId(message)
+        val nextPosition = clientMessageId?.let(positionByClientMessageId::get)
+        if (message.deliveryState.equals("queued", ignoreCase = true) && nextPosition != null) {
+            message.copy(queuePosition = nextPosition)
+        } else {
+            message
+        }
+    }
+    commitQueuedMessageMutation(messages)
+}
+
+fun ChatStore.removeQueuedMessage(messageId: String) {
+    val entry = orderedQueuedTimelineOutboxEntries()
+        .firstOrNull { queuedEntry -> queuedEntryMatchesMessage(queuedEntry, messageId) }
+        ?: return
+    val clientMessageId = normalizedQueuedEntryClientMessageId(entry) ?: return
+    timelineOutbox.remove(entry.idempotencyKey)
+    val messages = _state.value.messages.filterNot { message ->
+        message.deliveryState.equals("queued", ignoreCase = true) &&
+            queuedClientMessageId(message) == clientMessageId
+    }
+    commitQueuedMessageMutation(messages)
+}
+
+private fun ChatStore.commitQueuedMessageMutation(messages: List<com.rethinkingstudio.clawlink.core.models.chat.ChatMessage>) {
+    val ordered = orderedMessages(messages)
+    _state.value = _state.value.copy(messages = ordered)
+    timelineState = timelineState.copy(messages = ordered)
+    noteCanonicalTimelineMutation()
+    if (!persistCurrentTimelineSnapshot(timelineState, ordered, durablePendingOverlay = true)) {
+        _state.value = _state.value.copy(
+            errorMessage = choose(
+                "The updated message queue could not be saved.",
+                "消息队列的调整暂时无法保存。"
+            )
+        )
+    }
+}
+
+private fun ChatStore.orderedQueuedTimelineOutboxEntries(): List<TimelineOutboxEntry> {
+    return timelineOutbox.values
+        .filter { entry -> entry.queued && entry.kind == TimelineOutboxKind.TEXT }
+        .sortedWith(
+            compareBy<TimelineOutboxEntry>(::effectiveQueuedTimelineOutboxPosition)
+                .thenBy { entry -> entry.idempotencyKey }
+        )
+}
+
+private fun ChatStore.nextQueuedTimelineOutboxPosition(): Long {
+    val maximum = orderedQueuedTimelineOutboxEntries()
+        .maxOfOrNull(::effectiveQueuedTimelineOutboxPosition)
+        ?: return 0L
+    return if (maximum == Long.MAX_VALUE) maximum else maximum + 1L
+}
+
+private fun effectiveQueuedTimelineOutboxPosition(entry: TimelineOutboxEntry): Long {
+    return entry.queuePosition ?: entry.createdAtEpochMs
+}
+
+private fun queuedEntryMatchesMessage(entry: TimelineOutboxEntry, messageId: String): Boolean {
+    val normalizedMessageId = messageId.trim()
+    val clientMessageId = normalizedQueuedEntryClientMessageId(entry) ?: return false
+    return normalizedMessageId == clientMessageId ||
+        normalizedMessageId == "user-$clientMessageId" ||
+        normalizedMessageId == "local-user-$clientMessageId"
+}
+
+private fun normalizedQueuedEntryClientMessageId(entry: TimelineOutboxEntry): String? {
+    return entry.clientMessageId.trim().takeIf { it.isNotEmpty() }
+}
+
+private fun queuedClientMessageId(message: com.rethinkingstudio.clawlink.core.models.chat.ChatMessage): String? {
+    val runId = message.runId.trim()
+    if (runId.startsWith("local-user-")) {
+        return runId.removePrefix("local-user-").trim().takeIf { it.isNotEmpty() }
+    }
+    return message.id.removePrefix("user-").trim().takeIf { it.isNotEmpty() }
+}
+
 internal fun ChatStore.sendVoiceOutgoingRun(
     gatewayId: String,
     audio: VoiceSendAudioPayload,
     message: String?,
     languageHint: String?
 ) {
+    if (hasActiveReplyForOutgoingQueue()) return
     val sessionKey = _state.value.currentSessionKey
     if (sessionKey.isBlank()) return
 
@@ -170,6 +438,16 @@ internal fun ChatStore.sendVoiceOutgoingRun(
     )
 }
 
+/**
+ * 只有当前时间线上确实存在可见的流式回复时，后续消息才进入队列。
+ * timeline 的 active-run 映射可能在终态事件缺少旧 client runId 时短暂残留，
+ * 不能让这类不可见的恢复元数据永久阻塞用户发送。
+ */
+private fun ChatStore.hasActiveReplyForOutgoingQueue(): Boolean {
+    return _state.value.isStreaming &&
+        hasActiveVisibleTimelineRun(timelineState, _state.value.messages)
+}
+
 internal fun ChatStore.replayPendingTimelineOutbox() {
     val persistenceScope = activeTimelinePersistenceScope() ?: return
     if (!isCurrentTimelineScope(persistenceScope)) return
@@ -179,7 +457,7 @@ internal fun ChatStore.replayPendingTimelineOutbox() {
             timelineState.messages
         )
     ) return
-    timelineOutbox.values.toList().forEach { entry ->
+    timelineOutbox.values.filterNot { it.queued }.forEach { entry ->
         when (entry.kind) {
             TimelineOutboxKind.TEXT -> wsClient.sendChatMessage(
                 gatewayId = persistenceScope.gatewayId,

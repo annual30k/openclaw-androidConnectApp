@@ -234,6 +234,30 @@ internal object ChatTimelineReducer {
         } else {
             upsertedMessages
         }
+        val completionEndsRun = event.runState?.trim()?.lowercase() != "active"
+        if (!completionEndsRun) {
+            val canonicalRunId = event.runId?.takeIf { it.isNotBlank() } ?: completedRunId
+            val canonicalTurnId = event.turnId?.takeIf { it.isNotBlank() } ?: completedTurnId ?: canonicalRunId
+            return copy(
+                messages = orderTimelineMessages(anchoredMessagesForCompletedTurn(nextMessages, event)),
+                activeRunId = canonicalRunId ?: activeRunId,
+                activeRunsByTurnId = if (canonicalRunId != null && canonicalTurnId != null) {
+                    activeRunsByTurnId
+                        .filterValues { activeRun -> activeRun != canonicalRunId && activeRun != sameRunAssistant?.runId }
+                        .plus(canonicalTurnId to canonicalRunId)
+                } else {
+                    activeRunsByTurnId
+                },
+                activeTurnByRunId = if (canonicalRunId != null && canonicalTurnId != null) {
+                    activeTurnByRunId
+                        .filterKeys { activeRun -> activeRun != canonicalRunId && activeRun != sameRunAssistant?.runId }
+                        .plus(canonicalRunId to canonicalTurnId)
+                } else {
+                    activeTurnByRunId
+                },
+                messagePartsById = nextParts
+            )
+        }
         val placeholderRunIdToClear = sameRunAssistant?.runId
             ?.takeIf { it.isNotBlank() && it != completedRunId }
         val runIdsToClear = if (clearsWaitingAssistant) {

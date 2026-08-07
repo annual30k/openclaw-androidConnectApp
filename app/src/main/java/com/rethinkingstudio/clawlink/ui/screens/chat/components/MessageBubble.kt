@@ -88,6 +88,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
+internal val messageFooterMinimumItemGap = 10.dp
+
 @Composable
 internal fun MessageBubble(
     message: ChatMessage,
@@ -168,7 +170,7 @@ internal fun MessageBubble(
             return@Column
         }
         if (isStandaloneFileMessage) {
-            StandaloneFileMessage(blocks = fileBlocks, isUser = isUser, messageState = message.state, createdAt = message.createdAt, relayBaseUrl = relayBaseUrl, accessToken = accessToken, onImageClick = onImageClick, onFileClick = onFileClick)
+            StandaloneFileMessage(blocks = fileBlocks, isUser = isUser, messageState = message.state, deliveryState = message.deliveryState, createdAt = message.createdAt, relayBaseUrl = relayBaseUrl, accessToken = accessToken, onImageClick = onImageClick, onFileClick = onFileClick)
             return@Column
         }
         if (shouldShowStreamingWaitState(message.role, message.state) &&
@@ -212,7 +214,9 @@ internal fun MessageBubble(
                         softWrap = false,
                         maxLines = 1
                     ).size.width
-                    with(density) { (titleWidthPx + timestampWidthPx).toDp() + 16.dp }
+                    with(density) {
+                        (titleWidthPx + timestampWidthPx).toDp() + messageFooterMinimumItemGap
+                    }
                 }
                 val widestImageWidth = fileBlocks
                     .filter { it.isImageFileBlock }
@@ -319,6 +323,7 @@ internal fun MessageBubble(
                             title = footerTitle,
                             createdAt = message.createdAt,
                             isUser = isUser,
+                            deliveryState = message.deliveryState,
                             fillsAvailableWidth = true
                         )
                     }
@@ -463,16 +468,31 @@ internal fun MessageFooter(
     createdAt: String,
     isUser: Boolean,
     modifier: Modifier = Modifier,
-    fillsAvailableWidth: Boolean = false
+    fillsAvailableWidth: Boolean = false,
+    deliveryState: String = ""
 ) {
     // 气泡本身先按正文/媒体/最小 footer 宽度收缩；footer 再在该宽度内两端对齐。
     Row(
         modifier = if (fillsAvailableWidth) modifier.fillMaxWidth() else modifier,
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = if (fillsAvailableWidth) Arrangement.SpaceBetween else Arrangement.spacedBy(16.dp)
+        horizontalArrangement = Arrangement.Start
     ) {
         val footerColor = if (isUser) Color.White.copy(alpha = 0.72f) else ChatColors.secondaryText
-        Text(title, style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp), color = footerColor, fontWeight = FontWeight.Medium)
+        val deliveryLabel = when (deliveryState.trim().lowercase()) {
+            "queued" -> choose("Queued", "排队中")
+            "failed" -> choose("Send failed", "发送失败")
+            else -> ""
+        }
+        Text(
+            listOf(title, deliveryLabel).filter { it.isNotBlank() }.joinToString(" · "),
+            style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
+            color = footerColor,
+            fontWeight = FontWeight.Medium
+        )
+        Spacer(Modifier.width(messageFooterMinimumItemGap))
+        if (fillsAvailableWidth) {
+            Spacer(Modifier.weight(1f))
+        }
         Text(formatChatTimestamp(createdAt), style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp), color = footerColor, fontWeight = FontWeight.Medium)
     }
 }

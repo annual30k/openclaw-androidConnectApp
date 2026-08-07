@@ -79,7 +79,9 @@ internal data class TimelineOutboxEntry(
     val content: String = "",
     val attachments: List<TimelineOutboxAttachment> = emptyList(),
     val voice: TimelineOutboxVoice? = null,
-    val createdAtEpochMs: Long
+    val createdAtEpochMs: Long,
+    val queued: Boolean = false,
+    val queuePosition: Long? = null
 )
 
 @Serializable

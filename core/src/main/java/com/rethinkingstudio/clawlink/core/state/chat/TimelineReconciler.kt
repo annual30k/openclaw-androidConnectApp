@@ -100,7 +100,10 @@ private data class CanonicalTimelineEntry(
     val timelineOrderKey: String,
     val timelineIdentityKey: String,
     val timelineItemKind: String,
-    val timelineResolvesWaiting: Boolean?
+    val timelineResolvesWaiting: Boolean?,
+    val deliveryState: String = "",
+    val clientMessageText: String? = null,
+    val queuePosition: Long? = null
 )
 
 private fun String?.clean(): String? = this?.trim()?.takeIf { it.isNotEmpty() }
@@ -219,7 +222,10 @@ private fun ChatMessage.toEntry(sessionKey: String, originalIndex: Int = 0): Can
         timelineOrderKey = canonicalOrderKey.orEmpty(),
         timelineIdentityKey = canonicalIdentityKey.orEmpty(),
         timelineItemKind = timelineItemKind.clean().orEmpty(),
-        timelineResolvesWaiting = timelineResolvesWaiting
+        timelineResolvesWaiting = timelineResolvesWaiting,
+        deliveryState = deliveryState,
+        clientMessageText = clientMessageText,
+        queuePosition = queuePosition
     )
 }
 
@@ -242,7 +248,10 @@ private fun CanonicalTimelineEntry.toChatMessage(): ChatMessage {
         timelineIdentityKey = timelineIdentityKey,
         timelineItemKind = timelineItemKind,
         timelineResolvesWaiting = timelineResolvesWaiting,
-        source = source
+        source = source,
+        deliveryState = deliveryState,
+        clientMessageText = clientMessageText,
+        queuePosition = queuePosition
     )
 }
 

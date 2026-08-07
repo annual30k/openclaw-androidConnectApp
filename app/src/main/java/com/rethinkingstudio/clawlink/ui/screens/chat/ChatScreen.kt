@@ -44,11 +44,14 @@ import androidx.core.view.WindowCompat
 import com.google.accompanist.permissions.ExperimentalPermissionsApi
 import com.google.accompanist.permissions.isGranted
 import com.google.accompanist.permissions.rememberPermissionState
+import com.rethinkingstudio.clawlink.core.models.chat.ChatMessage
 import com.rethinkingstudio.clawlink.core.models.chat.MessageRole
 import com.rethinkingstudio.clawlink.core.models.chat.MessageState
 import com.rethinkingstudio.clawlink.core.models.gateway.GatewayType
 import com.rethinkingstudio.clawlink.core.state.LocalizedText.choose
 import com.rethinkingstudio.clawlink.core.state.chat.ChatStore
+import com.rethinkingstudio.clawlink.core.state.chat.moveQueuedMessage
+import com.rethinkingstudio.clawlink.core.state.chat.removeQueuedMessage
 import com.rethinkingstudio.clawlink.core.state.chat.visibleContextUsageLine
 import com.rethinkingstudio.clawlink.core.state.gateway.GatewayStore
 import com.rethinkingstudio.clawlink.core.state.model.ModelStore
@@ -62,6 +65,7 @@ import com.rethinkingstudio.clawlink.ui.screens.chat.components.GatewaySheetOver
 import com.rethinkingstudio.clawlink.ui.screens.chat.components.ImageFullscreenOverlay
 import com.rethinkingstudio.clawlink.ui.screens.chat.components.ModelPickerSheetOverlay
 import com.rethinkingstudio.clawlink.ui.screens.chat.components.NewMessagesFloatingButton
+import com.rethinkingstudio.clawlink.ui.screens.chat.components.QueuedMessageOverlay
 import com.rethinkingstudio.clawlink.ui.screens.chat.components.SkillExpansionSheetOverlay
 import com.rethinkingstudio.clawlink.ui.screens.chat.components.SlashCommandPanel
 import com.rethinkingstudio.clawlink.ui.screens.chat.components.VoiceInputOverlay
@@ -106,7 +110,16 @@ fun ChatScreen(
     val gatewayId = gatewayState.selectedGatewayId
     val hasSelectedGateway = gatewayState.selectedGateway != null
     val isChatChainReady = gatewayState.isSelectedGatewayChatChainReady
-    val hasActiveSession = hasSelectedGateway && chatState.currentSessionKey.isNotBlank() && isChatChainReady
+    val composerAvailability = resolveChatComposerAvailability(
+        hasSelectedGateway = hasSelectedGateway,
+        sessionKey = chatState.currentSessionKey,
+        isChatChainReady = isChatChainReady,
+        isStreaming = chatState.isStreaming,
+        isStoppingRun = chatState.isStoppingRun,
+        isUploadingAttachment = viewModel.isUploadingAttachment,
+        isVoiceInputBusy = viewModel.voiceInputPhase.isBusy
+    )
+    val hasActiveSession = composerAvailability.hasActiveSession
     val selectedGatewayType = gatewayState.selectedGateway?.gatewayType ?: GatewayType.openclaw
     val showsSkillExpansionControls = hasSelectedGateway && showsSkillExpansionControlsForGateway(selectedGatewayType)
     val showsModelPicker = hasSelectedGateway && showsModelPickerForGateway(selectedGatewayType)
@@ -150,6 +163,20 @@ fun ChatScreen(
             ) ||
                 message.state == MessageState.streaming && message.role == MessageRole.assistant
         }
+    }
+    val queuedMessages = remember(chatState.messages) {
+        chatState.messages
+            .asSequence()
+            .filter { message ->
+                message.role == MessageRole.user &&
+                    message.deliveryState.equals("queued", ignoreCase = true)
+            }
+            .sortedWith(
+                compareBy<ChatMessage> { message ->
+                    message.queuePosition ?: ((message.sortTimestamp ?: 0.0) * 1_000.0).toLong()
+                }.thenBy { message -> message.id }
+            )
+            .toList()
     }
     val messageStructureSignature = remember(visibleMessagesForScroll) {
         conversationStructureSignature(visibleMessagesForScroll)
@@ -267,6 +294,10 @@ fun ChatScreen(
         scope = scope
     )
     val slashActions = slashCommandState.actions
+    val showsSlashCommandPanel = slashActions.isNotEmpty() &&
+        hasActiveSession &&
+        !viewModel.voiceMode &&
+        !viewModel.voiceInputPhase.isBusy
 
     LaunchedEffect(Unit) {
         gatewayStore.loadGateways()
@@ -474,7 +505,7 @@ fun ChatScreen(
                             }
                     ) {
                         AnimatedVisibility(
-                            slashActions.isNotEmpty() && hasActiveSession && !viewModel.voiceMode && !viewModel.voiceInputPhase.isBusy,
+                            showsSlashCommandPanel,
                             enter = fadeIn() + expandVertically(),
                             exit = fadeOut() + shrinkVertically()
                         ) {
@@ -502,8 +533,8 @@ fun ChatScreen(
                             attachments = viewModel.composerAttachments,
                             isUploadingAttachment = viewModel.isUploadingAttachment,
                             hasActiveSession = hasActiveSession,
-                            canEditComposer = hasActiveSession && !chatState.isStreaming && !viewModel.isUploadingAttachment && !chatState.isStoppingRun && !viewModel.voiceInputPhase.isBusy,
-                            canSendMessage = isChatChainReady,
+                            canEditComposer = composerAvailability.canEditComposer,
+                            canSendMessage = composerAvailability.canSendMessage,
                             showAttachmentMenu = viewModel.showAttachmentMenu,
                             onDismissAttachmentMenu = { viewModel.showAttachmentMenu = false },
                             attachmentButtonPosition = viewModel.attachmentButtonPosition,
@@ -567,7 +598,24 @@ fun ChatScreen(
                         }
                     )
                 }
-                if (hasPendingMessagesBelow) {
+                if (
+                    queuedMessages.isNotEmpty() &&
+                    viewModel.composerHeight > 0.dp &&
+                    !showsSlashCommandPanel &&
+                    !voiceOverlayActive
+                ) {
+                    QueuedMessageOverlay(
+                        messages = queuedMessages,
+                        composerHeight = viewModel.composerHeight,
+                        onMove = { message, offset ->
+                            chatStore.moveQueuedMessage(message.id, offset)
+                        },
+                        onRemove = { message ->
+                            chatStore.removeQueuedMessage(message.id)
+                        }
+                    )
+                }
+                if (hasPendingMessagesBelow && queuedMessages.isEmpty()) {
                     NewMessagesFloatingButton(
                         composerHeight = viewModel.composerHeight,
                         onClick = {

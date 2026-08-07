@@ -61,7 +61,8 @@ internal sealed interface TimelineEvent {
         val timelineOrderKey: String? = null,
         val timelineIdentityKey: String? = null,
         val timelineItemKind: String? = null,
-        val timelineResolvesWaiting: Boolean? = null
+        val timelineResolvesWaiting: Boolean? = null,
+        val runState: String? = null
     ) : TimelineEvent
 
     data class RunTerminal(
@@ -294,7 +295,8 @@ private data class RawTimelineEvent(
                 timelineOrderKey = timelineOrderKey,
                 timelineIdentityKey = timelineIdentityKey,
                 timelineItemKind = timelineItemKind,
-                timelineResolvesWaiting = timelineResolvesWaiting
+                timelineResolvesWaiting = timelineResolvesWaiting,
+                runState = runState
             )
             "run.completed", "run.failed", "run.aborted" -> TimelineEvent.RunTerminal(
                 eventId = eventId,

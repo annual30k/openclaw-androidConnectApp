@@ -21,6 +21,10 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.rethinkingstudio.clawlink.R
 
+// 10dp 阴影会向下占用间距；36dp 几何间距保留约 26dp 可见留白，
+// 与待发送队列浮层的底部安全区保持一致。
+internal val newMessagesFloatingButtonGap = 36.dp
+
 @Composable
 internal fun NewMessagesFloatingButton(
     composerHeight: Dp,
@@ -33,7 +37,7 @@ internal fun NewMessagesFloatingButton(
         color = MaterialTheme.colorScheme.surface.copy(alpha = 0.98f),
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.14f)),
         shadowElevation = 10.dp,
-        modifier = modifier.padding(bottom = composerHeight + 18.dp)
+        modifier = modifier.padding(bottom = composerHeight + newMessagesFloatingButtonGap)
     ) {
         Row(
             modifier = Modifier.padding(horizontal = 18.dp, vertical = 11.dp),
