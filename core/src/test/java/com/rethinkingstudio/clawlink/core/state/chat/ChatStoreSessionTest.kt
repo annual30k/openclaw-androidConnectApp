@@ -6,9 +6,11 @@ import com.rethinkingstudio.clawlink.core.models.chat.ComposerAttachmentDraft
 import com.rethinkingstudio.clawlink.core.models.chat.MessageRole
 import com.rethinkingstudio.clawlink.core.models.chat.MessageState
 import com.rethinkingstudio.clawlink.core.models.chat.RelayChatContentBlock
+import com.rethinkingstudio.clawlink.core.models.gateway.GatewayType
 import com.rethinkingstudio.clawlink.core.network.RelayAPIClient
 import com.rethinkingstudio.clawlink.core.network.dto.RelayFileTransferItem
 import com.rethinkingstudio.clawlink.core.network.transport.RelayWebSocketClient
+import com.rethinkingstudio.clawlink.core.network.transport.WsConnectionState
 import com.rethinkingstudio.clawlink.core.network.transport.WsEvent
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.serialization.json.Json
@@ -488,6 +490,51 @@ class ChatStoreSessionTest {
             assertTrue(store.state.value.isStoppingRun)
             assertEquals(listOf("user-1", "assistant-local"), currentTimelineState(store).messages.map { it.id })
             assertEquals("run-1", currentTimelineState(store).activeRunId)
+        } finally {
+            wsClient.destroy()
+        }
+    }
+
+    @Test
+    fun preparedTimelineRehydrationKeepsMixedVersionQuestionBeforeAnswer() {
+        val wsClient = RelayWebSocketClient()
+        try {
+            val store = ChatStore(
+                apiClient = RelayAPIClient(),
+                wsClient = wsClient,
+                notificationPort = object : NotificationPort {
+                    override fun showReplyNotification(sessionKey: String, title: String, body: String) = Unit
+                    override fun cancelNotification(id: Int) = Unit
+                    override fun cancelAll() = Unit
+                }
+            )
+            val question = ChatMessage(
+                id = "user-mixed-version-restore",
+                role = MessageRole.user,
+                state = MessageState.completed,
+                content = "帮我分析一下这个图片",
+                runId = "mixed-version-restore:user",
+                timelineOrderKey = "v5|0|00000000000000000040|00000000000000000005|10|0000000000000005:00000000000000000005:user|eeee",
+                timelineIdentityKey = "message:user:mixed-version-restore",
+                timelineItemKind = "message:user"
+            )
+            val answer = ChatMessage(
+                id = "assistant-mixed-version-restore",
+                role = MessageRole.assistant,
+                state = MessageState.completed,
+                content = "这是一张自然风景照。",
+                runId = "mixed-version-restore:assistant",
+                timelineOrderKey = "v4|0|00000000000000000040|50|0000000000000006:00000000000000000006:assistant|ffff",
+                timelineIdentityKey = "message:assistant:mixed-version-restore",
+                timelineItemKind = "message:assistant"
+            )
+
+            val prepared = store.prepareTimelineRehydration(
+                restored = ChatTimelineState(messages = listOf(answer, question)),
+                sessionKey = "main"
+            )
+
+            assertEquals(listOf(question.id, answer.id), prepared.orderedMessages.map { it.id })
         } finally {
             wsClient.destroy()
         }
@@ -1094,6 +1141,108 @@ class ChatStoreSessionTest {
     }
 
     @Test
+    fun offlineFollowUpStaysQueuedUntilWebSocketReconnects() {
+        val wsClient = RelayWebSocketClient()
+        try {
+            val store = ChatStore(
+                apiClient = RelayAPIClient(),
+                wsClient = wsClient,
+                gatewayTypeFor = { GatewayType.hermes },
+                notificationPort = object : NotificationPort {
+                    override fun showReplyNotification(sessionKey: String, title: String, body: String) = Unit
+                    override fun cancelNotification(id: Int) = Unit
+                    override fun cancelAll() = Unit
+                }
+            )
+            setChatState(
+                store,
+                ChatState(currentGatewayId = "gateway-1", currentSessionKey = "main")
+            )
+
+            store.sendTextOutgoingRun("active", "gateway-1", emptyList(), emptyList(), emptyList(), "run-active")
+            store.sendTextOutgoingRun("111", "gateway-1", emptyList(), emptyList(), emptyList(), "run-offline-queued")
+            setChatState(store, store.state.value.copy(isStreaming = false))
+            setCurrentTimelineState(
+                store,
+                currentTimelineState(store).copy(
+                    activeRunId = null,
+                    activeRunsByTurnId = emptyMap(),
+                    activeTurnByRunId = emptyMap()
+                )
+            )
+
+            store.drainQueuedTimelineOutbox(WsConnectionState.disconnected)
+            store.handleWebSocketConnectionState(WsConnectionState.reconnecting)
+            // 回复元数据已经结束但旧队列尚未发送时，新消息也必须排在旧消息后面，不能插队。
+            store.sendTextOutgoingRun(
+                "newer",
+                "gateway-1",
+                emptyList(),
+                emptyList(),
+                emptyList(),
+                "run-newer-queued"
+            )
+
+            assertTrue(store.timelineOutbox.getValue("run-offline-queued").queued)
+            assertTrue(store.timelineOutbox.getValue("run-newer-queued").queued)
+            assertEquals(
+                listOf("run-offline-queued", "run-newer-queued"),
+                store.timelineOutbox.values
+                    .filter { it.queued }
+                    .sortedBy { it.queuePosition }
+                    .map { it.clientMessageId }
+            )
+            assertEquals(
+                "queued",
+                store.state.value.messages.single { it.id == "user-run-offline-queued" }.deliveryState
+            )
+            assertFalse(store.state.value.messages.any { it.id == "assistant-run-offline-queued" })
+            assertFalse(store.state.value.isStreaming)
+
+            store.handleWebSocketConnectionState(WsConnectionState.connected)
+
+            assertFalse(store.timelineOutbox.getValue("run-offline-queued").queued)
+            assertTrue(store.timelineOutbox.getValue("run-newer-queued").queued)
+            assertEquals(
+                "",
+                store.state.value.messages.single { it.id == "user-run-offline-queued" }.deliveryState
+            )
+            assertTrue(store.state.value.messages.any { it.id == "assistant-run-offline-queued" })
+            assertTrue(store.state.value.isStreaming)
+        } finally {
+            wsClient.destroy()
+        }
+    }
+
+    @Test
+    fun configuredOfflineTransportQueuesFirstMessageInsteadOfStartingVolatileRun() {
+        assertTrue(
+            shouldQueueOutgoingTextRun(
+                hasActiveReply = false,
+                hasQueuedEntries = false,
+                relayConfigured = true,
+                connectionState = WsConnectionState.disconnected
+            )
+        )
+        assertFalse(
+            shouldQueueOutgoingTextRun(
+                hasActiveReply = false,
+                hasQueuedEntries = false,
+                relayConfigured = true,
+                connectionState = WsConnectionState.connected
+            )
+        )
+        assertTrue(
+            shouldQueueOutgoingTextRun(
+                hasActiveReply = false,
+                hasQueuedEntries = true,
+                relayConfigured = true,
+                connectionState = WsConnectionState.connected
+            )
+        )
+    }
+
+    @Test
     fun followUpQueueSupportsReorderRemoveAndDrainsExactlyOnePerTerminalRun() {
         val wsClient = RelayWebSocketClient()
         try {
@@ -1145,7 +1294,7 @@ class ChatStoreSessionTest {
                     activeTurnByRunId = emptyMap()
                 )
             )
-            store.drainQueuedTimelineOutbox()
+            store.drainQueuedTimelineOutbox(WsConnectionState.connected)
 
             assertEquals(listOf(false, false, true), store.timelineOutbox.values.map { it.queued })
             assertTrue(store.state.value.isStreaming)
@@ -1162,7 +1311,7 @@ class ChatStoreSessionTest {
                     activeTurnByRunId = emptyMap()
                 )
             )
-            store.drainQueuedTimelineOutbox()
+            store.drainQueuedTimelineOutbox(WsConnectionState.connected)
 
             assertEquals(listOf(false, false, false), store.timelineOutbox.values.map { it.queued })
             assertEquals("", store.state.value.messages.single { it.id == "user-run-4" }.deliveryState)
@@ -1217,7 +1366,7 @@ class ChatStoreSessionTest {
                     activeTurnByRunId = emptyMap()
                 )
             )
-            store.drainQueuedTimelineOutbox()
+            store.drainQueuedTimelineOutbox(WsConnectionState.connected)
             assertEquals(false, store.timelineOutbox.getValue("run-same-1").queued)
             assertEquals(true, store.timelineOutbox.getValue("run-same-2").queued)
 
@@ -1230,7 +1379,7 @@ class ChatStoreSessionTest {
                     activeTurnByRunId = emptyMap()
                 )
             )
-            store.drainQueuedTimelineOutbox()
+            store.drainQueuedTimelineOutbox(WsConnectionState.connected)
             assertEquals(false, store.timelineOutbox.getValue("run-same-2").queued)
             assertEquals(
                 listOf("same follow-up", "same follow-up"),
@@ -1274,7 +1423,7 @@ class ChatStoreSessionTest {
             // 模拟终态已结束可见回复，但旧协议映射尚未带齐 client runId，留下 stale active-run 元数据。
             setChatState(store, store.state.value.copy(messages = completedMessages, isStreaming = false))
 
-            store.drainQueuedTimelineOutbox()
+            store.drainQueuedTimelineOutbox(WsConnectionState.connected)
 
             assertFalse(store.timelineOutbox.getValue("run-queued").queued)
             assertEquals("", store.state.value.messages.single { it.id == "user-run-queued" }.deliveryState)
@@ -1335,7 +1484,7 @@ class ChatStoreSessionTest {
                 )
             )
 
-            store.drainQueuedTimelineOutbox()
+            store.drainQueuedTimelineOutbox(WsConnectionState.connected)
 
             assertTrue(store.timelineOutbox.containsKey("run-queue-1"))
             assertFalse(store.timelineOutbox.getValue("run-queue-1").queued)
@@ -1399,7 +1548,7 @@ class ChatStoreSessionTest {
                 executor.execute {
                     ready.countDown()
                     start.await()
-                    store.drainQueuedTimelineOutbox()
+                    store.drainQueuedTimelineOutbox(WsConnectionState.connected)
                     finished.countDown()
                 }
             }
@@ -1461,7 +1610,7 @@ class ChatStoreSessionTest {
                 )
             )
 
-            store.drainQueuedTimelineOutbox()
+            store.drainQueuedTimelineOutbox(WsConnectionState.connected)
 
             assertFalse(store.timelineOutbox.containsKey(invalidEntry.idempotencyKey))
             assertFalse(store.timelineOutbox.getValue(validEntry.idempotencyKey).queued)

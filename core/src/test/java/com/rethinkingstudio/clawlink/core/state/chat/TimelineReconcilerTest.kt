@@ -10,6 +10,75 @@ import org.junit.Test
 
 class TimelineReconcilerTest {
     @Test
+    fun mixedV4V5OrderKeysFormATransitiveTotalOrderWithoutChangingVersionSemantics() {
+        val olderV5 = "v5|0|00000000000000000010|00000000000000000001|10|0000000000000001:00000000000000000001:user-old|aaaa"
+        val newerV4 = "v4|0|00000000000000000020|10|0000000000000002:00000000000000000002:user-new|bbbb"
+        assertTrue(compareCanonicalTimelineOrderKeys(olderV5, newerV4) < 0)
+        assertTrue(compareCanonicalTimelineOrderKeys(newerV4, olderV5) > 0)
+
+        val userV4 = "v4|0|00000000000000000030|10|0000000000000003:00000000000000000003:user|cccc"
+        val assistantV5 = "v5|0|00000000000000000030|00000000000000000004|50|0000000000000004:00000000000000000004:assistant|dddd"
+        assertTrue(compareCanonicalTimelineOrderKeys(userV4, assistantV5) < 0)
+
+        val userV5 = "v5|0|00000000000000000040|00000000000000000005|10|0000000000000005:00000000000000000005:user|eeee"
+        val assistantV4 = "v4|0|00000000000000000040|50|0000000000000006:00000000000000000006:assistant|ffff"
+        assertTrue(compareCanonicalTimelineOrderKeys(assistantV4, userV5) < 0)
+
+        val confirmedV5 = "v5|0|00000000000000000999|00000000000000000001|50|0000000000000001:00000000000000000001:confirmed|1111"
+        val pendingV4 = "v4|1|00000000000000000001|10|0000000000000001:00000000000000000001:pending|2222"
+        assertTrue(compareCanonicalTimelineOrderKeys(confirmedV5, pendingV4) < 0)
+        assertTrue(compareCanonicalTimelineOrderKeys(pendingV4, confirmedV5) > 0)
+
+        val highSuborderV4 = "v4|0|00000000000000000050|10|0000000000000030:00000000000000000030:a|aaaa"
+        val lowSuborderV4 = "v4|0|00000000000000000050|50|0000000000000010:00000000000000000010:b|bbbb"
+        val middleSuborderV5 = "v5|0|00000000000000000050|0000000000000020|30|0000000000000020:00000000000000000020:c|cccc"
+        val expected = listOf(highSuborderV4, lowSuborderV4, middleSuborderV5)
+        listOf(
+            listOf(highSuborderV4, lowSuborderV4, middleSuborderV5),
+            listOf(highSuborderV4, middleSuborderV5, lowSuborderV4),
+            listOf(lowSuborderV4, highSuborderV4, middleSuborderV5),
+            listOf(lowSuborderV4, middleSuborderV5, highSuborderV4),
+            listOf(middleSuborderV5, highSuborderV4, lowSuborderV4),
+            listOf(middleSuborderV5, lowSuborderV4, highSuborderV4)
+        ).forEach { permutation ->
+            assertEquals(
+                expected,
+                permutation.sortedWith { left, right -> compareCanonicalTimelineOrderKeys(left, right) }
+            )
+        }
+    }
+
+    @Test
+    fun mixedV4V5TimelineKeepsQuestionBeforeItsAnswer() {
+        val question = ChatMessage(
+            id = "user-mixed-version",
+            role = MessageRole.user,
+            state = MessageState.completed,
+            content = "帮我分析一下这个图片",
+            contentBlocks = listOf(RelayChatContentBlock(type = "text", text = "帮我分析一下这个图片")),
+            runId = "mixed-version-run:user",
+            timelineOrderKey = "v5|0|00000000000000000040|00000000000000000005|10|0000000000000005:00000000000000000005:user|eeee",
+            timelineIdentityKey = "message:user:mixed-version",
+            timelineItemKind = "message:user"
+        )
+        val answer = ChatMessage(
+            id = "assistant-mixed-version",
+            role = MessageRole.assistant,
+            state = MessageState.completed,
+            content = "这是一张自然风景照。",
+            contentBlocks = listOf(RelayChatContentBlock(type = "text", text = "这是一张自然风景照。")),
+            runId = "mixed-version-run:assistant",
+            timelineOrderKey = "v4|0|00000000000000000040|50|0000000000000006:00000000000000000006:assistant|ffff",
+            timelineIdentityKey = "message:assistant:mixed-version",
+            timelineItemKind = "message:assistant"
+        )
+
+        val ordered = sortTimelineMessagesV3(listOf(answer, question))
+
+        assertEquals(listOf(question.id, answer.id), ordered.map { it.id })
+    }
+
+    @Test
     fun localPendingTurnsKeepEachUserBeforeItsOwnAssistantPlaceholder() {
         val firstUser = ChatMessage(
             id = "user-first-run",

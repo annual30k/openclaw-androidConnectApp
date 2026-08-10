@@ -114,6 +114,9 @@ fun ChatScreen(
         hasSelectedGateway = hasSelectedGateway,
         sessionKey = chatState.currentSessionKey,
         isChatChainReady = isChatChainReady,
+        isRecoveringMessages = chatState.isLoading ||
+            chatState.isSwitchingSession ||
+            chatState.historyWindow.isCatchingUp,
         isStreaming = chatState.isStreaming,
         isStoppingRun = chatState.isStoppingRun,
         isUploadingAttachment = viewModel.isUploadingAttachment,

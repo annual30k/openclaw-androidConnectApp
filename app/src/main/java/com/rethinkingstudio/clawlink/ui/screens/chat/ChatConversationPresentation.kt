@@ -5,6 +5,7 @@ import com.rethinkingstudio.clawlink.core.models.chat.MessageRole
 import com.rethinkingstudio.clawlink.core.models.chat.MessageState
 import com.rethinkingstudio.clawlink.core.models.chat.RelayChatContentBlock
 import com.rethinkingstudio.clawlink.core.state.chat.ChatState
+import com.rethinkingstudio.clawlink.core.state.chat.compareCanonicalTimelineOrderKeys
 import java.io.File
 import java.net.URI
 
@@ -288,12 +289,15 @@ private fun ChatMessage.preferredSameTurnUserTextSource(group: List<ChatMessage>
             message.preferredSameTurnUserTextBlocks().isNotEmpty() ||
                 (message.contentBlocks.none { it.isTransferContentBlock } && message.content.trim().isNotEmpty())
         }
-        .maxWithOrNull(
-            compareBy<ChatMessage> { it.sameTurnUserTextSourceScore() }
-                .thenBy { it.timelineOrderKey }
-                .thenBy { it.timelineIdentityKey }
-                .thenBy { it.id }
-        )
+        .maxWithOrNull(Comparator { left, right ->
+            left.sameTurnUserTextSourceScore().compareTo(right.sameTurnUserTextSourceScore())
+                .takeIf { it != 0 }
+                ?: compareCanonicalTimelineOrderKeys(left.timelineOrderKey, right.timelineOrderKey)
+                    .takeIf { it != 0 }
+                ?: left.timelineIdentityKey.compareTo(right.timelineIdentityKey)
+                    .takeIf { it != 0 }
+                ?: left.id.compareTo(right.id)
+        })
         ?: takeIf { content.trim().isNotEmpty() }
 }
 
@@ -537,7 +541,7 @@ private fun List<ChatMessage>.coalescedResolvedTransientAssistantPlaceholders():
 }
 
 private fun ChatMessage.prefersTransientAssistantPlaceholderOver(other: ChatMessage): Boolean {
-    val keyComparison = compareNormalizedText(timelineOrderKey, other.timelineOrderKey)
+    val keyComparison = compareCanonicalTimelineOrderKeys(timelineOrderKey, other.timelineOrderKey)
     if (keyComparison != 0) return keyComparison > 0
 
     val identityComparison = compareNormalizedText(timelineIdentityKey.ifBlank { id }, other.timelineIdentityKey.ifBlank { other.id })

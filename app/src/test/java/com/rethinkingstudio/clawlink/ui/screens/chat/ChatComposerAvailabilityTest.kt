@@ -11,6 +11,7 @@ class ChatComposerAvailabilityTest {
             hasSelectedGateway = true,
             sessionKey = "main",
             isChatChainReady = false,
+            isRecoveringMessages = false,
             isStreaming = true,
             isStoppingRun = false,
             isUploadingAttachment = false,
@@ -28,6 +29,43 @@ class ChatComposerAvailabilityTest {
             hasSelectedGateway = true,
             sessionKey = "main",
             isChatChainReady = false,
+            isRecoveringMessages = false,
+            isStreaming = false,
+            isStoppingRun = false,
+            isUploadingAttachment = false,
+            isVoiceInputBusy = false
+        )
+
+        assertFalse(availability.hasActiveSession)
+        assertFalse(availability.canEditComposer)
+        assertFalse(availability.canSendMessage)
+    }
+
+    @Test
+    fun messageRecoveryAllowsDurableOutgoingQueueBeforePresenceConverges() {
+        val availability = resolveChatComposerAvailability(
+            hasSelectedGateway = true,
+            sessionKey = "main",
+            isChatChainReady = false,
+            isRecoveringMessages = true,
+            isStreaming = false,
+            isStoppingRun = false,
+            isUploadingAttachment = false,
+            isVoiceInputBusy = false
+        )
+
+        assertTrue(availability.hasActiveSession)
+        assertTrue(availability.canEditComposer)
+        assertTrue(availability.canSendMessage)
+    }
+
+    @Test
+    fun messageRecoveryWithoutAStableSessionScopeStaysLocked() {
+        val availability = resolveChatComposerAvailability(
+            hasSelectedGateway = true,
+            sessionKey = "",
+            isChatChainReady = false,
+            isRecoveringMessages = true,
             isStreaming = false,
             isStoppingRun = false,
             isUploadingAttachment = false,
@@ -45,6 +83,7 @@ class ChatComposerAvailabilityTest {
             hasSelectedGateway = true,
             sessionKey = "main",
             isChatChainReady = true,
+            isRecoveringMessages = false,
             isStreaming = true,
             isStoppingRun = true,
             isUploadingAttachment = false,

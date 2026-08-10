@@ -158,6 +158,9 @@ class ChatStore(
         wsClient.events
             .onEach { event -> handleWsEvent(event) }
             .launchIn(scope)
+        wsClient.connectionState
+            .onEach { connectionState -> handleWebSocketConnectionState(connectionState) }
+            .launchIn(scope)
     }
 
     internal data class PreparedTimelineRehydration(
@@ -402,6 +405,14 @@ class ChatStore(
             kotlinx.coroutines.yield()
             drainQueuedTimelineOutbox()
         }
+    }
+
+    internal fun handleWebSocketConnectionState(connectionState: WsConnectionState) {
+        if (connectionState != WsConnectionState.connected) return
+        // 离线期间 queued entry 始终保留持久队列身份；只有真正重连成功后才激活队首。
+        // 锁会合并历史恢复、终态事件和连接事件的并发触发，确保一次只发送一条。
+        drainQueuedTimelineOutbox(connectionState)
+        schedulePendingFinalSyncsForCurrentSession()
     }
 
     private fun markTimelineRunResolved(runId: String, runScope: ChatRunScope?) {

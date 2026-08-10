@@ -3,16 +3,23 @@ package com.rethinkingstudio.clawlink.core.state.chat
 import com.rethinkingstudio.clawlink.core.models.chat.RelayChatContentBlock
 import com.rethinkingstudio.clawlink.core.network.transport.RelayChatSendAttachmentPayload
 import com.rethinkingstudio.clawlink.core.network.transport.VoiceSendAudioPayload
+import com.rethinkingstudio.clawlink.core.network.transport.WsConnectionState
 import com.rethinkingstudio.clawlink.core.state.LocalizedText.choose
 import java.util.UUID
 
-internal fun ChatStore.drainQueuedTimelineOutbox() {
+internal fun ChatStore.drainQueuedTimelineOutbox(
+    connectionState: WsConnectionState = wsClient.connectionState.value
+) {
     synchronized(queuedTimelineOutboxDrainLock) {
-        drainQueuedTimelineOutboxLocked()
+        drainQueuedTimelineOutboxLocked(connectionState)
     }
 }
 
-private fun ChatStore.drainQueuedTimelineOutboxLocked() {
+private fun ChatStore.drainQueuedTimelineOutboxLocked(connectionState: WsConnectionState) {
+    // durable queue 只有在传输层已经真正连通时才能激活。离线时提前把 queued 改成 false，
+    // 会让队列面板消失并把可靠性退化成 WebSocket 的进程内缓冲；进程重建后只剩用户气泡，
+    // 无法保证原请求继续获得回复。
+    if (connectionState != WsConnectionState.connected) return
     if (hasActiveReplyForOutgoingQueue()) return
     val gatewayId = _state.value.currentGatewayId?.trim().orEmpty()
     val sessionKey = normalizeSessionKey(_state.value.currentSessionKey)
@@ -22,7 +29,7 @@ private fun ChatStore.drainQueuedTimelineOutboxLocked() {
     val clientMessageId = entry.clientMessageId.trim()
     if (clientMessageId.isEmpty()) {
         failUnrestorableQueuedTimelineOutboxEntry(entry)
-        drainQueuedTimelineOutboxLocked()
+        drainQueuedTimelineOutboxLocked(connectionState)
         return
     }
 
@@ -35,7 +42,7 @@ private fun ChatStore.drainQueuedTimelineOutboxLocked() {
     }
     if (userIndex < 0) {
         failUnrestorableQueuedTimelineOutboxEntry(entry, messages)
-        drainQueuedTimelineOutboxLocked()
+        drainQueuedTimelineOutboxLocked(connectionState)
         return
     }
 
@@ -156,7 +163,12 @@ internal fun ChatStore.sendTextOutgoingRun(
     commandAttachments: List<RelayChatSendAttachmentPayload>,
     clientRunId: String? = null
 ) {
-    val queueBehindActiveRun = hasActiveReplyForOutgoingQueue()
+    val queueBehindActiveRun = shouldQueueOutgoingTextRun(
+        hasActiveReply = hasActiveReplyForOutgoingQueue(),
+        hasQueuedEntries = orderedQueuedTimelineOutboxEntries().isNotEmpty(),
+        relayConfigured = apiClient.isConfigured,
+        connectionState = wsClient.connectionState.value
+    )
     val sessionKey = _state.value.currentSessionKey
     if (sessionKey.isBlank()) return
 
@@ -455,6 +467,17 @@ internal fun ChatStore.sendVoiceOutgoingRun(
 private fun ChatStore.hasActiveReplyForOutgoingQueue(): Boolean {
     return _state.value.isStreaming &&
         hasActiveVisibleTimelineRun(timelineState, _state.value.messages)
+}
+
+internal fun shouldQueueOutgoingTextRun(
+    hasActiveReply: Boolean,
+    hasQueuedEntries: Boolean,
+    relayConfigured: Boolean,
+    connectionState: WsConnectionState
+): Boolean {
+    return hasActiveReply ||
+        hasQueuedEntries ||
+        (relayConfigured && connectionState != WsConnectionState.connected)
 }
 
 internal fun ChatStore.replayPendingTimelineOutbox() {

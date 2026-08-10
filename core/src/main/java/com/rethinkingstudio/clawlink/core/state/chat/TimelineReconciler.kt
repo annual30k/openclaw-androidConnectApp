@@ -350,7 +350,7 @@ private fun compareEntries(left: CanonicalTimelineEntry, right: CanonicalTimelin
     if (localPendingTimelineOrder(left, right)) return -1
     if (localPendingTimelineOrder(right, left)) return 1
     if (leftOrderKey != null && rightOrderKey != null) {
-        val orderCompare = leftOrderKey.compareTo(rightOrderKey)
+        val orderCompare = compareCanonicalTimelineOrderKeys(leftOrderKey, rightOrderKey)
         if (orderCompare != 0) return orderCompare
         val identityCompare = left.timelineIdentityKey.compareTo(right.timelineIdentityKey)
         if (identityCompare != 0) return identityCompare
@@ -637,7 +637,7 @@ internal fun sortTimelineMessagesV3(messages: List<ChatMessage>, sessionKey: Str
         if (relayTimelineOrderKey(entry) == null) entry else canonicalEntries.next()
     }
     val projectedTurns = projectActiveLocalTurns(canonicalSlotted)
-    val userAnchored = moveLegacyUnconfirmedUsersBeforeMatchingOutputs(projectedTurns)
+    val userAnchored = moveSameTurnUsersBeforeMatchingOutputs(projectedTurns)
     return moveWaitingAfterSameTurnOutputs(userAnchored).map { it.toChatMessage() }
 }
 
@@ -712,7 +712,7 @@ private fun projectActiveLocalTurns(
         val leftOrder = relayTimelineOrderKey(left.entry)
         val rightOrder = relayTimelineOrderKey(right.entry)
         if (leftOrder != null && rightOrder != null && leftOrder != rightOrder) {
-            return@sortedWith leftOrder.compareTo(rightOrder)
+            return@sortedWith compareCanonicalTimelineOrderKeys(leftOrder, rightOrder)
         }
         left.physicalIndex.compareTo(right.physicalIndex)
     }.map(LocalTurnProjection::entry)
@@ -730,27 +730,52 @@ private fun projectActiveLocalTurns(
     return base
 }
 
-private fun moveLegacyUnconfirmedUsersBeforeMatchingOutputs(
+private fun moveSameTurnUsersBeforeMatchingOutputs(
     entries: List<CanonicalTimelineEntry>
 ): List<CanonicalTimelineEntry> {
-    val result = entries.toMutableList()
-    val users = entries.filter { user ->
+    val identitySets = entries.map(::turnIdentitySet)
+    val eligibleUserIndices = entries.indices.filter { index ->
+        val user = entries[index]
         user.role == MessageRole.user &&
-            relayTimelineOrderKey(user) == null &&
             user.state !in setOf(MessageState.failed, MessageState.deleted, MessageState.recalled) &&
             user.deliveryState.trim().lowercase() !in setOf("failed", "error", "aborted")
     }
-    users.forEach { user ->
-        val userTurn = normalizedTurnIdentity(user)
-        if (userTurn.isEmpty()) return@forEach
-        val userIndex = result.indexOf(user)
-        val outputIndex = result.indexOfFirst { output ->
-            output.role in setOf(MessageRole.assistant, MessageRole.tool) &&
-                normalizedTurnIdentity(output) == userTurn
+    val userIndicesByIdentity = mutableMapOf<String, MutableSet<Int>>()
+    eligibleUserIndices.forEach { index ->
+        identitySets[index].forEach { identity ->
+            userIndicesByIdentity.getOrPut(identity, ::mutableSetOf).add(index)
         }
-        if (userIndex < 0 || outputIndex < 0 || outputIndex >= userIndex) return@forEach
-        result.removeAt(userIndex)
-        result.add(outputIndex, user)
+    }
+    val firstOutputIndexByIdentity = mutableMapOf<String, Int>()
+    entries.indices.forEach { index ->
+        if (entries[index].role !in setOf(MessageRole.assistant, MessageRole.tool)) return@forEach
+        identitySets[index].forEach { identity ->
+            firstOutputIndexByIdentity.putIfAbsent(identity, index)
+        }
+    }
+    val userIndicesByOutputIndex = mutableMapOf<Int, MutableList<Int>>()
+    eligibleUserIndices.forEach { userIndex ->
+        val identities = identitySets[userIndex]
+        if (identities.isEmpty()) return@forEach
+        val matchingUserIndices = identities
+            .flatMap { identity -> userIndicesByIdentity[identity].orEmpty() }
+            .toSet()
+        if (matchingUserIndices != setOf(userIndex)) return@forEach
+        val outputIndex = identities.mapNotNull(firstOutputIndexByIdentity::get).minOrNull()
+            ?: return@forEach
+        if (outputIndex >= userIndex) return@forEach
+        // v4/v5 在同一 conversation sequence 的字段语义不同。只有唯一、稳定的
+        // turn identity 才有资格跨版本把 user 锚到本轮输出之前。
+        userIndicesByOutputIndex.getOrPut(outputIndex, ::mutableListOf).add(userIndex)
+    }
+    if (userIndicesByOutputIndex.isEmpty()) return entries
+    val movedUserIndices = userIndicesByOutputIndex.values.flatten().toSet()
+    val result = ArrayList<CanonicalTimelineEntry>(entries.size)
+    entries.indices.forEach { index ->
+        userIndicesByOutputIndex[index].orEmpty().sorted().forEach { userIndex ->
+            result.add(entries[userIndex])
+        }
+        if (index !in movedUserIndices) result.add(entries[index])
     }
     return result
 }
