@@ -27,6 +27,9 @@ internal fun ChatTimelineState.upsertMessage(
         current[index] = message.copy(
             createdAt = message.createdAt.ifBlank { existing.createdAt },
             runId = message.runId.ifBlank { existing.runId },
+            turnId = message.turnId.ifBlank { existing.turnId },
+            clientMessageId = message.clientMessageId.ifBlank { existing.clientMessageId },
+            idempotencyKey = message.idempotencyKey.ifBlank { existing.idempotencyKey },
             sortTimestamp = message.sortTimestamp ?: existing.sortTimestamp,
             seq = message.seq ?: existing.seq,
             turnSeq = message.turnSeq ?: existing.turnSeq,
@@ -37,7 +40,8 @@ internal fun ChatTimelineState.upsertMessage(
             timelineIdentityKey = message.timelineIdentityKey.ifBlank { existing.timelineIdentityKey },
             timelineItemKind = message.timelineItemKind.ifBlank { existing.timelineItemKind },
             timelineResolvesWaiting = message.timelineResolvesWaiting ?: existing.timelineResolvesWaiting,
-            source = message.source.ifBlank { existing.source }
+            source = message.source.ifBlank { existing.source },
+            localTurnOrder = message.localTurnOrder ?: existing.localTurnOrder
         )
         if (replacementIndex >= 0 && replacementIndex != index) {
             // canonical identity 已存在时，replaceMessageId 指向的本地 user/waiting 仍必须被清理；
@@ -72,6 +76,9 @@ internal fun ChatTimelineState.upsertToolMessage(message: ChatMessage): List<Cha
         current[index] = message.copy(
             createdAt = message.createdAt.ifBlank { existing.createdAt },
             runId = message.runId.ifBlank { existing.runId },
+            turnId = message.turnId.ifBlank { existing.turnId },
+            clientMessageId = message.clientMessageId.ifBlank { existing.clientMessageId },
+            idempotencyKey = message.idempotencyKey.ifBlank { existing.idempotencyKey },
             sortTimestamp = message.sortTimestamp ?: existing.sortTimestamp,
             seq = message.seq ?: existing.seq,
             turnSeq = message.turnSeq ?: existing.turnSeq,
@@ -82,7 +89,8 @@ internal fun ChatTimelineState.upsertToolMessage(message: ChatMessage): List<Cha
             timelineIdentityKey = message.timelineIdentityKey.ifBlank { existing.timelineIdentityKey },
             timelineItemKind = message.timelineItemKind.ifBlank { existing.timelineItemKind },
             timelineResolvesWaiting = message.timelineResolvesWaiting ?: existing.timelineResolvesWaiting,
-            source = message.source.ifBlank { existing.source }
+            source = message.source.ifBlank { existing.source },
+            localTurnOrder = message.localTurnOrder ?: existing.localTurnOrder
         )
     }
 }

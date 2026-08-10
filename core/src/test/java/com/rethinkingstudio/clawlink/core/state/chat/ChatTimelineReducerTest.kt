@@ -65,6 +65,69 @@ class ChatTimelineReducerTest {
     }
 
     @Test
+    fun providerRunCompletionKeepsLocalQuestionAheadByClientAlias() {
+        val clientRunId = "client-run-alias"
+        val initial = ChatTimelineState(
+            messages = listOf(
+                ChatMessage(
+                    id = "user-$clientRunId",
+                    role = MessageRole.user,
+                    content = "question",
+                    runId = "local-user-$clientRunId",
+                    turnId = clientRunId,
+                    clientMessageId = clientRunId,
+                    idempotencyKey = clientRunId,
+                    timelineOrderKey = "local:$clientRunId|10|user",
+                    timelineIdentityKey = "local:message:user:$clientRunId",
+                    timelineItemKind = "message:user",
+                    localTurnOrder = 1
+                ),
+                ChatMessage(
+                    id = "assistant-$clientRunId",
+                    role = MessageRole.assistant,
+                    state = MessageState.streaming,
+                    content = "[[clawlink:typing]]",
+                    runId = clientRunId,
+                    turnId = clientRunId,
+                    clientMessageId = clientRunId,
+                    idempotencyKey = clientRunId,
+                    timelineOrderKey = "local:$clientRunId|20|waiting",
+                    timelineIdentityKey = "local:waiting:$clientRunId",
+                    timelineItemKind = "waiting",
+                    localTurnOrder = 1
+                )
+            )
+        )
+        val completion = requireNotNull(
+            TimelineEventLog.decodeEvent(
+                """
+                {
+                  "protocolVersion": 2,
+                  "eventId": "evt-provider-answer",
+                  "eventType": "message.completed",
+                  "turnId": "server-turn-alias",
+                  "runId": "provider-run-alias",
+                  "clientMessageId": "$clientRunId",
+                  "idempotencyKey": "$clientRunId",
+                  "messageId": "assistant-provider",
+                  "role": "assistant",
+                  "content": [{ "type": "text", "text": "answer" }],
+                  "timelineOrderKey": "v1|00000000000000000001|50|000000|assistant-provider",
+                  "timelineIdentityKey": "message:assistant:assistant-provider",
+                  "timelineItemKind": "message:assistant"
+                }
+                """.trimIndent()
+            )
+        )
+
+        val state = ChatTimelineReducer.reduce(initial, completion)
+
+        assertEquals(listOf("user-$clientRunId", "assistant-provider"), state.messages.map { it.id })
+        assertEquals(clientRunId, state.messages.last().clientMessageId)
+        assertEquals(clientRunId, state.messages.last().idempotencyKey)
+    }
+
+    @Test
     fun liveUserTurnKeepsRemoteRunIdentityAndSource() {
         val event = requireNotNull(
             TimelineEventLog.decodeEvent(

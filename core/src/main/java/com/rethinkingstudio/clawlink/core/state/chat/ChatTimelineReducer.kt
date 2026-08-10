@@ -41,12 +41,16 @@ internal object ChatTimelineReducer {
         if (messages.any { it.id == event.messageId }) return this
         val incomingTurnIdentities = listOfNotNull(
             event.turnId.takeIf { it.isNotBlank() },
-            event.runId?.takeIf { it.isNotBlank() }
+            event.runId?.takeIf { it.isNotBlank() },
+            event.clientMessageId?.takeIf { it.isNotBlank() },
+            event.idempotencyKey?.takeIf { it.isNotBlank() }
         ).mapNotNull { normalizedTurnIdentity(it) }.toSet()
         val equivalentIndexes = messages.indices.filter { index ->
             val message = messages[index]
             message.role == MessageRole.user &&
-                normalizedTurnIdentity(message.runId) in incomingTurnIdentities
+                listOf(message.turnId, message.runId, message.clientMessageId, message.idempotencyKey)
+                    .mapNotNull(::normalizedTurnIdentity)
+                    .any { it in incomingTurnIdentities }
         }
         // 稳定 turn 正常只对应一条可见 user 消息；冲突超过一条时不按文案、时间或数组位置猜测。
         val equivalentIndex = equivalentIndexes.singleOrNull()
@@ -64,6 +68,9 @@ internal object ChatTimelineReducer {
                 } else {
                     event.runId?.takeIf { it.isNotBlank() } ?: event.turnId
                 },
+            turnId = event.turnId,
+            clientMessageId = event.clientMessageId.orEmpty().ifBlank { existing?.clientMessageId.orEmpty() },
+            idempotencyKey = event.idempotencyKey.orEmpty().ifBlank { existing?.idempotencyKey.orEmpty() },
             sortTimestamp = existing?.sortTimestamp ?: timelineSortTimestamp(event.createdAt),
             seq = event.seq,
             turnSeq = event.turnSeq,
@@ -134,13 +141,17 @@ internal object ChatTimelineReducer {
                 contentBlocks = event.content,
                 createdAt = event.createdAt.orEmpty().ifBlank { matchedMessage?.createdAt.orEmpty() },
                 runId = event.runId.orEmpty(),
+                turnId = event.turnId.orEmpty().ifBlank { matchedMessage?.turnId.orEmpty() },
+                clientMessageId = event.clientMessageId.orEmpty().ifBlank { matchedMessage?.clientMessageId.orEmpty() },
+                idempotencyKey = event.idempotencyKey.orEmpty().ifBlank { matchedMessage?.idempotencyKey.orEmpty() },
                 sortTimestamp = timelineSortTimestamp(event.createdAt, fallbackSortTimestamp),
                 seq = event.seq,
                 turnSeq = matchedMessage?.turnSeq ?: event.turnSeq,
                 timelineOrderKey = event.timelineOrderKey.orEmpty().ifBlank { matchedMessage?.timelineOrderKey.orEmpty() },
                 timelineIdentityKey = event.timelineIdentityKey.orEmpty().ifBlank { matchedMessage?.timelineIdentityKey.orEmpty() },
                 timelineItemKind = event.timelineItemKind.orEmpty().ifBlank { matchedMessage?.timelineItemKind.orEmpty() },
-                timelineResolvesWaiting = event.timelineResolvesWaiting ?: matchedMessage?.timelineResolvesWaiting
+                timelineResolvesWaiting = event.timelineResolvesWaiting ?: matchedMessage?.timelineResolvesWaiting,
+                localTurnOrder = matchedMessage?.localTurnOrder
             ),
             replaceMessageId = localPlaceholder?.id
         )
@@ -201,6 +212,9 @@ internal object ChatTimelineReducer {
             contentBlocks = event.content.ifEmpty { matchedMessage?.contentBlocks.orEmpty() },
             createdAt = event.createdAt.orEmpty().ifBlank { matchedMessage?.createdAt.orEmpty() },
             runId = event.runId.orEmpty().ifBlank { matchedMessage?.runId.orEmpty() },
+            turnId = event.turnId.orEmpty().ifBlank { matchedMessage?.turnId.orEmpty() },
+            clientMessageId = event.clientMessageId.orEmpty().ifBlank { matchedMessage?.clientMessageId.orEmpty() },
+            idempotencyKey = event.idempotencyKey.orEmpty().ifBlank { matchedMessage?.idempotencyKey.orEmpty() },
             sortTimestamp = matchedMessage?.sortTimestamp ?: timelineSortTimestamp(event.createdAt),
             seq = event.seq ?: matchedMessage?.seq,
             turnSeq = matchedMessage?.turnSeq ?: event.turnSeq,
@@ -208,7 +222,8 @@ internal object ChatTimelineReducer {
             timelineOrderKey = anchoredOrderKey.orEmpty().ifBlank { event.timelineOrderKey.orEmpty().ifBlank { matchedMessage?.timelineOrderKey.orEmpty() } },
             timelineIdentityKey = anchoredIdentityKey.orEmpty().ifBlank { event.timelineIdentityKey.orEmpty().ifBlank { matchedMessage?.timelineIdentityKey.orEmpty() } },
             timelineItemKind = anchoredItemKind,
-            timelineResolvesWaiting = event.timelineResolvesWaiting ?: matchedMessage?.timelineResolvesWaiting
+            timelineResolvesWaiting = event.timelineResolvesWaiting ?: matchedMessage?.timelineResolvesWaiting,
+            localTurnOrder = matchedMessage?.localTurnOrder
         )
         val messageForUpsert = message
         val nextParts = messagePartsById + (event.messageId to TimelineMessageParts(event.turnId, mapOf("text" to content)))
@@ -486,6 +501,9 @@ internal object ChatTimelineReducer {
                     contentBlocks = item.content,
                     createdAt = item.createdAt.orEmpty(),
                     runId = item.runId?.takeIf { it.isNotBlank() } ?: item.messageId,
+                    turnId = item.turnId,
+                    clientMessageId = item.clientMessageId.orEmpty(),
+                    idempotencyKey = item.idempotencyKey.orEmpty(),
                     sortTimestamp = sortTimestamp,
                     seq = item.seq,
                     turnSeq = item.turnSeq,
@@ -500,7 +518,9 @@ internal object ChatTimelineReducer {
                     nextState.matchingLocalUser(
                         excludingMessageId = item.messageId,
                         turnId = item.turnId,
-                        runId = item.runId
+                        runId = item.runId,
+                        clientMessageId = item.clientMessageId,
+                        idempotencyKey = item.idempotencyKey
                     )
                 } else {
                     null

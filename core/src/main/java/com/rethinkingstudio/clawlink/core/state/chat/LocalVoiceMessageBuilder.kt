@@ -13,7 +13,8 @@ internal fun buildLocalVoiceUserMessage(
     gatewayId: String,
     sessionKey: String,
     clientRunId: String,
-    sortTimestamp: Double
+    sortTimestamp: Double,
+    localTurnOrder: Long = 0L
 ): ChatMessage {
     val userMessageId = "user-$clientRunId"
     val localFileUrl = writeLocalVoicePlaybackCopy(audio)
@@ -35,10 +36,14 @@ internal fun buildLocalVoiceUserMessage(
         contentBlocks = listOf(contentBlock),
         createdAt = "",
         runId = "local-user-$clientRunId",
+        turnId = clientRunId,
+        clientMessageId = clientRunId,
+        idempotencyKey = clientRunId,
         sortTimestamp = sortTimestamp,
         timelineOrderKey = localTimelineOrderKey(clientRunId, 10, userMessageId),
         timelineIdentityKey = localTimelineIdentityKey("message:user", clientRunId),
-        timelineItemKind = "message:user"
+        timelineItemKind = "message:user",
+        localTurnOrder = localTurnOrder
     )
 }
 

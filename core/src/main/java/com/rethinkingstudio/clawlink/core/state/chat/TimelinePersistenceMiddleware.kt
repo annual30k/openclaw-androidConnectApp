@@ -81,7 +81,8 @@ internal data class TimelineOutboxEntry(
     val voice: TimelineOutboxVoice? = null,
     val createdAtEpochMs: Long,
     val queued: Boolean = false,
-    val queuePosition: Long? = null
+    val queuePosition: Long? = null,
+    val localTurnOrder: Long? = null
 )
 
 @Serializable

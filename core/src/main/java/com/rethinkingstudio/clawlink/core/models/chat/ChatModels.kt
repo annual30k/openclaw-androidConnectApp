@@ -427,6 +427,9 @@ data class ChatMessage(
     val contentBlocks: List<RelayChatContentBlock> = emptyList(),
     val createdAt: String = "",
     val runId: String = "",
+    val turnId: String = "",
+    val clientMessageId: String = "",
+    val idempotencyKey: String = "",
     val sortTimestamp: Double? = null,
     val seq: Long? = null,
     val turnSeq: Long? = null,
@@ -440,7 +443,8 @@ data class ChatMessage(
     val source: String = "",
     val deliveryState: String = "",
     val clientMessageText: String? = null,
-    val queuePosition: Long? = null
+    val queuePosition: Long? = null,
+    val localTurnOrder: Long? = null
 ) {
     val plainTextContent: String
         get() {

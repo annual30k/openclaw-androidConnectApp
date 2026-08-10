@@ -27,12 +27,16 @@ internal fun mergeLocalUserMessage(local: ChatMessage, incoming: ChatMessage): C
         contentBlocks = mergedBlocks,
         createdAt = incoming.createdAt.ifBlank { local.createdAt },
         runId = local.runId.takeIf { it.startsWith("local-user-") } ?: incoming.runId,
+        turnId = incoming.turnId.ifBlank { local.turnId },
+        clientMessageId = incoming.clientMessageId.ifBlank { local.clientMessageId },
+        idempotencyKey = incoming.idempotencyKey.ifBlank { local.idempotencyKey },
         sortTimestamp = local.sortTimestamp ?: incoming.sortTimestamp,
         seq = incoming.seq ?: local.seq,
         turnSeq = incoming.turnSeq ?: local.turnSeq,
         timelineStableKey = incoming.timelineStableKey.ifBlank { local.timelineStableKey },
         timelineMessageId = incoming.timelineMessageId.ifBlank { incoming.id.ifBlank { local.timelineMessageId } },
-        timelinePartId = incoming.timelinePartId.ifBlank { local.timelinePartId }
+        timelinePartId = incoming.timelinePartId.ifBlank { local.timelinePartId },
+        localTurnOrder = local.localTurnOrder ?: incoming.localTurnOrder
     )
 }
 

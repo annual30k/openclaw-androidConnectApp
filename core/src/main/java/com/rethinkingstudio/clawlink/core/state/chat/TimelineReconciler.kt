@@ -103,7 +103,8 @@ private data class CanonicalTimelineEntry(
     val timelineResolvesWaiting: Boolean?,
     val deliveryState: String = "",
     val clientMessageText: String? = null,
-    val queuePosition: Long? = null
+    val queuePosition: Long? = null,
+    val localTurnOrder: Long? = null
 )
 
 private fun String?.clean(): String? = this?.trim()?.takeIf { it.isNotEmpty() }
@@ -210,10 +211,10 @@ private fun ChatMessage.toEntry(sessionKey: String, originalIndex: Int = 0): Can
         role = role,
         state = state,
         runId = runId.clean(),
-        turnId = null,
+        turnId = turnId.clean(),
         partId = timelinePartId.clean(),
-        clientMessageId = localClientId() ?: id.takeIf { state == MessageState.pending || state == MessageState.streaming },
-        idempotencyKey = null,
+        clientMessageId = clientMessageId.clean() ?: localClientId() ?: id.takeIf { state == MessageState.pending || state == MessageState.streaming },
+        idempotencyKey = idempotencyKey.clean(),
         createdAt = createdAt,
         content = canonicalContent,
         attachmentIds = attachmentIds(canonicalContent, emptyList()),
@@ -225,7 +226,8 @@ private fun ChatMessage.toEntry(sessionKey: String, originalIndex: Int = 0): Can
         timelineResolvesWaiting = timelineResolvesWaiting,
         deliveryState = deliveryState,
         clientMessageText = clientMessageText,
-        queuePosition = queuePosition
+        queuePosition = queuePosition,
+        localTurnOrder = localTurnOrder
     )
 }
 
@@ -238,6 +240,9 @@ private fun CanonicalTimelineEntry.toChatMessage(): ChatMessage {
         contentBlocks = content,
         createdAt = createdAt,
         runId = runId.clean() ?: clientMessageId.clean() ?: messageId,
+        turnId = turnId.orEmpty(),
+        clientMessageId = clientMessageId.orEmpty(),
+        idempotencyKey = idempotencyKey.orEmpty(),
         sortTimestamp = sortTimestamp ?: createdAt.toEpochSeconds() ?: seq?.toDouble(),
         seq = seq,
         turnSeq = turnSeq,
@@ -251,7 +256,8 @@ private fun CanonicalTimelineEntry.toChatMessage(): ChatMessage {
         source = source,
         deliveryState = deliveryState,
         clientMessageText = clientMessageText,
-        queuePosition = queuePosition
+        queuePosition = queuePosition,
+        localTurnOrder = localTurnOrder
     )
 }
 
@@ -419,7 +425,25 @@ private fun normalizedTurnIdentity(entry: CanonicalTimelineEntry): String {
         }
     }
     if (!mediaSourceRunId.isNullOrEmpty()) return mediaSourceRunId
-    return normalizedTurnIdentityValue(entry.runId)
+    val runId = normalizedTurnIdentityValue(entry.runId)
+    if (runId.isNotEmpty()) return runId
+    return normalizedTurnIdentityValue(entry.clientMessageId).ifEmpty {
+        normalizedTurnIdentityValue(entry.idempotencyKey)
+    }
+}
+
+private fun turnIdentitySet(entry: CanonicalTimelineEntry): Set<String> {
+    return buildList {
+        entry.content.forEach { block -> add(block.sourceRunId) }
+        add(entry.clientMessageId)
+        add(entry.idempotencyKey)
+        add(entry.turnId)
+        add(entry.runId)
+    }
+        .map(::normalizedTurnIdentityValue)
+        .filter(String::isNotEmpty)
+        .map(String::lowercase)
+        .toSet()
 }
 
 private fun normalizedTurnIdentityValue(value: String?): String {
@@ -612,18 +636,118 @@ internal fun sortTimelineMessagesV3(messages: List<ChatMessage>, sessionKey: Str
     val canonicalSlotted = inputEntries.map { entry ->
         if (relayTimelineOrderKey(entry) == null) entry else canonicalEntries.next()
     }
-    val userAnchored = moveLocalUsersBeforeMatchingOutputs(canonicalSlotted)
+    val projectedTurns = projectActiveLocalTurns(canonicalSlotted)
+    val userAnchored = moveLegacyUnconfirmedUsersBeforeMatchingOutputs(projectedTurns)
     return moveWaitingAfterSameTurnOutputs(userAnchored).map { it.toChatMessage() }
 }
 
-private fun moveLocalUsersBeforeMatchingOutputs(
+private fun projectActiveLocalTurns(
+    entries: List<CanonicalTimelineEntry>
+): List<CanonicalTimelineEntry> {
+    val localUsers = entries.filter(::isActiveLocalUser)
+    if (localUsers.isEmpty()) return entries
+
+    val identitiesByUser = localUsers.associateWith { turnIdentitySet(it).toMutableSet() }
+    val userForOutput = mutableMapOf<CanonicalTimelineEntry, CanonicalTimelineEntry>()
+    var identitiesExpanded: Boolean
+    do {
+        identitiesExpanded = false
+        entries.forEachIndexed { outputIndex, output ->
+            if (output in userForOutput || output.role !in setOf(MessageRole.assistant, MessageRole.tool)) {
+                return@forEachIndexed
+            }
+            val outputIdentities = turnIdentitySet(output)
+            if (outputIdentities.isEmpty()) return@forEachIndexed
+            val matches = localUsers.filter { user ->
+                identitiesByUser.getValue(user).any(outputIdentities::contains)
+            }
+            val user = matches.singleOrNull() ?: return@forEachIndexed
+            val userIndex = entries.indexOf(user)
+            val canonicalAnswer = relayTimelineOrderKey(output) != null && output.role == MessageRole.assistant
+            val shouldProject = canonicalAnswer ||
+                output.state in setOf(MessageState.pending, MessageState.streaming) ||
+                isTransientAssistantTimelinePlaceholder(output) ||
+                // Local media/tool rows normally keep their relay input slot. The
+                // exception is an output that arrived physically before its own
+                // optimistic user row; pull only that inversion into the turn.
+                (relayTimelineOrderKey(output) == null && outputIndex < userIndex)
+            if (!shouldProject) return@forEachIndexed
+            userForOutput[output] = user
+            if (identitiesByUser.getValue(user).addAll(outputIdentities)) {
+                identitiesExpanded = true
+            }
+        }
+    } while (identitiesExpanded)
+    // A lone optimistic user must keep its physical slot. Projection is only
+    // justified when at least one output can be tied to an active local turn.
+    if (userForOutput.isEmpty()) return entries
+
+    // Older persisted rows did not have localTurnOrder. If any such row is present,
+    // keep the physical user order instead of mixing incomparable order domains.
+    val orderedUsers = if (localUsers.all { it.localTurnOrder != null }) {
+        localUsers.sortedWith(
+            compareBy<CanonicalTimelineEntry> { it.localTurnOrder }
+                .thenBy { it.originalIndex }
+        )
+    } else {
+        localUsers
+    }
+    val userOrder = orderedUsers.withIndex().associate { (index, user) -> user to index }
+    val projected = entries.mapIndexedNotNull { physicalIndex, entry ->
+        val user = when {
+            entry in identitiesByUser -> entry
+            else -> userForOutput[entry]
+        } ?: return@mapIndexedNotNull null
+        LocalTurnProjection(
+            entry = entry,
+            physicalIndex = physicalIndex,
+            userOrder = userOrder.getValue(user),
+            phase = localTurnProjectionPhase(entry)
+        )
+    }.sortedWith { left, right ->
+        val turnCompare = left.userOrder.compareTo(right.userOrder)
+        if (turnCompare != 0) return@sortedWith turnCompare
+        val phaseCompare = left.phase.compareTo(right.phase)
+        if (phaseCompare != 0) return@sortedWith phaseCompare
+        val leftOrder = relayTimelineOrderKey(left.entry)
+        val rightOrder = relayTimelineOrderKey(right.entry)
+        if (leftOrder != null && rightOrder != null && leftOrder != rightOrder) {
+            return@sortedWith leftOrder.compareTo(rightOrder)
+        }
+        left.physicalIndex.compareTo(right.physicalIndex)
+    }.map(LocalTurnProjection::entry)
+
+    val projectedEntries = projected.toSet()
+    val base = entries.filterNot(projectedEntries::contains).toMutableList()
+    if (base.any { relayTimelineOrderKey(it) != null }) {
+        return base + projected
+    }
+    val firstProjectedIndex = entries.indexOfFirst(projectedEntries::contains).let { index ->
+        if (index < 0) entries.size else index
+    }
+    val insertionIndex = entries.take(firstProjectedIndex).count { it !in projectedEntries }
+    base.addAll(insertionIndex, projected)
+    return base
+}
+
+private fun moveLegacyUnconfirmedUsersBeforeMatchingOutputs(
     entries: List<CanonicalTimelineEntry>
 ): List<CanonicalTimelineEntry> {
     val result = entries.toMutableList()
-    val localUsers = entries.filter { it.role == MessageRole.user && relayTimelineOrderKey(it) == null }
-    localUsers.forEach { user ->
-        val userIndex = result.indexOfFirst { it.stableKey == user.stableKey && it.displayId == user.displayId }
-        val outputIndex = result.indexOfFirst { output -> localUserMatchesOutput(user, output) }
+    val users = entries.filter { user ->
+        user.role == MessageRole.user &&
+            relayTimelineOrderKey(user) == null &&
+            user.state !in setOf(MessageState.failed, MessageState.deleted, MessageState.recalled) &&
+            user.deliveryState.trim().lowercase() !in setOf("failed", "error", "aborted")
+    }
+    users.forEach { user ->
+        val userTurn = normalizedTurnIdentity(user)
+        if (userTurn.isEmpty()) return@forEach
+        val userIndex = result.indexOf(user)
+        val outputIndex = result.indexOfFirst { output ->
+            output.role in setOf(MessageRole.assistant, MessageRole.tool) &&
+                normalizedTurnIdentity(output) == userTurn
+        }
         if (userIndex < 0 || outputIndex < 0 || outputIndex >= userIndex) return@forEach
         result.removeAt(userIndex)
         result.add(outputIndex, user)
@@ -631,13 +755,30 @@ private fun moveLocalUsersBeforeMatchingOutputs(
     return result
 }
 
-private fun localUserMatchesOutput(
-    user: CanonicalTimelineEntry,
-    output: CanonicalTimelineEntry
-): Boolean {
-    if (user.role != MessageRole.user || output.role !in setOf(MessageRole.assistant, MessageRole.tool)) return false
-    val userTurn = normalizedTurnIdentity(user)
-    return userTurn.isNotEmpty() && userTurn == normalizedTurnIdentity(output)
+private data class LocalTurnProjection(
+    val entry: CanonicalTimelineEntry,
+    val physicalIndex: Int,
+    val userOrder: Int,
+    val phase: Int
+)
+
+private fun isActiveLocalUser(entry: CanonicalTimelineEntry): Boolean {
+    if (entry.role != MessageRole.user || relayTimelineOrderKey(entry) != null) return false
+    val isLocal = entry.timelineOrderKey.startsWith("local:") ||
+        entry.timelineIdentityKey.startsWith("local:") ||
+        entry.source.equals("local", ignoreCase = true) ||
+        entry.runId?.startsWith("local-user-") == true
+    if (!isLocal) return false
+    if (entry.state in setOf(MessageState.failed, MessageState.deleted, MessageState.recalled)) return false
+    return entry.deliveryState.trim().lowercase() !in setOf("failed", "error", "aborted")
+}
+
+private fun localTurnProjectionPhase(entry: CanonicalTimelineEntry): Int {
+    if (entry.role == MessageRole.user) return 0
+    if (isTransientAssistantTimelinePlaceholder(entry) || entry.timelineItemKind.equals("waiting", ignoreCase = true)) {
+        return 2
+    }
+    return 1
 }
 
 private fun moveWaitingAfterSameTurnOutputs(

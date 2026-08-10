@@ -81,13 +81,17 @@ internal fun buildQueuedTimelineOutboxUserMessage(entry: TimelineOutboxEntry): C
         contentBlocks = contentBlocks,
         createdAt = "",
         runId = queuedUserRunId(entry),
+        turnId = entry.idempotencyKey,
+        clientMessageId = entry.clientMessageId,
+        idempotencyKey = entry.idempotencyKey,
         sortTimestamp = entry.createdAtEpochMs / 1_000.0,
         timelineOrderKey = localTimelineOrderKey(clientMessageId, 10, messageId),
         timelineIdentityKey = localTimelineIdentityKey("message:user", clientMessageId),
         timelineItemKind = "message:user",
         deliveryState = "queued",
         clientMessageText = entry.content,
-        queuePosition = entry.queuePosition
+        queuePosition = entry.queuePosition,
+        localTurnOrder = entry.localTurnOrder
     )
 }
 

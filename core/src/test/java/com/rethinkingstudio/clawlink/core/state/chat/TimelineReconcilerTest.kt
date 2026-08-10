@@ -786,6 +786,121 @@ class TimelineReconcilerTest {
     }
 
     @Test
+    fun canonicalTimelineAnchorsProviderRunAnswerByClientAliasBeforeHistoryCatchesUp() {
+        val localUser = ChatMessage(
+            id = "local-user-alias",
+            role = MessageRole.user,
+            content = "question",
+            runId = "local-user-client-run-alias",
+            turnId = "client-run-alias",
+            clientMessageId = "client-run-alias",
+            idempotencyKey = "client-run-alias",
+            timelineOrderKey = "local:client-run-alias|10|local-user-alias",
+            timelineIdentityKey = "local:message:user:client-run-alias",
+            timelineItemKind = "message:user",
+            source = "local",
+            localTurnOrder = 0
+        )
+        val providerAnswer = ChatMessage(
+            id = "provider-answer",
+            role = MessageRole.assistant,
+            content = "answer",
+            runId = "provider-run-alias",
+            turnId = "server-turn-alias",
+            clientMessageId = "client-run-alias",
+            idempotencyKey = "client-run-alias",
+            timelineOrderKey = "v1|00000000000000000001|50|000000|provider-answer",
+            timelineIdentityKey = "message:assistant:provider-answer",
+            timelineItemKind = "message:assistant"
+        )
+
+        val ordered = sortTimelineMessagesV3(listOf(providerAnswer, localUser))
+
+        assertEquals(listOf("local-user-alias", "provider-answer"), ordered.map { it.id })
+    }
+
+    @Test
+    fun canonicalTimelineKeepsMultipleLocalPromptsInOrderWhenSecondAnswerArrivesFirst() {
+        fun localUser(id: String, runId: String, order: Long) = ChatMessage(
+            id = id,
+            role = MessageRole.user,
+            content = id,
+            runId = "local-user-$runId",
+            turnId = runId,
+            clientMessageId = runId,
+            idempotencyKey = runId,
+            timelineOrderKey = "local:$runId|10|$id",
+            timelineIdentityKey = "local:message:user:$runId",
+            timelineItemKind = "message:user",
+            source = "local",
+            localTurnOrder = order
+        )
+        val firstUser = localUser("question-a", "client-run-a", 10)
+        val secondUser = localUser("question-b", "client-run-b", 11)
+        val secondAnswer = ChatMessage(
+            id = "answer-b",
+            role = MessageRole.assistant,
+            content = "answer-b",
+            runId = "provider-run-b",
+            turnId = "server-turn-b",
+            clientMessageId = "client-run-b",
+            idempotencyKey = "client-run-b",
+            timelineOrderKey = "v1|00000000000000000002|50|000000|answer-b",
+            timelineIdentityKey = "message:assistant:answer-b",
+            timelineItemKind = "message:assistant"
+        )
+
+        val ordered = sortTimelineMessagesV3(listOf(secondAnswer, firstUser, secondUser))
+
+        assertEquals(listOf("question-a", "question-b", "answer-b"), ordered.map { it.id })
+    }
+
+    @Test
+    fun failedLocalPromptDoesNotJoinLaterAnswerOverlay() {
+        val failedUser = ChatMessage(
+            id = "failed-question",
+            role = MessageRole.user,
+            content = "failed",
+            runId = "local-user-failed-run",
+            clientMessageId = "failed-run",
+            idempotencyKey = "failed-run",
+            timelineOrderKey = "local:failed-run|10|failed-question",
+            timelineIdentityKey = "local:message:user:failed-run",
+            timelineItemKind = "message:user",
+            source = "local",
+            deliveryState = "failed",
+            localTurnOrder = 20
+        )
+        val laterUser = ChatMessage(
+            id = "later-question",
+            role = MessageRole.user,
+            content = "later",
+            runId = "local-user-later-run",
+            clientMessageId = "later-run",
+            idempotencyKey = "later-run",
+            timelineOrderKey = "local:later-run|10|later-question",
+            timelineIdentityKey = "local:message:user:later-run",
+            timelineItemKind = "message:user",
+            source = "local",
+            localTurnOrder = 21
+        )
+        val laterAnswer = ChatMessage(
+            id = "later-answer",
+            role = MessageRole.assistant,
+            content = "later-answer",
+            runId = "provider-later-run",
+            clientMessageId = "later-run",
+            timelineOrderKey = "v1|00000000000000000003|50|000000|later-answer",
+            timelineIdentityKey = "message:assistant:later-answer",
+            timelineItemKind = "message:assistant"
+        )
+
+        val ordered = sortTimelineMessagesV3(listOf(failedUser, laterAnswer, laterUser))
+
+        assertEquals(listOf("failed-question", "later-question", "later-answer"), ordered.map { it.id })
+    }
+
+    @Test
     fun sameRunAndPartWithDifferentRolesRemainSeparateMessages() {
         val result = reconcileTimeline(
             existing = emptyList(),

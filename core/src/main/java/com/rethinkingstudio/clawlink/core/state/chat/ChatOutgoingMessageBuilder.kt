@@ -46,6 +46,7 @@ internal fun buildLocalTextOutgoingRun(
         }
     }
     val userSortTimestamp = replacedUploadSortTimestamp ?: (System.currentTimeMillis() / 1000.0)
+    val localTurnOrder = nextLocalTurnOrder(currentMessages)
     val normalizedContent = content.trim().takeIf { it.isNotEmpty() && it != " " } ?: ""
     val userMessageId = "user-$clientRunId"
     val outgoingAttachmentBlocks = contentBlocksWithOutgoingSourceRunId(attachmentBlocks, clientRunId)
@@ -57,16 +58,21 @@ internal fun buildLocalTextOutgoingRun(
         contentBlocks = localOutgoingUserContentBlocks(normalizedContent, outgoingAttachmentBlocks),
         createdAt = "",
         runId = "local-user-$clientRunId",
+        turnId = clientRunId,
+        clientMessageId = clientRunId,
+        idempotencyKey = clientRunId,
         sortTimestamp = userSortTimestamp,
         timelineOrderKey = localTimelineOrderKey(clientRunId, 10, userMessageId),
         timelineIdentityKey = localTimelineIdentityKey("message:user", clientRunId),
-        timelineItemKind = "message:user"
+        timelineItemKind = "message:user",
+        localTurnOrder = localTurnOrder
     )
     val assistantMessageId = "assistant-$clientRunId"
     val assistantMessage = buildLocalTextAssistantPlaceholderMessage(
         id = assistantMessageId,
         clientRunId = clientRunId,
-        sortTimestamp = userSortTimestamp + 0.001
+        sortTimestamp = userSortTimestamp + 0.001,
+        localTurnOrder = localTurnOrder
     )
     return LocalOutgoingRunDraft(
         clientRunId = clientRunId,
@@ -104,12 +110,14 @@ internal fun buildLocalVoiceOutgoingRun(
     audio: VoiceSendAudioPayload
 ): LocalOutgoingRunDraft {
     val now = System.currentTimeMillis() / 1000.0
+    val localTurnOrder = nextLocalTurnOrder(currentMessages)
     val userMessage = buildLocalVoiceUserMessage(
         audio = audio,
         gatewayId = gatewayId,
         sessionKey = sessionKey,
         clientRunId = clientRunId,
-        sortTimestamp = now
+        sortTimestamp = now,
+        localTurnOrder = localTurnOrder
     )
     val assistantMessageId = "assistant-$clientRunId"
     val assistantMessage = ChatMessage(
@@ -119,7 +127,11 @@ internal fun buildLocalVoiceOutgoingRun(
         content = choose("Waiting for host transcription...", "等待宿主机识别语音..."),
         createdAt = "",
         runId = clientRunId,
-        sortTimestamp = now + 0.001
+        turnId = clientRunId,
+        clientMessageId = clientRunId,
+        idempotencyKey = clientRunId,
+        sortTimestamp = now + 0.001,
+        localTurnOrder = localTurnOrder
     )
     return LocalOutgoingRunDraft(
         clientRunId = clientRunId,

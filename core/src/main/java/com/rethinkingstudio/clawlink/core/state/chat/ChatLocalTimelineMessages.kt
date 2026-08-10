@@ -76,7 +76,8 @@ internal fun ChatStore.persistCurrentTimelineSnapshot(
 internal fun buildLocalTextAssistantPlaceholderMessage(
     id: String,
     clientRunId: String,
-    sortTimestamp: Double
+    sortTimestamp: Double,
+    localTurnOrder: Long = 0L
 ): ChatMessage {
     return ChatMessage(
         id = id,
@@ -85,11 +86,20 @@ internal fun buildLocalTextAssistantPlaceholderMessage(
         content = protocolTypingMarkerText,
         createdAt = "",
         runId = clientRunId,
+        turnId = clientRunId,
+        clientMessageId = clientRunId,
+        idempotencyKey = clientRunId,
         sortTimestamp = sortTimestamp,
         timelineOrderKey = localTimelineOrderKey(clientRunId, 20, id),
         timelineIdentityKey = localTimelineIdentityKey("waiting", clientRunId),
-        timelineItemKind = "waiting"
+        timelineItemKind = "waiting",
+        localTurnOrder = localTurnOrder
     )
+}
+
+internal fun nextLocalTurnOrder(messages: List<ChatMessage>): Long {
+    val maximum = messages.mapNotNull(ChatMessage::localTurnOrder).maxOrNull() ?: return 0L
+    return if (maximum == Long.MAX_VALUE) maximum else maximum + 1L
 }
 
 internal fun localTimelineOrderKey(turnIdentity: String, slot: Int, itemId: String): String {

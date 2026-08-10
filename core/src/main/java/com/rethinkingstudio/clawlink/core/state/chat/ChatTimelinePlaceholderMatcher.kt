@@ -13,6 +13,14 @@ internal fun ChatTimelineState.historyItemMatchesPlaceholder(
     item: HistorySnapshotItem,
     message: ChatMessage
 ): Boolean {
+    val itemIdentities = listOf(item.turnId, item.runId, item.clientMessageId, item.idempotencyKey)
+        .mapNotNull(::normalizedTurnIdentity)
+        .toSet()
+    val messageIdentities = listOf(message.turnId, message.runId, message.clientMessageId, message.idempotencyKey)
+        .mapNotNull(::normalizedTurnIdentity)
+        .toSet()
+    if (itemIdentities.isNotEmpty() && messageIdentities.any(itemIdentities::contains)) return true
+
     val runId = item.runId?.takeIf { it.isNotBlank() }
     if (runId != null && message.runId == runId) return true
 
@@ -25,30 +33,40 @@ internal fun ChatTimelineState.historyItemMatchesPlaceholder(
 internal fun ChatTimelineState.matchingLocalUser(
     excludingMessageId: String,
     turnId: String?,
-    runId: String?
+    runId: String?,
+    clientMessageId: String? = null,
+    idempotencyKey: String? = null
 ): ChatMessage? {
     return matchingLocalUserIndex(
         excludingMessageId = excludingMessageId,
         turnId = turnId,
-        runId = runId
+        runId = runId,
+        clientMessageId = clientMessageId,
+        idempotencyKey = idempotencyKey
     )?.let(messages::get)
 }
 
 private fun ChatTimelineState.matchingLocalUserIndex(
     excludingMessageId: String,
     turnId: String?,
-    runId: String?
+    runId: String?,
+    clientMessageId: String?,
+    idempotencyKey: String?
 ): Int? {
     val incomingTurnIdentities = listOfNotNull(
         turnId?.takeIf { it.isNotBlank() },
-        runId?.takeIf { it.isNotBlank() }
+        runId?.takeIf { it.isNotBlank() },
+        clientMessageId?.takeIf { it.isNotBlank() },
+        idempotencyKey?.takeIf { it.isNotBlank() }
     ).mapNotNull { normalizedTurnIdentity(it) }.toSet()
     if (incomingTurnIdentities.isNotEmpty()) {
         val explicitIndex = messages.indexOfLast { message ->
-            message.role == MessageRole.user &&
+                message.role == MessageRole.user &&
                 message.id != excludingMessageId &&
                 message.isLocalUserEchoCandidate() &&
-                normalizedTurnIdentity(message.runId) in incomingTurnIdentities
+                listOf(message.turnId, message.runId, message.clientMessageId, message.idempotencyKey)
+                    .mapNotNull(::normalizedTurnIdentity)
+                    .any { it in incomingTurnIdentities }
         }
         if (explicitIndex >= 0) return explicitIndex
     }
@@ -93,6 +111,14 @@ internal fun ChatTimelineState.completedEventMatchesPlaceholder(
     message: ChatMessage,
     event: TimelineEvent.MessageCompleted
 ): Boolean {
+    val eventIdentities = listOf(event.turnId, event.runId, event.clientMessageId, event.idempotencyKey)
+        .mapNotNull(::normalizedTurnIdentity)
+        .toSet()
+    val messageIdentities = listOf(message.turnId, message.runId, message.clientMessageId, message.idempotencyKey)
+        .mapNotNull(::normalizedTurnIdentity)
+        .toSet()
+    if (eventIdentities.isNotEmpty() && messageIdentities.any(eventIdentities::contains)) return true
+
     val runId = event.runId?.takeIf { it.isNotBlank() }
     if (runId != null && message.runId == runId) return true
 

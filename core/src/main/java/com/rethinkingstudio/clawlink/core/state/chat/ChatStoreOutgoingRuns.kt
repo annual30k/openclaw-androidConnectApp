@@ -41,11 +41,13 @@ private fun ChatStore.drainQueuedTimelineOutboxLocked() {
 
     val userMessage = messages.removeAt(userIndex)
     val activatedAtEpochMs = System.currentTimeMillis()
+    val activatedLocalTurnOrder = nextLocalTurnOrder(messages)
     val activatedUserMessage = userMessage.copy(
         deliveryState = "",
         clientMessageText = entry.content,
         queuePosition = null,
-        sortTimestamp = activatedAtEpochMs / 1000.0
+        sortTimestamp = activatedAtEpochMs / 1000.0,
+        localTurnOrder = activatedLocalTurnOrder
     )
     // 激活时把队列项移动到当前时间线尾部；后续激活的旧队列项不能插回已发送消息之前。
     messages += activatedUserMessage
@@ -56,7 +58,8 @@ private fun ChatStore.drainQueuedTimelineOutboxLocked() {
         sortTimestamp = maxOf(
             activatedAtEpochMs / 1000.0,
             (activatedUserMessage.sortTimestamp ?: 0.0) + 0.001
-        )
+        ),
+        localTurnOrder = activatedLocalTurnOrder
     )
     messages.removeAll { message -> message.id == assistantMessageId }
     messages += assistantMessage
@@ -71,7 +74,11 @@ private fun ChatStore.drainQueuedTimelineOutboxLocked() {
     streamingContent.append(assistantMessage.content)
     rememberRunScope(entry.idempotencyKey, runScope)
     rememberRunScope(entry.requestId, runScope)
-    timelineOutbox[entry.idempotencyKey] = entry.copy(queued = false, queuePosition = null)
+    timelineOutbox[entry.idempotencyKey] = entry.copy(
+        queued = false,
+        queuePosition = null,
+        localTurnOrder = activatedLocalTurnOrder
+    )
     _state.value = _state.value.copy(
         messages = orderedMessages(messages),
         isStreaming = true,
@@ -183,7 +190,8 @@ internal fun ChatStore.sendTextOutgoingRun(
         },
         createdAtEpochMs = System.currentTimeMillis(),
         queued = queueBehindActiveRun,
-        queuePosition = queuePosition
+        queuePosition = queuePosition,
+        localTurnOrder = draft.userMessage.localTurnOrder
     )
 
     if (queueBehindActiveRun) {
@@ -409,7 +417,8 @@ internal fun ChatStore.sendVoiceOutgoingRun(
             message = message,
             languageHint = languageHint
         ),
-        createdAtEpochMs = System.currentTimeMillis()
+        createdAtEpochMs = System.currentTimeMillis(),
+        localTurnOrder = draft.userMessage.localTurnOrder
     )
     noteCanonicalTimelineMutation()
     if (!persistCurrentTimelineSnapshot(

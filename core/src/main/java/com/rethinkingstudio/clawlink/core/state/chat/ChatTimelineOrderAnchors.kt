@@ -45,7 +45,7 @@ internal fun completedAssistantItemKind(
 }
 
 internal fun ChatTimelineState.matchingTurnUserMessage(event: TimelineEvent.MessageCompleted): ChatMessage? {
-    val identities = listOfNotNull(event.turnId, event.runId)
+    val identities = listOfNotNull(event.turnId, event.runId, event.clientMessageId, event.idempotencyKey)
         .mapNotNull { normalizedTurnIdentity(it) }
         .toSet()
     if (identities.isEmpty()) return null
@@ -53,7 +53,10 @@ internal fun ChatTimelineState.matchingTurnUserMessage(event: TimelineEvent.Mess
         message.role == MessageRole.user &&
             listOfNotNull(
                 normalizedTurnIdentity(message.timelineMessageId),
-                normalizedTurnIdentity(message.runId)
+                normalizedTurnIdentity(message.turnId),
+                normalizedTurnIdentity(message.runId),
+                normalizedTurnIdentity(message.clientMessageId),
+                normalizedTurnIdentity(message.idempotencyKey)
             ).any { it in identities }
     }
 }
