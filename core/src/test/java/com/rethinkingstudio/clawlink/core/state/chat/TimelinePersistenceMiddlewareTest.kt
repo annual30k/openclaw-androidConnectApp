@@ -41,6 +41,31 @@ class TimelinePersistenceMiddlewareTest {
     }
 
     @Test
+    fun completedCanonicalLocalSourceMessagePersistsAsConfirmed() {
+        val message = ChatMessage(
+            id = "server-user-local-source",
+            role = MessageRole.user,
+            content = "hello",
+            runId = "client-run-local-source",
+            turnId = "client-run-local-source",
+            timelineOrderKey = "v5|0|00000000000000000001|00000000000000000000|10|server-user-local-source",
+            timelineIdentityKey = "v1|main|message|user|server-user-local-source",
+            timelineItemKind = "message:user",
+            source = "local",
+            localTurnOrder = 3
+        )
+
+        val snapshot = TimelinePersistenceMiddleware.buildSnapshot(
+            scope = scope,
+            state = ChatTimelineState(messages = listOf(message)),
+            savedAtEpochMs = 123L
+        )
+
+        assertEquals(listOf(message), snapshot.confirmedMessages)
+        assertTrue(snapshot.pendingMessages.isEmpty())
+    }
+
+    @Test
     fun oldBareTimelineStateCacheIsIgnored() {
         val oldRawSnapshot = """{"messages":[],"activeRunId":null}"""
 

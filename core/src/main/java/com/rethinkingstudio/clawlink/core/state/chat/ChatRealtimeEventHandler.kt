@@ -4,6 +4,7 @@ import com.rethinkingstudio.clawlink.core.models.chat.ChatMessage
 import com.rethinkingstudio.clawlink.core.models.chat.MessageRole
 import com.rethinkingstudio.clawlink.core.models.chat.MessageState
 import com.rethinkingstudio.clawlink.core.models.chat.RelayChatContentBlock
+import com.rethinkingstudio.clawlink.core.models.gateway.GatewayType
 import com.rethinkingstudio.clawlink.core.network.transport.WsEvent
 import com.rethinkingstudio.clawlink.core.state.LocalizedText.choose
 import kotlinx.serialization.json.JsonElement
@@ -101,7 +102,11 @@ private fun ChatStore.applyTimelinePayloadIfPresent(envelope: JsonObject, payloa
 
 private fun ChatStore.applyTimelineEvents(events: List<TimelineEvent>) {
     val seeded = timelineState.copy(messages = _state.value.messages)
-    timelineState = ChatTimelineReducer.reduceAll(seeded, events)
+    timelineState = keepHermesLiveFinalPendingUntilHistoryCommit(
+        state = ChatTimelineReducer.reduceAll(seeded, events),
+        events = events,
+        gatewayType = currentGatewayType()
+    )
     val ordered = orderMessagesForRealtime(timelineState.messages)
     val hasActiveVisibleRun = hasActiveVisibleTimelineRun(timelineState, ordered)
     _state.value = _state.value.copy(
@@ -114,6 +119,72 @@ private fun ChatStore.applyTimelineEvents(events: List<TimelineEvent>) {
     reconcileTimelineOutbox(ordered)
     persistCurrentTimelineSnapshot(timelineState, ordered)
     scheduleQueuedTimelineOutboxDrain()
+}
+
+internal fun keepHermesLiveFinalPendingUntilHistoryCommit(
+    state: ChatTimelineState,
+    events: List<TimelineEvent>,
+    gatewayType: GatewayType
+): ChatTimelineState {
+    if (gatewayType != GatewayType.hermes) return state
+
+    val historyCommittedTurns = events
+        .filterIsInstance<TimelineEvent.MessageCompleted>()
+        .filter { event ->
+            event.role.toMessageRole(default = MessageRole.assistant) == MessageRole.assistant &&
+                event.source.equals("history", ignoreCase = true)
+        }
+        .flatMap(::completedEventStableTurnIdentities)
+        .toSet()
+    val historyCommittedMessageIds = events
+        .filterIsInstance<TimelineEvent.MessageCompleted>()
+        .filter { event -> event.source.equals("history", ignoreCase = true) }
+        .map(TimelineEvent.MessageCompleted::messageId)
+        .toSet()
+    val liveFinalsAwaitingHistory = events
+        .filterIsInstance<TimelineEvent.MessageCompleted>()
+        .filter { event ->
+            event.role.toMessageRole(default = MessageRole.assistant) == MessageRole.assistant &&
+                !event.source.equals("history", ignoreCase = true) &&
+                event.messageId !in historyCommittedMessageIds &&
+                completedEventStableTurnIdentities(event).none(historyCommittedTurns::contains)
+        }
+    if (liveFinalsAwaitingHistory.isEmpty()) return state
+
+    val pendingMessageIds = liveFinalsAwaitingHistory.map(TimelineEvent.MessageCompleted::messageId).toSet()
+    val pendingTurnIdentities = liveFinalsAwaitingHistory
+        .flatMap(::completedEventStableTurnIdentities)
+        .toSet()
+    val pendingMessages = state.messages.map { message ->
+        val messageTurnIdentities = listOf(
+            message.turnId,
+            message.runId,
+            message.clientMessageId,
+            message.idempotencyKey
+        ).mapNotNull(::normalizedTurnIdentity).toSet()
+        val matchesLiveFinal = message.id in pendingMessageIds ||
+            messageTurnIdentities.any(pendingTurnIdentities::contains)
+        if (matchesLiveFinal &&
+            message.role == MessageRole.assistant &&
+            message.state == MessageState.completed &&
+            message.localTurnOrder != null
+        ) {
+            // Hermes API 的 live final 可能先于 state.db assistant 行落盘。此时若把消息队列
+            // 立即放行，下一条 user 会先写入 state.db，最终历史就变成 A问、B问、A答。
+            // 保留完整答案但维持 streaming 屏障；只有 source=history 的同轮稳定事件或
+            // 权威历史快照才能结束屏障。该状态会随 timeline 快照持久化，进程重建也不会抢跑。
+            message.copy(state = MessageState.streaming)
+        } else {
+            message
+        }
+    }
+    return state.copy(messages = pendingMessages)
+}
+
+private fun completedEventStableTurnIdentities(event: TimelineEvent.MessageCompleted): Set<String> {
+    return listOf(event.turnId, event.runId, event.clientMessageId, event.idempotencyKey)
+        .mapNotNull(::normalizedTurnIdentity)
+        .toSet()
 }
 
 private fun ChatStore.handleAgentPayload(payload: JsonElement?) {

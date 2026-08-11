@@ -132,7 +132,13 @@ internal fun submitAuth(
                 isPrivateDeployment = isPrivateDeployment
             )
             isRegisterMode -> false
-            else -> authStore.login(relayServer, email.trim(), password, deviceId)
+            else -> authStore.login(
+                baseUrl = relayServer,
+                email = email.trim(),
+                password = password,
+                deviceId = deviceId,
+                isPrivateDeployment = isPrivateDeployment
+            )
         }
         if (success) onLoginSuccess()
     }

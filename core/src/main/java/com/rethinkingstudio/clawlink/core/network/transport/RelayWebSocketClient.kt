@@ -117,21 +117,15 @@ class RelayWebSocketClient {
                 if (this@RelayWebSocketClient.webSocket !== webSocket) return
                 isConnected.set(false)
                 this@RelayWebSocketClient.webSocket = null
-                _connectionState.value = WsConnectionState.disconnected
-                if (reconnectEnabled.get()) {
-                    attemptReconnect()
-                }
+                handleSocketTermination()
             }
 
             override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
                 if (this@RelayWebSocketClient.webSocket !== webSocket) return
                 isConnected.set(false)
                 this@RelayWebSocketClient.webSocket = null
-                _connectionState.value = WsConnectionState.disconnected
                 eventBroadcaster.publish(WsEvent("error", null, null))
-                if (reconnectEnabled.get()) {
-                    attemptReconnect()
-                }
+                handleSocketTermination()
             }
         })
     }
@@ -318,9 +312,20 @@ class RelayWebSocketClient {
 
     private val reconnectDelays = listOf(1_000L, 2_000L, 4_000L, 8_000L, 15_000L)
 
+    private fun handleSocketTermination() {
+        if (reconnectEnabled.get()) {
+            // 可恢复的网络断开必须直接进入 reconnecting，不能先发布 offline。
+            // GatewayStore 会把该状态展示给聊天页；中间 offline 会被误当成链路故障弹窗。
+            attemptReconnect()
+        } else {
+            _connectionState.value = WsConnectionState.disconnected
+        }
+    }
+
     private fun attemptReconnect() {
         if (!reconnectEnabled.get()) return
         if (reconnectAttempts >= maxReconnectAttempts) {
+            _connectionState.value = WsConnectionState.disconnected
             pendingOutbound.drain().forEach { message ->
                 publishOutboundFailure(
                     message.requestId,

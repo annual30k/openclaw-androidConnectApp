@@ -169,6 +169,7 @@ class QueuedMessageOverlayLayoutUiTest {
             .fetchSemanticsNode().boundsInRoot
         val expectedGap = with(composeRule.density) { queuedMessageOverlayGap.toPx() }
 
+        assertEquals(8.dp, queuedMessageOverlayGap)
         assertEquals(composerBefore.top, composerAfter.top, 1f)
         assertEquals(composerBefore.bottom, composerAfter.bottom, 1f)
         assertEquals(composerAfter.top - expectedGap, queueBounds.bottom, 1f)
@@ -218,7 +219,8 @@ class QueuedMessageOverlayLayoutUiTest {
             .fetchSemanticsNode().boundsInRoot
         val expectedGap = with(composeRule.density) { newMessagesFloatingButtonGap.toPx() }
 
-        // Surface 的语义边界不包含外部阴影，因此只要可交互本体保留不小于配置值的安全间距即可。
+        assertEquals(8.dp, newMessagesFloatingButtonGap)
+        // Surface 的语义边界不包含外部阴影；可交互本体只保留紧凑安全间距。
         assertTrue(buttonBounds.bottom <= composerBounds.top - expectedGap)
     }
 

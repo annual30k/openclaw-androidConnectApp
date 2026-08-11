@@ -23,6 +23,7 @@ import com.rethinkingstudio.clawlink.core.state.chat.makeUploadedAttachmentConte
 import com.rethinkingstudio.clawlink.core.state.gateway.GatewayStore
 import com.rethinkingstudio.clawlink.core.state.model.ModelStore
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
@@ -274,6 +275,8 @@ internal class ChatViewModel(
         } catch (error: VoiceInputError) {
             resetVoiceInputState(restoreComposer = true)
             composerNotice = error.message
+        } catch (error: CancellationException) {
+            throw error
         } catch (error: Exception) {
             resetVoiceInputState(restoreComposer = true)
             composerNotice = context.getString(R.string.voice_input_start_failed, error.message ?: choose("Unknown error", "未知错误"))
@@ -407,6 +410,8 @@ internal class ChatViewModel(
             composerNotice = null
             messageText = ""
             resetVoiceInputState(restoreComposer = false)
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             composerNotice = context.getString(
                 R.string.chat_attachment_send_failed_with_reason,
@@ -567,6 +572,8 @@ internal class ChatViewModel(
                 }
             }
             
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             val failedAttachmentId = composerAttachmentUploadItems.firstOrNull { it.phase == AttachmentUploadPhase.uploading }?.attachment?.id
                 ?: attachments.firstOrNull()?.id

@@ -10,11 +10,13 @@ import com.rethinkingstudio.clawlink.core.network.RelayAPIClient
 import com.rethinkingstudio.clawlink.core.network.dto.ChatHistoryResponse
 import com.rethinkingstudio.clawlink.core.network.dto.ChatHistoryItem
 import com.rethinkingstudio.clawlink.core.network.transport.RelayWebSocketClient
+import com.rethinkingstudio.clawlink.core.network.transport.WsConnectionState
 import java.time.Instant
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeout
 import kotlinx.coroutines.yield
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
@@ -29,6 +31,91 @@ import org.junit.Ignore
 import org.junit.Test
 
 class ChatHistoryCanonicalSnapshotTest {
+    @Test
+    fun authoritativeHistoryCompletionWakesQueuedFollowUpWithoutReconnect() = runBlocking {
+        val wsClient = RelayWebSocketClient()
+        try {
+            val connectionStateField = RelayWebSocketClient::class.java.getDeclaredField("_connectionState")
+            connectionStateField.isAccessible = true
+            @Suppress("UNCHECKED_CAST")
+            (connectionStateField.get(wsClient) as MutableStateFlow<WsConnectionState>).value =
+                WsConnectionState.connected
+            val store = ChatStore(
+                apiClient = RelayAPIClient(),
+                wsClient = wsClient,
+                notificationPort = object : NotificationPort {
+                    override fun showReplyNotification(sessionKey: String, title: String, body: String) = Unit
+                    override fun cancelNotification(id: Int) = Unit
+                    override fun cancelAll() = Unit
+                },
+                chatHistoryPageFetcher = { _, _, _, _, _ ->
+                    ChatHistoryResponse(
+                        items = emptyList(),
+                        timelineSnapshot = Json.parseToJsonElement(
+                            """
+                            {
+                              "timelineProtocolVersion": 3,
+                              "sessionKey": "main",
+                              "messages": [
+                                {
+                                  "messageId": "server-user-active",
+                                  "role": "user",
+                                  "messageState": "completed",
+                                  "turnId": "run-active",
+                                  "runId": "run-active",
+                                  "clientMessageId": "run-active",
+                                  "idempotencyKey": "run-active",
+                                  "timelineOrderKey": "v1|00000000000000000001|10|server-user-active",
+                                  "timelineIdentityKey": "message:user:server-user-active",
+                                  "timelineItemKind": "message:user",
+                                  "content": [{ "type": "text", "text": "first" }]
+                                },
+                                {
+                                  "messageId": "server-assistant-active",
+                                  "role": "assistant",
+                                  "messageState": "completed",
+                                  "turnId": "run-active",
+                                  "runId": "run-active",
+                                  "timelineOrderKey": "v1|00000000000000000001|50|server-assistant-active",
+                                  "timelineIdentityKey": "message:assistant:server-assistant-active",
+                                  "timelineItemKind": "message:assistant",
+                                  "content": [{ "type": "text", "text": "done" }]
+                                }
+                              ]
+                            }
+                            """.trimIndent()
+                        )
+                    )
+                }
+            )
+            store.setStateForTest(ChatState(currentGatewayId = "gw_1", currentSessionKey = "main"))
+            store.sendTextOutgoingRun("first", "gw_1", emptyList(), emptyList(), emptyList(), "run-active")
+            store.sendTextOutgoingRun("follow-up", "gw_1", emptyList(), emptyList(), emptyList(), "run-queued")
+            assertTrue(store.timelineOutbox.getValue("run-queued").queued)
+
+            store.loadHistory("gw_1", "main", limit = 50)
+            withTimeout(2_000L) {
+                while (
+                    store.timelineOutbox.getValue("run-queued").queued ||
+                    store.state.value.messages
+                        .singleOrNull { it.id == "user-run-queued" }
+                        ?.deliveryState == "queued"
+                ) {
+                    yield()
+                }
+            }
+
+            assertFalse(store.timelineOutbox.getValue("run-queued").queued)
+            assertEquals(
+                "",
+                store.state.value.messages.single { it.id == "user-run-queued" }.deliveryState
+            )
+            assertTrue(store.state.value.isStreaming)
+        } finally {
+            wsClient.destroy()
+        }
+    }
+
     @Test
     fun loadHistoryCanonicalTimelineSnapshotDropsStaleCompletedCacheWhenLocalUserExists() = runBlocking {
         val wsClient = RelayWebSocketClient()

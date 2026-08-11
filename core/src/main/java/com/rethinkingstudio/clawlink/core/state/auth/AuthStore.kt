@@ -48,7 +48,13 @@ class AuthStore(
         }
     }
 
-    suspend fun login(baseUrl: String, email: String, password: String, deviceId: String): Boolean {
+    suspend fun login(
+        baseUrl: String,
+        email: String,
+        password: String,
+        deviceId: String,
+        isPrivateDeployment: Boolean = false
+    ): Boolean {
         val validationError = validateLogin(email, password)
         if (validationError != null) {
             _state.value = _state.value.copy(errorMessage = validationError)
@@ -67,7 +73,7 @@ class AuthStore(
             val shouldSuggestRegister = e is RelayAPIError.ServerError && e.errorCode == "user_not_registered"
             _state.value = _state.value.copy(
                 isLoading = false,
-                errorMessage = e.message,
+                errorMessage = loginErrorMessage(e, isPrivateDeployment),
                 suggestRegister = shouldSuggestRegister
             )
             false
@@ -109,10 +115,7 @@ class AuthStore(
                             isLoading = false,
                             pendingVerificationEmail = null,
                             pendingVerificationExpiresAt = null,
-                            errorMessage = choose(
-                                "This private relay still requires email verification. Set EMAIL_VERIFICATION_REQUIRED=false and restart the relay.",
-                                "当前私有 Relay 仍要求邮箱验证。请设置 EMAIL_VERIFICATION_REQUIRED=false 并重启 Relay。"
-                            )
+                            errorMessage = privateRelayEmailVerificationMessage()
                         )
                     } else {
                         _state.value = _state.value.copy(
@@ -307,3 +310,19 @@ class AuthStore(
         return Regex("^[A-Z0-9._%+-]+@[A-Z0-9.-]+\\.[A-Z]{2,}$", RegexOption.IGNORE_CASE).matches(trimmed)
     }
 }
+
+/** 私有 Relay 不应把托管环境的邮箱验证策略误呈现为用户账号操作。 */
+internal fun loginErrorMessage(error: RelayAPIError, isPrivateDeployment: Boolean): String {
+    val requiresEmailVerification = error is RelayAPIError.ServerError
+        && error.errorCode == "email_verification_required"
+    return if (isPrivateDeployment && requiresEmailVerification) {
+        privateRelayEmailVerificationMessage()
+    } else {
+        error.message ?: choose("Sign in failed.", "登录失败。")
+    }
+}
+
+private fun privateRelayEmailVerificationMessage(): String = choose(
+    "This private relay still requires email verification. Set EMAIL_VERIFICATION_REQUIRED=false and restart the relay.",
+    "当前私有 Relay 仍要求邮箱验证。请设置 EMAIL_VERIFICATION_REQUIRED=false 并重启 Relay。"
+)

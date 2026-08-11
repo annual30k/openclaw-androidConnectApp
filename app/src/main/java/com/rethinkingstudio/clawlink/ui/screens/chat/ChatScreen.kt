@@ -131,22 +131,15 @@ fun ChatScreen(
             modelStore.loadModels(gatewayId)
         }
     }
-    val connectionIssueMessage = remember(
-        hasSelectedGateway,
-        gatewayState.appRelayStatus,
-        gatewayState.selectedGatewayAggregateStatus,
-        isChatChainReady,
-        selectedGatewayType
-    ) {
-        chatConnectionIssueMessage(
-            hasSelectedGateway = hasSelectedGateway,
-            appRelayStatus = gatewayState.appRelayStatus,
-            isChatChainReady = isChatChainReady,
-            selectedGatewayType = selectedGatewayType
-        )
-    }
-    val statusAlertMessage = connectionIssueMessage ?: chatState.errorMessage ?: gatewayState.errorMessage ?: viewModel.composerNotice
-    val isStatusAlertError = connectionIssueMessage != null || chatState.errorMessage != null || gatewayState.errorMessage != null
+    // 链路状态会在顶部连接指示器和输入框可用性中实时呈现。它可能在网络恢复期间短暂变化，
+    // 因此不能作为阻断式弹窗的来源；仅操作失败才弹出错误提示。
+    val statusAlert = resolveChatStatusAlert(
+        chatErrorMessage = chatState.errorMessage,
+        gatewayErrorMessage = gatewayState.errorMessage,
+        composerNotice = viewModel.composerNotice
+    )
+    val statusAlertMessage = statusAlert.message
+    val isStatusAlertError = statusAlert.isError
     var dismissedStatusAlertMessage by remember { mutableStateOf<String?>(null) }
     var lastObservedVisibleMessageCount by remember { mutableStateOf(0) }
     var lastObservedMessageSignature by remember { mutableStateOf("") }

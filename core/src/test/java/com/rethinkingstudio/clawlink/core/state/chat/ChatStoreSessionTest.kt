@@ -1243,6 +1243,136 @@ class ChatStoreSessionTest {
     }
 
     @Test
+    fun hermesFollowUpWaitsForPersistedHistoryFinalBeforeQueueActivation() {
+        val wsClient = RelayWebSocketClient()
+        try {
+            val store = ChatStore(
+                apiClient = RelayAPIClient(),
+                wsClient = wsClient,
+                gatewayTypeFor = { GatewayType.hermes },
+                notificationPort = object : NotificationPort {
+                    override fun showReplyNotification(sessionKey: String, title: String, body: String) = Unit
+                    override fun cancelNotification(id: Int) = Unit
+                    override fun cancelAll() = Unit
+                }
+            )
+            setChatState(
+                store,
+                ChatState(currentGatewayId = "gateway-hermes", currentSessionKey = "mobile-session")
+            )
+            store.sendTextOutgoingRun(
+                "A question",
+                "gateway-hermes",
+                emptyList(),
+                emptyList(),
+                emptyList(),
+                "run-a"
+            )
+            store.sendTextOutgoingRun(
+                "B follow-up",
+                "gateway-hermes",
+                emptyList(),
+                emptyList(),
+                emptyList(),
+                "run-b"
+            )
+
+            invokeHandleChatPayload(
+                store,
+                """
+                {
+                  "state": "final",
+                  "sessionKey": "mobile-session",
+                  "runId": "run-a",
+                  "timelineEvents": [
+                    {
+                      "protocolVersion": 2,
+                      "eventId": "evt-live-final-a",
+                      "eventType": "message.completed",
+                      "turnId": "run-a",
+                      "runId": "run-a",
+                      "messageId": "assistant-run-a",
+                      "role": "assistant",
+                      "runState": "active",
+                      "source": "live",
+                      "content": [{ "type": "text", "text": "A answer" }],
+                      "timelineOrderKey": "v5|1|00000000000000000001|00000000000000000000|50|assistant-run-a",
+                      "timelineIdentityKey": "v1|mobile-session|message|assistant|assistant-run-a",
+                      "timelineItemKind": "message:assistant"
+                    },
+                    {
+                      "protocolVersion": 2,
+                      "eventId": "evt-live-terminal-a",
+                      "eventType": "run.completed",
+                      "turnId": "run-a",
+                      "runId": "run-a"
+                    }
+                  ]
+                }
+                """.trimIndent()
+            )
+            store.drainQueuedTimelineOutbox(WsConnectionState.connected)
+
+            val liveAnswer = store.state.value.messages.single { it.id == "assistant-run-a" }
+            assertEquals("A answer", liveAnswer.content)
+            assertEquals("live", liveAnswer.source)
+            assertEquals(MessageState.streaming, liveAnswer.state)
+            assertTrue(store.state.value.isStreaming)
+            assertTrue(store.timelineOutbox.getValue("run-b").queued)
+            assertEquals("queued", store.state.value.messages.single { it.id == "user-run-b" }.deliveryState)
+
+            invokeHandleChatPayload(
+                store,
+                """
+                {
+                  "state": "history_sync",
+                  "sessionKey": "mobile-session",
+                  "runId": "run-a",
+                  "timelineEvents": [
+                    {
+                      "protocolVersion": 2,
+                      "eventId": "evt-history-final-a",
+                      "eventType": "message.completed",
+                      "turnId": "run-a",
+                      "runId": "run-a",
+                      "messageId": "assistant-run-a",
+                      "role": "assistant",
+                      "runState": "active",
+                      "source": "history",
+                      "content": [{ "type": "text", "text": "A answer" }],
+                      "timelineOrderKey": "v5|0|00000000000000000002|00000000000000000000|50|assistant-run-a",
+                      "timelineIdentityKey": "v1|mobile-session|message|assistant|assistant-run-a",
+                      "timelineItemKind": "message:assistant"
+                    },
+                    {
+                      "protocolVersion": 2,
+                      "eventId": "evt-history-terminal-a",
+                      "eventType": "run.completed",
+                      "turnId": "run-a",
+                      "runId": "run-a"
+                    }
+                  ]
+                }
+                """.trimIndent()
+            )
+            store.drainQueuedTimelineOutbox(WsConnectionState.connected)
+
+            val persistedAnswer = store.state.value.messages.single { it.id == "assistant-run-a" }
+            assertEquals("history", persistedAnswer.source)
+            assertEquals(MessageState.completed, persistedAnswer.state)
+            assertFalse(store.timelineOutbox.getValue("run-b").queued)
+            assertEquals(
+                listOf("user-run-a", "assistant-run-a", "user-run-b", "assistant-run-b"),
+                store.state.value.messages
+                    .filter { it.role == MessageRole.user || it.role == MessageRole.assistant }
+                    .map { it.id }
+            )
+        } finally {
+            wsClient.destroy()
+        }
+    }
+
+    @Test
     fun followUpQueueSupportsReorderRemoveAndDrainsExactlyOnePerTerminalRun() {
         val wsClient = RelayWebSocketClient()
         try {

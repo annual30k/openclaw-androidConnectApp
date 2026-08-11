@@ -21,9 +21,8 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.rethinkingstudio.clawlink.R
 
-// 10dp 阴影会向下占用间距；36dp 几何间距保留约 26dp 可见留白，
-// 与待发送队列浮层的底部安全区保持一致。
-internal val newMessagesFloatingButtonGap = 36.dp
+// 与待发送队列浮层使用同一紧凑安全区，避免输入栏上方出现大块无意义留白。
+internal val newMessagesFloatingButtonGap = 8.dp
 
 @Composable
 internal fun NewMessagesFloatingButton(

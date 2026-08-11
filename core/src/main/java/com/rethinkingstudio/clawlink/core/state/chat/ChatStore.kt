@@ -337,6 +337,9 @@ class ChatStore(
                     limit = chatHistoryPageSize,
                     keepSwitchingOverlay = false
                 )
+                // 权威历史可能已经清除了本地残留的 streaming/active 标记。历史提交完成后
+                // 必须重新检查 durable queue；否则入队时恰好遇到旧运行态的消息会永久停在队列里。
+                scheduleQueuedTimelineOutboxDrain()
             }
         } finally {
             val shouldRestart = synchronized(canonicalHistoryReconcileLock) {
@@ -391,6 +394,11 @@ class ChatStore(
 
     internal fun orderMessagesForRealtime(messages: List<ChatMessage>): List<ChatMessage> {
         return orderedMessages(messages)
+    }
+
+    internal fun currentGatewayType(): GatewayType {
+        val gatewayId = _state.value.currentGatewayId?.trim().orEmpty()
+        return gatewayTypeFor(gatewayId)
     }
 
     internal fun completeCurrentRun(runId: String, runScope: ChatRunScope?) {
@@ -858,6 +866,9 @@ class ChatStore(
             limit = limit,
             keepSwitchingOverlay = keepSwitchingOverlay
         )
+        // 手动刷新、会话进入与启动恢复都经过这里。历史状态收敛为空闲后立即唤醒队首，
+        // 不依赖下一次 WebSocket 重连或下一条终态事件碰巧到来。
+        scheduleQueuedTimelineOutboxDrain()
     }
 
     fun releaseSessionSwitchOverlay() {

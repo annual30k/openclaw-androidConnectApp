@@ -322,6 +322,9 @@ fun ChatStore.removeQueuedMessage(messageId: String) {
             queuedClientMessageId(message) == clientMessageId
     }
     commitQueuedMessageMutation(messages)
+    // 删除旧队首时当前运行可能早已结束；立即复核剩余队列，避免下一条继续被旧队首的
+    // 生命周期卡住。drain 本身会再次校验连接态与可见 active reply。
+    scheduleQueuedTimelineOutboxDrain()
 }
 
 private fun ChatStore.commitQueuedMessageMutation(messages: List<com.rethinkingstudio.clawlink.core.models.chat.ChatMessage>) {

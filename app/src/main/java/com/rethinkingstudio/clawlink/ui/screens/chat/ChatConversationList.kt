@@ -18,6 +18,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.dp
+import com.rethinkingstudio.clawlink.core.models.chat.ChatMessage
 import com.rethinkingstudio.clawlink.core.models.chat.MessageRole
 import com.rethinkingstudio.clawlink.core.models.chat.MessageState
 import com.rethinkingstudio.clawlink.core.state.chat.ChatStore
@@ -34,6 +35,37 @@ import com.rethinkingstudio.clawlink.ui.screens.chat.components.ThinkingRow
 import com.rethinkingstudio.clawlink.ui.screens.chat.components.UsageGuidePromptCard
 import com.rethinkingstudio.clawlink.ui.screens.chat.components.resolveFileDownloadUrl
 import java.io.File
+
+internal data class ConversationMessageListItem(
+    val message: ChatMessage,
+    val stableKey: String
+)
+
+internal fun conversationMessageListItems(
+    messages: List<ChatMessage>,
+    conversationAnimationKey: String
+): List<ConversationMessageListItem> {
+    val messageIdCounts = messages.groupingBy { message -> message.id.trim() }.eachCount()
+    return messages.map { message ->
+        val messageId = message.id.trim()
+        val keyIdentity = when {
+            messageId.isNotEmpty() && messageIdCounts[messageId] == 1 -> "message-id:$messageId"
+            message.timelineIdentityKey.isNotBlank() -> "timeline:${message.timelineIdentityKey.trim()}"
+            message.timelineStableKey.isNotBlank() -> "stable:${message.timelineStableKey.trim()}"
+            else -> listOf(
+                "message-id:$messageId",
+                "timeline-message:${message.timelineMessageId.trim()}",
+                "timeline-part:${message.timelinePartId.trim()}",
+                "kind:${message.timelineItemKind.trim()}",
+                "role:${message.role.name}"
+            ).joinToString(separator = "|")
+        }
+        ConversationMessageListItem(
+            message = message,
+            stableKey = "$conversationAnimationKey:$keyIdentity"
+        )
+    }
+}
 
 @Composable
 internal fun ChatConversationList(
@@ -87,6 +119,9 @@ internal fun ChatConversationList(
         it.role == MessageRole.assistant && it.state == MessageState.streaming
     }
     val conversationAnimationKey = "${gatewayId.orEmpty()}::${chatState.currentSessionKey}"
+    val displayItems = remember(displayMessages, conversationAnimationKey) {
+        conversationMessageListItems(displayMessages, conversationAnimationKey)
+    }
     val shouldLoadOlder by remember(
         chatState.historyWindow,
         chatState.isLoading,
@@ -128,10 +163,11 @@ LazyColumn(
         item { ChatSessionLoadingCard() }
     }
 
-    items(displayMessages, key = { message -> "$conversationAnimationKey:${message.id}" }) { message ->
+    items(displayItems, key = ConversationMessageListItem::stableKey) { item ->
+        val message = item.message
         ConversationMessageEnterAnimation(
             isUserAuthoredMessage = message.isUserAuthoredMessage(),
-            animationKey = "$conversationAnimationKey:${message.id}",
+            animationKey = item.stableKey,
             shouldAnimate = shouldAnimateConversationMessageEntry(message)
         ) {
             MessageBubble(

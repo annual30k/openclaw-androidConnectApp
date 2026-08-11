@@ -53,6 +53,15 @@ internal fun reduceTimelineHistorySnapshot(
                 }
                 val result = reconcileTimeline(
                     existing = baseMessages,
+                    // 权威快照可以替换可见内容，但不能在对账前丢掉本机提交顺序。
+                    // 这里只把稳定 turn 元数据作为匹配来源，不把旧消息重新塞回快照结果。
+                    localOrderSources = if (replaceExistingTimelineState) {
+                        currentMessages.filter { message ->
+                            message.role == MessageRole.user && message.localTurnOrder != null
+                        }
+                    } else {
+                        emptyList()
+                    },
                     snapshot = page
                 )
                 val reconciled = result.messages + result.pending

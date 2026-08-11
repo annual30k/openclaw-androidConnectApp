@@ -160,6 +160,54 @@ class ChatTimelineReducerTest {
     }
 
     @Test
+    fun canonicalUserEchoWithSameMessageIdPromotesLocalBubbleWithoutLosingLocalOrder() {
+        val runId = "1502fed0-7966-4629-9e88-5857815d0a2b"
+        val local = ChatMessage(
+            id = "user-$runId",
+            role = MessageRole.user,
+            content = "/new",
+            runId = "local-user-$runId",
+            turnId = runId,
+            clientMessageId = runId,
+            idempotencyKey = runId,
+            timelineOrderKey = "local:$runId|10|user-$runId",
+            timelineIdentityKey = "local:message:user:$runId",
+            timelineItemKind = "message:user",
+            source = "local",
+            localTurnOrder = 7
+        )
+        val canonical = requireNotNull(
+            TimelineEventLog.decodeEvent(
+                """
+                {
+                  "protocolVersion": 2,
+                  "eventId": "evt-user-$runId",
+                  "eventType": "turn.user.created",
+                  "turnId": "$runId",
+                  "runId": "$runId",
+                  "clientMessageId": "$runId",
+                  "idempotencyKey": "$runId",
+                  "messageId": "user-$runId",
+                  "source": "local",
+                  "content": [{ "type": "text", "text": "/new" }],
+                  "timelineOrderKey": "v5|1|00000000000000000001|00000000000000000000|10|user-$runId",
+                  "timelineIdentityKey": "v1|mobile-session|message|user|srv-user-$runId",
+                  "timelineItemKind": "message:user"
+                }
+                """.trimIndent()
+            )
+        )
+
+        val state = ChatTimelineReducer.reduce(ChatTimelineState(messages = listOf(local)), canonical)
+
+        assertEquals(1, state.messages.size)
+        assertEquals("user-$runId", state.messages.single().id)
+        assertEquals(7L, state.messages.single().localTurnOrder)
+        assertEquals("v5|1|00000000000000000001|00000000000000000000|10|user-$runId", state.messages.single().timelineOrderKey)
+        assertEquals("v1|mobile-session|message|user|srv-user-$runId", state.messages.single().timelineIdentityKey)
+    }
+
+    @Test
     fun decodesWithUnknownKeysAndNullOptionals() {
         val event = TimelineEventLog.decodeEvent(
             """

@@ -10,6 +10,58 @@ import org.junit.Test
 
 class TimelineReconcilerTest {
     @Test
+    fun hermesRehydrationSortDoesNotCreateComparatorCycle() {
+        fun canonicalMessage(
+            id: String,
+            role: MessageRole,
+            runId: String,
+            sequence: Long,
+            localTurnOrder: Long? = null
+        ) = ChatMessage(
+            id = id,
+            role = role,
+            state = MessageState.completed,
+            content = id,
+            runId = runId,
+            turnId = runId,
+            clientMessageId = runId.takeIf { role == MessageRole.user }.orEmpty(),
+            timelineOrderKey = "v5|0|${sequence.toString().padStart(20, '0')}|00000000000000000000|${if (role == MessageRole.user) "10" else "30"}|$id",
+            timelineIdentityKey = "v1|mobile-hermes|${role.name}|$id",
+            timelineItemKind = if (role == MessageRole.tool) "tool" else "message:${role.name}",
+            source = "history",
+            localTurnOrder = localTurnOrder
+        )
+
+        val messages = buildList {
+            add(canonicalMessage("epoch-user", MessageRole.user, "epoch-run", 17_864_413_825_600L, 0))
+            add(canonicalMessage("epoch-answer", MessageRole.assistant, "epoch-run", 17_864_413_852_070L))
+            add(canonicalMessage("hermes-user", MessageRole.user, "hermes-run", 4_379, 10))
+            // Hermes live tool rows may use a run-local sequence before state.db assigns
+            // the later conversation sequence to their matching persisted user row.
+            add(canonicalMessage("hermes-live-tool", MessageRole.tool, "hermes-run", 4))
+            repeat(11) { turnIndex ->
+                val runId = "history-run-$turnIndex"
+                val userSequence = 4_357L + turnIndex * 2
+                add(canonicalMessage("history-user-$turnIndex", MessageRole.user, runId, userSequence, turnIndex + 1L))
+                add(canonicalMessage("history-answer-$turnIndex", MessageRole.assistant, runId, userSequence + 1))
+            }
+            add(canonicalMessage("tool-run-user", MessageRole.user, "tool-run", 4_381, 11))
+            add(canonicalMessage("tool-run-first", MessageRole.tool, "tool-run", 4_385))
+            add(canonicalMessage("tool-run-second", MessageRole.tool, "tool-run", 4_392))
+            add(canonicalMessage("tool-run-answer", MessageRole.assistant, "tool-run", 4_388))
+            add(canonicalMessage("tail-user-a", MessageRole.user, "tail-run-a", 4_394, 12))
+            add(canonicalMessage("tail-user-b", MessageRole.user, "tail-run-b", 4_395, 13))
+            add(canonicalMessage("tail-answer-b", MessageRole.assistant, "tail-run-b", 4_396))
+        }
+
+        val ordered = sortTimelineMessagesV3(messages, "mobile-hermes")
+
+        assertEquals(messages.size, ordered.size)
+        assertEquals(messages.map { it.id }.toSet(), ordered.map { it.id }.toSet())
+        assertTrue(ordered.indexOfFirst { it.id == "hermes-user" } < ordered.indexOfFirst { it.id == "hermes-live-tool" })
+    }
+
+    @Test
     fun mixedV4V5OrderKeysFormATransitiveTotalOrderWithoutChangingVersionSemantics() {
         val olderV5 = "v5|0|00000000000000000010|00000000000000000001|10|0000000000000001:00000000000000000001:user-old|aaaa"
         val newerV4 = "v4|0|00000000000000000020|10|0000000000000002:00000000000000000002:user-new|bbbb"
@@ -135,6 +187,74 @@ class TimelineReconcilerTest {
 
         assertEquals(
             listOf("user-first-run", "assistant-first-run", "user-second-run", "assistant-second-run"),
+            ordered.map { it.id }
+        )
+    }
+
+    @Test
+    fun hermesWaitingStaysWithItsToolOutputWhenOldQueuedPromptArrivesBetweenThem() {
+        val activeRunId = "attachment-active-run"
+        val activeUser = ChatMessage(
+            id = "active-image-user",
+            role = MessageRole.user,
+            state = MessageState.completed,
+            content = "分析这张图片",
+            runId = activeRunId,
+            turnId = activeRunId,
+            timelineOrderKey = "v5|0|00000000000000004404|00000000000000000000|10|active-image-user",
+            timelineIdentityKey = "message:user:active-image-user",
+            timelineItemKind = "message:user",
+            source = "history"
+        )
+        val activeTool = ChatMessage(
+            id = "active-tool-result",
+            role = MessageRole.tool,
+            state = MessageState.completed,
+            content = "tool result",
+            runId = activeRunId,
+            turnId = activeRunId,
+            timelineOrderKey = "v5|0|00000000000000004408|00000000000000000000|30|active-tool-result",
+            timelineIdentityKey = "tool:active-tool-result",
+            timelineItemKind = "tool",
+            source = "live"
+        )
+        val oldQueuedUser = ChatMessage(
+            id = "old-queued-user",
+            role = MessageRole.user,
+            state = MessageState.completed,
+            content = "Run the shell command: sleep 30.",
+            runId = "local-user-old-queued-run",
+            turnId = "old-queued-run",
+            clientMessageId = "old-queued-run",
+            idempotencyKey = "old-queued-run",
+            timelineOrderKey = "local:old-queued-run|10|old-queued-user",
+            timelineIdentityKey = "local:message:user:old-queued-run",
+            timelineItemKind = "message:user",
+            source = "local",
+            deliveryState = "queued",
+            localTurnOrder = 1
+        )
+        val activeWaiting = ChatMessage(
+            id = "active-waiting",
+            role = MessageRole.assistant,
+            state = MessageState.streaming,
+            content = protocolTypingMarkerText,
+            contentBlocks = listOf(RelayChatContentBlock(type = "text", text = protocolTypingMarkerText)),
+            runId = activeRunId,
+            turnId = activeRunId,
+            timelineOrderKey = "local:$activeRunId|20|active-waiting",
+            timelineIdentityKey = "local:waiting:$activeRunId",
+            timelineItemKind = "waiting",
+            source = "local"
+        )
+
+        val ordered = sortTimelineMessagesV3(
+            listOf(activeUser, activeTool, oldQueuedUser, activeWaiting),
+            "mobile-hermes"
+        )
+
+        assertEquals(
+            listOf("active-image-user", "active-tool-result", "active-waiting", "old-queued-user"),
             ordered.map { it.id }
         )
     }
@@ -922,6 +1042,75 @@ class TimelineReconcilerTest {
         val ordered = sortTimelineMessagesV3(listOf(secondAnswer, firstUser, secondUser))
 
         assertEquals(listOf("question-a", "question-b", "answer-b"), ordered.map { it.id })
+    }
+
+    @Test
+    fun canonicalSnapshotKeepsStableLocalTurnOrderAcrossMixedHermesOrderDomains() {
+        fun localUser(id: String, runId: String, content: String, order: Long) = ChatMessage(
+            id = id,
+            role = MessageRole.user,
+            content = content,
+            runId = "local-user-$runId",
+            turnId = runId,
+            clientMessageId = runId,
+            idempotencyKey = runId,
+            timelineOrderKey = "local:$runId|10|$id",
+            timelineIdentityKey = "local:message:user:$runId",
+            timelineItemKind = "message:user",
+            source = "local",
+            localTurnOrder = order
+        )
+        fun snapshotMessage(
+            id: String,
+            role: String,
+            runId: String,
+            content: String,
+            orderKey: String,
+            kind: String
+        ) = TimelineSnapshotMessage(
+            serverMessageId = id,
+            messageId = id,
+            role = role,
+            messageState = "completed",
+            runId = runId,
+            turnId = runId,
+            clientMessageId = runId.takeIf { role == "user" },
+            content = listOf(RelayChatContentBlock(type = "text", text = content)),
+            timelineOrderKey = orderKey,
+            timelineIdentityKey = "v1|mobile-hermes|message|$role|$id",
+            timelineItemKind = kind,
+            source = "history"
+        )
+
+        val newRun = "new-run"
+        val helloRun = "hello-run"
+        val pingRun = "ping-run"
+        val existing = listOf(
+            localUser("local-new", newRun, "/new", 0),
+            localUser("local-hello", helloRun, "hello", 1),
+            localUser("local-ping", pingRun, "ping", 2)
+        )
+        val snapshot = TimelineSnapshotPage(
+            sessionKey = "mobile-hermes",
+            messages = listOf(
+                snapshotMessage("hello-user", "user", helloRun, "hello", "v5|0|00000000000000004349|00000000000000000000|10|hello-user", "message:user"),
+                snapshotMessage("hello-answer", "assistant", helloRun, "hello-answer", "v5|0|00000000000000004350|00000000000000000000|50|hello-answer", "message:assistant"),
+                snapshotMessage("ping-user", "user", pingRun, "ping", "v5|0|00000000000000004351|00000000000000000000|10|ping-user", "message:user"),
+                snapshotMessage("new-user", "user", newRun, "/new", "v5|0|00000001786421720969|00000000000000000000|10|new-user", "message:user"),
+                snapshotMessage("new-answer", "assistant", newRun, "New session started!", "v5|0|00001786421722525000|00000000000000000000|50|new-answer", "message:assistant"),
+                snapshotMessage("ping-answer", "assistant", pingRun, "pong", "v5|1|00000000000000000003|00000000000000000000|50|ping-answer", "message:assistant")
+            )
+        )
+
+        val reconciled = reconcileTimeline(existing = existing, snapshot = snapshot)
+        val ordered = sortTimelineMessagesV3(reconciled.messages + reconciled.pending, snapshot.sessionKey)
+
+        assertEquals(emptyList<ChatMessage>(), reconciled.pending)
+        assertEquals(listOf(0L, 1L, 2L), ordered.filter { it.role == MessageRole.user }.mapNotNull { it.localTurnOrder })
+        assertEquals(
+            listOf("/new", "New session started!", "hello", "hello-answer", "ping", "pong"),
+            ordered.map { it.content }
+        )
     }
 
     @Test

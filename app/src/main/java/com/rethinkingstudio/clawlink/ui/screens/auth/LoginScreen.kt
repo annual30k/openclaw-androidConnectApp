@@ -271,6 +271,7 @@ fun LoginScreen(
 
                         if (state.errorMessage != null && !showingForgotPassword) {
                             Surface(
+                                modifier = Modifier.fillMaxWidth(),
                                 shape = RoundedCornerShape(18.dp),
                                 color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.9f),
                                 contentColor = MaterialTheme.colorScheme.onErrorContainer

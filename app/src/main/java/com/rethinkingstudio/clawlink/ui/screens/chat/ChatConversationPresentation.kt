@@ -442,36 +442,54 @@ private fun mergedBlocksContainSourceRunIdentity(
 }
 
 private fun List<ChatMessage>.coalescedLocalUserLiveEchoes(): List<ChatMessage> {
-    val localEchoKeys = mutableSetOf<LocalUserEchoKey>()
-    val liveEchoIndexesToDrop = mutableSetOf<Int>()
-
-    for (local in this) {
-        if (local.role != MessageRole.user || !local.runId.trim().startsWith("local-user-")) continue
-        val localContent = normalizedUserEchoContent(local.content)
-        if (localContent.isEmpty()) continue
-        val localRunId = normalizedUserEchoRunId(local.runId)
-        if (localRunId.isEmpty()) continue
-        localEchoKeys += LocalUserEchoKey(runId = localRunId, content = localContent)
-    }
-
-    forEachIndexed { liveIndex, live ->
-        if (live.role != MessageRole.user ||
-            live.runId.trim().startsWith("local-user-") ||
-            live.runId.trim().startsWith("history-")
-        ) {
-            return@forEachIndexed
-        }
-        val liveKey = LocalUserEchoKey(
-            runId = normalizedUserEchoRunId(live.runId),
-            content = normalizedUserEchoContent(live.content)
-        )
-        if (liveKey.runId.isNotEmpty() && liveKey.content.isNotEmpty() && liveKey in localEchoKeys) {
-            liveEchoIndexesToDrop += liveIndex
+    val localIndexesByRun = linkedMapOf<String, MutableList<Int>>()
+    val relayIndexesByRun = linkedMapOf<String, MutableList<Int>>()
+    forEachIndexed { index, message ->
+        if (message.role != MessageRole.user) return@forEachIndexed
+        val runIdentity = normalizedUserEchoRunId(message.runId).takeIf { it.isNotEmpty() }
+            ?: return@forEachIndexed
+        when {
+            message.runId.trim().startsWith("local-user-") -> {
+                localIndexesByRun.getOrPut(runIdentity, ::mutableListOf) += index
+            }
+            !message.runId.trim().startsWith("history-") -> {
+                relayIndexesByRun.getOrPut(runIdentity, ::mutableListOf) += index
+            }
         }
     }
 
-    if (liveEchoIndexesToDrop.isEmpty()) return this
-    return filterIndexed { index, _ -> index !in liveEchoIndexesToDrop }
+    val localIndexByRelayIndex = mutableMapOf<Int, Int>()
+    localIndexesByRun.forEach { (runIdentity, localIndexes) ->
+        val relayIndexes = relayIndexesByRun[runIdentity].orEmpty()
+        // 稳定 run 正常只对应一条本地回显和一条 Relay 回显；身份冲突时全部保留，
+        // 不能再用文案或时间猜测应该合并哪一条。
+        if (localIndexes.size == 1 && relayIndexes.size == 1) {
+            localIndexByRelayIndex[relayIndexes.single()] = localIndexes.single()
+        }
+    }
+    if (localIndexByRelayIndex.isEmpty()) return this
+
+    val localIndexesToDrop = localIndexByRelayIndex.values.toSet()
+    return mapIndexedNotNull { index, message ->
+        when {
+            index in localIndexesToDrop -> null
+            index in localIndexByRelayIndex -> {
+                val local = this[localIndexByRelayIndex.getValue(index)]
+                message.copy(
+                    // 保留 Compose item key 和本地预览，但位置及时间线身份必须继承
+                    // 权威 Relay 回显，避免本地回显把已确认消息拉回旧位置。
+                    id = local.id,
+                    content = message.content.ifBlank { local.content },
+                    contentBlocks = local.contentBlocks.ifEmpty { message.contentBlocks },
+                    runId = local.runId,
+                    clientMessageId = message.clientMessageId.ifBlank { local.clientMessageId },
+                    idempotencyKey = message.idempotencyKey.ifBlank { local.idempotencyKey },
+                    localTurnOrder = local.localTurnOrder ?: message.localTurnOrder
+                )
+            }
+            else -> message
+        }
+    }
 }
 
 private fun List<ChatMessage>.coalescedDuplicateFileTransferMessages(): List<ChatMessage> {
@@ -500,35 +518,60 @@ private fun List<ChatMessage>.coalescedDuplicateFileTransferMessages(): List<Cha
 private fun List<ChatMessage>.coalescedDuplicateTransientAssistantPlaceholders(): List<ChatMessage> {
     if (size < 2) return this
 
-    val placeholderIndexes = indices.filter { index -> this[index].isTransientDisplayWaitingPlaceholder() }
-    if (placeholderIndexes.size < 2) return this
+    val placeholderIndexGroups = mutableListOf<MutableList<Int>>()
+    val turnIdentitiesByGroup = mutableListOf<MutableSet<String>>()
+    forEachIndexed { index, message ->
+        if (!message.isTransientDisplayWaitingPlaceholder()) return@forEachIndexed
+        val turnIdentities = message.displayTurnIdentities()
+        if (turnIdentities.isEmpty()) return@forEachIndexed
 
-    val keepIndex = placeholderIndexes.reduce { preferredIndex, candidateIndex ->
-        val preferred = this[preferredIndex]
-        val candidate = this[candidateIndex]
-        if (candidate.prefersTransientAssistantPlaceholderOver(preferred)) candidateIndex else preferredIndex
-    }
+        val matchingGroupIndexes = turnIdentitiesByGroup.indices.filter { groupIndex ->
+            turnIdentitiesByGroup[groupIndex].any(turnIdentities::contains)
+        }
+        if (matchingGroupIndexes.isEmpty()) {
+            placeholderIndexGroups += mutableListOf(index)
+            turnIdentitiesByGroup += turnIdentities.toMutableSet()
+            return@forEachIndexed
+        }
 
-    // 展示层只允许一个纯 waiting 占位；真实文本、附件、工具输出不走这个分支，避免误删业务消息。
-    return filterIndexed { index, message ->
-        !message.isTransientDisplayWaitingPlaceholder() || index == keepIndex
+        val targetGroupIndex = matchingGroupIndexes.first()
+        placeholderIndexGroups[targetGroupIndex] += index
+        turnIdentitiesByGroup[targetGroupIndex] += turnIdentities
+        matchingGroupIndexes.drop(1).asReversed().forEach { groupIndex ->
+            placeholderIndexGroups[targetGroupIndex] += placeholderIndexGroups[groupIndex]
+            turnIdentitiesByGroup[targetGroupIndex] += turnIdentitiesByGroup[groupIndex]
+            placeholderIndexGroups.removeAt(groupIndex)
+            turnIdentitiesByGroup.removeAt(groupIndex)
+        }
     }
+    val indexesToDrop = mutableSetOf<Int>()
+    placeholderIndexGroups.forEach { placeholderIndexes ->
+        if (placeholderIndexes.size < 2) return@forEach
+        val keepIndex = placeholderIndexes.reduce { preferredIndex, candidateIndex ->
+            val preferred = this[preferredIndex]
+            val candidate = this[candidateIndex]
+            if (candidate.prefersTransientAssistantPlaceholderOver(preferred)) candidateIndex else preferredIndex
+        }
+        placeholderIndexes.filterTo(indexesToDrop) { index -> index != keepIndex }
+    }
+    if (indexesToDrop.isEmpty()) return this
+
+    // 只压缩同一稳定 turn 的重复 waiting；不同 turn 或身份缺失时必须全部保留。
+    return filterIndexed { index, _ -> index !in indexesToDrop }
 }
 
 private fun List<ChatMessage>.coalescedResolvedTransientAssistantPlaceholders(): List<ChatMessage> {
     if (size < 2) return this
 
+    val visibleAssistantOutputs = filter(ChatMessage::isVisibleAssistantTextOutput)
+    if (visibleAssistantOutputs.isEmpty()) return this
     val placeholderIndexesToDrop = mutableSetOf<Int>()
     forEachIndexed { index, message ->
         if (!message.isResolvableTransientTypingPlaceholder()) return@forEachIndexed
-        val previousUserIndex = indices.lastOrNull { candidateIndex ->
-            candidateIndex < index && this[candidateIndex].role == MessageRole.user
-        } ?: return@forEachIndexed
-        val nextUserIndex = indices.firstOrNull { candidateIndex ->
-            candidateIndex > index && this[candidateIndex].role == MessageRole.user
-        } ?: size
-        val currentTurnHasVisibleAssistantText = (previousUserIndex + 1 until nextUserIndex).any { candidateIndex ->
-            candidateIndex != index && this[candidateIndex].isVisibleAssistantTextOutput()
+        val waitingIdentities = message.displayTurnIdentities()
+        if (waitingIdentities.isEmpty()) return@forEachIndexed
+        val currentTurnHasVisibleAssistantText = visibleAssistantOutputs.any { output ->
+            output.displayTurnIdentities().any(waitingIdentities::contains)
         }
         if (currentTurnHasVisibleAssistantText) {
             placeholderIndexesToDrop += index
@@ -552,7 +595,30 @@ private fun ChatMessage.prefersTransientAssistantPlaceholderOver(other: ChatMess
 
 private fun List<ChatMessage>.orderedForConversationDisplay(): List<ChatMessage> {
     if (size < 2) return this
-    return mapIndexed { index, message -> IndexedDisplayMessage(index, message) }
+    val hasStableLocalTurnProjection = any { message ->
+        message.role == MessageRole.user && message.localTurnOrder != null
+    }
+    val canonicalOrdered = if (hasStableLocalTurnProjection) {
+        // ChatStore 已用稳定 localTurnOrder 将本机提交轮次和同 turn 输出投影完成；
+        // 展示层不能再用混合的 Host/Relay canonical key 把它二次洗牌。
+        this
+    } else {
+        val canonicalMessages = filter(ChatMessage::hasCanonicalDisplayOrder)
+            .sortedWith { left, right ->
+                compareCanonicalTimelineOrderKeys(left.timelineOrderKey, right.timelineOrderKey)
+                    .takeIf { it != 0 }
+                    ?: left.timelineIdentityKey.compareTo(right.timelineIdentityKey)
+                        .takeIf { it != 0 }
+                    ?: left.timelineItemKind.compareTo(right.timelineItemKind)
+                        .takeIf { it != 0 }
+                    ?: left.id.compareTo(right.id)
+            }
+            .iterator()
+        map { message ->
+            if (message.hasCanonicalDisplayOrder()) canonicalMessages.next() else message
+        }
+    }
+    return canonicalOrdered.mapIndexed { index, message -> IndexedDisplayMessage(index, message) }
         .sortedWith { left, right ->
             when {
                 sameTurnOutputBeforeWaiting(left.message, right.message) -> -1
@@ -563,12 +629,20 @@ private fun List<ChatMessage>.orderedForConversationDisplay(): List<ChatMessage>
         .map { it.message }
 }
 
+private fun ChatMessage.hasCanonicalDisplayOrder(): Boolean {
+    return timelineOrderKey.isNotBlank() &&
+        !timelineOrderKey.startsWith("local:") &&
+        timelineIdentityKey.isNotBlank() &&
+        timelineItemKind.isNotBlank()
+}
+
 private fun sameTurnOutputBeforeWaiting(left: ChatMessage, right: ChatMessage): Boolean {
     if (!right.isResolvableTransientTypingPlaceholder()) return false
-    val leftTurn = left.displayTurnIdentity()
+    val leftTurnIdentities = left.displayTurnIdentities()
+    val rightTurnIdentities = right.displayTurnIdentities()
     // 同一用户 turn 的真实输出必须排在 transient waiting 前面，避免附件到达后仍被 loading 气泡压住。
-    return leftTurn.isNotEmpty() &&
-        leftTurn == right.displayTurnIdentity() &&
+    return leftTurnIdentities.isNotEmpty() &&
+        leftTurnIdentities.any(rightTurnIdentities::contains) &&
         left.isAssistantOrToolOutput()
 }
 
@@ -609,13 +683,16 @@ private fun ChatMessage.isTransientDisplayWaitingPlaceholder(): Boolean {
     return timelineItemKind.trim() == "waiting" || text.isEmpty() || isTransientDisplayWaitingText(text)
 }
 
-private fun ChatMessage.displayTurnIdentity(): String {
-    val blockSourceRunId = contentBlocks.firstNotNullOfOrNull { block ->
-        normalizedDisplayTurnIdentity(block.sourceRunId)
-            .takeIf { it.isNotEmpty() }
-    }
-    if (!blockSourceRunId.isNullOrEmpty()) return blockSourceRunId
-    return normalizedDisplayTurnIdentity(runId)
+private fun ChatMessage.displayTurnIdentities(): Set<String> {
+    return buildList {
+        contentBlocks.forEach { block -> add(block.sourceRunId) }
+        add(turnId)
+        add(clientMessageId)
+        add(idempotencyKey)
+        add(runId)
+    }.mapNotNull { value ->
+        normalizedDisplayTurnIdentity(value).takeIf { identity -> identity.isNotEmpty() }
+    }.toSet()
 }
 
 private fun normalizedDisplayTurnIdentity(value: String?): String {
@@ -795,10 +872,6 @@ private fun normalizedUserEchoRunId(value: String): String {
     return normalized.trim()
 }
 
-private fun normalizedUserEchoContent(value: String): String {
-    return value.trim().replace(Regex("\\s+"), " ")
-}
-
 private fun compareNormalizedText(left: String, right: String): Int {
     val normalizedLeft = left.trim()
     val normalizedRight = right.trim()
@@ -807,11 +880,6 @@ private fun compareNormalizedText(left: String, right: String): Int {
     if (normalizedRight.isEmpty()) return 1
     return normalizedLeft.compareTo(normalizedRight)
 }
-
-private data class LocalUserEchoKey(
-    val runId: String,
-    val content: String
-)
 
 private data class FileTransferDisplayKeys(
     val stableKey: String?

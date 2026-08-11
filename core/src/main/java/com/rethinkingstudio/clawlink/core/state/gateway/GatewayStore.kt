@@ -8,6 +8,7 @@ import com.rethinkingstudio.clawlink.core.network.transport.WsEvent
 import com.rethinkingstudio.clawlink.core.network.dto.GatewaySummaryDTO
 import com.rethinkingstudio.clawlink.core.network.dto.SlashCommandListResponse
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -293,6 +294,9 @@ class GatewayStore(
             if (selectedId != null && selectedId != currentSelected) {
                 scope.launch { credentialStore.saveLastGatewayId(selectedId) }
             }
+        } catch (e: CancellationException) {
+            _state.value = _state.value.copy(isLoading = false)
+            throw e
         } catch (e: Exception) {
             _state.value = _state.value.copy(
                 isLoading = false,

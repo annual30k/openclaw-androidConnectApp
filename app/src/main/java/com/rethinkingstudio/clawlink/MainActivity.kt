@@ -51,8 +51,6 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.Lifecycle
-import androidx.lifecycle.LifecycleEventObserver
 import androidx.core.view.WindowCompat
 import com.rethinkingstudio.clawlink.ui.navigation.AppNavigation
 import com.rethinkingstudio.clawlink.app.PocketClawTheme
@@ -69,18 +67,8 @@ class MainActivity : AppCompatActivity() {
         val app = application as ClawLinkApplication
         appContainer = app.container
 
-        lifecycle.addObserver(LifecycleEventObserver { _, event ->
-            when (event) {
-                Lifecycle.Event.ON_STOP -> {
-                    appContainer.chatStore.suspendWebSocket()
-                }
-                Lifecycle.Event.ON_START -> {
-                    appContainer.chatStore.resumeWebSocket()
-                }
-                else -> {}
-            }
-        })
-
+        // 不要随 Activity ON_STOP 主动断开 WebSocket：切后台或打开系统文件选择器都会触发
+        // ON_STOP，iOS/微信均保持连接，主动断开会让每次回前台都显示“连接中”并重复对账。
         setContent {
             PocketClawTheme {
                 LaunchRoot(container = appContainer)

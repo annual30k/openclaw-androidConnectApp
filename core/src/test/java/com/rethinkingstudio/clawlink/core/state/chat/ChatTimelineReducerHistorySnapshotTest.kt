@@ -4,6 +4,8 @@ import com.rethinkingstudio.clawlink.core.models.chat.ChatMessage
 import com.rethinkingstudio.clawlink.core.models.chat.MessageRole
 import com.rethinkingstudio.clawlink.core.models.chat.MessageState
 import com.rethinkingstudio.clawlink.core.models.chat.RelayChatContentBlock
+import com.rethinkingstudio.clawlink.core.network.dto.ChatHistoryResponse
+import kotlinx.serialization.json.Json
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
@@ -11,6 +13,116 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class ChatTimelineReducerHistorySnapshotTest {
+    @Test
+    fun authoritativeHistoryReplacementKeepsCompletedLocalTurnOrderAsMetadataOnly() {
+        fun localUser(id: String, runId: String, order: Long) = ChatMessage(
+            id = id,
+            role = MessageRole.user,
+            state = MessageState.completed,
+            content = id,
+            runId = "local-user-$runId",
+            turnId = runId,
+            clientMessageId = runId,
+            idempotencyKey = runId,
+            timelineOrderKey = "local:$runId|10|$id",
+            timelineIdentityKey = "local:message:user:$runId",
+            timelineItemKind = "message:user",
+            source = "local",
+            localTurnOrder = order
+        )
+        val currentMessages = listOf(
+            localUser("local-new", "run-new", 0),
+            localUser("local-ping", "run-ping", 1)
+        )
+        val response = ChatHistoryResponse(
+            items = emptyList(),
+            timelineSnapshot = Json.parseToJsonElement(
+                """
+                {
+                  "timelineProtocolVersion": 3,
+                  "sessionKey": "mobile-hermes",
+                  "snapshotRevision": "rev-local-order",
+                  "messages": [
+                    {
+                      "messageId": "server-new-user",
+                      "role": "user",
+                      "messageState": "completed",
+                      "turnId": "run-new",
+                      "runId": "run-new",
+                      "clientMessageId": "run-new",
+                      "idempotencyKey": "run-new",
+                      "timelineOrderKey": "v5|0|00000001786421720969|00000000000000000000|10|server-new-user",
+                      "timelineIdentityKey": "v1|mobile-hermes|message|user|server-new-user",
+                      "timelineItemKind": "message:user",
+                      "source": "history",
+                      "content": [{ "type": "text", "text": "/new" }]
+                    },
+                    {
+                      "messageId": "server-new-answer",
+                      "role": "assistant",
+                      "messageState": "completed",
+                      "turnId": "run-new",
+                      "runId": "run-new",
+                      "timelineOrderKey": "v5|0|00001786421722525000|00000000000000000000|50|server-new-answer",
+                      "timelineIdentityKey": "v1|mobile-hermes|message|assistant|server-new-answer",
+                      "timelineItemKind": "message:assistant",
+                      "source": "history",
+                      "content": [{ "type": "text", "text": "New session started!" }]
+                    },
+                    {
+                      "messageId": "server-ping-user",
+                      "role": "user",
+                      "messageState": "completed",
+                      "turnId": "run-ping",
+                      "runId": "run-ping",
+                      "clientMessageId": "run-ping",
+                      "idempotencyKey": "run-ping",
+                      "timelineOrderKey": "v5|0|00000000000000004355|00000000000000000000|10|server-ping-user",
+                      "timelineIdentityKey": "v1|mobile-hermes|message|user|server-ping-user",
+                      "timelineItemKind": "message:user",
+                      "source": "history",
+                      "content": [{ "type": "text", "text": "ping" }]
+                    },
+                    {
+                      "messageId": "server-ping-answer",
+                      "role": "assistant",
+                      "messageState": "completed",
+                      "turnId": "run-ping",
+                      "runId": "run-ping",
+                      "timelineOrderKey": "v5|0|00000000000000004356|00000000000000000000|50|server-ping-answer",
+                      "timelineIdentityKey": "v1|mobile-hermes|message|assistant|server-ping-answer",
+                      "timelineItemKind": "message:assistant",
+                      "source": "history",
+                      "content": [{ "type": "text", "text": "pong" }]
+                    }
+                  ]
+                }
+                """.trimIndent()
+            )
+        )
+
+        val reduction = requireNotNull(
+            reduceTimelineHistorySnapshot(
+                response = response,
+                currentMessages = currentMessages,
+                currentSessionKey = "mobile-hermes",
+                timelineState = ChatTimelineState(messages = currentMessages),
+                replaceExistingTimelineState = true
+            )
+        )
+        val ordered = sortTimelineMessagesV3(reduction.messages, "mobile-hermes")
+
+        assertEquals(
+            listOf("server-new-user", "server-new-answer", "server-ping-user", "server-ping-answer"),
+            ordered.map(ChatMessage::id)
+        )
+        assertEquals(
+            listOf(0L, 1L),
+            ordered.filter { it.role == MessageRole.user }.mapNotNull(ChatMessage::localTurnOrder)
+        )
+        assertTrue(reduction.messages.none { it.id.startsWith("local-") })
+    }
+
     @Test
     fun historySnapshotReplayRemovesPersistedLocalUserDuplicateWhenCanonicalRowAlreadyExists() {
         val turnId = "android-client-run-relogin"

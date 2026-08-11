@@ -38,7 +38,6 @@ internal object ChatTimelineReducer {
     }
 
     private fun ChatTimelineState.applyUserTurn(event: TimelineEvent.TurnUserCreated): ChatTimelineState {
-        if (messages.any { it.id == event.messageId }) return this
         val incomingTurnIdentities = listOfNotNull(
             event.turnId.takeIf { it.isNotBlank() },
             event.runId?.takeIf { it.isNotBlank() },
@@ -48,9 +47,10 @@ internal object ChatTimelineReducer {
         val equivalentIndexes = messages.indices.filter { index ->
             val message = messages[index]
             message.role == MessageRole.user &&
-                listOf(message.turnId, message.runId, message.clientMessageId, message.idempotencyKey)
-                    .mapNotNull(::normalizedTurnIdentity)
-                    .any { it in incomingTurnIdentities }
+                (message.id == event.messageId ||
+                    listOf(message.turnId, message.runId, message.clientMessageId, message.idempotencyKey)
+                        .mapNotNull(::normalizedTurnIdentity)
+                        .any { it in incomingTurnIdentities })
         }
         // 稳定 turn 正常只对应一条可见 user 消息；冲突超过一条时不按文案、时间或数组位置猜测。
         val equivalentIndex = equivalentIndexes.singleOrNull()
@@ -223,6 +223,7 @@ internal object ChatTimelineReducer {
             timelineIdentityKey = anchoredIdentityKey.orEmpty().ifBlank { event.timelineIdentityKey.orEmpty().ifBlank { matchedMessage?.timelineIdentityKey.orEmpty() } },
             timelineItemKind = anchoredItemKind,
             timelineResolvesWaiting = event.timelineResolvesWaiting ?: matchedMessage?.timelineResolvesWaiting,
+            source = event.source.orEmpty().ifBlank { matchedMessage?.source.orEmpty() },
             localTurnOrder = matchedMessage?.localTurnOrder
         )
         val messageForUpsert = message

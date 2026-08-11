@@ -627,7 +627,7 @@ private fun ChatMessage.hasCanonicalTimelineKeysForSnapshot(): Boolean {
 private fun ChatMessage.isPendingTimelineOverlay(): Boolean {
     return timelineOrderKey.startsWith("local:") ||
         timelineIdentityKey.startsWith("local:") ||
-        source.equals("local", ignoreCase = true)
+        (source.equals("local", ignoreCase = true) && !hasCanonicalTimelineKeysForSnapshot())
 }
 
 private fun sha256Hex(value: String): String {

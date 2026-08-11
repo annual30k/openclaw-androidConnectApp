@@ -334,6 +334,105 @@ class ChatConversationPresentationTest {
     }
 
     @Test
+    fun displayMessagesUsesRelaySequenceAfterLocalAndCanonicalEchoesArriveOutOfOrder() {
+        fun canonical(
+            id: String,
+            role: MessageRole,
+            runId: String,
+            content: String,
+            conversationSequence: Int,
+            slot: Int
+        ) = ChatMessage(
+            id = id,
+            role = role,
+            state = MessageState.completed,
+            content = content,
+            contentBlocks = listOf(RelayChatContentBlock(type = "text", text = content)),
+            runId = runId,
+            turnId = runId,
+            timelineOrderKey = "v5|1|${conversationSequence.toString().padStart(20, '0')}|00000000000000000000|${slot.toString().padStart(2, '0')}|$id",
+            timelineIdentityKey = "v1|mobile-hermes|message|${role.name}|$id",
+            timelineItemKind = "message:${role.name}"
+        )
+        fun local(id: String, runId: String, content: String) = ChatMessage(
+            id = id,
+            role = MessageRole.user,
+            state = MessageState.completed,
+            content = content,
+            runId = "local-user-$runId",
+            turnId = runId,
+            timelineOrderKey = "local:$runId|10|$id",
+            timelineIdentityKey = "local:message:user:$runId",
+            timelineItemKind = "message:user",
+            source = "local"
+        )
+
+        val displayMessages = conversationDisplayMessages(
+            messages = listOf(
+                canonical("hermes-user", MessageRole.user, "hermes-run", "Reply exactly HERMESNEW0811", 2, 10),
+                canonical("hermes-answer", MessageRole.assistant, "hermes-run", "HERMESNEW0811", 2, 50),
+                local("local-hello", "hello-run", "你好"),
+                local("local-new", "new-run", "/new"),
+                canonical("relay-new", MessageRole.user, "new-run", "/new", 1, 10),
+                canonical("new-answer", MessageRole.assistant, "new-run", "(^_^)v New session started!", 1, 50),
+                canonical("relay-hello", MessageRole.user, "hello-run", "你好", 3, 10),
+                canonical("hello-answer", MessageRole.assistant, "hello-run", "你好！有什么可以帮你的？", 3, 50)
+            ),
+            showInvocationProcess = true
+        )
+
+        assertEquals(
+            listOf("local-new", "new-answer", "hermes-user", "hermes-answer", "local-hello", "hello-answer"),
+            displayMessages.map { it.id }
+        )
+        assertEquals(
+            listOf("/new", "(^_^)v New session started!", "Reply exactly HERMESNEW0811", "HERMESNEW0811", "你好", "你好！有什么可以帮你的？"),
+            displayMessages.map { it.content }
+        )
+    }
+
+    @Test
+    fun displayMessagesDoesNotResortStableLocalTurnsAcrossMixedHermesOrderDomains() {
+        fun message(
+            id: String,
+            role: MessageRole,
+            runId: String,
+            content: String,
+            orderKey: String,
+            localTurnOrder: Long? = null
+        ) = ChatMessage(
+            id = id,
+            role = role,
+            state = MessageState.completed,
+            content = content,
+            contentBlocks = listOf(RelayChatContentBlock(type = "text", text = content)),
+            runId = runId,
+            turnId = runId,
+            timelineOrderKey = orderKey,
+            timelineIdentityKey = "v1|mobile-hermes|message|${role.name}|$id",
+            timelineItemKind = "message:${role.name}",
+            localTurnOrder = localTurnOrder
+        )
+
+        val displayMessages = conversationDisplayMessages(
+            messages = listOf(
+                message("new-user", MessageRole.user, "new-run", "/new", "v5|0|00000001786421720969|00000000000000000000|10|new-user", 0),
+                message("new-answer", MessageRole.assistant, "new-run", "New session started!", "v5|0|00001786421722525000|00000000000000000000|50|new-answer"),
+                message("hello-user", MessageRole.user, "hello-run", "hello", "v5|0|00000000000000004349|00000000000000000000|10|hello-user", 1),
+                message("hello-answer", MessageRole.assistant, "hello-run", "hello-answer", "v5|0|00000000000000004350|00000000000000000000|50|hello-answer"),
+                message("ping-user", MessageRole.user, "ping-run", "ping", "v5|0|00000000000000004351|00000000000000000000|10|ping-user", 2),
+                message("ping-answer", MessageRole.assistant, "ping-run", "pong", "v5|1|00000000000000000003|00000000000000000000|50|ping-answer")
+            ),
+            showInvocationProcess = true
+        )
+
+        assertEquals(
+            listOf("/new", "New session started!", "hello", "hello-answer", "ping", "pong"),
+            displayMessages.map { it.content }
+        )
+    }
+
+    @Test
     fun displayMessagesMergesCompletedMobileAttachmentIntoLocalTextBubble() {
         val localImageFile = File.createTempFile("album-waterfall", ".jpg").apply { deleteOnExit() }
         val localImageUrl = localImageFile.toURI().toString()
@@ -715,7 +814,7 @@ class ChatConversationPresentationTest {
     }
 
     @Test
-    fun displayMessagesShowsAtMostOneTransientAssistantTypingBubble() {
+    fun displayMessagesKeepsTransientTypingBubblesForDistinctTurns() {
         val firstUser = ChatMessage(
             id = "local-user-first",
             role = MessageRole.user,
@@ -767,11 +866,105 @@ class ChatConversationPresentationTest {
         )
 
         assertEquals(
-            listOf("waiting-second"),
+            listOf("waiting-first", "waiting-second"),
             displayMessages
                 .filter { it.role == MessageRole.assistant && it.state == MessageState.streaming }
                 .map { it.id }
         )
+    }
+
+    @Test
+    fun displayMessagesCoalescesDuplicateTransientTypingWithinSameStableTurn() {
+        val first = ChatMessage(
+            id = "waiting-same-turn-first",
+            role = MessageRole.assistant,
+            state = MessageState.streaming,
+            content = "[[clawlink:typing]]",
+            runId = "client-run-same-turn",
+            turnId = "client-run-same-turn",
+            timelineOrderKey = "local:client-run-same-turn:020-waiting-a",
+            timelineIdentityKey = "local:client-run-same-turn:waiting:a",
+            timelineItemKind = "waiting"
+        )
+        val second = first.copy(
+            id = "waiting-same-turn-second",
+            timelineOrderKey = "local:client-run-same-turn:020-waiting-b",
+            timelineIdentityKey = "local:client-run-same-turn:waiting:b"
+        )
+
+        val displayMessages = conversationDisplayMessages(
+            messages = listOf(first, second),
+            showInvocationProcess = true
+        )
+
+        assertEquals(listOf("waiting-same-turn-second"), displayMessages.map(ChatMessage::id))
+    }
+
+    @Test
+    fun displayMessagesCoalescesWaitingWhenStableTurnAliasMatches() {
+        val first = ChatMessage(
+            id = "waiting-provider-run-a",
+            role = MessageRole.assistant,
+            state = MessageState.streaming,
+            content = "[[clawlink:typing]]",
+            contentBlocks = listOf(
+                RelayChatContentBlock(type = "text", sourceRunId = "provider-run-a")
+            ),
+            runId = "provider-run-a",
+            turnId = "client-turn-shared",
+            timelineOrderKey = "local:client-turn-shared:020-waiting-a",
+            timelineIdentityKey = "local:client-turn-shared:waiting:a",
+            timelineItemKind = "waiting"
+        )
+        val second = first.copy(
+            id = "waiting-provider-run-b",
+            contentBlocks = listOf(
+                RelayChatContentBlock(type = "text", sourceRunId = "provider-run-b")
+            ),
+            runId = "provider-run-b",
+            timelineOrderKey = "local:client-turn-shared:020-waiting-b",
+            timelineIdentityKey = "local:client-turn-shared:waiting:b"
+        )
+
+        val displayMessages = conversationDisplayMessages(
+            messages = listOf(first, second),
+            showInvocationProcess = true
+        )
+
+        assertEquals(listOf("waiting-provider-run-b"), displayMessages.map(ChatMessage::id))
+    }
+
+    @Test
+    fun displayMessagesDoesNotResolveWaitingFromUnrelatedAssistantText() {
+        val waiting = ChatMessage(
+            id = "waiting-turn-a",
+            role = MessageRole.assistant,
+            state = MessageState.streaming,
+            content = "[[clawlink:typing]]",
+            runId = "turn-a",
+            turnId = "turn-a",
+            timelineOrderKey = "local:turn-a:020-waiting",
+            timelineIdentityKey = "local:turn-a:waiting",
+            timelineItemKind = "waiting"
+        )
+        val unrelatedAnswer = ChatMessage(
+            id = "answer-turn-b",
+            role = MessageRole.assistant,
+            state = MessageState.completed,
+            content = "turn b answer",
+            runId = "turn-b",
+            turnId = "turn-b",
+            timelineOrderKey = "v5|0|00000000000000000001|00000000000000000000|50|answer-turn-b",
+            timelineIdentityKey = "v1|main|message|assistant|answer-turn-b",
+            timelineItemKind = "message:assistant"
+        )
+
+        val displayMessages = conversationDisplayMessages(
+            messages = listOf(waiting, unrelatedAnswer),
+            showInvocationProcess = true
+        )
+
+        assertEquals(listOf("waiting-turn-a", "answer-turn-b"), displayMessages.map(ChatMessage::id))
     }
 
     @Test
@@ -803,6 +996,7 @@ class ChatConversationPresentationTest {
             content = "这张拍得不错！分析如下：",
             createdAt = "2026-06-30T01:30:03Z",
             runId = "server-run-waterfall-analysis",
+            turnId = "client-run-waterfall-analysis",
             timelineOrderKey = "server:waterfall-analysis:030-assistant",
             timelineIdentityKey = "server:waterfall-analysis:message:assistant:030-assistant",
             timelineItemKind = "message:assistant"
@@ -827,6 +1021,31 @@ class ChatConversationPresentationTest {
         assertEquals(
             listOf("local-user-waterfall", "assistant-waterfall-text"),
             displayMessages.map { it.id }
+        )
+    }
+
+    @Test
+    fun conversationListKeysUseCanonicalIdentityWhenToolMessageIdsCollide() {
+        val first = ChatMessage(
+            id = "tool-shared-id",
+            role = MessageRole.tool,
+            content = "first tool row",
+            timelineOrderKey = "v5|0|00000000000000000001|00000000000000000000|30|tool-a",
+            timelineIdentityKey = "v1|main|tool|call-a",
+            timelineItemKind = "tool"
+        )
+        val second = first.copy(
+            content = "second tool row",
+            timelineOrderKey = "v5|0|00000000000000000002|00000000000000000000|30|tool-b",
+            timelineIdentityKey = "v1|main|tool|call-b"
+        )
+
+        val items = conversationMessageListItems(listOf(first, second), "gateway::main")
+
+        assertEquals(2, items.map(ConversationMessageListItem::stableKey).toSet().size)
+        assertEquals(
+            listOf("gateway::main:timeline:v1|main|tool|call-a", "gateway::main:timeline:v1|main|tool|call-b"),
+            items.map(ConversationMessageListItem::stableKey)
         )
     }
 

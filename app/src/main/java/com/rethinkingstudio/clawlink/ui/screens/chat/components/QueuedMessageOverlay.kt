@@ -9,9 +9,9 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.rethinkingstudio.clawlink.core.models.chat.ChatMessage
 
-// Android Surface 的 3dp 阴影会向外占用间距；32dp 几何间距可在阴影后保留约 24dp 的可见留白，
-// 让队列浮层与 Skills / 模型栏形成清晰的光学分区。
-internal val queuedMessageOverlayGap = 32.dp
+// 与微信端的紧凑悬浮比例保持一致；8dp 足以容纳 Surface 阴影，又不会在队列和输入区之间
+// 留出一块看起来像空白控件的区域。
+internal val queuedMessageOverlayGap = 8.dp
 internal val queuedMessageOverlayHorizontalPadding = 14.dp
 
 /**

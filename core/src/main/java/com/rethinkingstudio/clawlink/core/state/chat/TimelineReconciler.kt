@@ -345,10 +345,6 @@ private fun identitiesMatch(left: CanonicalTimelineEntry, right: CanonicalTimeli
 private fun compareEntries(left: CanonicalTimelineEntry, right: CanonicalTimelineEntry): Int {
     val leftOrderKey = relayTimelineOrderKey(left)
     val rightOrderKey = relayTimelineOrderKey(right)
-    if (localUserBeforeUnconfirmedOutput(left, right, leftOrderKey, rightOrderKey)) return -1
-    if (localUserBeforeUnconfirmedOutput(right, left, rightOrderKey, leftOrderKey)) return 1
-    if (localPendingTimelineOrder(left, right)) return -1
-    if (localPendingTimelineOrder(right, left)) return 1
     if (leftOrderKey != null && rightOrderKey != null) {
         val orderCompare = compareCanonicalTimelineOrderKeys(leftOrderKey, rightOrderKey)
         if (orderCompare != 0) return orderCompare
@@ -356,14 +352,13 @@ private fun compareEntries(left: CanonicalTimelineEntry, right: CanonicalTimelin
         if (identityCompare != 0) return identityCompare
         return left.timelineItemKind.compareTo(right.timelineItemKind)
     }
-    if (pendingWaitingOverlayOrder(left, right)) return 1
-    if (pendingWaitingOverlayOrder(right, left)) return -1
-    if (sameTurnToolBeforeAssistant(left, right)) return -1
-    if (sameTurnToolBeforeAssistant(right, left)) return 1
-
     if (leftOrderKey != null && rightOrderKey == null) return -1
     if (leftOrderKey == null && rightOrderKey != null) return 1
 
+    // Pair-dependent turn rules do not belong in a global comparator: combining
+    // them with relay order keys can form A < B < C < A and makes TimSort throw.
+    // Local turn grouping is applied after this total order by the projection
+    // helpers below; unconfirmed overlays retain their stable input order here.
     val inputCompare = left.originalIndex.compareTo(right.originalIndex)
     if (inputCompare != 0) return inputCompare
     return left.stableKey.compareTo(right.stableKey)
@@ -379,39 +374,6 @@ private fun relayTimelineOrderKey(entry: CanonicalTimelineEntry): String? {
         return null
     }
     return orderKey
-}
-
-private fun localUserBeforeUnconfirmedOutput(
-    left: CanonicalTimelineEntry,
-    right: CanonicalTimelineEntry,
-    leftOrderKey: String?,
-    rightOrderKey: String?
-): Boolean {
-    if (leftOrderKey != null || rightOrderKey != null) return false
-    if (left.role != MessageRole.user || right.role !in setOf(MessageRole.assistant, MessageRole.tool)) return false
-    if (left.runId?.trim()?.startsWith("local-user-") != true) return false
-    return normalizedTurnIdentity(left).isNotEmpty() &&
-        normalizedTurnIdentity(left) == normalizedTurnIdentity(right)
-}
-
-private fun CanonicalTimelineEntry.isLocalOverlayEntry(): Boolean {
-    return timelineOrderKey.trim().startsWith("local:") ||
-        source.trim().equals("local", ignoreCase = true) ||
-        runId?.trim()?.startsWith("local-user-") == true ||
-        isTransientAssistantTimelinePlaceholder(this)
-}
-
-private fun pendingWaitingOverlayOrder(left: CanonicalTimelineEntry, right: CanonicalTimelineEntry): Boolean {
-    if (!isTransientAssistantTimelinePlaceholder(left)) return false
-    if (normalizedTurnIdentity(left) != normalizedTurnIdentity(right)) return false
-    return right.role == MessageRole.tool || right.role == MessageRole.assistant
-}
-
-private fun sameTurnToolBeforeAssistant(left: CanonicalTimelineEntry, right: CanonicalTimelineEntry): Boolean {
-    if (left.role != MessageRole.tool || right.role != MessageRole.assistant) return false
-    if (isTransientAssistantTimelinePlaceholder(right)) return false
-    val leftTurn = normalizedTurnIdentity(left)
-    return leftTurn.isNotEmpty() && leftTurn == normalizedTurnIdentity(right)
 }
 
 private fun normalizedTurnIdentity(entry: CanonicalTimelineEntry): String {
@@ -464,21 +426,6 @@ private fun isLocalTimelineMessageId(id: String): Boolean {
         Regex("^tool-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$", RegexOption.IGNORE_CASE).matches(id)
 }
 
-private fun localPendingTimelineOrder(left: CanonicalTimelineEntry, right: CanonicalTimelineEntry): Boolean {
-    val leftRunId = left.runId?.trim().orEmpty()
-    if (left.role != MessageRole.user) return false
-    val clientRunId = leftRunId.removePrefix("local-user-").trim()
-    if (clientRunId.isNotEmpty() && right.role in setOf(MessageRole.assistant, MessageRole.tool)) {
-        val rightTurn = normalizedTurnIdentity(right)
-        if (rightTurn.isEmpty() || rightTurn == clientRunId || right.runId?.trim() == clientRunId) {
-            return true
-        }
-    }
-    return clientRunId.isNotEmpty() &&
-        right.role == MessageRole.assistant &&
-        right.runId?.trim() == clientRunId
-}
-
 private fun isTransientAssistantTimelinePlaceholder(entry: CanonicalTimelineEntry): Boolean {
     if (entry.role != MessageRole.assistant || entry.state !in setOf(MessageState.streaming, MessageState.pending)) return false
     if (entry.content.any { it.type in setOf("file", "image", "voice", "audio", "tool", "tool_result") }) return false
@@ -493,31 +440,50 @@ private fun deletedTombstone(entry: CanonicalTimelineEntry): CanonicalTimelineEn
 internal fun reconcileTimeline(
     existing: List<ChatMessage>,
     pending: List<ChatMessage> = emptyList(),
-    snapshot: TimelineSnapshotPage
+    snapshot: TimelineSnapshotPage,
+    localOrderSources: List<ChatMessage> = emptyList()
 ): TimelineReconcileResult {
     val (existingConfirmed, existingPending) = TimelinePendingOverlay.splitPending(existing)
     val pendingEntries = (existingPending + pending).mapIndexedNotNull { index, message ->
         message.toEntry(snapshot.sessionKey, index)
     }
+    val localOrderSourceEntries = localOrderSources.mapIndexedNotNull { index, message ->
+        message.toEntry(snapshot.sessionKey, index)
+    }
     val incoming = snapshot.messages.mapIndexedNotNull { index, message ->
         message.toEntryOrNull(snapshot.sessionKey, index)
     }
-    return reconcileCanonicalTimeline(existingConfirmed, pendingEntries, incoming, snapshot)
+    return reconcileCanonicalTimeline(
+        existingConfirmed = existingConfirmed,
+        pendingEntries = pendingEntries,
+        localOrderSourceEntries = localOrderSourceEntries,
+        incomingCanonical = incoming,
+        snapshot = snapshot
+    )
 }
 
 private fun reconcileCanonicalTimeline(
     existingConfirmed: List<ChatMessage>,
     pendingEntries: List<CanonicalTimelineEntry>,
+    localOrderSourceEntries: List<CanonicalTimelineEntry>,
     incomingCanonical: List<CanonicalTimelineEntry>,
     snapshot: TimelineSnapshotPage
 ): TimelineReconcileResult {
-    val incomingIdentities = incomingCanonical.mapTo(mutableSetOf()) { it.timelineIdentityKey }
+    val existingConfirmedEntries = existingConfirmed.mapIndexedNotNull { index, message ->
+        message.toEntry(snapshot.sessionKey, index)
+    }
+    val locallyOrderedUsers = (existingConfirmedEntries + pendingEntries + localOrderSourceEntries).filter { entry ->
+        entry.role == MessageRole.user && entry.localTurnOrder != null
+    }
+    val incomingCanonicalWithLocalOrder = incomingCanonical.map { incoming ->
+        incoming.inheritingStableLocalTurnOrder(locallyOrderedUsers)
+    }
+    val incomingIdentities = incomingCanonicalWithLocalOrder.mapTo(mutableSetOf()) { it.timelineIdentityKey }
     val deletedIds = snapshot.deletedMessageIds.toSet()
     val byIdentity = linkedMapOf<String, CanonicalTimelineEntry>()
     val range = snapshot.range
 
-    existingConfirmed
-        .mapIndexedNotNull { index, message -> message.toEntry(snapshot.sessionKey, index) }
+    existingConfirmedEntries
         .filter { it.timelineIdentityKey.isNotBlank() && it.timelineItemKind.isNotBlank() && relayTimelineOrderKey(it) != null }
         .filter { range.isBounded && !range.contains(it.seq ?: it.conversationSeq) }
         .forEach { entry ->
@@ -528,7 +494,7 @@ private fun reconcileCanonicalTimeline(
             }
         }
 
-    incomingCanonical.forEach { entry ->
+    incomingCanonicalWithLocalOrder.forEach { entry ->
         byIdentity[entry.timelineIdentityKey] = entry
     }
 
@@ -539,7 +505,7 @@ private fun reconcileCanonicalTimeline(
         .toSet()
     val remainingPending = pendingEntries
         .filter { pendingEntry ->
-            incomingCanonical.none { incomingEntry -> pendingResolvedByCanonical(pendingEntry, incomingEntry) }
+            incomingCanonicalWithLocalOrder.none { incomingEntry -> pendingResolvedByCanonical(pendingEntry, incomingEntry) }
         }
         .filter { pendingEntry ->
             if (pendingEntry.role != MessageRole.user || pendingEntry.runId?.trim()?.startsWith("local-user-") != true) {
@@ -553,6 +519,21 @@ private fun reconcileCanonicalTimeline(
         messages = byIdentity.values.sortedWith(::compareEntries).map { it.toChatMessage() },
         pending = remainingPending.sortedWith(::compareEntries).map { it.toChatMessage() }
     )
+}
+
+private fun CanonicalTimelineEntry.inheritingStableLocalTurnOrder(
+    locallyOrderedUsers: List<CanonicalTimelineEntry>
+): CanonicalTimelineEntry {
+    if (role != MessageRole.user || localTurnOrder != null) return this
+    val identities = turnIdentitySet(this)
+    if (identities.isEmpty()) return this
+    val matchingOrders = locallyOrderedUsers.asSequence()
+        .filter { candidate -> turnIdentitySet(candidate).any(identities::contains) }
+        .mapNotNull(CanonicalTimelineEntry::localTurnOrder)
+        .distinct()
+        .toList()
+    // 只在稳定 turn 身份唯一对应一个本地提交序号时继承；冲突时保留服务端投影。
+    return matchingOrders.singleOrNull()?.let { order -> copy(localTurnOrder = order) } ?: this
 }
 
 private fun pendingResolvedByCanonical(
@@ -718,16 +699,11 @@ private fun projectActiveLocalTurns(
     }.map(LocalTurnProjection::entry)
 
     val projectedEntries = projected.toSet()
-    val base = entries.filterNot(projectedEntries::contains).toMutableList()
-    if (base.any { relayTimelineOrderKey(it) != null }) {
-        return base + projected
+    val projectedIterator = projected.iterator()
+    // 只重排这些稳定本地 turn 已占据的槽位，不能跨过其他设备/历史消息。
+    return entries.map { entry ->
+        if (entry in projectedEntries) projectedIterator.next() else entry
     }
-    val firstProjectedIndex = entries.indexOfFirst(projectedEntries::contains).let { index ->
-        if (index < 0) entries.size else index
-    }
-    val insertionIndex = entries.take(firstProjectedIndex).count { it !in projectedEntries }
-    base.addAll(insertionIndex, projected)
-    return base
 }
 
 private fun moveSameTurnUsersBeforeMatchingOutputs(
@@ -788,12 +764,15 @@ private data class LocalTurnProjection(
 )
 
 private fun isActiveLocalUser(entry: CanonicalTimelineEntry): Boolean {
-    if (entry.role != MessageRole.user || relayTimelineOrderKey(entry) != null) return false
-    val isLocal = entry.timelineOrderKey.startsWith("local:") ||
+    if (entry.role != MessageRole.user) return false
+    val hasStableLocalOrder = entry.localTurnOrder != null
+    val isUnconfirmedLocal = relayTimelineOrderKey(entry) == null && (
+        entry.timelineOrderKey.startsWith("local:") ||
         entry.timelineIdentityKey.startsWith("local:") ||
         entry.source.equals("local", ignoreCase = true) ||
         entry.runId?.startsWith("local-user-") == true
-    if (!isLocal) return false
+    )
+    if (!hasStableLocalOrder && !isUnconfirmedLocal) return false
     if (entry.state in setOf(MessageState.failed, MessageState.deleted, MessageState.recalled)) return false
     return entry.deliveryState.trim().lowercase() !in setOf("failed", "error", "aborted")
 }
@@ -824,9 +803,14 @@ private fun moveWaitingAfterSameTurnOutputs(
                 !isTransientAssistantTimelinePlaceholder(result[index]) &&
                 normalizedTurnIdentity(result[index]) == waitingTurn
         } ?: return@forEach
-        if (lastOutputIndex <= waitingIndex) return@forEach
+        val desiredIndex = lastOutputIndex + 1
+        if (waitingIndex == desiredIndex) return@forEach
+        // waiting 必须紧跟本轮已经出现的最后一个输出。旧逻辑只处理 waiting 在输出前的情况；
+        // Hermes 同步中间态若把旧排队用户行插到 tool 与 waiting 之间，waiting 位于输出后方，
+        // 就会把两个不同 turn 视觉上夹成一轮。这里按稳定 turn identity 双向收拢，不猜文本或时间。
         result.removeAt(waitingIndex)
-        result.add(lastOutputIndex, waiting)
+        val insertionIndex = if (waitingIndex < desiredIndex) desiredIndex - 1 else desiredIndex
+        result.add(insertionIndex, waiting)
     }
     return result
 }
