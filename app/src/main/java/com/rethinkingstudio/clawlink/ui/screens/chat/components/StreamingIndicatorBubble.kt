@@ -13,8 +13,28 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.lerp
 import com.rethinkingstudio.clawlink.ui.screens.chat.ChatColors
+
+internal object StreamingIndicatorMotion {
+    const val durationMillis = 720
+    const val staggerMillis = 160
+    const val initialScale = 0.82f
+    const val targetScale = 1f
+    const val initialAlpha = 0.38f
+    const val targetAlpha = 1f
+    val initialVerticalOffset = 1.dp
+    val targetVerticalOffset = (-2).dp
+
+    fun verticalOffset(progress: Float): Dp = lerp(
+        initialVerticalOffset,
+        targetVerticalOffset,
+        progress.coerceIn(0f, 1f)
+    )
+}
 
 @Composable
 fun StreamingIndicatorBubble(
@@ -43,18 +63,27 @@ fun StreamingIndicatorBubble(
                 initialValue = 0f,
                 targetValue = 1f,
                 animationSpec = infiniteRepeatable(
-                    animation = tween(durationMillis = 720, easing = LinearEasing),
+                    animation = tween(durationMillis = StreamingIndicatorMotion.durationMillis, easing = LinearEasing),
                     repeatMode = RepeatMode.Reverse,
-                    initialStartOffset = StartOffset(index * 160)
+                    initialStartOffset = StartOffset(index * StreamingIndicatorMotion.staggerMillis)
                 ),
                 label = "dot-$index"
             )
-            
+
             Box(
                 modifier = Modifier
                     .size(11.dp)
-                    .scale(0.82f + (0.18f * animationProgress))
-                    .alpha(0.38f + (0.62f * animationProgress))
+                    // 三个点必须有实际纵向位移；仅缩放和透明度变化会看起来像静止。
+                    .offset(y = StreamingIndicatorMotion.verticalOffset(animationProgress))
+                    .testTag("streaming_indicator_dot_$index")
+                    .scale(
+                        StreamingIndicatorMotion.initialScale +
+                            ((StreamingIndicatorMotion.targetScale - StreamingIndicatorMotion.initialScale) * animationProgress)
+                    )
+                    .alpha(
+                        StreamingIndicatorMotion.initialAlpha +
+                            ((StreamingIndicatorMotion.targetAlpha - StreamingIndicatorMotion.initialAlpha) * animationProgress)
+                    )
                     .background(
                         color = ChatColors.secondaryText.copy(alpha = 0.72f),
                         shape = CircleShape
@@ -80,9 +109,9 @@ fun InlineStreamingIndicator(
                 initialValue = 0f,
                 targetValue = 1f,
                 animationSpec = infiniteRepeatable(
-                    animation = tween(durationMillis = 720, easing = LinearEasing),
+                    animation = tween(durationMillis = StreamingIndicatorMotion.durationMillis, easing = LinearEasing),
                     repeatMode = RepeatMode.Reverse,
-                    initialStartOffset = StartOffset(index * 160)
+                    initialStartOffset = StartOffset(index * StreamingIndicatorMotion.staggerMillis)
                 ),
                 label = "inline-dot-$index"
             )
@@ -90,8 +119,16 @@ fun InlineStreamingIndicator(
             Box(
                 modifier = Modifier
                     .size(6.dp)
-                    .scale(0.82f + (0.18f * animationProgress))
-                    .alpha(0.38f + (0.62f * animationProgress))
+                    .offset(y = StreamingIndicatorMotion.verticalOffset(animationProgress))
+                    .testTag("inline_streaming_indicator_dot_$index")
+                    .scale(
+                        StreamingIndicatorMotion.initialScale +
+                            ((StreamingIndicatorMotion.targetScale - StreamingIndicatorMotion.initialScale) * animationProgress)
+                    )
+                    .alpha(
+                        StreamingIndicatorMotion.initialAlpha +
+                            ((StreamingIndicatorMotion.targetAlpha - StreamingIndicatorMotion.initialAlpha) * animationProgress)
+                    )
                     .background(
                         color = ChatColors.secondaryText.copy(alpha = 0.72f),
                         shape = CircleShape

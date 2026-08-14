@@ -494,6 +494,23 @@ private fun reconcileCanonicalTimeline(
             }
         }
 
+    existingConfirmedEntries
+        .filter(CanonicalTimelineEntry::isDurableStableFileProjection)
+        .filter { existingEntry ->
+            incomingCanonicalWithLocalOrder.none { incomingEntry ->
+                existingEntry.sameStableAttachmentProjection(incomingEntry)
+            }
+        }
+        .forEach { entry ->
+            if (entry.messageId in deletedIds || entry.timelineIdentityKey in deletedIds) {
+                byIdentity[entry.timelineIdentityKey] = deletedTombstone(entry)
+            } else if (entry.timelineIdentityKey !in incomingIdentities) {
+                // provider history 可能暂时不包含 Relay 文件通道独立落库的附件；已有稳定附件身份
+                // 的 canonical 行必须跨完整刷新保留，直到新投影接管或显式 tombstone 删除。
+                byIdentity[entry.timelineIdentityKey] = entry
+            }
+        }
+
     incomingCanonicalWithLocalOrder.forEach { entry ->
         byIdentity[entry.timelineIdentityKey] = entry
     }
@@ -512,7 +529,10 @@ private fun reconcileCanonicalTimeline(
                 return@filter true
             }
             val turnIdentity = normalizedTurnIdentity(pendingEntry)
-            turnIdentity.isNotBlank() && turnIdentity in pendingTurnIds
+            // 文件回显可能在 assistant final 之后才升级成独立 attachment 行；只要仍有稳定传输身份，
+            // 就不能因等待占位已经结束而删除本地媒体投影。
+            pendingEntry.isDurableStableFileProjection() ||
+                (turnIdentity.isNotBlank() && turnIdentity in pendingTurnIds)
         }
 
     return TimelineReconcileResult(
@@ -541,6 +561,17 @@ private fun pendingResolvedByCanonical(
     canonical: CanonicalTimelineEntry
 ): Boolean {
     if (pending.role != canonical.role) return false
+    if (pending.role == MessageRole.user && pending.content.any { it.isFileBlock && !it.isVoiceMessageBlock }) {
+        val pendingAttachmentIdentities = pending.stableTransferIdentitySet()
+        val canonicalAttachmentIdentities = canonical.stableTransferIdentitySet()
+        // 图片/文件 user echo 不能被同 turn 的纯文字历史行提前确认；否则部分快照会先删掉
+        // 本地媒体，直到附件行稍后到达才重新出现。只允许稳定附件身份完成接管。
+        if (pendingAttachmentIdentities.isEmpty() ||
+            pendingAttachmentIdentities.intersect(canonicalAttachmentIdentities).isEmpty()
+        ) {
+            return false
+        }
+    }
     if (pending.role == MessageRole.assistant &&
         !canonical.replacesStreamingAssistantWaiting(pending) &&
         !canonical.clearsWaitingAssistantTimelineItem()
@@ -568,6 +599,31 @@ private fun pendingResolvedByCanonical(
         return true
     }
     return false
+}
+
+private fun CanonicalTimelineEntry.stableTransferIdentitySet(): Set<String> {
+    return buildSet {
+        attachmentIds.forEach { identity ->
+            identity.trim().takeIf { it.isNotEmpty() }?.let(::add)
+        }
+        content.forEach { block ->
+            block.attachmentId?.trim()?.takeIf { it.isNotEmpty() }?.let(::add)
+            block.fileId?.trim()?.takeIf { it.isNotEmpty() }?.let(::add)
+        }
+    }
+}
+
+private fun CanonicalTimelineEntry.isDurableStableFileProjection(): Boolean {
+    return content.any { it.isFileBlock && !it.isVoiceMessageBlock } &&
+        stableTransferIdentitySet().isNotEmpty()
+}
+
+private fun CanonicalTimelineEntry.sameStableAttachmentProjection(
+    candidate: CanonicalTimelineEntry
+): Boolean {
+    if (!isDurableStableFileProjection() || !candidate.isDurableStableFileProjection()) return false
+    if (role != candidate.role) return false
+    return stableTransferIdentitySet().intersect(candidate.stableTransferIdentitySet()).isNotEmpty()
 }
 
 private fun CanonicalTimelineEntry.replacesStreamingAssistantWaiting(

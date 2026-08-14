@@ -18,7 +18,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -39,7 +38,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -60,6 +58,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -69,6 +68,7 @@ import androidx.compose.ui.unit.dp
 import com.rethinkingstudio.clawlink.R
 import com.rethinkingstudio.clawlink.core.state.LocalizedText.choose
 import com.rethinkingstudio.clawlink.core.state.auth.AuthStore
+import com.rethinkingstudio.clawlink.ui.components.ClawLinkAlertDialog
 import com.rethinkingstudio.clawlink.ui.components.ClawLinkCard
 import com.rethinkingstudio.clawlink.ui.components.ClawLinkScaffold
 import kotlinx.coroutines.delay
@@ -269,21 +269,6 @@ fun LoginScreen(
                             )
                         }
 
-                        if (state.errorMessage != null && !showingForgotPassword) {
-                            Surface(
-                                modifier = Modifier.fillMaxWidth(),
-                                shape = RoundedCornerShape(18.dp),
-                                color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.9f),
-                                contentColor = MaterialTheme.colorScheme.onErrorContainer
-                            ) {
-                                Text(
-                                    text = state.errorMessage!!,
-                                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
-                                    style = MaterialTheme.typography.bodySmall
-                                )
-                            }
-                        }
-
                         if (isRegisterMode) {
                             LegalConsentRow(
                                 accepted = hasAcceptedLegal,
@@ -378,5 +363,36 @@ fun LoginScreen(
             },
             scope = scope
         )
+    } else {
+        state.errorMessage?.let { message ->
+            LoginAuthenticationErrorDialog(
+                message = message,
+                isRegisterMode = isRegisterMode,
+                waitingForVerification = waitingForVerification,
+                onDismiss = authStore::clearError
+            )
+        }
     }
+}
+
+@Composable
+internal fun LoginAuthenticationErrorDialog(
+    message: String,
+    isRegisterMode: Boolean,
+    waitingForVerification: Boolean,
+    onDismiss: () -> Unit
+) {
+    val title = when {
+        waitingForVerification -> choose("Verification failed", "验证失败")
+        isRegisterMode -> choose("Registration failed", "注册失败")
+        else -> choose("Sign in failed", "登录失败")
+    }
+
+    ClawLinkAlertDialog(
+        title = title,
+        message = message,
+        onDismissRequest = onDismiss,
+        confirmText = stringResource(R.string.common_action_ok),
+        onConfirm = onDismiss
+    )
 }

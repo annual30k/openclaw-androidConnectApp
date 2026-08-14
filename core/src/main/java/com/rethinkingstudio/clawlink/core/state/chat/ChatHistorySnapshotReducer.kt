@@ -24,7 +24,7 @@ internal fun reduceTimelineHistorySnapshot(
 ): ChatHistorySnapshotReduction? {
     val snapshot = response.timelineSnapshot ?: return null
     val authoritativePendingOverlay = if (replaceExistingTimelineState) {
-        activeStreamingHistoryOverlay(currentMessages, activeStreamingMessageId)
+        authoritativeHistoryOverlay(currentMessages, activeStreamingMessageId)
     } else {
         currentMessages
     }
@@ -94,22 +94,34 @@ internal fun reduceTimelineHistorySnapshot(
     )
 }
 
-private fun activeStreamingHistoryOverlay(
+private fun authoritativeHistoryOverlay(
     currentMessages: List<ChatMessage>,
     activeStreamingMessageId: String?
 ): List<ChatMessage> {
-    val activeId = activeStreamingMessageId?.trim()?.takeIf { it.isNotEmpty() } ?: return emptyList()
-    val activeAssistant = currentMessages.firstOrNull { message ->
-        message.id == activeId &&
-            message.role == MessageRole.assistant &&
-            message.state in setOf(MessageState.pending, MessageState.streaming)
-    } ?: return emptyList()
-    val activeTurnId = normalizedHistoryOverlayTurnId(activeAssistant.runId)
+    val activeId = activeStreamingMessageId?.trim()?.takeIf { it.isNotEmpty() }
+    val activeAssistant = activeId?.let { resolvedActiveId ->
+        currentMessages.firstOrNull { message ->
+            message.id == resolvedActiveId &&
+                message.role == MessageRole.assistant &&
+                message.state in setOf(MessageState.pending, MessageState.streaming)
+        }
+    }
+    val activeTurnId = activeAssistant?.let { normalizedHistoryOverlayTurnId(it.runId) }
     return currentMessages.filter { message ->
-        message.id == activeId ||
-            (message.role == MessageRole.user &&
+        message.isDurableRelayAttachmentProjection() ||
+            (activeAssistant != null && message.id == activeId) ||
+            (activeTurnId != null &&
+                message.role == MessageRole.user &&
                 message.runId.trim().startsWith("local-user-") &&
                 normalizedHistoryOverlayTurnId(message.runId) == activeTurnId)
+    }
+}
+
+private fun ChatMessage.isDurableRelayAttachmentProjection(): Boolean {
+    // Android 在附件独立回显前会把已上传文件暂存在 message:user；耐久性由稳定传输身份决定，
+    // 不能依赖 timelineItemKind 已经变成 attachment。
+    return fileContentBlocks.any { block ->
+        !block.attachmentId.isNullOrBlank() || !block.fileId.isNullOrBlank()
     }
 }
 
