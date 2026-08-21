@@ -26,7 +26,6 @@ internal fun conversationDisplayMessages(
             message.shouldDisplayInChat(showInvocationProcess = showInvocationProcess) ||
                 message.state == MessageState.streaming && message.role == MessageRole.assistant
         }
-        .orderedForConversationDisplay()
 }
 
 // 同一稳定调用已有结果时只展示结果卡；不能按工具名或到达时间猜测配对关系。
@@ -593,64 +592,6 @@ private fun ChatMessage.prefersTransientAssistantPlaceholderOver(other: ChatMess
     return false
 }
 
-private fun List<ChatMessage>.orderedForConversationDisplay(): List<ChatMessage> {
-    if (size < 2) return this
-    val hasStableLocalTurnProjection = any { message ->
-        message.role == MessageRole.user && message.localTurnOrder != null
-    }
-    val canonicalOrdered = if (hasStableLocalTurnProjection) {
-        // ChatStore 已用稳定 localTurnOrder 将本机提交轮次和同 turn 输出投影完成；
-        // 展示层不能再用混合的 Host/Relay canonical key 把它二次洗牌。
-        this
-    } else {
-        val canonicalMessages = filter(ChatMessage::hasCanonicalDisplayOrder)
-            .sortedWith { left, right ->
-                compareCanonicalTimelineOrderKeys(left.timelineOrderKey, right.timelineOrderKey)
-                    .takeIf { it != 0 }
-                    ?: left.timelineIdentityKey.compareTo(right.timelineIdentityKey)
-                        .takeIf { it != 0 }
-                    ?: left.timelineItemKind.compareTo(right.timelineItemKind)
-                        .takeIf { it != 0 }
-                    ?: left.id.compareTo(right.id)
-            }
-            .iterator()
-        map { message ->
-            if (message.hasCanonicalDisplayOrder()) canonicalMessages.next() else message
-        }
-    }
-    return canonicalOrdered.mapIndexed { index, message -> IndexedDisplayMessage(index, message) }
-        .sortedWith { left, right ->
-            when {
-                sameTurnOutputBeforeWaiting(left.message, right.message) -> -1
-                sameTurnOutputBeforeWaiting(right.message, left.message) -> 1
-                else -> left.index.compareTo(right.index)
-            }
-        }
-        .map { it.message }
-}
-
-private fun ChatMessage.hasCanonicalDisplayOrder(): Boolean {
-    return timelineOrderKey.isNotBlank() &&
-        !timelineOrderKey.startsWith("local:") &&
-        timelineIdentityKey.isNotBlank() &&
-        timelineItemKind.isNotBlank()
-}
-
-private fun sameTurnOutputBeforeWaiting(left: ChatMessage, right: ChatMessage): Boolean {
-    if (!right.isResolvableTransientTypingPlaceholder()) return false
-    val leftTurnIdentities = left.displayTurnIdentities()
-    val rightTurnIdentities = right.displayTurnIdentities()
-    // 同一用户 turn 的真实输出必须排在 transient waiting 前面，避免附件到达后仍被 loading 气泡压住。
-    return leftTurnIdentities.isNotEmpty() &&
-        leftTurnIdentities.any(rightTurnIdentities::contains) &&
-        left.isAssistantOrToolOutput()
-}
-
-private fun ChatMessage.isAssistantOrToolOutput(): Boolean {
-    if (isTransientDisplayWaitingPlaceholder()) return false
-    return role == MessageRole.assistant || role == MessageRole.tool
-}
-
 private fun ChatMessage.isVisibleAssistantTextOutput(): Boolean {
     if (role != MessageRole.assistant || isTransientDisplayWaitingPlaceholder()) return false
 
@@ -883,9 +824,4 @@ private fun compareNormalizedText(left: String, right: String): Int {
 
 private data class FileTransferDisplayKeys(
     val stableKey: String?
-)
-
-private data class IndexedDisplayMessage(
-    val index: Int,
-    val message: ChatMessage
 )

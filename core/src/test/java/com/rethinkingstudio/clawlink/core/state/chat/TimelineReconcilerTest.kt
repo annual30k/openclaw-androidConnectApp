@@ -10,7 +10,7 @@ import org.junit.Test
 
 class TimelineReconcilerTest {
     @Test
-    fun hermesRehydrationSortDoesNotCreateComparatorCycle() {
+    fun hermesRehydrationUsesRelayOrderForConfirmedRows() {
         fun canonicalMessage(
             id: String,
             role: MessageRole,
@@ -38,7 +38,10 @@ class TimelineReconcilerTest {
             add(canonicalMessage("hermes-user", MessageRole.user, "hermes-run", 4_379, 10))
             // Hermes live tool rows may use a run-local sequence before state.db assigns
             // the later conversation sequence to their matching persisted user row.
-            add(canonicalMessage("hermes-live-tool", MessageRole.tool, "hermes-run", 4))
+            // The live tool can share the overall conversation but is not the
+            // confirmed user's canonical turn identity; do not infer a pair
+            // from arrival order or a provider run label.
+            add(canonicalMessage("hermes-live-tool", MessageRole.tool, "hermes-live-tool-run", 4))
             repeat(11) { turnIndex ->
                 val runId = "history-run-$turnIndex"
                 val userSequence = 4_357L + turnIndex * 2
@@ -58,7 +61,179 @@ class TimelineReconcilerTest {
 
         assertEquals(messages.size, ordered.size)
         assertEquals(messages.map { it.id }.toSet(), ordered.map { it.id }.toSet())
-        assertTrue(ordered.indexOfFirst { it.id == "hermes-user" } < ordered.indexOfFirst { it.id == "hermes-live-tool" })
+        // Both rows are confirmed Relay rows. The live tool's canonical sequence is
+        // earlier, so no same-turn identity heuristic may lift the user above it.
+        assertTrue(ordered.indexOfFirst { it.id == "hermes-live-tool" } < ordered.indexOfFirst { it.id == "hermes-user" })
+    }
+
+    @Test
+    fun confirmedImageUserFollowsRelaySlotWhenStaleToolArrivesBeforeIt() {
+        fun order(namespace: Int, sequence: Long, slot: Int, id: String): String =
+            "v5|$namespace|${sequence.toString().padStart(20, '0')}|00000000000000000000|${slot.toString().padStart(2, '0')}|$id"
+
+        fun confirmed(
+            id: String,
+            role: MessageRole,
+            sequence: Long,
+            slot: Int,
+            runId: String,
+            turnId: String,
+            content: String = id,
+            blocks: List<RelayChatContentBlock> = listOf(RelayChatContentBlock(type = "text", text = content)),
+            namespace: Int = 0
+        ) = ChatMessage(
+            id = id,
+            role = role,
+            state = MessageState.completed,
+            content = content,
+            contentBlocks = blocks,
+            runId = runId,
+            turnId = turnId,
+            conversationSeq = sequence,
+            seq = sequence,
+            conversationSeqState = "committed",
+            timelineOrderKey = order(namespace, sequence, slot, id),
+            timelineIdentityKey = "v1|main|${role.name}|$id",
+            timelineItemKind = if (role == MessageRole.tool) "tool" else "message:${role.name}",
+            source = "history"
+        )
+
+        val attachmentTurn = "attachment-f0f2b02ff0c8b3ebd24dd05328d1908450b3e9d5b6867ed7ad81ec6fb796fcec"
+        val confirmedImageUser = confirmed(
+            id = "image-user-4905",
+            role = MessageRole.user,
+            sequence = 4905,
+            slot = 10,
+            runId = "file-file_a60b9b239c8d459b94a5c914f3ed356b",
+            turnId = attachmentTurn,
+            content = "分析一下这张图",
+            blocks = listOf(
+                RelayChatContentBlock(type = "text", text = "分析一下这张图"),
+                RelayChatContentBlock(
+                    type = "image",
+                    fileId = "file-a60b9b239c8d459b94a5c914f3ed356b",
+                    fileName = "photo.jpg",
+                    mimeType = "image/jpeg",
+                    downloadUrl = "/api/mobile/files/file-a60b9b239c8d459b94a5c914f3ed356b",
+                    sourceRunId = "file-file_a60b9b239c8d459b94a5c914f3ed356b"
+                )
+            )
+        )
+        val messages = listOf(
+            confirmed(
+                id = "stale-tool-ns0-seq10",
+                role = MessageRole.tool,
+                sequence = 10,
+                slot = 30,
+                runId = attachmentTurn,
+                turnId = attachmentTurn,
+                content = "stale tool"
+            ).copy(contentBlocks = listOf(RelayChatContentBlock(type = "tool_result", text = "stale tool"))),
+            confirmed("old-user-4895", MessageRole.user, 4895, 10, "old-turn", "old-turn", "你好"),
+            confirmed("old-answer-4896", MessageRole.assistant, 4896, 50, "old-turn", "old-turn", "你好！"),
+            confirmedImageUser,
+            confirmed(
+                id = "live-tool-ns1-seq5",
+                role = MessageRole.tool,
+                sequence = 5,
+                slot = 30,
+                runId = attachmentTurn,
+                turnId = attachmentTurn,
+                content = "live tool",
+                namespace = 1
+            ).copy(contentBlocks = listOf(RelayChatContentBlock(type = "tool_result", text = "live tool"))),
+            confirmed(
+                id = "live-answer-ns1-seq5",
+                role = MessageRole.assistant,
+                sequence = 5,
+                slot = 50,
+                runId = attachmentTurn,
+                turnId = attachmentTurn,
+                content = "图片分析结果",
+                namespace = 1
+            )
+        )
+
+        val ordered = sortTimelineMessagesV3(messages, "main")
+
+        // The hidden stale tool may occupy the first canonical slot, but it
+        // must not move the confirmed image user to the list head.
+        assertEquals(
+            listOf(
+                "stale-tool-ns0-seq10",
+                "old-user-4895",
+                "old-answer-4896",
+                "image-user-4905",
+                "live-tool-ns1-seq5",
+                "live-answer-ns1-seq5"
+            ),
+            ordered.map(ChatMessage::id)
+        )
+    }
+
+    @Test
+    fun unconfirmedLocalUserOverlayStaysAtTailBeforeItsMatchingOutput() {
+        fun canonical(id: String, role: MessageRole, sequence: Long, slot: Int, content: String) = ChatMessage(
+            id = id,
+            role = role,
+            state = MessageState.completed,
+            content = content,
+            contentBlocks = listOf(RelayChatContentBlock(type = "text", text = content)),
+            runId = "old-turn",
+            turnId = "old-turn",
+            conversationSeq = sequence,
+            seq = sequence,
+            conversationSeqState = "committed",
+            timelineOrderKey = "v5|0|${sequence.toString().padStart(20, '0')}|00000000000000000000|${slot.toString().padStart(2, '0')}|$id",
+            timelineIdentityKey = "v1|main|message|${role.name}|$id",
+            timelineItemKind = "message:${role.name}",
+            source = "history"
+        )
+
+        val clientRunId = "client-run-unconfirmed-image"
+        val localUser = ChatMessage(
+            id = "local-user-unconfirmed-image",
+            role = MessageRole.user,
+            state = MessageState.pending,
+            content = "分析这张图",
+            contentBlocks = listOf(RelayChatContentBlock(type = "text", text = "分析这张图")),
+            runId = "local-user-$clientRunId",
+            turnId = clientRunId,
+            clientMessageId = clientRunId,
+            idempotencyKey = clientRunId,
+            conversationSeqState = "provisional",
+            timelineOrderKey = "local:$clientRunId|10|local-user-unconfirmed-image",
+            timelineIdentityKey = "local:message:user:$clientRunId",
+            timelineItemKind = "message:user",
+            source = "local",
+            localTurnOrder = 0
+        )
+        val matchingOutput = ChatMessage(
+            id = "live-answer-unconfirmed-image",
+            role = MessageRole.assistant,
+            state = MessageState.streaming,
+            content = "正在分析图片",
+            contentBlocks = listOf(RelayChatContentBlock(type = "text", text = "正在分析图片")),
+            runId = "provider-run-unconfirmed-image",
+            turnId = clientRunId,
+            clientMessageId = clientRunId,
+            conversationSeq = 5,
+            seq = 5,
+            timelineOrderKey = "v5|1|00000000000000000005|00000000000000000000|50|live-answer-unconfirmed-image",
+            timelineIdentityKey = "v1|main|message:assistant|live-answer-unconfirmed-image",
+            timelineItemKind = "message:assistant",
+            source = "live"
+        )
+
+        val ordered = sortTimelineMessagesV3(
+            listOf(matchingOutput, canonical("old-user", MessageRole.user, 1, 10, "旧问题"), canonical("old-answer", MessageRole.assistant, 2, 50, "旧回答"), localUser),
+            "main"
+        )
+
+        assertEquals(
+            listOf("old-user", "old-answer", "local-user-unconfirmed-image", "live-answer-unconfirmed-image"),
+            ordered.map(ChatMessage::id)
+        )
     }
 
     @Test
@@ -101,7 +276,7 @@ class TimelineReconcilerTest {
     }
 
     @Test
-    fun mixedV4V5TimelineKeepsQuestionBeforeItsAnswer() {
+    fun mixedV4V5TimelineRepairsOnlyOutputThatPrecedesItsUniqueUser() {
         val question = ChatMessage(
             id = "user-mixed-version",
             role = MessageRole.user,
@@ -528,9 +703,10 @@ class TimelineReconcilerTest {
         )
 
         val visible = sortTimelineMessagesV3(result.messages + result.pending, "ios-session")
-        assertEquals(listOf("987948be", "assistant-$clientRunId"), visible.map { it.id })
+        assertEquals(listOf(localUser.id, "assistant-$clientRunId"), visible.map { it.id })
         assertEquals(1, visible.count { it.role == MessageRole.user })
         assertEquals("Send desktop screenshot to my phone test 1053", visible.first().content)
+        assertEquals("987948be", visible.first().timelineMessageId)
         assertEquals(listOf("assistant-$clientRunId"), result.pending.map { it.id })
     }
 
@@ -588,7 +764,8 @@ class TimelineReconcilerTest {
         )
 
         val visible = sortTimelineMessagesV3(result.messages + result.pending, "main")
-        assertEquals(listOf("local-user-stream-suffix", "assistant-stream-suffix"), visible.map { it.id })
+        assertEquals(listOf("local-user-stream-suffix", waiting.id), visible.map { it.id })
+        assertEquals("assistant-stream-suffix", visible.last().timelineMessageId)
         assertEquals(1, visible.count { it.role == MessageRole.assistant && it.state == MessageState.streaming })
     }
 
@@ -804,7 +981,8 @@ class TimelineReconcilerTest {
     @Test
     fun localEchoFixtureReplacesPendingWithServerAck() {
         val result = applyFixture("local_echo_then_history_snapshot.json")
-        assertEquals(listOf("user-client-run-1"), result.messages.map { it.id })
+        assertEquals(listOf("local-user-client-run-1"), result.messages.map { it.id })
+        assertEquals(listOf("user-client-run-1"), result.messages.map { it.timelineMessageId })
         assertTrue(result.pending.isEmpty())
     }
 
@@ -1045,7 +1223,7 @@ class TimelineReconcilerTest {
     }
 
     @Test
-    fun canonicalSnapshotKeepsStableLocalTurnOrderAcrossMixedHermesOrderDomains() {
+    fun canonicalSnapshotUsesRelayOrderAfterLocalTurnsAreConfirmedAcrossMixedHermesDomains() {
         fun localUser(id: String, runId: String, content: String, order: Long) = ChatMessage(
             id = id,
             role = MessageRole.user,
@@ -1106,9 +1284,12 @@ class TimelineReconcilerTest {
         val ordered = sortTimelineMessagesV3(reconciled.messages + reconciled.pending, snapshot.sessionKey)
 
         assertEquals(emptyList<ChatMessage>(), reconciled.pending)
-        assertEquals(listOf(0L, 1L, 2L), ordered.filter { it.role == MessageRole.user }.mapNotNull { it.localTurnOrder })
+        // Once the snapshot confirms all three users, they are canonical rows.
+        // Their previous localTurnOrder is retained as metadata only; it must
+        // not override the Relay's mixed namespace/sequence order.
+        assertEquals(listOf(1L, 2L, 0L), ordered.filter { it.role == MessageRole.user }.mapNotNull { it.localTurnOrder })
         assertEquals(
-            listOf("/new", "New session started!", "hello", "hello-answer", "ping", "pong"),
+            listOf("hello", "hello-answer", "ping", "/new", "New session started!", "pong"),
             ordered.map { it.content }
         )
     }
@@ -1250,6 +1431,68 @@ class TimelineReconcilerTest {
 
         assertEquals(listOf("history-file"), result.messages.map { it.id })
         assertEquals("/api/mobile/files/att-local", result.messages.single().contentBlocks.single().downloadUrl)
+    }
+
+    @Test
+    fun hermesAcceptedInputSurvivesStaleSnapshotUntilExplicitCommit() {
+        val clientRunId = "client-run-accepted-gap"
+        val localUser = ChatMessage(
+            id = "local-user-accepted-gap",
+            role = MessageRole.user,
+            content = "never disappear",
+            runId = "local-user-$clientRunId",
+            turnId = clientRunId,
+            clientMessageId = clientRunId,
+            idempotencyKey = clientRunId,
+            timelineOrderKey = "local:$clientRunId|10|user",
+            timelineIdentityKey = "local:message:user:$clientRunId",
+            timelineItemKind = "message:user",
+            source = "local"
+        )
+        fun relayRow(state: String, source: String) = TimelineSnapshotMessage(
+            serverMessageId = "srv-user-accepted-gap",
+            conversationSeq = 101,
+            conversationSeqState = state,
+            messageId = "user-$clientRunId",
+            role = "user",
+            messageState = "completed",
+            runId = clientRunId,
+            turnId = clientRunId,
+            clientMessageId = clientRunId,
+            idempotencyKey = clientRunId,
+            createdAt = "2026-08-18T09:30:00.000Z",
+            content = listOf(RelayChatContentBlock(type = "text", text = "never disappear")),
+            source = source,
+            timelineOrderKey = "v5|1|00000000000000000101|00000000000000000001|10|accepted-gap",
+            timelineIdentityKey = "v1|main|message|user|accepted-gap",
+            timelineItemKind = "message:user"
+        )
+
+        val accepted = reconcileTimeline(
+            existing = listOf(localUser),
+            snapshot = TimelineSnapshotPage(sessionKey = "main", messages = listOf(relayRow("provisional", "local")))
+        )
+        assertEquals(listOf(localUser.id), accepted.messages.map { it.id })
+        assertEquals(listOf("provisional"), accepted.messages.map { it.conversationSeqState })
+
+        val stale = reconcileTimeline(
+            existing = accepted.messages,
+            snapshot = TimelineSnapshotPage(
+                sessionKey = "main",
+                rangeStartCursor = "seq:100",
+                rangeEndCursor = "seq:102",
+                messages = emptyList()
+            )
+        )
+        assertEquals(listOf(localUser.id), stale.pending.map { it.id })
+
+        val committed = reconcileTimeline(
+            existing = stale.pending,
+            snapshot = TimelineSnapshotPage(sessionKey = "main", messages = listOf(relayRow("committed", "history")))
+        )
+        assertTrue(committed.pending.isEmpty())
+        assertEquals(listOf(localUser.id), committed.messages.map { it.id })
+        assertEquals(listOf("committed"), committed.messages.map { it.conversationSeqState })
     }
 
 }

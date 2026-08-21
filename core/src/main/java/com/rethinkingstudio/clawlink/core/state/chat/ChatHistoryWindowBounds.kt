@@ -1,6 +1,24 @@
 package com.rethinkingstudio.clawlink.core.state.chat
 
 import com.rethinkingstudio.clawlink.core.models.chat.ChatMessage
+import com.rethinkingstudio.clawlink.core.models.chat.MessageRole
+
+internal fun ChatMessage.hasUnconfirmedLocalTimelineIdentity(): Boolean {
+    val hasProvisionalConversationLifecycle = role == MessageRole.user && (
+        conversationSeqState.equals("provisional", ignoreCase = true) ||
+            (conversationSeqState.isBlank() && source.equals("local", ignoreCase = true))
+        )
+    return hasProvisionalConversationLifecycle ||
+        timelineOrderKey.trim().startsWith("local:") ||
+        timelineIdentityKey.trim().startsWith("local:")
+}
+
+internal fun ChatMessage.hasRelayTimelineIdentity(): Boolean {
+    return timelineOrderKey.trim().isNotEmpty() &&
+        !timelineOrderKey.trim().startsWith("local:") &&
+        timelineIdentityKey.trim().isNotEmpty() &&
+        timelineItemKind.trim().isNotEmpty()
+}
 
 internal fun newestBoundedHistoryWindowMessages(
     messages: List<ChatMessage>,

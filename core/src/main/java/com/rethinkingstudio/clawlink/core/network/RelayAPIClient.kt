@@ -293,6 +293,18 @@ class RelayAPIClient(
         return fetchChatHistoryPage(gatewayId, sessionKey, limit).items
     }
 
+    suspend fun fetchChatSync(
+        gatewayId: String,
+        sessionKey: String,
+        cursor: String? = null,
+        limit: Int = 100
+    ): ChatSyncResponse {
+        return request(
+            endpoint = APIEndpoints.Mobile.Chat.sync(gatewayId, sessionKey, limit, cursor),
+            extraHeaders = gatewayLoadHeaders
+        )
+    }
+
     suspend fun checkChatReady(gatewayId: String): Boolean {
         val response: GatewayChatReadyResponse = request(APIEndpoints.Mobile.Chat.ready(gatewayId))
         return response.ready

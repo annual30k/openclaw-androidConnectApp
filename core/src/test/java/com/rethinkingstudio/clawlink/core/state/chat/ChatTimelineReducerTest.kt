@@ -160,6 +160,83 @@ class ChatTimelineReducerTest {
     }
 
     @Test
+    fun canonicalEventPreservesConversationSequenceWithoutReplacingProducerSequence() {
+        val event = requireNotNull(
+            TimelineEventLog.decodeEvent(
+                """
+                {
+                  "protocolVersion": 2,
+                  "eventId": "pc-conversation-seq",
+                  "eventType": "message.completed",
+                  "turnId": "turn-conversation-seq",
+                  "runId": "run-conversation-seq",
+                  "messageId": "message-conversation-seq",
+                  "role": "assistant",
+                  "conversationSeq": 34,
+                  "seq": 7,
+                  "content": [{ "type": "text", "text": "ordered reply" }],
+                  "timelineOrderKey": "v1|00000000000000000034|50|000000|message-conversation-seq",
+                  "timelineIdentityKey": "message:assistant:message-conversation-seq",
+                  "timelineItemKind": "message:assistant"
+                }
+                """.trimIndent()
+            )
+        )
+
+        assertEquals(34L, (event as TimelineEvent.MessageCompleted).conversationSeq)
+        val state = ChatTimelineReducer.reduce(ChatTimelineState(), event)
+
+        assertEquals(34L, state.messages.single().conversationSeq)
+        assertEquals(7L, state.messages.single().seq)
+    }
+
+    @Test
+    fun staleActiveCompletionDoesNotReactivateFinalizedPersistedMessage() {
+        val initial = ChatTimelineState(
+            messages = listOf(
+                ChatMessage(
+                    id = "message-finished",
+                    role = MessageRole.assistant,
+                    state = MessageState.completed,
+                    content = "completed answer",
+                    runId = "run-finished",
+                    turnId = "turn-finished",
+                    timelineOrderKey = "v1|00000000000000000001|50|000000|message-finished",
+                    timelineIdentityKey = "message:assistant:message-finished",
+                    timelineItemKind = "message:assistant"
+                )
+            )
+        )
+        val staleActiveCompletion = requireNotNull(
+            TimelineEventLog.decodeEvent(
+                """
+                {
+                  "protocolVersion": 2,
+                  "eventId": "event-stale-active-completion",
+                  "eventType": "message.completed",
+                  "turnId": "turn-finished",
+                  "runId": "run-finished",
+                  "messageId": "message-finished",
+                  "role": "assistant",
+                  "messageState": "completed",
+                  "runState": "active",
+                  "content": [{ "type": "text", "text": "completed answer" }],
+                  "timelineOrderKey": "v1|00000000000000000001|50|000000|message-finished",
+                  "timelineIdentityKey": "message:assistant:message-finished",
+                  "timelineItemKind": "message:assistant"
+                }
+                """.trimIndent()
+            )
+        )
+
+        val result = ChatTimelineReducer.reduce(initial, staleActiveCompletion)
+
+        assertFalse(result.hasActiveRun)
+        assertEquals(MessageState.completed, result.messages.single().state)
+        assertEquals("completed answer", result.messages.single().content)
+    }
+
+    @Test
     fun canonicalUserEchoWithSameMessageIdPromotesLocalBubbleWithoutLosingLocalOrder() {
         val runId = "1502fed0-7966-4629-9e88-5857815d0a2b"
         val local = ChatMessage(

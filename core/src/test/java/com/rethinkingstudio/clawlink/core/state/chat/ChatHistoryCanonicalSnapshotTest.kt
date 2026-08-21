@@ -27,7 +27,6 @@ import kotlinx.serialization.json.put
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
-import org.junit.Ignore
 import org.junit.Test
 
 class ChatHistoryCanonicalSnapshotTest {
@@ -209,7 +208,11 @@ class ChatHistoryCanonicalSnapshotTest {
             store.loadHistory("gw_1", "main", limit = 100)
 
             val messages = store.state.value.messages
-            assertEquals(listOf("user-canonical", "assistant-canonical"), messages.map { it.id })
+            assertEquals(listOf(localUser.id, "assistant-canonical"), messages.map { it.id })
+            assertEquals(
+                listOf("user-canonical", "assistant-canonical"),
+                messages.map { it.timelineMessageId }
+            )
             assertEquals(
                 listOf(
                     Instant.parse("2026-06-08T00:36:34.684Z").toEpochMilli() / 1000.0,
@@ -316,68 +319,6 @@ class ChatHistoryCanonicalSnapshotTest {
         }
     }
 
-    @Ignore("Legacy non-canonical history failure cache behavior was removed; Relay canonical order is required.")
-    @Test
-    fun loadOlderHistoryFailureKeepsExistingWindowAndCursor() = runBlocking {
-        var shouldFailOlder = false
-        val wsClient = RelayWebSocketClient()
-        try {
-            val store = ChatStore(
-                apiClient = RelayAPIClient(),
-                wsClient = wsClient,
-                notificationPort = object : NotificationPort {
-                    override fun showReplyNotification(sessionKey: String, title: String, body: String) = Unit
-                    override fun cancelNotification(id: Int) = Unit
-                    override fun cancelAll() = Unit
-                },
-                chatHistoryPageFetcher = { _, _, _, cursor, _ ->
-                    if (cursor == "seq:10" && shouldFailOlder) error("older history unavailable")
-                    ChatHistoryResponse(
-                        items = chatHistoryItems(10..12),
-                        hasMore = true,
-                        nextCursor = "seq:10",
-                        newestCursor = "seq:12"
-                    )
-                }
-            )
-
-            store.loadHistory("gw_1", "main", limit = 100)
-            shouldFailOlder = true
-            store.loadOlderHistory("gw_1", "main")
-
-            val state = store.state.value
-            assertEquals(listOf("history-10", "history-11", "history-12"), state.messages.map { it.id })
-            assertFalse(state.historyWindow.isLoadingOlder)
-            assertTrue(state.historyWindow.hasOlder)
-            assertEquals("seq:10", state.historyWindow.olderCursor)
-            assertEquals("seq:12", state.historyWindow.newestCursor)
-        } finally {
-            wsClient.destroy()
-        }
-    }
-    @Ignore("Legacy protocol-marker filtering for non-canonical history was removed; Relay canonical order is required.")
-    @Test
-    fun filtersProtocolTypingMarkersFromHistoryMessages() {
-        val messages = buildHistoryMessagesFromItems(
-            listOf(
-                ChatHistoryItem(
-                    id = "typing",
-                    role = "assistant",
-                    content = JsonPrimitive("[[clawlink:typing]][[clawlink:typing]]"),
-                    createdAt = "2026-05-24T08:00:00.000Z"
-                ),
-                ChatHistoryItem(
-                    id = "answer",
-                    role = "assistant",
-                    content = JsonPrimitive("final answer"),
-                    createdAt = "2026-05-24T08:00:03.000Z"
-                )
-            )
-        )
-
-        assertEquals(listOf("answer"), messages.map { it.id })
-    }
-
     @Test
     fun treatsProtocolTypingMarkersAsTransientAssistantPlaceholders() {
         val message = ChatMessage(
@@ -409,51 +350,5 @@ class ChatHistoryCanonicalSnapshotTest {
 
         assertTrue(isTransientAssistantPlaceholder(zhMessage))
         assertTrue(isTransientAssistantPlaceholder(enMessage))
-    }
-
-    @Ignore("Legacy voice transcript replacement by local matching was removed; Relay canonical order is required.")
-    @Test
-    fun replacesLateVoiceTranscriptHistoryTextWithLocalVoiceMessage() {
-        val historyTranscript = ChatMessage(
-            id = "history-transcript",
-            role = MessageRole.user,
-            content = "你可以做什么？",
-            runId = "voice-client-run-1",
-            sortTimestamp = 1400.0
-        )
-        val historyAssistant = ChatMessage(
-            id = "history-assistant",
-            role = MessageRole.assistant,
-            content = "我可以帮你处理本机任务。",
-            runId = "assistant-client-run-1",
-            sortTimestamp = 1401.0
-        )
-        val localVoice = ChatMessage(
-            id = "local-voice",
-            role = MessageRole.user,
-            content = "voice-input.m4a",
-            contentBlocks = listOf(
-                RelayChatContentBlock(
-                    type = "voice",
-                    fileName = "voice-input.m4a",
-                    mimeType = "audio/mp4",
-                    downloadUrl = "file:///tmp/voice-input.m4a"
-                )
-            ),
-            runId = "local-user-voice-client-run-1",
-            sortTimestamp = 1000.0
-        )
-
-        val merged = mergeHistoryWithCurrentMessages(
-            historyMessages = listOf(historyTranscript, historyAssistant),
-            currentMessages = listOf(localVoice),
-            currentStreamingMessageId = null,
-            isTrackedPendingAssistantMessageId = { false }
-        )
-
-        assertEquals(listOf("local-user-voice-client-run-1", "assistant-client-run-1"), merged.map { it.runId })
-        assertTrue(merged.first().hasVoiceContent)
-        assertEquals("你可以做什么？", merged.first().voiceTranscriptText)
-        assertFalse(merged.any { it.id == historyTranscript.id })
     }
 }

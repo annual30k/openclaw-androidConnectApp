@@ -46,6 +46,7 @@ internal class ChatStateDisplayCoalescer(
     private val onEmit: (ChatState) -> Unit
 ) {
     private var pendingJob: Job? = null
+    private var latestCoalescedState: ChatState? = null
 
     fun submit(
         currentDisplayed: ChatState,
@@ -54,22 +55,26 @@ internal class ChatStateDisplayCoalescer(
         if (!shouldCoalesceChatDisplayUpdate(currentDisplayed, incoming)) {
             pendingJob?.cancel()
             pendingJob = null
+            latestCoalescedState = null
             onEmit(incoming)
             return
         }
 
-        // 只在确认为“同一条 assistant 尾部文本增量”时做一次性延迟合并；
-        // 不能用永久 50ms 轮询，否则聊天页在整个生命周期里都会持续唤醒主线程。
-        pendingJob?.cancel()
+        // Preserve the newest tail delta but do not restart an active window. Restarting the
+        // delay on every Hermes delta starves the UI until the host pauses its stream.
+        latestCoalescedState = incoming
+        if (pendingJob != null) return
         pendingJob = scope.launch {
             delay(delayMillis)
             pendingJob = null
-            onEmit(incoming)
+            latestCoalescedState?.let(onEmit)
+            latestCoalescedState = null
         }
     }
 
     fun cancelPending() {
         pendingJob?.cancel()
         pendingJob = null
+        latestCoalescedState = null
     }
 }

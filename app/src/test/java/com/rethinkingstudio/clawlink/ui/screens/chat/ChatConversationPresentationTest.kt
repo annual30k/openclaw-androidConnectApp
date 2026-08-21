@@ -38,6 +38,98 @@ class ChatConversationPresentationTest {
 
         assertEquals(listOf("tool-result-row"), displayMessages.map { it.id })
     }
+
+    @Test
+    fun confirmedImageTurnKeepsRelayOrderWhenStaleToolSharesAttachmentTurn() {
+        fun order(namespace: Int, sequence: Long, slot: Int, id: String): String =
+            "v5|$namespace|${sequence.toString().padStart(20, '0')}|00000000000000000000|${slot.toString().padStart(2, '0')}|$id"
+
+        fun message(
+            id: String,
+            role: MessageRole,
+            namespace: Int,
+            sequence: Long,
+            slot: Int,
+            runId: String,
+            turnId: String,
+            content: String,
+            blocks: List<RelayChatContentBlock> = listOf(RelayChatContentBlock(type = "text", text = content))
+        ) = ChatMessage(
+            id = id,
+            role = role,
+            content = content,
+            contentBlocks = blocks,
+            runId = runId,
+            turnId = turnId,
+            conversationSeq = sequence,
+            seq = sequence,
+            conversationSeqState = "committed",
+            timelineOrderKey = order(namespace, sequence, slot, id),
+            timelineIdentityKey = "v1|main|${role.name}|$id",
+            timelineItemKind = if (role == MessageRole.tool) "tool" else "message:${role.name}",
+            source = "history"
+        )
+
+        val attachmentTurn = "attachment-f0f2b02ff0c8b3ebd24dd05328d1908450b3e9d5b6867ed7ad81ec6fb796fcec"
+        val fileRun = "file-file_a60b9b239c8d459b94a5c914f3ed356b"
+        val imageUser = message(
+            id = "image-user-4905",
+            role = MessageRole.user,
+            namespace = 0,
+            sequence = 4905,
+            slot = 10,
+            runId = fileRun,
+            turnId = attachmentTurn,
+            content = "分析一下这张图",
+            blocks = listOf(
+                RelayChatContentBlock(type = "text", text = "分析一下这张图"),
+                RelayChatContentBlock(
+                    type = "image",
+                    fileId = "file-a60b9b239c8d459b94a5c914f3ed356b",
+                    fileName = "photo.jpg",
+                    mimeType = "image/jpeg",
+                    downloadUrl = "/api/mobile/files/file-a60b9b239c8d459b94a5c914f3ed356b",
+                    sourceRunId = fileRun
+                )
+            )
+        )
+        val rows = listOf(
+            message(
+                id = "stale-tool-ns0-seq10",
+                role = MessageRole.tool,
+                namespace = 0,
+                sequence = 10,
+                slot = 30,
+                runId = attachmentTurn,
+                turnId = attachmentTurn,
+                content = "stale tool",
+                blocks = listOf(RelayChatContentBlock(type = "tool_result", text = "stale tool"))
+            ),
+            message("old-user-4895", MessageRole.user, 0, 4895, 10, "old-turn", "old-turn", "旧问题"),
+            message("old-answer-4896", MessageRole.assistant, 0, 4896, 50, "old-turn", "old-turn", "旧回答"),
+            imageUser,
+            message(
+                id = "live-tool-ns1-seq5",
+                role = MessageRole.tool,
+                namespace = 1,
+                sequence = 5,
+                slot = 30,
+                runId = attachmentTurn,
+                turnId = attachmentTurn,
+                content = "live tool",
+                blocks = listOf(RelayChatContentBlock(type = "tool_result", text = "live tool"))
+            ),
+            message("live-answer-ns1-seq5", MessageRole.assistant, 1, 5, 50, attachmentTurn, attachmentTurn, "图片分析结果")
+        )
+
+        val visible = conversationDisplayMessages(rows, showInvocationProcess = false)
+
+        assertEquals(
+            listOf("old-user-4895", "old-answer-4896", "image-user-4905", "live-answer-ns1-seq5"),
+            visible.map(ChatMessage::id)
+        )
+    }
+
     @Test
     fun unpairedGatewayStateHidesCachedMessagesFromPreviousGateway() {
         val cachedMessage = ChatMessage(
@@ -334,7 +426,7 @@ class ChatConversationPresentationTest {
     }
 
     @Test
-    fun displayMessagesUsesRelaySequenceAfterLocalAndCanonicalEchoesArriveOutOfOrder() {
+    fun displayMessagesPreservesCoreSlotsAfterLocalAndCanonicalEchoesCoalesce() {
         fun canonical(
             id: String,
             role: MessageRole,
@@ -382,17 +474,17 @@ class ChatConversationPresentationTest {
         )
 
         assertEquals(
-            listOf("local-new", "new-answer", "hermes-user", "hermes-answer", "local-hello", "hello-answer"),
+            listOf("hermes-user", "hermes-answer", "local-new", "new-answer", "local-hello", "hello-answer"),
             displayMessages.map { it.id }
         )
         assertEquals(
-            listOf("/new", "(^_^)v New session started!", "Reply exactly HERMESNEW0811", "HERMESNEW0811", "你好", "你好！有什么可以帮你的？"),
+            listOf("Reply exactly HERMESNEW0811", "HERMESNEW0811", "/new", "(^_^)v New session started!", "你好", "你好！有什么可以帮你的？"),
             displayMessages.map { it.content }
         )
     }
 
     @Test
-    fun displayMessagesDoesNotResortStableLocalTurnsAcrossMixedHermesOrderDomains() {
+    fun displayMessagesPreservesCoreOrderAcrossMixedHermesOrderDomains() {
         fun message(
             id: String,
             role: MessageRole,
@@ -803,7 +895,9 @@ class ChatConversationPresentationTest {
         )
 
         val displayMessages = conversationDisplayMessages(
-            messages = listOf(localPrompt, waiting, image),
+            // Core owns the local overlay projection; presentation must keep
+            // the already projected user -> output -> waiting slots unchanged.
+            messages = listOf(localPrompt, image, waiting),
             showInvocationProcess = true
         )
 

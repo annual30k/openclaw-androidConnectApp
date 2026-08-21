@@ -76,6 +76,25 @@ object APIEndpoints {
                     queries
                 )
             }
+            fun sync(
+                gatewayID: String,
+                sessionKey: String,
+                limit: Int = 100,
+                cursor: String? = null
+            ): APIEndpoint {
+                val queries = mutableListOf(
+                    "sessionKey" to queryValue(sessionKey),
+                    "limit" to limit.toString()
+                )
+                cursor?.trim()?.takeIf { it.isNotEmpty() }?.let {
+                    queries.add("cursor" to queryValue(it))
+                }
+                return APIEndpoint(
+                    HTTPMethod.GET,
+                    "/api/mobile/gateways/${pathSegment(gatewayID)}/chat/sync",
+                    queries
+                )
+            }
             fun ready(gatewayID: String) = APIEndpoint(HTTPMethod.GET, "/api/mobile/gateways/${pathSegment(gatewayID)}/chat/ready")
             fun toolDetail(
                 gatewayID: String,

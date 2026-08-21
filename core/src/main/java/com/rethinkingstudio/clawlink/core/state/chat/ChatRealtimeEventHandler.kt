@@ -100,7 +100,7 @@ private fun ChatStore.applyTimelinePayloadIfPresent(envelope: JsonObject, payloa
     return true
 }
 
-private fun ChatStore.applyTimelineEvents(events: List<TimelineEvent>) {
+internal fun ChatStore.applyTimelineEvents(events: List<TimelineEvent>) {
     val seeded = timelineState.copy(messages = _state.value.messages)
     timelineState = keepHermesLiveFinalPendingUntilHistoryCommit(
         state = ChatTimelineReducer.reduceAll(seeded, events),
@@ -108,6 +108,10 @@ private fun ChatStore.applyTimelineEvents(events: List<TimelineEvent>) {
         gatewayType = currentGatewayType()
     )
     val ordered = orderMessagesForRealtime(timelineState.messages)
+    ordered.mapNotNull(ChatMessage::conversationSeq).maxOrNull()?.let { incomingHighWatermark ->
+        timelineHighWatermark = maxOf(timelineHighWatermark ?: Long.MIN_VALUE, incomingHighWatermark)
+            .takeUnless { it == Long.MIN_VALUE }
+    }
     val hasActiveVisibleRun = hasActiveVisibleTimelineRun(timelineState, ordered)
     _state.value = _state.value.copy(
         messages = ordered,

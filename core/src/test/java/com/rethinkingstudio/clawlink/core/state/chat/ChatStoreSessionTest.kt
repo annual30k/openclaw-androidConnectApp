@@ -20,7 +20,6 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
-import org.junit.Ignore
 import org.junit.Test
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.Executors
@@ -660,69 +659,6 @@ class ChatStoreSessionTest {
         }
     }
 
-    @Ignore("Legacy attachment upload placeholder coalescing by local identity was removed from display ordering.")
-    @Test
-    fun sendMessageReplacesAttachmentUploadPlaceholderWithCombinedPrompt() {
-        val wsClient = RelayWebSocketClient()
-        try {
-            val store = ChatStore(
-                apiClient = RelayAPIClient(),
-                wsClient = wsClient,
-                notificationPort = object : NotificationPort {
-                    override fun showReplyNotification(sessionKey: String, title: String, body: String) = Unit
-                    override fun cancelNotification(id: Int) = Unit
-                    override fun cancelAll() = Unit
-                }
-            )
-            store.beginGatewaySwitch("gateway-1")
-            store.newSession("main")
-            val attachment = ComposerAttachmentDraft(
-                id = "attachment-1",
-                fileUri = "/tmp/photo.png",
-                fileName = "photo.png",
-                mimeType = "image/png",
-                sizeBytes = 42,
-                imageWidth = 320,
-                imageHeight = 240
-            )
-            val imageBlock = RelayChatContentBlock(
-                type = "image",
-                fileId = "file-1",
-                fileName = "photo.png",
-                mimeType = "image/png",
-                sizeBytes = 42,
-                imageWidth = 320,
-                imageHeight = 240,
-                downloadUrl = "/tmp/photo.png",
-                downloadPath = "/api/mobile/files/file-1"
-            )
-
-            store.beginComposerAttachmentUploadMessages(
-                attachments = listOf(attachment),
-                gatewayId = "gateway-1",
-                sessionKey = "main",
-                senderDisplayName = "Mac",
-                messageSortBaseTimestamp = 100.0
-            )
-            store.sendMessage(
-                content = "分析一下这张图",
-                gatewayId = "gateway-1",
-                attachmentIds = listOf(attachment.id),
-                attachmentBlocks = listOf(imageBlock)
-            )
-
-            val userMessages = store.state.value.messages.filter { it.role == MessageRole.user }
-            assertEquals(1, userMessages.size)
-            assertEquals("分析一下这张图", userMessages.single().content)
-            assertEquals(listOf(imageBlock), userMessages.single().contentBlocks)
-            assertEquals(100.0, userMessages.single().sortTimestamp ?: 0.0, 0.0001)
-            assertTrue(store.state.value.messages.none { it.id == attachment.id || it.runId == "upload-${attachment.id}" })
-            assertEquals(1, store.state.value.messages.count { it.role == MessageRole.assistant && it.state == MessageState.streaming })
-        } finally {
-            wsClient.destroy()
-        }
-    }
-
     @Test
     fun attachmentOnlyUploadSyncsTimelineSnapshotWithoutAssistantRun() {
         val wsClient = RelayWebSocketClient()
@@ -952,106 +888,6 @@ class ChatStoreSessionTest {
         }
     }
 
-    @Ignore("Legacy duplicate message-id coalescing before rendering was removed; canonical identity is authoritative.")
-    @Test
-    fun orderedMessagesCoalescesDuplicateMessageIdsBeforeRendering() {
-        val wsClient = RelayWebSocketClient()
-        try {
-            val store = ChatStore(
-                apiClient = RelayAPIClient(),
-                wsClient = wsClient,
-                notificationPort = object : NotificationPort {
-                    override fun showReplyNotification(sessionKey: String, title: String, body: String) = Unit
-                    override fun cancelNotification(id: Int) = Unit
-                    override fun cancelAll() = Unit
-                }
-            )
-            val localBlock = RelayChatContentBlock(
-                type = "image",
-                fileId = "file-1",
-                fileName = "photo.png",
-                mimeType = "image/png",
-                downloadUrl = "/tmp/photo.png",
-                downloadPath = "/api/mobile/files/file-1"
-            )
-            val remoteBlock = localBlock.copy(downloadUrl = "/api/mobile/files/file-1")
-            val localMessage = ChatMessage(
-                id = "user-duplicate",
-                role = MessageRole.user,
-                state = MessageState.completed,
-                content = "20260606",
-                contentBlocks = listOf(localBlock),
-                runId = "local-user-duplicate",
-                sortTimestamp = 100.0
-            )
-            val echoedMessage = localMessage.copy(
-                contentBlocks = listOf(remoteBlock),
-                createdAt = "2030-01-01T00:00:00.000Z",
-                sortTimestamp = 101.0
-            )
-
-            val ordered = invokeOrderedMessages(store, listOf(localMessage, echoedMessage))
-
-            assertEquals(1, ordered.size)
-            assertEquals("user-duplicate", ordered.single().id)
-            assertEquals("20260606", ordered.single().content)
-            assertEquals(listOf(localBlock), ordered.single().contentBlocks)
-            assertEquals(100.0, ordered.single().sortTimestamp ?: 0.0, 0.0001)
-        } finally {
-            wsClient.destroy()
-        }
-    }
-
-    @Ignore("Legacy local/server user echo coalescing before rendering was removed; canonical identity is authoritative.")
-    @Test
-    fun orderedMessagesCoalescesLocalUserMessageWithServerEchoBeforeRendering() {
-        val wsClient = RelayWebSocketClient()
-        try {
-            val store = ChatStore(
-                apiClient = RelayAPIClient(),
-                wsClient = wsClient,
-                notificationPort = object : NotificationPort {
-                    override fun showReplyNotification(sessionKey: String, title: String, body: String) = Unit
-                    override fun cancelNotification(id: Int) = Unit
-                    override fun cancelAll() = Unit
-                }
-            )
-            val localUser = ChatMessage(
-                id = "user-client-run",
-                role = MessageRole.user,
-                state = MessageState.completed,
-                content = "你好",
-                runId = "local-user-client-run",
-                sortTimestamp = 100.0
-            )
-            val assistantPlaceholder = ChatMessage(
-                id = "assistant-client-run",
-                role = MessageRole.assistant,
-                state = MessageState.streaming,
-                content = protocolTypingMarkerText,
-                runId = "client-run",
-                sortTimestamp = 100.001
-            )
-            val serverEcho = ChatMessage(
-                id = "user-client-run",
-                role = MessageRole.user,
-                state = MessageState.completed,
-                content = "你好",
-                runId = "client-run",
-                createdAt = "2030-01-01T00:00:00.000Z",
-                sortTimestamp = 100.002
-            )
-
-            val ordered = invokeOrderedMessages(store, listOf(localUser, assistantPlaceholder, serverEcho))
-
-            assertEquals(1, ordered.count { it.role == MessageRole.user && it.content == "你好" })
-            assertEquals("user-client-run", ordered.first { it.role == MessageRole.user }.id)
-            assertEquals("local-user-client-run", ordered.first { it.role == MessageRole.user }.runId)
-        } finally {
-            wsClient.destroy()
-        }
-    }
-
     @Test
     fun orderedMessagesKeepsSameLocalUserTextAcrossAssistantBoundary() {
         val wsClient = RelayWebSocketClient()
@@ -1096,45 +932,6 @@ class ChatStoreSessionTest {
                 listOf("user-client-run-1", "user-client-run-2"),
                 ordered.filter { it.role == MessageRole.user }.map { it.id }
             )
-        } finally {
-            wsClient.destroy()
-        }
-    }
-
-    @Ignore("Legacy remote user echo matching without canonical identity was removed.")
-    @Test
-    fun orderedMessagesKeepsRemoteUserEchoWhenStableRunDoesNotMatchLocalUser() {
-        val wsClient = RelayWebSocketClient()
-        try {
-            val store = ChatStore(
-                apiClient = RelayAPIClient(),
-                wsClient = wsClient,
-                notificationPort = object : NotificationPort {
-                    override fun showReplyNotification(sessionKey: String, title: String, body: String) = Unit
-                    override fun cancelNotification(id: Int) = Unit
-                    override fun cancelAll() = Unit
-                }
-            )
-            val localUser = ChatMessage(
-                id = "user-client-run",
-                role = MessageRole.user,
-                state = MessageState.completed,
-                content = "你好",
-                runId = "local-user-client-run",
-                sortTimestamp = 100.0
-            )
-            val serverEcho = ChatMessage(
-                id = "server-user-message",
-                role = MessageRole.user,
-                state = MessageState.completed,
-                content = "你好",
-                runId = "server-run",
-                sortTimestamp = 100.1
-            )
-
-            val ordered = invokeOrderedMessages(store, listOf(localUser, serverEcho))
-
-            assertEquals(listOf("user-client-run", "server-user-message"), ordered.map { it.id })
         } finally {
             wsClient.destroy()
         }

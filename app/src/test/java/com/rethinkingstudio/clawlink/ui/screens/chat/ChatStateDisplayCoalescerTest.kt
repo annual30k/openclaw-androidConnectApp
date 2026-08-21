@@ -37,7 +37,7 @@ class ChatStateDisplayCoalescerTest {
     }
 
     @Test
-    fun newerCoalescedUpdateCancelsOlderPendingEmission() = runTest {
+    fun newerCoalescedUpdateUsesLatestStateWithoutRestartingTheWindow() = runTest {
         val emitted = mutableListOf<ChatState>()
         val coalescer = ChatStateDisplayCoalescer(
             scope = backgroundScope,
@@ -52,10 +52,6 @@ class ChatStateDisplayCoalescerTest {
         advanceTimeBy(25L)
         runCurrent()
         coalescer.submit(currentDisplayed = current, incoming = secondIncoming)
-
-        advanceTimeBy(25L)
-        runCurrent()
-        assertTrue(emitted.isEmpty())
 
         advanceTimeBy(25L)
         runCurrent()

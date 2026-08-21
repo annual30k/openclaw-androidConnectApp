@@ -95,6 +95,7 @@ class ChatStore(
     internal var timelineSnapshotRevision: String? = null
     internal var timelineHighWatermark: Long? = null
     internal val timelineOutbox = linkedMapOf<String, TimelineOutboxEntry>()
+    private val incrementalSyncScopesInFlight = mutableSetOf<String>()
     // 队列激活是一个跨多个内存状态与持久化快照的原子事务；所有触发入口必须共用同一把锁，
     // 避免终态事件、历史恢复和重连在 IO 线程池上并发激活同一条或相邻两条消息。
     internal val queuedTimelineOutboxDrainLock = Any()
@@ -108,6 +109,7 @@ class ChatStore(
         getTimelineState = { timelineState },
         setTimelineState = { nextTimelineState -> timelineState = nextTimelineState },
         v3Sessions = v3Sessions,
+        locallyStoppedRunIds = { locallyStoppedRunIds.toSet() },
         currentStreamingMessageId = { streamingMessageId },
         isTrackedPendingAssistantMessageId = ::isTrackedPendingAssistantMessageId,
         clearStreamingPointersIfResolved = ::clearStreamingPointersIfResolved,
@@ -421,6 +423,99 @@ class ChatStore(
         // 锁会合并历史恢复、终态事件和连接事件的并发触发，确保一次只发送一条。
         drainQueuedTimelineOutbox(connectionState)
         schedulePendingFinalSyncsForCurrentSession()
+        scheduleIncrementalTimelineSyncForCurrentScope()
+    }
+
+    /**
+     * Restored chat scopes do not need to wait for a socket callback before
+     * reconciling. The same in-flight key also coalesces a near-simultaneous
+     * WebSocket connected event, so foreground restore cannot race a full
+     * history snapshot against durable cursor replay.
+     */
+    fun reconcileTimelineAfterLocalRestore(
+        gatewayId: String,
+        sessionKey: String,
+        keepSwitchingOverlay: Boolean = true
+    ) {
+        if (!matchesCurrentStoreScope(gatewayId, sessionKey)) return
+        scheduleIncrementalTimelineSync(gatewayId, sessionKey, keepSwitchingOverlay)
+    }
+
+    private fun scheduleIncrementalTimelineSyncForCurrentScope() {
+        val current = _state.value
+        val gatewayId = current.currentGatewayId?.trim().orEmpty()
+        val sessionKey = normalizeSessionKey(current.currentSessionKey)
+        scheduleIncrementalTimelineSync(gatewayId, sessionKey, keepSwitchingOverlay = false)
+    }
+
+    private fun scheduleIncrementalTimelineSync(
+        gatewayId: String,
+        sessionKey: String,
+        keepSwitchingOverlay: Boolean
+    ) {
+        if (gatewayId.isBlank()) return
+        val scopeKey = "$gatewayId\u0000$sessionKey"
+        synchronized(incrementalSyncScopesInFlight) {
+            if (!incrementalSyncScopesInFlight.add(scopeKey)) return
+        }
+        scope.launch {
+            try {
+                reconcileTimelineAfterReconnect(gatewayId, sessionKey, keepSwitchingOverlay)
+            } finally {
+                synchronized(incrementalSyncScopesInFlight) {
+                    incrementalSyncScopesInFlight.remove(scopeKey)
+                }
+            }
+        }
+    }
+
+    private suspend fun reconcileTimelineAfterReconnect(
+        gatewayId: String,
+        sessionKey: String,
+        keepSwitchingOverlay: Boolean
+    ) {
+        val savedCursor = sessionSelectionStore?.loadSyncCursor(gatewayId, sessionKey)
+        if (!savedCursor.isNullOrBlank() && replayTimelineSyncChanges(gatewayId, sessionKey, savedCursor)) return
+
+        // An absent/expired cursor cannot establish that a bounded local cache
+        // is canonical. Reuse the existing snapshot reconciler, then establish
+        // a fresh checkpoint for the next reconnect.
+        loadHistory(gatewayId, sessionKey, keepSwitchingOverlay = keepSwitchingOverlay)
+        if (matchesCurrentStoreScope(gatewayId, sessionKey) && _state.value.errorMessage == null) {
+            replayTimelineSyncChanges(gatewayId, sessionKey, null)
+        }
+    }
+
+    private suspend fun replayTimelineSyncChanges(
+        gatewayId: String,
+        sessionKey: String,
+        initialCursor: String?
+    ): Boolean {
+        var cursor = initialCursor?.trim()?.takeIf { it.isNotEmpty() }
+        repeat(20) {
+            val response = try {
+                apiClient.fetchChatSync(gatewayId, sessionKey, cursor)
+            } catch (error: CancellationException) {
+                throw error
+            } catch (_: Exception) {
+                // Includes 409 cursor_expired and an older Relay's 404. The
+                // caller deliberately falls back to canonical chat.history.
+                return false
+            }
+            if (!matchesCurrentStoreScope(gatewayId, sessionKey)) return false
+            val events = response.events.flatMap(TimelineEventLog::decodePayload)
+            if (events.isNotEmpty()) applyTimelineEvents(events)
+            val nextCursor = response.nextCursor?.trim()?.takeIf { it.isNotEmpty() }
+                ?: response.latestCursor?.trim()?.takeIf { it.isNotEmpty() }
+                ?: cursor
+            if (!nextCursor.isNullOrBlank()) {
+                sessionSelectionStore?.saveSyncCursor(gatewayId, sessionKey, nextCursor)
+            }
+            if (!response.hasMore) return !nextCursor.isNullOrBlank()
+            if (nextCursor.isNullOrBlank() || nextCursor == cursor) return false
+            cursor = nextCursor
+        }
+        return false
     }
 
     private fun markTimelineRunResolved(runId: String, runScope: ChatRunScope?) {

@@ -211,6 +211,13 @@ class MessageBubblePresentationTest {
     }
 
     @Test
+    fun mixedMediaFooterMeasurementUsesTheSameQueuedAndFailedLabelThatIsRendered() {
+        assertEquals("You", messageFooterLeadingLabel("You", ""))
+        assertTrue(messageFooterLeadingLabel("You", "queued").startsWith("You · "))
+        assertTrue(messageFooterLeadingLabel("You", "failed").startsWith("You · "))
+    }
+
+    @Test
     fun repeatedLegacyMediaProjectionUsesOneCanonicalPrompt() {
         val blocks = listOf(
             RelayChatContentBlock(type = "text", contentBlockId = "blk_prompt", text = "分析一下这个图片"),

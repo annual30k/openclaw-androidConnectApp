@@ -446,12 +446,7 @@ internal class ChatViewModel(
             if (trimmed == "/new") {
                 val nextSessionKey = newMobileDraftSessionKey()
                 chatStore.newSession(nextSessionKey)
-                if (gatewayStore.state.value.selectedGateway?.gatewayType == GatewayType.hermes) {
-                    chatStore.sendCommand(
-                        gatewayId = gatewayId,
-                        command = trimmed
-                    )
-                } else {
+                if (gatewayStore.state.value.selectedGateway?.gatewayType != GatewayType.hermes) {
                     chatStore.resetSession(
                         gatewayId = gatewayId,
                         sessionKey = nextSessionKey

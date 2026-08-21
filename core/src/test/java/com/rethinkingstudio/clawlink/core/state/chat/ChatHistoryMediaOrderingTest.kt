@@ -128,4 +128,73 @@ class ChatHistoryMediaOrderingTest {
             messages.map { it.runId }
         )
     }
+
+    @Test
+    fun testAcknowledgedAttachmentUserStaysAtTailWhileHermesIsStreaming() {
+        val olderUser = ChatMessage(
+            id = "older-user",
+            role = MessageRole.user,
+            state = MessageState.completed,
+            content = "旧消息",
+            runId = "older-run",
+            sortTimestamp = 100.0,
+            conversationSeq = 9_000L,
+            conversationSeqState = "committed",
+            timelineMessageId = "older-message",
+            timelineOrderKey = "v5|0|00000000000000009000|00000000000000000000|10|older-message",
+            timelineIdentityKey = "message:user:older-message",
+            timelineItemKind = "message:user",
+            source = "history"
+        )
+        val turnID = "attachment-stable-turn"
+        val acknowledgedUser = ChatMessage(
+            id = "acknowledged-user",
+            role = MessageRole.user,
+            state = MessageState.completed,
+            content = "帮我分析一下这张图",
+            contentBlocks = listOf(
+                RelayChatContentBlock(
+                    type = "image",
+                    attachmentId = turnID,
+                    fileId = "file-image",
+                    fileName = "waterfall.jpeg",
+                    mimeType = "image/jpeg",
+                    sourceRunId = turnID
+                )
+            ),
+            runId = "file-image",
+            turnId = turnID,
+            clientMessageId = turnID,
+            idempotencyKey = turnID,
+            sortTimestamp = 200.0,
+            conversationSeq = 54L,
+            conversationSeqState = "committed",
+            timelineMessageId = "acknowledged-user",
+            timelineOrderKey = "v5|0|00000000000000004787|00000000000000000000|10|acknowledged-user",
+            timelineIdentityKey = "message:user:acknowledged-user",
+            timelineItemKind = "message:user",
+            source = "history"
+        )
+        val streaming = ChatMessage(
+            id = "streaming-assistant",
+            role = MessageRole.assistant,
+            state = MessageState.streaming,
+            content = "正在分析这张瀑布风景图，稍等片刻...",
+            runId = turnID,
+            turnId = turnID,
+            clientMessageId = turnID,
+            sortTimestamp = 201.0,
+            timelineOrderKey = "v5|0|00000000000000004788|00000000000000000000|50|streaming-assistant",
+            timelineIdentityKey = "message:assistant:streaming-assistant",
+            timelineItemKind = "message:assistant",
+            source = "local"
+        )
+
+        val ordered = orderTimelineMessages(listOf(acknowledgedUser, olderUser, streaming))
+
+        assertEquals(
+            listOf("older-user", "acknowledged-user", "streaming-assistant"),
+            ordered.map { it.id }
+        )
+    }
 }

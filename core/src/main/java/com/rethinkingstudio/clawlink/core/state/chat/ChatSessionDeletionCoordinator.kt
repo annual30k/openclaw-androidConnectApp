@@ -95,6 +95,7 @@ internal class ChatSessionDeletionCoordinator(
         setState(update.state)
         clearSessionCaches(gatewayId, sessionKey)
         sessionSelectionStore?.clear(gatewayId, sessionKey)
+        sessionSelectionStore?.clearSyncCursor(gatewayId, sessionKey)
         update.nextSessionKeyToPersist?.let { nextSessionKey ->
             persistSelectedSession(gatewayId, nextSessionKey)
         }

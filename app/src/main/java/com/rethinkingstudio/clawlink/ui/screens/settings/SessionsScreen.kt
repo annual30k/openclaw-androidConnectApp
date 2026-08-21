@@ -209,11 +209,7 @@ fun SessionsScreen(
                             if (!canSwitchSessions) return@SessionManagerSummaryCard
                             val nextSessionKey = newMobileDraftSessionKey()
                             chatStore.newSession(nextSessionKey)
-                            if (selectedGatewayType == GatewayType.hermes) {
-                                gatewayId?.let { id ->
-                                    chatStore.sendCommand(id, "/new")
-                                }
-                            } else {
+                            if (selectedGatewayType != GatewayType.hermes) {
                                 gatewayId?.let { id ->
                                     chatStore.resetSession(id, nextSessionKey)
                                 }

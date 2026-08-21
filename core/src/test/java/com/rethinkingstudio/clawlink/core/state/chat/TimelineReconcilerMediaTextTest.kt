@@ -207,8 +207,12 @@ class TimelineReconcilerMediaTextTest {
         val partial = applyFixture("local_image_echo_partial_history_snapshot.json")
 
         assertEquals(
-            listOf("server-image-user-1", "server-image-assistant-1"),
+            listOf("server-image-user-1", "assistant-image-run-1"),
             partial.messages.map { it.id }
+        )
+        assertEquals(
+            listOf("server-image-user-1", "server-image-assistant-1"),
+            partial.messages.map { it.timelineMessageId }
         )
         assertEquals(listOf("user-image-run-1"), partial.pending.map { it.id })
         assertEquals("att-image-run-1", partial.pending.single().fileContentBlocks.single().attachmentId)
@@ -294,8 +298,12 @@ class TimelineReconcilerMediaTextTest {
         assertTrue(providerSnapshotWithoutRelayAttachment.pending.isEmpty())
         assertEquals(1, providerSnapshotWithoutRelayAttachment.messages.sumOf { it.fileContentBlocks.size })
         assertEquals(
-            "server-image-attachment-1",
+            "user-image-run-1",
             providerSnapshotWithoutRelayAttachment.messages.single { it.timelineItemKind == "attachment" }.id
+        )
+        assertEquals(
+            "server-image-attachment-1",
+            providerSnapshotWithoutRelayAttachment.messages.single { it.timelineItemKind == "attachment" }.timelineMessageId
         )
 
         val authoritativeHistoryRefresh = reduceTimelineHistorySnapshot(
@@ -313,8 +321,12 @@ class TimelineReconcilerMediaTextTest {
 
         assertEquals(1, authoritativeHistoryRefresh!!.messages.sumOf { it.fileContentBlocks.size })
         assertEquals(
-            "server-image-attachment-1",
+            "user-image-run-1",
             authoritativeHistoryRefresh.messages.single { it.timelineItemKind == "attachment" }.id
+        )
+        assertEquals(
+            "server-image-attachment-1",
+            authoritativeHistoryRefresh.messages.single { it.timelineItemKind == "attachment" }.timelineMessageId
         )
     }
 

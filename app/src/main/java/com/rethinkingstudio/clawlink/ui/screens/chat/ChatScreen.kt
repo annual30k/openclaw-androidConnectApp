@@ -227,10 +227,11 @@ fun ChatScreen(
             GatewayHistoryRequestDecision.StartLoad -> Unit
         }
         try {
-            // 冷启动/切会话固定为一条确定链路：精确 scope 本地缓存 → 实时缓冲/连接 → 权威历史对账。
+            // 冷启动/切会话先恢复精确 scope 本地缓存，再走 durable
+            // cursor；没有/过期 cursor 时 ChatStore 才回退权威历史快照。
             chatStore.rehydrateTimelineState(request.gatewayId, request.sessionKey)
             chatStore.connectWebSocket()
-            chatStore.loadHistory(
+            chatStore.reconcileTimelineAfterLocalRestore(
                 request.gatewayId,
                 request.sessionKey,
                 keepSwitchingOverlay = keepSwitchingOverlay

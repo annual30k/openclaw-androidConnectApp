@@ -14,6 +14,325 @@ import org.junit.Test
 
 class ChatTimelineReducerHistorySnapshotTest {
     @Test
+    fun completedLocalTurnSurvivesOlderSnapshotUntilRelayConfirmsStableIdentity() {
+        val clientMessageId = "client-completed-overlay-turn"
+        val localUser = ChatMessage(
+            id = "local-user-$clientMessageId",
+            role = MessageRole.user,
+            state = MessageState.completed,
+            content = "本地问题",
+            runId = "local-user-$clientMessageId",
+            turnId = clientMessageId,
+            clientMessageId = clientMessageId,
+            idempotencyKey = clientMessageId,
+            timelineOrderKey = "local:$clientMessageId|10|user",
+            timelineIdentityKey = "local:message:user:$clientMessageId",
+            timelineItemKind = "message:user",
+            source = "local"
+        )
+        val localAnswer = ChatMessage(
+            id = "local-assistant-$clientMessageId",
+            role = MessageRole.assistant,
+            state = MessageState.completed,
+            content = "本地已完成的回答",
+            runId = "local-assistant-$clientMessageId",
+            turnId = clientMessageId,
+            clientMessageId = clientMessageId,
+            idempotencyKey = clientMessageId,
+            timelineOrderKey = "local:$clientMessageId|50|assistant",
+            timelineIdentityKey = "local:message:assistant:$clientMessageId",
+            timelineItemKind = "message:assistant",
+            source = "local"
+        )
+        fun response(revision: String, messages: String) = ChatHistoryResponse(
+            items = emptyList(),
+            timelineSnapshot = Json.parseToJsonElement(
+                """
+                {
+                  "timelineProtocolVersion": 3,
+                  "sessionKey": "main",
+                  "snapshotRevision": "$revision",
+                  "rangeStartCursor": "seq:1",
+                  "rangeEndCursor": "seq:3",
+                  "messages": [$messages]
+                }
+                """.trimIndent()
+            )
+        )
+        val olderOnly = response(
+            revision = "before-local-turn",
+            messages = """
+                {
+                  "messageId": "relay-old-assistant",
+                  "seq": 1,
+                  "role": "assistant",
+                  "messageState": "completed",
+                  "timelineOrderKey": "v5|0|00000000000000000001|00000000000000000000|50|relay-old-assistant",
+                  "timelineIdentityKey": "v1|main|message|assistant|relay-old-assistant",
+                  "timelineItemKind": "message:assistant",
+                  "content": [{"type": "text", "text": "更早的回答"}]
+                }
+            """.trimIndent()
+        )
+
+        val waitingForRelay = requireNotNull(
+            reduceTimelineHistorySnapshot(
+                response = olderOnly,
+                currentMessages = listOf(localUser, localAnswer),
+                currentSessionKey = "main",
+                timelineState = ChatTimelineState(messages = listOf(localUser, localAnswer)),
+                replaceExistingTimelineState = true
+            )
+        )
+
+        assertTrue(waitingForRelay.messages.any { it.id == localUser.id })
+        assertTrue(waitingForRelay.messages.any { it.id == localAnswer.id })
+
+        val confirmed = requireNotNull(
+            reduceTimelineHistorySnapshot(
+                response = response(
+                    revision = "relay-confirmed-local-turn",
+                    messages = """
+                        {
+                          "messageId": "relay-old-assistant",
+                          "seq": 1,
+                          "role": "assistant",
+                          "messageState": "completed",
+                          "timelineOrderKey": "v5|0|00000000000000000001|00000000000000000000|50|relay-old-assistant",
+                          "timelineIdentityKey": "v1|main|message|assistant|relay-old-assistant",
+                          "timelineItemKind": "message:assistant",
+                          "content": [{"type": "text", "text": "更早的回答"}]
+                        },
+                        {
+                          "messageId": "relay-user-1",
+                          "seq": 2,
+                          "role": "user",
+                          "messageState": "completed",
+                          "runId": "host-run-1",
+                          "turnId": "host-run-1",
+                          "clientMessageId": "$clientMessageId",
+                          "idempotencyKey": "$clientMessageId",
+                          "timelineOrderKey": "v5|0|00000000000000000002|00000000000000000000|10|relay-user-1",
+                          "timelineIdentityKey": "v1|main|message|user|relay-user-1",
+                          "timelineItemKind": "message:user",
+                          "content": [{"type": "text", "text": "本地问题"}]
+                        },
+                        {
+                          "messageId": "relay-assistant-1",
+                          "seq": 3,
+                          "role": "assistant",
+                          "messageState": "completed",
+                          "runId": "host-run-1",
+                          "turnId": "host-run-1",
+                          "clientMessageId": "$clientMessageId",
+                          "idempotencyKey": "$clientMessageId",
+                          "timelineOrderKey": "v5|0|00000000000000000003|00000000000000000000|50|relay-assistant-1",
+                          "timelineIdentityKey": "v1|main|message|assistant|relay-assistant-1",
+                          "timelineItemKind": "message:assistant",
+                          "content": [{"type": "text", "text": "Relay 权威回答"}]
+                        }
+                    """.trimIndent()
+                ),
+                currentMessages = waitingForRelay.messages,
+                currentSessionKey = "main",
+                timelineState = ChatTimelineState(messages = waitingForRelay.messages),
+                replaceExistingTimelineState = true
+            )
+        )
+
+        assertEquals(
+            listOf("relay-old-assistant", localUser.id, localAnswer.id),
+            sortTimelineMessagesV3(confirmed.messages, "main").map(ChatMessage::id)
+        )
+        assertEquals(
+            listOf("relay-old-assistant", "relay-user-1", "relay-assistant-1"),
+            sortTimelineMessagesV3(confirmed.messages, "main").map(ChatMessage::timelineMessageId)
+        )
+        assertFalse(confirmed.messages.any { it.timelineOrderKey.startsWith("local:") })
+    }
+
+    @Test
+    fun olderWindowKeepsCompletedLocalAssistantUntilRelayConfirmation() {
+        val canonicalHistory = (1..500).map { sequence ->
+            ChatMessage(
+                id = "history-$sequence",
+                role = MessageRole.assistant,
+                state = MessageState.completed,
+                content = "history $sequence",
+                runId = "history-run-$sequence",
+                timelineOrderKey = "v5|0|${sequence.toString().padStart(20, '0')}|00000000000000000000|50|history-$sequence",
+                timelineIdentityKey = "v1|main|message|assistant|history-$sequence",
+                timelineItemKind = "message:assistant"
+            )
+        }
+        val completedLocalAssistant = ChatMessage(
+            id = "local-completed-assistant",
+            role = MessageRole.assistant,
+            state = MessageState.completed,
+            content = "本地已完成、等待 Relay history 确认的回答",
+            runId = "local-assistant-window-turn",
+            clientMessageId = "window-turn",
+            idempotencyKey = "window-turn",
+            timelineOrderKey = "local:window-turn|50|assistant",
+            timelineIdentityKey = "local:message:assistant:window-turn",
+            timelineItemKind = "message:assistant",
+            source = "local"
+        )
+
+        val bounded = olderBoundedHistoryWindowMessages(
+            messages = canonicalHistory + completedLocalAssistant,
+            maxMessages = 500,
+            shouldPreserveActiveMessage = ChatMessage::hasUnconfirmedLocalTimelineIdentity
+        )
+
+        assertEquals(500, bounded.size)
+        assertTrue(bounded.any { it.id == completedLocalAssistant.id })
+    }
+
+    @Test
+    fun authoritativeRefreshKeepsLocalQuestionAfterRunWasStopped() {
+        val runId = "hermes-stopped-run-1"
+        val localUser = ChatMessage(
+            id = "local-user-$runId",
+            role = MessageRole.user,
+            state = MessageState.completed,
+            content = "继续分析这张图",
+            runId = "local-user-$runId",
+            turnId = runId,
+            source = "local"
+        )
+        val transientAssistant = ChatMessage(
+            id = "assistant-$runId",
+            role = MessageRole.assistant,
+            state = MessageState.streaming,
+            content = "",
+            runId = runId,
+            turnId = runId,
+            source = "local"
+        )
+        val response = ChatHistoryResponse(
+            items = emptyList(),
+            timelineSnapshot = Json.parseToJsonElement(
+                """
+                {
+                  "timelineProtocolVersion": 3,
+                  "sessionKey": "main",
+                  "snapshotRevision": "after-stop-without-turn",
+                  "messages": [{
+                    "messageId": "server-older-user",
+                    "role": "user",
+                    "messageState": "completed",
+                    "turnId": "older-turn",
+                    "runId": "older-turn:user",
+                    "timelineOrderKey": "v1|00000000000000000001|10|server-older-user",
+                    "timelineIdentityKey": "v1|main|message|user|server-older-user",
+                    "timelineItemKind": "message:user",
+                    "content": [{"type": "text", "text": "之前的问题"}]
+                  }]
+                }
+                """.trimIndent()
+            )
+        )
+
+        val reduction = requireNotNull(
+            reduceTimelineHistorySnapshot(
+                response = response,
+                currentMessages = listOf(localUser, transientAssistant),
+                currentSessionKey = "main",
+                timelineState = ChatTimelineState(messages = listOf(localUser, transientAssistant)),
+                replaceExistingTimelineState = true,
+                locallyStoppedRunIds = setOf(runId)
+            )
+        )
+
+        assertTrue(reduction.messages.any { it.id == localUser.id })
+        assertTrue(reduction.messages.none { it.id == transientAssistant.id })
+    }
+
+    @Test
+    fun authoritativePartialSnapshotKeepsLocalImageAndStreamingReplyWithoutActivePointer() {
+        val runId = "hermes-image-run-1"
+        val localUser = ChatMessage(
+            id = "user-$runId",
+            role = MessageRole.user,
+            state = MessageState.completed,
+            content = "分析一下这张图",
+            contentBlocks = listOf(
+                RelayChatContentBlock(
+                    type = "image",
+                    fileName = "chart.png",
+                    mimeType = "image/png",
+                    downloadUrl = "file:///tmp/chart.png",
+                    sourceRunId = runId
+                )
+            ),
+            runId = "local-user-$runId",
+            turnId = runId,
+            clientMessageId = runId,
+            idempotencyKey = runId,
+            timelineOrderKey = "local:$runId|10|user-$runId",
+            timelineIdentityKey = "local:message:user:$runId",
+            timelineItemKind = "message:user",
+            source = "local"
+        )
+        val streamingAssistant = ChatMessage(
+            id = "assistant-$runId",
+            role = MessageRole.assistant,
+            state = MessageState.streaming,
+            content = "正在分析图像…",
+            contentBlocks = listOf(RelayChatContentBlock(type = "text", text = "正在分析图像…")),
+            runId = runId,
+            turnId = runId,
+            timelineOrderKey = "local:$runId|20|assistant-$runId",
+            timelineIdentityKey = "local:waiting:assistant:$runId",
+            timelineItemKind = "waiting",
+            source = "local"
+        )
+        val response = ChatHistoryResponse(
+            items = emptyList(),
+            timelineSnapshot = Json.parseToJsonElement(
+                """
+                {
+                  "timelineProtocolVersion": 3,
+                  "sessionKey": "main",
+                  "snapshotRevision": "partial-hermes-image",
+                  "messages": [
+                    {
+                      "messageId": "server-user-$runId",
+                      "role": "user",
+                      "messageState": "completed",
+                      "turnId": "$runId:user",
+                      "runId": "$runId:user",
+                      "clientMessageId": "$runId",
+                      "idempotencyKey": "$runId",
+                      "timelineOrderKey": "v1|00000000000000000001|10|server-user-$runId",
+                      "timelineIdentityKey": "v1|main|message|user|server-user-$runId",
+                      "timelineItemKind": "message:user",
+                      "content": [{ "type": "text", "text": "分析一下这张图" }]
+                    }
+                  ]
+                }
+                """.trimIndent()
+            )
+        )
+
+        val reduction = requireNotNull(
+            reduceTimelineHistorySnapshot(
+                response = response,
+                currentMessages = listOf(localUser, streamingAssistant),
+                currentSessionKey = "main",
+                timelineState = ChatTimelineState(messages = listOf(localUser, streamingAssistant)),
+                replaceExistingTimelineState = true,
+                activeStreamingMessageId = null
+            )
+        )
+        val visible = reduction.messages
+
+        assertEquals(1, visible.sumOf { it.fileContentBlocks.size })
+        assertTrue(visible.any { it.role == MessageRole.assistant && it.state == MessageState.streaming })
+    }
+
+    @Test
     fun authoritativeHistoryReplacementKeepsCompletedLocalTurnOrderAsMetadataOnly() {
         fun localUser(id: String, runId: String, order: Long) = ChatMessage(
             id = id,
@@ -113,14 +432,18 @@ class ChatTimelineReducerHistorySnapshotTest {
         val ordered = sortTimelineMessagesV3(reduction.messages, "mobile-hermes")
 
         assertEquals(
-            listOf("server-new-user", "server-new-answer", "server-ping-user", "server-ping-answer"),
+            listOf("local-new", "server-new-answer", "local-ping", "server-ping-answer"),
             ordered.map(ChatMessage::id)
+        )
+        assertEquals(
+            listOf("server-new-user", "server-new-answer", "server-ping-user", "server-ping-answer"),
+            ordered.map(ChatMessage::timelineMessageId)
         )
         assertEquals(
             listOf(0L, 1L),
             ordered.filter { it.role == MessageRole.user }.mapNotNull(ChatMessage::localTurnOrder)
         )
-        assertTrue(reduction.messages.none { it.id.startsWith("local-") })
+        assertTrue(reduction.messages.none { it.timelineOrderKey.startsWith("local:") })
     }
 
     @Test
@@ -936,6 +1259,138 @@ class ChatTimelineReducerHistorySnapshotTest {
         assertEquals("OK", lateFinal.messages.single().content)
         assertEquals(MessageState.completed, lateFinal.messages.single().state)
         assertFalse(lateFinal.hasActiveRun)
+    }
+
+    @Test
+    fun historySnapshotCanonicalRefreshDropsStaleCompletedMessagesFromPreviousSessionStateAcrossReset() {
+        val staleImage = ChatMessage(
+            id = "file-stale-photo",
+            role = MessageRole.user,
+            state = MessageState.completed,
+            content = "photo.jpg",
+            contentBlocks = listOf(
+                RelayChatContentBlock(
+                    type = "image",
+                    text = "photo.jpg",
+                    fileId = "file-stale-1",
+                    fileName = "photo.jpg",
+                    mimeType = "image/jpeg",
+                    downloadUrl = "/api/mobile/files/file-stale-1"
+                )
+            ),
+            runId = "file-stale-photo",
+            seq = 3,
+            conversationSeq = 3,
+            timelineOrderKey = "v5|0|00000000000000000003|00000000000000000000|10|file-stale-photo",
+            timelineIdentityKey = "v1|main|message|user|file-stale-photo",
+            timelineItemKind = "message:user",
+            source = "history"
+        )
+        val staleUser = ChatMessage(
+            id = "run-stale-user",
+            role = MessageRole.user,
+            state = MessageState.completed,
+            content = "测试回复",
+            runId = "run-stale-user",
+            seq = 4,
+            conversationSeq = 4,
+            timelineOrderKey = "v5|0|00000000000000000004|00000000000000000000|10|run-stale-user",
+            timelineIdentityKey = "v1|main|message|user|run-stale-user",
+            timelineItemKind = "message:user",
+            source = "history"
+        )
+        val staleAssistant = ChatMessage(
+            id = "run-stale-assistant",
+            role = MessageRole.assistant,
+            state = MessageState.completed,
+            content = "album-427E00E4-0BB8-4A1",
+            contentBlocks = listOf(
+                RelayChatContentBlock(
+                    type = "file",
+                    text = "album-427E00E4-0BB8-4A1",
+                    fileId = "file-stale-album",
+                    fileName = "album.zip",
+                    mimeType = "application/zip",
+                    downloadUrl = "/api/mobile/files/file-stale-album"
+                )
+            ),
+            runId = "run-stale-assistant",
+            seq = 5,
+            conversationSeq = 5,
+            timelineOrderKey = "v5|0|00000000000000000005|00000000000000000000|50|run-stale-assistant",
+            timelineIdentityKey = "v1|main|message|assistant|run-stale-assistant",
+            timelineItemKind = "message:assistant",
+            source = "history"
+        )
+        val currentMessages = listOf(staleImage, staleUser, staleAssistant)
+
+        val response = ChatHistoryResponse(
+            items = emptyList(),
+            timelineSnapshot = Json.parseToJsonElement(
+                """
+                {
+                  "sessionKey": "main",
+                  "snapshotRevision": "rev-new-session",
+                  "rangeStartCursor": "seq:1",
+                  "rangeEndCursor": "seq:3",
+                  "newestCursor": "seq:2",
+                  "oldestCursor": "seq:1",
+                  "deletedMessageIds": [],
+                  "messages": [
+                    {
+                      "messageId": "new-user",
+                      "seq": 1,
+                      "turnSeq": 1,
+                      "role": "user",
+                      "messageState": "completed",
+                      "runId": "run-new-turn",
+                      "turnId": "run-new-turn",
+                      "partId": "part-text-1",
+                      "createdAt": "2026-06-08T01:00:00.000Z",
+                      "timelineOrderKey": "v5|0|00000000000000000001|00000000000000000000|10|new-user",
+                      "timelineIdentityKey": "v1|main|message|user|new-user",
+                      "timelineItemKind": "message:user",
+                      "source": "history",
+                      "content": [{ "type": "text", "text": "你好啦" }]
+                    },
+                    {
+                      "messageId": "new-assistant",
+                      "seq": 2,
+                      "turnSeq": 2,
+                      "role": "assistant",
+                      "messageState": "completed",
+                      "runId": "run-new-turn",
+                      "turnId": "run-new-turn",
+                      "partId": "part-text-1",
+                      "createdAt": "2026-06-08T01:00:05.000Z",
+                      "timelineOrderKey": "v5|0|00000000000000000002|00000000000000000000|50|new-assistant",
+                      "timelineIdentityKey": "v1|main|message|assistant|new-assistant",
+                      "timelineItemKind": "message:assistant",
+                      "source": "history",
+                      "content": [{ "type": "text", "text": "你好呀！有什么需要帮忙的吗？" }]
+                    }
+                  ]
+                }
+                """.trimIndent()
+            )
+        )
+
+        val reduction = requireNotNull(
+            reduceTimelineHistorySnapshot(
+                response = response,
+                currentMessages = currentMessages,
+                currentSessionKey = "main",
+                timelineState = ChatTimelineState(messages = currentMessages),
+                replaceExistingTimelineState = true
+            )
+        )
+
+        val ordered = sortTimelineMessagesV3(reduction.messages, "main")
+        assertEquals(2, ordered.size)
+        assertEquals(listOf("你好啦", "你好呀！有什么需要帮忙的吗？"), ordered.map(ChatMessage::content))
+        assertFalse(ordered.any { it.content == "测试回复" })
+        assertFalse(ordered.any { it.content == "photo.jpg" })
+        assertFalse(ordered.any { it.content == "album-427E00E4-0BB8-4A1" })
     }
 
 }

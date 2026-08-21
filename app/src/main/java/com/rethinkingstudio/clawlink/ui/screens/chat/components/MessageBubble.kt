@@ -88,7 +88,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-internal val messageFooterMinimumItemGap = 10.dp
+internal val messageFooterMinimumItemGap = 20.dp
 
 @Composable
 internal fun MessageBubble(
@@ -183,6 +183,7 @@ internal fun MessageBubble(
             val expandedBubbleWidth = mixedMediaBubbleWidth(maxWidth)
             val embeddedImageMaxWidth = maxOf(120.dp, expandedBubbleWidth - 32.dp)
             val footerTitle = if (isUser) "You" else "ClawLink"
+            val footerLeadingLabel = messageFooterLeadingLabel(footerTitle, message.deliveryState)
             val adaptiveBubbleWidth = if (useExpandedMixedMediaBubble) {
                 val density = LocalDensity.current
                 val textMeasurer = rememberTextMeasurer()
@@ -200,10 +201,10 @@ internal fun MessageBubble(
                     }
                 }
                 val formattedTimestamp = formatChatTimestamp(message.createdAt)
-                val measuredFooterWidth = remember(footerTitle, formattedTimestamp, textMeasurer, density) {
+                val measuredFooterWidth = remember(footerLeadingLabel, formattedTimestamp, textMeasurer, density) {
                     val footerStyle = TextStyle(fontSize = 10.sp, fontWeight = FontWeight.Medium)
-                    val titleWidthPx = textMeasurer.measure(
-                        text = footerTitle,
+                    val leadingLabelWidthPx = textMeasurer.measure(
+                        text = footerLeadingLabel,
                         style = footerStyle,
                         softWrap = false,
                         maxLines = 1
@@ -215,7 +216,7 @@ internal fun MessageBubble(
                         maxLines = 1
                     ).size.width
                     with(density) {
-                        (titleWidthPx + timestampWidthPx).toDp() + messageFooterMinimumItemGap
+                        (leadingLabelWidthPx + timestampWidthPx).toDp() + messageFooterMinimumItemGap
                     }
                 }
                 val widestImageWidth = fileBlocks
@@ -323,8 +324,7 @@ internal fun MessageBubble(
                             title = footerTitle,
                             createdAt = message.createdAt,
                             isUser = isUser,
-                            deliveryState = message.deliveryState,
-                            fillsAvailableWidth = true
+                            deliveryState = message.deliveryState
                         )
                     }
                 }
@@ -462,6 +462,15 @@ internal fun adaptiveMixedMediaBubbleWidth(maximumWidth: Dp, contentWidths: List
     return (contentWidth + 32.dp).coerceAtMost(maximumWidth).coerceAtLeast(0.dp)
 }
 
+internal fun messageDeliveryLabel(deliveryState: String): String = when (deliveryState.trim().lowercase()) {
+    "queued" -> choose("Queued", "排队中")
+    "failed" -> choose("Send failed", "发送失败")
+    else -> ""
+}
+
+internal fun messageFooterLeadingLabel(title: String, deliveryState: String): String =
+    listOf(title, messageDeliveryLabel(deliveryState)).filter { it.isNotBlank() }.joinToString(" · ")
+
 @Composable
 internal fun MessageFooter(
     title: String,
@@ -478,13 +487,8 @@ internal fun MessageFooter(
         horizontalArrangement = Arrangement.Start
     ) {
         val footerColor = if (isUser) Color.White.copy(alpha = 0.72f) else ChatColors.secondaryText
-        val deliveryLabel = when (deliveryState.trim().lowercase()) {
-            "queued" -> choose("Queued", "排队中")
-            "failed" -> choose("Send failed", "发送失败")
-            else -> ""
-        }
         Text(
-            listOf(title, deliveryLabel).filter { it.isNotBlank() }.joinToString(" · "),
+            messageFooterLeadingLabel(title, deliveryState),
             style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
             color = footerColor,
             fontWeight = FontWeight.Medium

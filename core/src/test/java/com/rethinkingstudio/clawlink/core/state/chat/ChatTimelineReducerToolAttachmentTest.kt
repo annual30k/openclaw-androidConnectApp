@@ -8,7 +8,6 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
-import org.junit.Ignore
 import org.junit.Test
 
 class ChatTimelineReducerToolAttachmentTest {
@@ -626,43 +625,4 @@ class ChatTimelineReducerToolAttachmentTest {
         assertEquals(setOf("turn-1"), state.historySnapshotTurnIds)
         assertEquals(setOf("user-1", "assistant-1"), state.historySnapshotMessageIds)
     }
-
-    @Ignore("Legacy assistant fragment collapse by contained text was removed; relay canonical identity is authoritative.")
-    @Test
-    fun historySnapshotPageCollapsesContainedAssistantTextFragments() {
-        val state = ChatTimelineReducer.reduceAll(
-            ChatTimelineState(),
-            listOf(
-                event(
-                    """
-                    {
-                      "protocolVersion": 2,
-                      "eventId": "history-page",
-                      "eventType": "history.snapshot.page",
-                      "messages": [
-                        {
-                          "turnId": "turn-1",
-                          "messageId": "assistant-fragment",
-                          "role": "assistant",
-                          "createdAt": "1970-01-01T00:03:20.000Z",
-                          "content": [{ "type": "text", "text": "我可以帮你直接动手做事，不只是聊天。" }]
-                        },
-                        {
-                          "turnId": "turn-1",
-                          "messageId": "assistant-full",
-                          "role": "assistant",
-                          "createdAt": "1970-01-01T00:03:20.500Z",
-                          "content": [{ "type": "text", "text": "我可以帮你直接动手做事，不只是聊天。主要能做这些：\n\n1. 操作你的 Mac" }]
-                        }
-                      ]
-                    }
-                    """.trimIndent()
-                )
-            )
-        )
-        assertEquals(listOf("assistant-full"), state.messages.map { it.id })
-        assertEquals("我可以帮你直接动手做事，不只是聊天。主要能做这些：\n\n1. 操作你的 Mac", state.messages.single().content)
-        assertEquals(setOf("assistant-fragment", "assistant-full"), state.historySnapshotMessageIds)
-    }
-
 }

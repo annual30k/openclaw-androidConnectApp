@@ -431,6 +431,8 @@ data class ChatMessage(
     val clientMessageId: String = "",
     val idempotencyKey: String = "",
     val sortTimestamp: Double? = null,
+    val conversationSeq: Long? = null,
+    val conversationSeqState: String = "",
     val seq: Long? = null,
     val turnSeq: Long? = null,
     val timelineStableKey: String = "",

@@ -72,6 +72,7 @@ internal object ChatTimelineReducer {
             clientMessageId = event.clientMessageId.orEmpty().ifBlank { existing?.clientMessageId.orEmpty() },
             idempotencyKey = event.idempotencyKey.orEmpty().ifBlank { existing?.idempotencyKey.orEmpty() },
             sortTimestamp = existing?.sortTimestamp ?: timelineSortTimestamp(event.createdAt),
+            conversationSeq = event.conversationSeq ?: existing?.conversationSeq,
             seq = event.seq,
             turnSeq = event.turnSeq,
             timelineOrderKey = event.timelineOrderKey.orEmpty(),
@@ -145,6 +146,7 @@ internal object ChatTimelineReducer {
                 clientMessageId = event.clientMessageId.orEmpty().ifBlank { matchedMessage?.clientMessageId.orEmpty() },
                 idempotencyKey = event.idempotencyKey.orEmpty().ifBlank { matchedMessage?.idempotencyKey.orEmpty() },
                 sortTimestamp = timelineSortTimestamp(event.createdAt, fallbackSortTimestamp),
+                conversationSeq = event.conversationSeq ?: matchedMessage?.conversationSeq,
                 seq = event.seq,
                 turnSeq = matchedMessage?.turnSeq ?: event.turnSeq,
                 timelineOrderKey = event.timelineOrderKey.orEmpty().ifBlank { matchedMessage?.timelineOrderKey.orEmpty() },
@@ -181,6 +183,11 @@ internal object ChatTimelineReducer {
     private fun ChatTimelineState.applyMessageCompleted(event: TimelineEvent.MessageCompleted): ChatTimelineState {
         val existing = messages.firstOrNull { it.id == event.messageId }
         val eventRole = event.role.toMessageRole(default = existing?.role ?: MessageRole.assistant)
+        // 缓存先恢复 completed 行、同一 messageId 的旧 active completion 后到时，
+        // 后者只能更新消息内容，不能把已结束的 run 再登记为 active。
+        // 否则重连回放会让输入区永久停在“停止”状态。
+        val wasAlreadyCompletedAssistant = existing?.role == MessageRole.assistant &&
+            existing.state == MessageState.completed
         val clearsWaitingAssistant = event.clearsWaitingAssistant()
         val sameRunAssistant = if (clearsWaitingAssistant) {
             matchingAssistantMessageForCompletedEvent(event)
@@ -216,6 +223,7 @@ internal object ChatTimelineReducer {
             clientMessageId = event.clientMessageId.orEmpty().ifBlank { matchedMessage?.clientMessageId.orEmpty() },
             idempotencyKey = event.idempotencyKey.orEmpty().ifBlank { matchedMessage?.idempotencyKey.orEmpty() },
             sortTimestamp = matchedMessage?.sortTimestamp ?: timelineSortTimestamp(event.createdAt),
+            conversationSeq = event.conversationSeq ?: matchedMessage?.conversationSeq,
             seq = event.seq ?: matchedMessage?.seq,
             turnSeq = matchedMessage?.turnSeq ?: event.turnSeq,
             timelineMessageId = event.messageId,
@@ -251,7 +259,7 @@ internal object ChatTimelineReducer {
             upsertedMessages
         }
         val completionEndsRun = event.runState?.trim()?.lowercase() != "active"
-        if (!completionEndsRun) {
+        if (!completionEndsRun && !wasAlreadyCompletedAssistant) {
             val canonicalRunId = event.runId?.takeIf { it.isNotBlank() } ?: completedRunId
             val canonicalTurnId = event.turnId?.takeIf { it.isNotBlank() } ?: completedTurnId ?: canonicalRunId
             return copy(
@@ -390,6 +398,7 @@ internal object ChatTimelineReducer {
             createdAt = event.createdAt.orEmpty().ifBlank { existingMessage?.createdAt.orEmpty() },
             runId = event.runId.orEmpty().ifBlank { existingMessage?.runId.orEmpty() },
             sortTimestamp = resolvedSortTimestamp,
+            conversationSeq = event.conversationSeq ?: existingMessage?.conversationSeq,
             seq = event.seq ?: existingMessage?.seq,
             turnSeq = event.turnSeq ?: existingMessage?.turnSeq,
             timelineOrderKey = event.timelineOrderKey.orEmpty().ifBlank { existingMessage?.timelineOrderKey.orEmpty() },
@@ -506,6 +515,7 @@ internal object ChatTimelineReducer {
                     clientMessageId = item.clientMessageId.orEmpty(),
                     idempotencyKey = item.idempotencyKey.orEmpty(),
                     sortTimestamp = sortTimestamp,
+                    conversationSeq = item.conversationSeq,
                     seq = item.seq,
                     turnSeq = item.turnSeq,
                     timelineMessageId = item.messageId,

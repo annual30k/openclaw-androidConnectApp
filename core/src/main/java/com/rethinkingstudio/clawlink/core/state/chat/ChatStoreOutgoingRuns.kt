@@ -541,7 +541,9 @@ internal fun ChatStore.reconcileTimelineOutbox(messages: List<com.rethinkingstud
         messages.any { message ->
             val isCanonical = !message.timelineOrderKey.startsWith("local:") &&
                 !message.timelineIdentityKey.startsWith("local:")
-            isCanonical && listOf(
+            val isDurable = message.conversationSeqState.equals("committed", ignoreCase = true) ||
+                (message.conversationSeqState.isBlank() && !message.source.equals("local", ignoreCase = true))
+            isCanonical && isDurable && listOf(
                 message.runId,
                 message.timelineIdentityKey,
                 message.timelineStableKey,

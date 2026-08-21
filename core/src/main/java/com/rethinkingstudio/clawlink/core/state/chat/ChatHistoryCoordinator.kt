@@ -18,6 +18,7 @@ internal class ChatHistoryCoordinator(
     private val getTimelineState: () -> ChatTimelineState,
     private val setTimelineState: (ChatTimelineState) -> Unit,
     private val v3Sessions: MutableSet<String>,
+    private val locallyStoppedRunIds: () -> Set<String>,
     private val currentStreamingMessageId: () -> String?,
     private val isTrackedPendingAssistantMessageId: (String) -> Boolean,
     private val clearStreamingPointersIfResolved: (List<ChatMessage>) -> Unit,
@@ -542,7 +543,8 @@ internal class ChatHistoryCoordinator(
             currentSessionKey = currentState.currentSessionKey,
             timelineState = timelineState,
             replaceExistingTimelineState = replaceExistingTimelineState,
-            activeStreamingMessageId = activeStreamingMessageId
+            activeStreamingMessageId = activeStreamingMessageId,
+            locallyStoppedRunIds = locallyStoppedRunIds().toSet()
         )
         val historyMessages = snapshotReduction?.messages ?: buildHistoryMessagesFromItems(response.items)
         val shouldUseAuthoritativeSnapshot = (replaceExistingTimelineState && response.timelineSnapshot != null) ||
@@ -589,10 +591,9 @@ internal class ChatHistoryCoordinator(
         response: ChatHistoryResponse,
         currentMessages: List<ChatMessage>
     ): Boolean {
-        // HTTP chat.history snapshots are authoritative for the requested newest window.
-        // Only the explicitly active streaming turn is overlaid by the snapshot reducer;
-        // completed local cache entries must not survive merely because the server no
-        // longer returns them (for example, filtered OpenClaw heartbeat artifacts).
+        // HTTP chat.history 的 V3 snapshot 对它声明的 cursor range 是权威的。Reducer
+        // 会保留 range 外的 canonical 行，并让本地回显等待同稳定身份的 Relay 行确认；
+        // 不能把不含该回合的旧页误当作整条本地时间线的替换。
         if (response.timelineSnapshot != null) return true
         val shouldMergeCurrentLocalUsers = hasLocalUserMessagesNeedingHistoryMerge(currentMessages)
         return currentStreamingMessageId() == null && !shouldMergeCurrentLocalUsers
@@ -660,7 +661,10 @@ internal class ChatHistoryCoordinator(
     ): Boolean {
         return message.state == MessageState.streaming ||
             activeStreamingMessageId == message.id ||
-            message.id in trackedPendingAssistantMessageIds
+            message.id in trackedPendingAssistantMessageIds ||
+            // completed 仅表示本地已显示 final，不等于 Relay history 已确认。向上翻页
+            // 窗口必须保留 local identity 行，避免把同一回合裁成只剩 user 或只剩 assistant。
+            message.hasUnconfirmedLocalTimelineIdentity()
     }
 
     private fun trackedPendingAssistantMessageIds(messages: List<ChatMessage>): Set<String> {
@@ -680,8 +684,8 @@ internal class ChatHistoryCoordinator(
 
     private fun hasLocalUserMessagesNeedingHistoryMerge(messages: List<ChatMessage>): Boolean {
         return messages.any { message ->
-            message.role == MessageRole.user &&
-                message.runId.startsWith("local-user-")
+            (message.role == MessageRole.user && message.runId.startsWith("local-user-")) ||
+                message.hasUnconfirmedLocalTimelineIdentity()
         }
     }
 

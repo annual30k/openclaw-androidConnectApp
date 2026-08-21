@@ -53,6 +53,14 @@ data class ChatHistoryResponse(
     val timelineSnapshot: JsonElement? = null
 )
 
+@Serializable
+data class ChatSyncResponse(
+    val events: List<JsonElement> = emptyList(),
+    val nextCursor: String? = null,
+    val latestCursor: String? = null,
+    val hasMore: Boolean = false
+)
+
 object ChatHistoryResponseSerializer : KSerializer<ChatHistoryResponse> {
     override val descriptor: SerialDescriptor = JsonElement.serializer().descriptor
     private val itemJson = Json { ignoreUnknownKeys = true }

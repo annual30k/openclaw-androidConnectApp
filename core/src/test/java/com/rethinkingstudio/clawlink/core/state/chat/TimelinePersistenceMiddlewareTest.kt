@@ -41,7 +41,7 @@ class TimelinePersistenceMiddlewareTest {
     }
 
     @Test
-    fun completedCanonicalLocalSourceMessagePersistsAsConfirmed() {
+    fun explicitlyCommittedCanonicalLocalSourceMessagePersistsAsConfirmed() {
         val message = ChatMessage(
             id = "server-user-local-source",
             role = MessageRole.user,
@@ -52,6 +52,7 @@ class TimelinePersistenceMiddlewareTest {
             timelineIdentityKey = "v1|main|message|user|server-user-local-source",
             timelineItemKind = "message:user",
             source = "local",
+            conversationSeqState = "committed",
             localTurnOrder = 3
         )
 
@@ -63,6 +64,32 @@ class TimelinePersistenceMiddlewareTest {
 
         assertEquals(listOf(message), snapshot.confirmedMessages)
         assertTrue(snapshot.pendingMessages.isEmpty())
+    }
+
+    @Test
+    fun provisionalCanonicalLocalSourceMessagePersistsAsPending() {
+        val message = ChatMessage(
+            id = "server-user-provisional-local-source",
+            role = MessageRole.user,
+            content = "must remain visible",
+            runId = "client-run-provisional-local-source",
+            turnId = "client-run-provisional-local-source",
+            timelineOrderKey = "v5|0|00000000000000000001|00000000000000000000|10|server-user-provisional-local-source",
+            timelineIdentityKey = "v1|main|message|user|server-user-provisional-local-source",
+            timelineItemKind = "message:user",
+            source = "local",
+            conversationSeqState = "provisional",
+            localTurnOrder = 3
+        )
+
+        val snapshot = TimelinePersistenceMiddleware.buildSnapshot(
+            scope = scope,
+            state = ChatTimelineState(messages = listOf(message)),
+            savedAtEpochMs = 123L
+        )
+
+        assertTrue(snapshot.confirmedMessages.isEmpty())
+        assertEquals(listOf(message), snapshot.pendingMessages)
     }
 
     @Test

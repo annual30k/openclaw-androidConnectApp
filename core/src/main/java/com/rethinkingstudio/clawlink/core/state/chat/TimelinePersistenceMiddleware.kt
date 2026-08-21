@@ -625,7 +625,12 @@ private fun ChatMessage.hasCanonicalTimelineKeysForSnapshot(): Boolean {
 }
 
 private fun ChatMessage.isPendingTimelineOverlay(): Boolean {
-    return timelineOrderKey.startsWith("local:") ||
+    val hasProvisionalConversationLifecycle = role == com.rethinkingstudio.clawlink.core.models.chat.MessageRole.user && (
+        conversationSeqState.equals("provisional", ignoreCase = true) ||
+            (conversationSeqState.isBlank() && source.equals("local", ignoreCase = true))
+        )
+    return hasProvisionalConversationLifecycle ||
+        timelineOrderKey.startsWith("local:") ||
         timelineIdentityKey.startsWith("local:") ||
         (source.equals("local", ignoreCase = true) && !hasCanonicalTimelineKeysForSnapshot())
 }
