@@ -12,6 +12,7 @@ import com.rethinkingstudio.clawlink.core.models.gateway.GatewayType
 import com.rethinkingstudio.clawlink.core.domain.NotificationPort
 import com.rethinkingstudio.clawlink.core.network.RelayAPIClient
 import com.rethinkingstudio.clawlink.core.network.dto.ChatHistoryResponse
+import com.rethinkingstudio.clawlink.core.network.dto.ChatSyncResponse
 import com.rethinkingstudio.clawlink.core.network.dto.RelayFileTransferItem
 import com.rethinkingstudio.clawlink.core.network.transport.RelayChatSendAttachmentPayload
 import com.rethinkingstudio.clawlink.core.network.transport.RelayWebSocketClient
@@ -50,6 +51,12 @@ internal typealias ChatHistoryPageFetcher = suspend (
     direction: String
 ) -> ChatHistoryResponse
 
+internal typealias ChatTimelineSyncPageFetcher = suspend (
+    gatewayId: String,
+    sessionKey: String,
+    cursor: String?
+) -> ChatSyncResponse
+
 private data class TimelineMutationSignal(
     val generation: Long,
     val revision: Long
@@ -67,6 +74,8 @@ class ChatStore(
     internal val notificationPort: NotificationPort,
     internal val sessionSelectionStore: ChatSessionSelectionStore? = null,
     private val chatHistoryPageFetcher: ChatHistoryPageFetcher? = null,
+    private val chatTimelineSyncPageFetcher: ChatTimelineSyncPageFetcher? = null,
+    private val chatTimelineSyncCursorLoader: ((String, String) -> String?)? = null,
     private val gatewayTypeFor: (String) -> GatewayType = { GatewayType.openclaw }
 ) {
     val relayBaseUrl: String get() = apiClient.baseUrl
@@ -474,16 +483,50 @@ class ChatStore(
         sessionKey: String,
         keepSwitchingOverlay: Boolean
     ) {
-        val savedCursor = sessionSelectionStore?.loadSyncCursor(gatewayId, sessionKey)
-        if (!savedCursor.isNullOrBlank() && replayTimelineSyncChanges(gatewayId, sessionKey, savedCursor)) return
-
-        // An absent/expired cursor cannot establish that a bounded local cache
-        // is canonical. Reuse the existing snapshot reconciler, then establish
-        // a fresh checkpoint for the next reconnect.
-        loadHistory(gatewayId, sessionKey, keepSwitchingOverlay = keepSwitchingOverlay)
-        if (matchesCurrentStoreScope(gatewayId, sessionKey) && _state.value.errorMessage == null) {
-            replayTimelineSyncChanges(gatewayId, sessionKey, null)
+        val savedCursor = chatTimelineSyncCursorLoader?.invoke(gatewayId, sessionKey)
+            ?: sessionSelectionStore?.loadSyncCursor(gatewayId, sessionKey)
+        if (!savedCursor.isNullOrBlank() && replayTimelineSyncChanges(gatewayId, sessionKey, savedCursor)) {
+            // A successful cursor replay is just as terminal as a canonical history load.
+            // Session selection sets this flag before local rehydration, so returning here
+            // without closing it leaves an already-restored conversation permanently covered.
+            if (matchesCurrentStoreScope(gatewayId, sessionKey)) {
+                releaseSessionSwitchOverlay()
+            }
+            return
         }
+
+        // Capture a journal boundary before reading the snapshot. Events written
+        // while history is in flight are replayed from this exact checkpoint.
+        val bootstrapCheckpoint = fetchTimelineSyncCheckpoint(gatewayId, sessionKey)
+        loadHistory(gatewayId, sessionKey, keepSwitchingOverlay = keepSwitchingOverlay)
+        if (bootstrapCheckpoint != null &&
+            matchesCurrentStoreScope(gatewayId, sessionKey) &&
+            _state.value.errorMessage == null
+        ) {
+            replayTimelineSyncChanges(gatewayId, sessionKey, bootstrapCheckpoint)
+        }
+    }
+
+    /**
+     * Reads but does not persist the bootstrap boundary. It becomes durable only after
+     * canonical history succeeds and replay advances from it.
+     */
+    private suspend fun fetchTimelineSyncCheckpoint(gatewayId: String, sessionKey: String): String? {
+        // Keep history-only unit test doubles isolated from the real network client.
+        if (chatTimelineSyncPageFetcher == null && chatHistoryPageFetcher != null) return null
+        val response = try {
+            chatTimelineSyncPageFetcher?.invoke(gatewayId, sessionKey, null)
+                ?: apiClient.fetchChatSync(gatewayId, sessionKey, null)
+        } catch (error: CancellationException) {
+            throw error
+        } catch (_: Exception) {
+            return null
+        }
+        if (!matchesCurrentStoreScope(gatewayId, sessionKey) || response.events.isNotEmpty() || response.hasMore) {
+            return null
+        }
+        return response.latestCursor?.trim()?.takeIf { it.isNotEmpty() }
+            ?: response.nextCursor?.trim()?.takeIf { it.isNotEmpty() }
     }
 
     private suspend fun replayTimelineSyncChanges(
@@ -494,7 +537,8 @@ class ChatStore(
         var cursor = initialCursor?.trim()?.takeIf { it.isNotEmpty() }
         repeat(20) {
             val response = try {
-                apiClient.fetchChatSync(gatewayId, sessionKey, cursor)
+                chatTimelineSyncPageFetcher?.invoke(gatewayId, sessionKey, cursor)
+                    ?: apiClient.fetchChatSync(gatewayId, sessionKey, cursor)
             } catch (error: CancellationException) {
                 throw error
             } catch (_: Exception) {

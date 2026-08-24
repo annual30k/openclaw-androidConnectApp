@@ -212,6 +212,9 @@ data class RelayChatContentBlock(
     @JsonNames("download_path")
     val downloadPath: String? = null,
     @OptIn(ExperimentalSerializationApi::class)
+    @JsonNames("local_path", "tempFilePath", "temp_file_path")
+    val localPath: String? = null,
+    @OptIn(ExperimentalSerializationApi::class)
     @JsonNames("thumbnail_url")
     val thumbnailUrl: String? = null,
     @OptIn(ExperimentalSerializationApi::class)

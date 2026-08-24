@@ -196,20 +196,11 @@ internal fun ChatSessionSwitchLoadingOverlay(modifier: Modifier = Modifier) {
 }
 
 @Composable
-internal fun ThinkingRow() {
-    Column(
-        verticalArrangement = Arrangement.spacedBy(8.dp),
+internal fun ThinkingRow(progressLabel: String) {
+    StreamingIndicatorBubble(
+        progressLabel = progressLabel,
         modifier = Modifier.padding(vertical = 4.dp)
-    ) {
-        StreamingIndicatorBubble()
-        Text(
-            "ClawLink",
-            modifier = Modifier.padding(horizontal = 4.dp),
-            style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
-            color = ChatColors.secondaryText,
-            fontWeight = FontWeight.Medium
-        )
-    }
+    )
 }
 
 @Composable

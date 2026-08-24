@@ -172,6 +172,290 @@ class TimelineReconcilerTest {
     }
 
     @Test
+    fun acknowledgedImageUserAnchorsLocalWaitingThatArrivedAtListHead() {
+        val turnId = "attachment-acknowledged-image"
+        val older = canonicalTimelineMessage(
+            id = "older-user",
+            role = MessageRole.user,
+            turnId = "older-turn",
+            sequence = 4_786,
+            slot = 10,
+            content = "旧消息"
+        )
+        val acknowledgedImageUser = canonicalTimelineMessage(
+            id = "acknowledged-image-user",
+            role = MessageRole.user,
+            turnId = turnId,
+            sequence = 4_787,
+            slot = 10,
+            content = "帮我分析一下这张图",
+            blocks = listOf(
+                RelayChatContentBlock(type = "text", text = "帮我分析一下这张图"),
+                RelayChatContentBlock(
+                    type = "image",
+                    attachmentId = turnId,
+                    fileId = "file-image",
+                    fileName = "waterfall.jpeg",
+                    mimeType = "image/jpeg",
+                    sourceRunId = turnId
+                )
+            )
+        )
+        val waiting = localOutputOverlay(
+            id = "waiting-for-image-answer",
+            turnId = turnId,
+            kind = "waiting",
+            content = "[[clawlink:typing]]"
+        )
+
+        val ordered = sortTimelineMessagesV3(
+            listOf(waiting, acknowledgedImageUser, older),
+            "main"
+        )
+
+        assertEquals(
+            listOf("older-user", "acknowledged-image-user", "waiting-for-image-answer"),
+            ordered.map(ChatMessage::id)
+        )
+    }
+
+    @Test
+    fun acknowledgedImageUserAnchorsLocalStreamingAfterCanonicalToolOutput() {
+        val turnId = "attachment-streaming-image"
+        val older = canonicalTimelineMessage(
+            id = "older-answer",
+            role = MessageRole.assistant,
+            turnId = "older-turn",
+            sequence = 4_786,
+            slot = 50,
+            content = "旧回答"
+        )
+        val acknowledgedImageUser = canonicalTimelineMessage(
+            id = "streaming-image-user",
+            role = MessageRole.user,
+            turnId = turnId,
+            sequence = 4_787,
+            slot = 10,
+            content = "看看图片"
+        )
+        val canonicalTool = canonicalTimelineMessage(
+            id = "image-tool",
+            role = MessageRole.tool,
+            turnId = turnId,
+            sequence = 4_788,
+            slot = 30,
+            content = "图片读取完成",
+            blocks = listOf(RelayChatContentBlock(type = "tool_result", text = "图片读取完成"))
+        )
+        val streaming = localOutputOverlay(
+            id = "local-streaming-image-answer",
+            turnId = turnId,
+            kind = "message:assistant",
+            content = "这张图片里……"
+        )
+
+        val ordered = sortTimelineMessagesV3(
+            listOf(streaming, acknowledgedImageUser, older, canonicalTool),
+            "main"
+        )
+
+        assertEquals(
+            listOf("older-answer", "streaming-image-user", "image-tool", "local-streaming-image-answer"),
+            ordered.map(ChatMessage::id)
+        )
+    }
+
+    @Test
+    fun ambiguousLocalOutputIdentityKeepsItsPhysicalPosition() {
+        val sharedTurnId = "shared-turn"
+        val waiting = localOutputOverlay(
+            id = "ambiguous-waiting",
+            turnId = sharedTurnId,
+            kind = "waiting",
+            content = "[[clawlink:typing]]"
+        )
+        val first = canonicalTimelineMessage(
+            id = "first-shared-user",
+            role = MessageRole.user,
+            turnId = sharedTurnId,
+            sequence = 1,
+            slot = 10,
+            content = "第一条"
+        )
+        val second = canonicalTimelineMessage(
+            id = "second-shared-user",
+            role = MessageRole.user,
+            turnId = sharedTurnId,
+            sequence = 2,
+            slot = 10,
+            content = "第二条"
+        )
+
+        val ordered = sortTimelineMessagesV3(listOf(waiting, second, first), "main")
+
+        assertEquals(
+            listOf("ambiguous-waiting", "first-shared-user", "second-shared-user"),
+            ordered.map(ChatMessage::id)
+        )
+    }
+
+    @Test
+    fun mediaTurnKeepsLocalDisplayIdsAcrossStreamingAndFinalCanonicalSnapshots() {
+        listOf(
+            "image" to "image/jpeg",
+            "voice" to "audio/mp4"
+        ).forEach { (mediaType, mimeType) ->
+            val turnId = "attachment-$mediaType-stable-turn"
+            val localUserId = "local-$mediaType-user"
+            val localAssistantId = "local-$mediaType-assistant"
+            val mediaBlock = RelayChatContentBlock(
+                type = mediaType,
+                attachmentId = "attachment-$mediaType",
+                fileId = "file-$mediaType",
+                fileName = if (mediaType == "image") "photo.jpg" else "recording.m4a",
+                mimeType = mimeType,
+                sourceRunId = turnId
+            )
+            val localUser = ChatMessage(
+                id = localUserId,
+                role = MessageRole.user,
+                state = MessageState.completed,
+                content = "分析这个${if (mediaType == "image") "图片" else "语音"}",
+                contentBlocks = listOf(mediaBlock),
+                runId = "local-user-$turnId",
+                turnId = turnId,
+                clientMessageId = turnId,
+                idempotencyKey = turnId,
+                conversationSeqState = "provisional",
+                timelineOrderKey = "local:$turnId|10|$localUserId",
+                timelineIdentityKey = "local:$turnId:message:user",
+                timelineItemKind = "message:user",
+                source = "local",
+                localTurnOrder = 1
+            )
+            val localWaiting = ChatMessage(
+                id = localAssistantId,
+                role = MessageRole.assistant,
+                state = MessageState.streaming,
+                content = "[[clawlink:typing]]",
+                contentBlocks = listOf(RelayChatContentBlock(type = "text", text = "[[clawlink:typing]]")),
+                runId = turnId,
+                turnId = turnId,
+                clientMessageId = turnId,
+                idempotencyKey = turnId,
+                timelineOrderKey = "local:$turnId|20|$localAssistantId",
+                timelineIdentityKey = "local:$turnId:waiting",
+                timelineItemKind = "waiting",
+                source = "local",
+                localTurnOrder = 1
+            )
+
+            fun snapshot(
+                userMessageId: String,
+                assistantMessageId: String,
+                assistantText: String,
+                assistantState: String,
+                revision: String
+            ) = TimelineSnapshotPage(
+                sessionKey = "main",
+                snapshotRevision = revision,
+                messages = listOf(
+                    TimelineSnapshotMessage(
+                        messageId = userMessageId,
+                        conversationSeq = 100,
+                        seq = 100,
+                        turnId = turnId,
+                        runId = turnId,
+                        clientMessageId = turnId,
+                        idempotencyKey = turnId,
+                        role = "user",
+                        messageState = "completed",
+                        content = listOf(mediaBlock),
+                        source = "history",
+                        timelineOrderKey = "v5|0|00000000000000000100|00000000000000000000|10|$userMessageId",
+                        timelineIdentityKey = "v1|main|message|user|$userMessageId",
+                        timelineItemKind = "message:user"
+                    ),
+                    TimelineSnapshotMessage(
+                        messageId = assistantMessageId,
+                        conversationSeq = if (assistantState == "completed") 102 else 101,
+                        seq = if (assistantState == "completed") 102 else 101,
+                        turnId = turnId,
+                        runId = turnId,
+                        clientMessageId = turnId,
+                        role = "assistant",
+                        messageState = assistantState,
+                        content = listOf(RelayChatContentBlock(type = "text", text = assistantText)),
+                        source = if (assistantState == "completed") "history" else "live",
+                        timelineOrderKey = if (assistantState == "completed") {
+                            "v5|0|00000000000000000102|00000000000000000000|50|$assistantMessageId"
+                        } else {
+                            "v5|0|00000000000000000101|00000000000000000000|50|$assistantMessageId"
+                        },
+                        timelineIdentityKey = "v1|main|message|assistant|$assistantMessageId",
+                        timelineItemKind = "message:assistant",
+                        timelineResolvesWaiting = true
+                    )
+                )
+            )
+
+            val firstStreaming = reconcileTimeline(
+                existing = listOf(localUser, localWaiting),
+                snapshot = snapshot(
+                    userMessageId = "server-$mediaType-user-live",
+                    assistantMessageId = "server-$mediaType-assistant-live",
+                    assistantText = "回复显示到一半",
+                    assistantState = "streaming",
+                    revision = "rev-$mediaType-stream-1"
+                )
+            )
+            assertEquals(emptyList<ChatMessage>(), firstStreaming.pending)
+            assertEquals(
+                listOf(localUserId, localAssistantId),
+                sortTimelineMessagesV3(firstStreaming.messages, "main").map(ChatMessage::id)
+            )
+
+            val continuedStreaming = reconcileTimeline(
+                existing = firstStreaming.messages,
+                snapshot = snapshot(
+                    userMessageId = "server-$mediaType-user-live",
+                    assistantMessageId = "server-$mediaType-assistant-live",
+                    assistantText = "回复显示到一半，继续输出",
+                    assistantState = "streaming",
+                    revision = "rev-$mediaType-stream-2"
+                )
+            )
+            assertEquals(
+                listOf(localUserId, localAssistantId),
+                sortTimelineMessagesV3(continuedStreaming.messages, "main").map(ChatMessage::id)
+            )
+
+            val completed = reconcileTimeline(
+                existing = continuedStreaming.messages,
+                snapshot = snapshot(
+                    userMessageId = "server-$mediaType-user-history",
+                    assistantMessageId = "server-$mediaType-assistant-history",
+                    assistantText = "回复完成",
+                    assistantState = "completed",
+                    revision = "rev-$mediaType-completed"
+                )
+            )
+            assertEquals(
+                listOf(localUserId, localAssistantId),
+                sortTimelineMessagesV3(completed.messages, "main").map(ChatMessage::id)
+            )
+            assertEquals(
+                "server-$mediaType-user-history",
+                completed.messages.first { it.role == MessageRole.user }.timelineMessageId
+            )
+            assertEquals(
+                "server-$mediaType-assistant-history",
+                completed.messages.first { it.role == MessageRole.assistant }.timelineMessageId
+            )
+        }
+    }
+
+    @Test
     fun unconfirmedLocalUserOverlayStaysAtTailBeforeItsMatchingOutput() {
         fun canonical(id: String, role: MessageRole, sequence: Long, slot: Int, content: String) = ChatMessage(
             id = id,
@@ -235,6 +519,53 @@ class TimelineReconcilerTest {
             ordered.map(ChatMessage::id)
         )
     }
+
+    private fun canonicalTimelineMessage(
+        id: String,
+        role: MessageRole,
+        turnId: String,
+        sequence: Long,
+        slot: Int,
+        content: String,
+        blocks: List<RelayChatContentBlock> = listOf(RelayChatContentBlock(type = "text", text = content))
+    ) = ChatMessage(
+        id = id,
+        role = role,
+        state = MessageState.completed,
+        content = content,
+        contentBlocks = blocks,
+        runId = turnId,
+        turnId = turnId,
+        clientMessageId = turnId.takeIf { role == MessageRole.user }.orEmpty(),
+        idempotencyKey = turnId.takeIf { role == MessageRole.user }.orEmpty(),
+        conversationSeq = sequence,
+        seq = sequence,
+        conversationSeqState = "committed",
+        timelineOrderKey = "v5|0|${sequence.toString().padStart(20, '0')}|00000000000000000000|${slot.toString().padStart(2, '0')}|$id",
+        timelineIdentityKey = "v1|main|message|${role.name}|$id",
+        timelineItemKind = if (role == MessageRole.tool) "tool" else "message:${role.name}",
+        source = "history"
+    )
+
+    private fun localOutputOverlay(
+        id: String,
+        turnId: String,
+        kind: String,
+        content: String
+    ) = ChatMessage(
+        id = id,
+        role = MessageRole.assistant,
+        state = MessageState.streaming,
+        content = content,
+        contentBlocks = listOf(RelayChatContentBlock(type = "text", text = content)),
+        runId = turnId,
+        turnId = turnId,
+        clientMessageId = turnId,
+        timelineOrderKey = "local:$turnId|20|$id",
+        timelineIdentityKey = "local:waiting:$turnId",
+        timelineItemKind = kind,
+        source = "local"
+    )
 
     @Test
     fun mixedV4V5OrderKeysFormATransitiveTotalOrderWithoutChangingVersionSemantics() {

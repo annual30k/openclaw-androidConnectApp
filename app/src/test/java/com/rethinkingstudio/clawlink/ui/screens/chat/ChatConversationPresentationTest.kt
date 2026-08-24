@@ -11,6 +11,47 @@ import org.junit.Test
 
 class ChatConversationPresentationTest {
     @Test
+    fun streamingProgressLabelsUseOnlyActiveToolsAndKeepRunIdentity() {
+        val weatherTool = ChatMessage(
+            id = "tool-weather",
+            role = MessageRole.tool,
+            state = MessageState.streaming,
+            runId = "run-weather",
+            contentBlocks = listOf(RelayChatContentBlock(type = "tool_call", name = "exec", text = "curl wttr.in"))
+        )
+        val completedSearchTool = ChatMessage(
+            id = "tool-search-completed",
+            role = MessageRole.tool,
+            state = MessageState.completed,
+            runId = "run-search",
+            contentBlocks = listOf(RelayChatContentBlock(type = "tool_call", name = "search"))
+        )
+        val labels = activeToolProgressLabels(listOf(weatherTool, completedSearchTool))
+
+        assertEquals("正在查询天气…", labels["run-weather"])
+        assertEquals("正在查询天气…", streamingWaitProgressLabel(listOf(weatherTool, completedSearchTool)))
+        assertEquals("正在查询天气…", streamingAssistantProgressLabel(
+            ChatMessage(id = "assistant", role = MessageRole.assistant, state = MessageState.streaming, runId = "run-weather"),
+            labels
+        ))
+        assertEquals("正在思考…", streamingAssistantProgressLabel(
+            ChatMessage(id = "other-assistant", role = MessageRole.assistant, state = MessageState.streaming, runId = "run-other"),
+            labels
+        ))
+        assertEquals("正在调用工具…", streamingWaitProgressLabel(listOf(
+            ChatMessage(id = "tool-generic", role = MessageRole.tool, state = MessageState.streaming, runId = "run-generic")
+        )))
+        assertEquals(emptyMap<String, String>(), activeToolProgressLabels(
+            messages = listOf(weatherTool),
+            showInvocationProcess = true
+        ))
+        assertEquals("正在思考…", streamingWaitProgressLabel(
+            messages = listOf(weatherTool),
+            showInvocationProcess = true
+        ))
+    }
+
+    @Test
     fun completedToolResultHidesItsSeparateHistoryCallCard() {
         val call = ChatMessage(
             id = "tool-call-row",
@@ -677,6 +718,81 @@ class ChatConversationPresentationTest {
         assertEquals(listOf("file-file-basketball"), displayMessages.map { it.id })
         assertEquals(prompt, displayMessages.single().content)
         assertEquals(listOf("file-basketball"), displayMessages.single().fileContentBlocks.map { it.fileId })
+    }
+
+    @Test
+    fun displayMessagesPreservesLocalVoicePlaybackWhenCanonicalAttachmentWins() {
+        val runId = "android-voice-playback-turn"
+        val fileName = "$runId.m4a"
+        val localVoice = ChatMessage(
+            id = "user-$runId",
+            role = MessageRole.user,
+            state = MessageState.completed,
+            content = fileName,
+            contentBlocks = listOf(
+                RelayChatContentBlock(
+                    type = "voice",
+                    fileId = "voice:$runId",
+                    fileName = fileName,
+                    mimeType = "audio/mp4",
+                    downloadUrl = "file:///data/user/0/clawlink/cache/$fileName",
+                    localPath = "file:///data/user/0/clawlink/cache/$fileName",
+                    durationMs = 3_020,
+                    sourceRunId = runId
+                )
+            ),
+            runId = "local-user-$runId",
+            turnId = runId,
+            source = "local"
+        )
+        val canonicalAttachment = ChatMessage(
+            id = "canonical-voice-attachment",
+            role = MessageRole.user,
+            state = MessageState.completed,
+            content = fileName,
+            contentBlocks = listOf(
+                RelayChatContentBlock(
+                    type = "audio",
+                    attachmentId = "att-voice-server",
+                    fileId = "file-voice-server",
+                    fileName = fileName,
+                    mimeType = "audio/mp4",
+                    downloadUrl = "/api/mobile/files/file-voice-server",
+                    sourceRunId = "$runId:user"
+                )
+            ),
+            runId = "$runId:user",
+            turnId = "$runId:user",
+            timelineOrderKey = "v1|00000000000000000031|40|000000|file-voice-server",
+            timelineIdentityKey = "v1|main|attachment|user|file-voice-server",
+            timelineItemKind = "attachment"
+        )
+        val transcript = ChatMessage(
+            id = "canonical-voice-transcript",
+            role = MessageRole.user,
+            state = MessageState.completed,
+            content = "这是语音转写",
+            contentBlocks = listOf(
+                RelayChatContentBlock(type = "text", contentBlockId = "voice-transcript", text = "这是语音转写")
+            ),
+            runId = "$runId:user",
+            turnId = "$runId:user",
+            timelineOrderKey = "v1|00000000000000000031|10|000000|voice-transcript",
+            timelineIdentityKey = "v1|main|message|user|voice-transcript",
+            timelineItemKind = "message:user"
+        )
+
+        val visible = conversationDisplayMessages(
+            messages = listOf(localVoice, canonicalAttachment, transcript),
+            showInvocationProcess = true
+        )
+
+        assertEquals(1, visible.size)
+        val voice = visible.single().voiceContentBlocks.single()
+        assertEquals("file-voice-server", voice.fileId)
+        assertEquals("/api/mobile/files/file-voice-server", voice.downloadUrl)
+        assertEquals("file:///data/user/0/clawlink/cache/$fileName", voice.localPath)
+        assertEquals(3_020, voice.durationMs)
     }
 
     @Test

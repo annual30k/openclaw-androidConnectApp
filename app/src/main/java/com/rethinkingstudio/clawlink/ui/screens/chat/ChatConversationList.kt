@@ -77,6 +77,7 @@ internal fun ChatConversationList(
     gatewayId: String?,
     hasSelectedGateway: Boolean,
     canAutoLoadOlderHistory: Boolean,
+    hasLocalSendBottomLock: Boolean,
     onOpenUsageGuide: (() -> Unit)?,
     onOpenSettings: (() -> Unit)?,
     onLoadOlderHistory: () -> Unit,
@@ -122,6 +123,18 @@ internal fun ChatConversationList(
     val displayItems = remember(displayMessages, conversationAnimationKey) {
         conversationMessageListItems(displayMessages, conversationAnimationKey)
     }
+    val activeToolProgressLabels = remember(chatState.messages, chatState.showInvocationProcess) {
+        activeToolProgressLabels(
+            messages = chatState.messages,
+            showInvocationProcess = chatState.showInvocationProcess
+        )
+    }
+    val streamingWaitProgressLabel = remember(chatState.messages, chatState.showInvocationProcess) {
+        streamingWaitProgressLabel(
+            messages = chatState.messages,
+            showInvocationProcess = chatState.showInvocationProcess
+        )
+    }
     val shouldLoadOlder by remember(
         chatState.historyWindow,
         chatState.isLoading,
@@ -129,12 +142,14 @@ internal fun ChatConversationList(
         chatState.currentSessionKey,
         hasSelectedGateway,
         canAutoLoadOlderHistory,
+        hasLocalSendBottomLock,
         gatewayId,
         listState
     ) {
         derivedStateOf {
             hasSelectedGateway &&
                 canAutoLoadOlderHistory &&
+                !hasLocalSendBottomLock &&
                 !gatewayId.isNullOrBlank() &&
                 chatState.currentSessionKey.isNotBlank() &&
                 chatState.historyWindow.hasOlder &&
@@ -172,6 +187,7 @@ LazyColumn(
         ) {
             MessageBubble(
                 message = message,
+                streamingProgressLabel = streamingAssistantProgressLabel(message, activeToolProgressLabels),
                 showInvocationProcess = chatState.showInvocationProcess,
                 relayBaseUrl = chatStore.relayBaseUrl,
                 accessToken = chatStore.accessToken,
@@ -257,7 +273,7 @@ LazyColumn(
     }
 
     if (hasSelectedGateway && chatState.isStreaming && !hasStreamingAssistantMessage) {
-        item { ThinkingRow() }
+        item { ThinkingRow(progressLabel = streamingWaitProgressLabel) }
     }
 
     item(key = "$conversationAnimationKey:chat-bottom") {

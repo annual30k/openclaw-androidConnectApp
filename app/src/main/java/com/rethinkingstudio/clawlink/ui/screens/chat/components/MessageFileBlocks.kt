@@ -100,8 +100,7 @@ internal fun StandaloneFileMessage(blocks: List<RelayChatContentBlock>, isUser: 
             createdAt = createdAt,
             isUser = false,
             deliveryState = deliveryState,
-            modifier = Modifier.padding(horizontal = 4.dp),
-            fillsAvailableWidth = true
+            modifier = Modifier.padding(horizontal = 4.dp)
         )
     }
 }

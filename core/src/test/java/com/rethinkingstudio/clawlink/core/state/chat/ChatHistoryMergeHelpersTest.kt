@@ -9,6 +9,7 @@ import com.rethinkingstudio.clawlink.core.domain.NotificationPort
 import com.rethinkingstudio.clawlink.core.network.RelayAPIClient
 import com.rethinkingstudio.clawlink.core.network.dto.ChatHistoryResponse
 import com.rethinkingstudio.clawlink.core.network.dto.ChatHistoryItem
+import com.rethinkingstudio.clawlink.core.network.dto.ChatSyncResponse
 import com.rethinkingstudio.clawlink.core.network.transport.RelayWebSocketClient
 import java.time.Instant
 import kotlinx.coroutines.CompletableDeferred
@@ -30,6 +31,144 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class ChatHistoryMergeHelpersTest {
+    @Test
+    fun successfulCursorReplayReleasesSessionSwitchOverlayWithoutHistoryFallback() = runBlocking {
+        val operations = mutableListOf<String>()
+        val wsClient = RelayWebSocketClient()
+        try {
+            val store = ChatStore(
+                apiClient = RelayAPIClient(),
+                wsClient = wsClient,
+                notificationPort = object : NotificationPort {
+                    override fun showReplyNotification(sessionKey: String, title: String, body: String) = Unit
+                    override fun cancelNotification(id: Int) = Unit
+                    override fun cancelAll() = Unit
+                },
+                chatHistoryPageFetcher = { _, _, _, _, _ ->
+                    operations += "history"
+                    ChatHistoryResponse(items = emptyList())
+                },
+                chatTimelineSyncPageFetcher = { _, _, cursor ->
+                    operations += "sync:$cursor"
+                    ChatSyncResponse(
+                        nextCursor = cursor,
+                        latestCursor = cursor,
+                        hasMore = false
+                    )
+                },
+                chatTimelineSyncCursorLoader = { _, _ -> "ts1.current" }
+            )
+            store.setStateForTest(
+                ChatState(
+                    currentGatewayId = "gw_1",
+                    currentSessionKey = "session-b",
+                    isSwitchingSession = true
+                )
+            )
+
+            store.reconcileTimelineAfterLocalRestore("gw_1", "session-b")
+            withTimeout(3_000) {
+                while (store.state.value.isSwitchingSession) yield()
+            }
+
+            assertEquals(listOf("sync:ts1.current"), operations)
+            assertFalse(store.state.value.isSwitchingSession)
+        } finally {
+            wsClient.destroy()
+        }
+    }
+
+    @Test
+    fun reconnectBootstrapReplacesExpiredCursorBeforeHistoryAndReplaysConcurrentEvent() = runBlocking {
+        val operations = mutableListOf<String>()
+        val wsClient = RelayWebSocketClient()
+        try {
+            val store = ChatStore(
+                apiClient = RelayAPIClient(),
+                wsClient = wsClient,
+                notificationPort = object : NotificationPort {
+                    override fun showReplyNotification(sessionKey: String, title: String, body: String) = Unit
+                    override fun cancelNotification(id: Int) = Unit
+                    override fun cancelAll() = Unit
+                },
+                chatHistoryPageFetcher = { _, _, _, _, _ ->
+                    operations += "history"
+                    ChatHistoryResponse(
+                        items = emptyList(),
+                        timelineSnapshot = Json.parseToJsonElement(
+                            """
+                            {
+                              "timelineProtocolVersion": 4,
+                              "sessionKey": "main",
+                              "snapshotRevision": "checkpoint-first",
+                              "messages": [{
+                                "messageId": "assistant-history",
+                                "conversationSeq": 1,
+                                "role": "assistant",
+                                "messageState": "completed",
+                                "timelineOrderKey": "v4|0|00000000000000000001|50|assistant-history",
+                                "timelineIdentityKey": "v1|main|message|assistant|assistant-history",
+                                "timelineItemKind": "message:assistant",
+                                "content": [{"type":"text","text":"from history"}]
+                              }]
+                            }
+                            """.trimIndent()
+                        )
+                    )
+                },
+                chatTimelineSyncPageFetcher = { _, _, cursor ->
+                    operations += "sync:${cursor ?: "nil"}"
+                    if (cursor == "ts1.expired") {
+                        throw IllegalStateException("cursor_expired")
+                    } else if (cursor == null) {
+                        ChatSyncResponse(
+                            nextCursor = "ts1.checkpoint",
+                            latestCursor = "ts1.checkpoint"
+                        )
+                    } else {
+                        ChatSyncResponse(
+                            events = listOf(Json.parseToJsonElement(
+                                """
+                                {
+                                  "protocolVersion": 2,
+                                  "eventId": "evt-android-concurrent",
+                                  "eventType": "message.completed",
+                                  "gatewayId": "gw_1",
+                                  "sessionKey": "main",
+                                  "conversationSeq": 2,
+                                  "turnId": "turn-android-concurrent",
+                                  "runId": "run-android-concurrent",
+                                  "messageId": "assistant-concurrent",
+                                  "role": "assistant",
+                                  "messageState": "completed",
+                                  "timelineOrderKey": "v4|0|00000000000000000002|50|assistant-concurrent",
+                                  "timelineIdentityKey": "v1|main|message|assistant|assistant-concurrent",
+                                  "timelineItemKind": "message:assistant",
+                                  "content": [{"type":"text","text":"arrived during history"}]
+                                }
+                                """.trimIndent()
+                            )),
+                            nextCursor = "ts1.after",
+                            latestCursor = "ts1.after"
+                        )
+                    }
+                },
+                chatTimelineSyncCursorLoader = { _, _ -> "ts1.expired" }
+            )
+            store.setStateForTest(ChatState(currentGatewayId = "gw_1", currentSessionKey = "main"))
+
+            store.reconcileTimelineAfterLocalRestore("gw_1", "main")
+            withTimeout(3_000) {
+                while (store.state.value.messages.size < 2) yield()
+            }
+
+            assertEquals(listOf("sync:ts1.expired", "sync:nil", "history", "sync:ts1.checkpoint"), operations)
+            assertEquals(listOf("from history", "arrived during history"), store.state.value.messages.map { it.content })
+        } finally {
+            wsClient.destroy()
+        }
+    }
+
     @Test
     fun canonicalAssistantTextWithTrailingToolCallKeepsAssistantRole() {
         val messages = buildHistoryMessagesFromItems(

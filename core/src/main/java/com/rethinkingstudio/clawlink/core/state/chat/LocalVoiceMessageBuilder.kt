@@ -24,6 +24,7 @@ internal fun buildLocalVoiceUserMessage(
         mimeType = audio.mimeType,
         sizeBytes = audio.sizeBytes.coerceAtMost(Int.MAX_VALUE.toLong()).toInt(),
         downloadUrl = localFileUrl,
+        localPath = localFileUrl,
         sourceRunId = clientRunId,
         gatewayId = gatewayId,
         sessionKey = sessionKey

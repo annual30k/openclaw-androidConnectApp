@@ -116,8 +116,7 @@ internal fun StandaloneVoiceMessage(
             title = if (isUser) "You" else "ClawLink",
             createdAt = createdAt,
             isUser = false,
-            modifier = Modifier.padding(horizontal = 4.dp),
-            fillsAvailableWidth = true
+            modifier = Modifier.padding(horizontal = 4.dp)
         )
     }
 }
@@ -326,16 +325,23 @@ internal fun voiceBubbleWidth(durationMs: Int?): Dp {
 
 private suspend fun resolveVoicePlayableFile(block: RelayChatContentBlock, relayBaseUrl: String, accessToken: String): File {
     return withContext(Dispatchers.IO) {
-        val raw = block.voiceDownloadURLString?.trim().orEmpty()
-        if (raw.startsWith("file://", ignoreCase = true)) {
-            val file = File(raw.removePrefix("file://"))
-            if (file.exists()) return@withContext file
+        val references = listOf(block.localPath, block.downloadUrl, block.downloadPath)
+            .mapNotNull { it?.trim()?.takeIf(String::isNotEmpty) }
+        references.forEach { reference ->
+            if (reference.startsWith("file://", ignoreCase = true)) {
+                val file = File(reference.removePrefix("file://"))
+                if (file.exists()) return@withContext file
+            } else if (!reference.contains("://") && !reference.startsWith("/api/")) {
+                val file = File(reference)
+                if (file.exists()) return@withContext file
+            }
         }
-        if (raw.isNotBlank()) {
-            val local = File(raw)
-            if (local.exists()) return@withContext local
+        val remoteReference = references.firstOrNull { reference ->
+            !reference.startsWith("file:", ignoreCase = true) &&
+                !reference.startsWith("content:", ignoreCase = true) &&
+                !reference.startsWith("/data/", ignoreCase = true)
         }
-        val resolvedUrl = raw.takeIf { it.isNotBlank() }?.let { resolveFileUrl(it, relayBaseUrl) }
+        val resolvedUrl = remoteReference?.let { resolveFileUrl(it, relayBaseUrl) }
             ?: throw IllegalStateException(choose("Missing voice download URL", "缺少语音下载地址"))
         val cacheKey = block.chatAttachmentCacheKey() ?: block.voicePlaybackIdentifier
         RemoteAttachmentCache.cachedFile(cacheKey)?.let { return@withContext it }

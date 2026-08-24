@@ -92,6 +92,58 @@ internal fun conversationStreamingTailSignature(messages: List<ChatMessage>): St
     ).joinToString(separator = "\u001E")
 }
 
+internal fun activeToolProgressLabels(
+    messages: List<ChatMessage>,
+    showInvocationProcess: Boolean = false
+): Map<String, String> {
+    if (showInvocationProcess) return emptyMap()
+    return messages.asSequence()
+        .filter { message -> message.role == MessageRole.tool && message.state == MessageState.streaming }
+        .mapNotNull { message ->
+            message.runId.trim().takeIf { it.isNotEmpty() }?.let { runId ->
+                runId to toolProgressLabel(message)
+            }
+        }
+        .toMap()
+}
+
+internal fun streamingAssistantProgressLabel(
+    message: ChatMessage,
+    activeToolLabels: Map<String, String>
+): String? {
+    if (message.role != MessageRole.assistant || message.state != MessageState.streaming) return null
+    return activeToolLabels[message.runId.trim()] ?: "正在思考…"
+}
+
+internal fun streamingWaitProgressLabel(
+    messages: List<ChatMessage>,
+    showInvocationProcess: Boolean = false
+): String {
+    if (showInvocationProcess) return "正在思考…"
+    return messages.lastOrNull { message ->
+        message.role == MessageRole.tool && message.state == MessageState.streaming
+    }?.let(::toolProgressLabel) ?: "正在思考…"
+}
+
+private fun toolProgressLabel(message: ChatMessage): String {
+    val detail = buildList {
+        add(message.plainTextContent)
+        add(message.toolDisplayName.orEmpty())
+        message.contentBlocks.forEach { block ->
+            add(block.text.orEmpty())
+            add(block.name.orEmpty())
+            add(block.toolName.orEmpty())
+        }
+    }.joinToString(separator = "\n").lowercase()
+    return when {
+        detail.contains("wttr.in") -> "正在查询天气…"
+        detail.contains("search") -> "正在搜索资料…"
+        detail.contains("browser") -> "正在获取网页信息…"
+        detail.contains("exec") || detail.contains("bash") || detail.contains("process") -> "正在执行操作…"
+        else -> "正在调用工具…"
+    }
+}
+
 internal fun shouldCoalesceChatDisplayUpdate(
     current: ChatState,
     incoming: ChatState
@@ -724,20 +776,29 @@ private fun richerAttachmentBlock(
     existing: RelayChatContentBlock,
     incoming: RelayChatContentBlock
 ): RelayChatContentBlock {
+    var preferred = existing
+    var fallback = incoming
     val incomingHasStableId = incoming.stableTransferId.isNotEmpty()
     val existingHasStableId = existing.stableTransferId.isNotEmpty()
-    if (incomingHasStableId && !existingHasStableId) return incoming
+    if (incomingHasStableId && !existingHasStableId) {
+        preferred = incoming
+        fallback = existing
+    }
 
     val incomingUrl = normalizedAttachmentText(incoming.downloadUrl ?: incoming.downloadPath)
     val existingUrl = normalizedAttachmentText(existing.downloadUrl ?: existing.downloadPath)
-    if (incomingUrl.startsWith("/api/") && !existingUrl.startsWith("/api/")) return incoming
+    if (incomingUrl.startsWith("/api/") && !existingUrl.startsWith("/api/")) {
+        preferred = incoming
+        fallback = existing
+    }
 
-    return existing
+    return preferred.preservingLocalVoicePlayback(fallback)
 }
 
 private fun RelayChatContentBlock.matchesCompletedAttachmentBlock(
     completedBlock: RelayChatContentBlock
 ): Boolean {
+    if (sharesSourceBoundVoiceIdentity(completedBlock)) return true
     val localId = stableTransferId
     val completedId = completedBlock.stableTransferId
     if (localId.isNotEmpty() && completedId.isNotEmpty()) {
@@ -755,6 +816,40 @@ private fun RelayChatContentBlock.matchesCompletedAttachmentBlock(
         localMimeType == completedMimeType ||
         localMimeType == "application/octet-stream" ||
         completedMimeType == "application/octet-stream"
+}
+
+private fun RelayChatContentBlock.sharesSourceBoundVoiceIdentity(other: RelayChatContentBlock): Boolean {
+    if (!isVoiceMessageBlock || !other.isVoiceMessageBlock) return false
+    val leftSource = normalizedDisplayTurnIdentity(sourceRunId)
+    val rightSource = normalizedDisplayTurnIdentity(other.sourceRunId)
+    return leftSource.isNotEmpty() && leftSource == rightSource
+}
+
+private fun RelayChatContentBlock.preservingLocalVoicePlayback(
+    fallback: RelayChatContentBlock
+): RelayChatContentBlock {
+    if (!sharesSourceBoundVoiceIdentity(fallback)) return this
+    val localReference = listOf(
+        localPath,
+        downloadUrl,
+        downloadPath,
+        fallback.localPath,
+        fallback.downloadUrl,
+        fallback.downloadPath
+    ).map(::normalizedAttachmentReference)
+        .firstOrNull(::isAndroidLocalVoiceReference)
+        ?: return this
+    return copy(
+        localPath = localReference,
+        durationMs = durationMs ?: fallback.durationMs,
+        sourceRunId = sourceRunId ?: fallback.sourceRunId
+    )
+}
+
+private fun isAndroidLocalVoiceReference(value: String): Boolean {
+    return value.startsWith("file:", ignoreCase = true) ||
+        value.startsWith("content:", ignoreCase = true) ||
+        value.startsWith("/data/", ignoreCase = true)
 }
 
 private val RelayChatContentBlock.isTransferContentBlock: Boolean

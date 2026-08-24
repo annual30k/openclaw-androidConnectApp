@@ -16,6 +16,14 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class MessageBubblePresentationTest {
+
+    @Test
+    fun `message bubble geometry matches iOS chat rhythm`() {
+        assertEquals(22.dp, messageBubbleCornerRadius)
+        assertEquals(8.dp, messageBubbleFooterSpacing)
+        assertEquals(16.dp, messageFooterMinimumItemGap)
+    }
+
     @Test
     fun markdownBlockCacheIsContentExactAndCannotCrossMessageText() {
         AndroidMarkdownBlockCache.clearForTesting()

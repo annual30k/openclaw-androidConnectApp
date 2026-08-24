@@ -490,11 +490,22 @@ private fun reconcileCanonicalTimeline(
             .filter(CanonicalTimelineEntry::isUnconfirmedLocalProjection)
             .filter { pending -> pendingResolvedByCanonical(pending, incoming) }
             .singleOrNull()
-        if (matchingLocalPending == null) incoming else incoming.copy(
+        val previouslyAdoptedDisplay = if (matchingLocalPending == null) {
+            (existingConfirmedEntries + pendingEntries)
+                .filter { existing -> existing.displayId != existing.messageId }
+                .filter { existing -> previouslyAdoptedDisplayMatches(existing, incoming) }
+                .singleOrNull()
+        } else {
+            null
+        }
+        val displaySource = matchingLocalPending ?: previouslyAdoptedDisplay
+        if (displaySource == null) incoming else incoming.copy(
             // Relay messageId 仍保留在 messageId/timelineMessageId；只复用 UI display id，
             // 使本地 completed 回答在权威行到达时原地升级，不产生删除再插入的闪烁。
-            displayId = matchingLocalPending.displayId,
-            localTurnOrder = matchingLocalPending.localTurnOrder ?: incoming.localTurnOrder
+            // 首次接管后，后续 delta/history snapshot 也必须沿用这个 display id；否则
+            // Compose 会在长回复中途把同一行当成删除 + 新增，导致视口跳到列表顶部。
+            displayId = displaySource.displayId,
+            localTurnOrder = displaySource.localTurnOrder ?: incoming.localTurnOrder
         )
     }
     val incomingIdentities = incomingCanonicalWithLocalDisplayId.mapTo(mutableSetOf()) { it.timelineIdentityKey }
@@ -565,6 +576,39 @@ private fun reconcileCanonicalTimeline(
         messages = byIdentity.values.sortedWith(::compareEntries).map { it.toChatMessage() },
         pending = remainingPending.sortedWith(::compareEntries).map { it.toChatMessage() }
     )
+}
+
+private fun previouslyAdoptedDisplayMatches(
+    existing: CanonicalTimelineEntry,
+    incoming: CanonicalTimelineEntry
+): Boolean {
+    if (existing.role != incoming.role) return false
+    if (existing.timelineIdentityKey.isNotBlank() && existing.timelineIdentityKey == incoming.timelineIdentityKey) {
+        return true
+    }
+    if (existing.messageId.isNotBlank() && existing.messageId == incoming.messageId) return true
+
+    val existingIdentities = turnIdentitySet(existing)
+    val incomingIdentities = turnIdentitySet(incoming)
+    if (existingIdentities.isEmpty() || incomingIdentities.isEmpty() ||
+        existingIdentities.intersect(incomingIdentities).isEmpty()
+    ) {
+        return false
+    }
+    if (existing.role != MessageRole.user) return true
+
+    // 当前版本的本地 user 都携带 clientMessageId/idempotencyKey。canonical user
+    // 必须显式回传其中一个才能继承本地展示 ID；只共享 provider run/turn 不足以确认。
+    val localAcknowledgementIds = listOf(existing.clientMessageId, existing.idempotencyKey)
+        .map(::normalizedTurnIdentityValue)
+        .filter(String::isNotEmpty)
+        .toSet()
+    if (localAcknowledgementIds.isEmpty()) return true
+    val incomingAcknowledgementIds = listOf(incoming.clientMessageId, incoming.idempotencyKey)
+        .map(::normalizedTurnIdentityValue)
+        .filter(String::isNotEmpty)
+        .toSet()
+    return localAcknowledgementIds.intersect(incomingAcknowledgementIds).isNotEmpty()
 }
 
 private fun CanonicalTimelineEntry.isUnconfirmedLocalProjection(): Boolean {
@@ -771,7 +815,7 @@ private fun projectUnconfirmedLocalTurns(
     entries: List<CanonicalTimelineEntry>
 ): List<CanonicalTimelineEntry> {
     val localUsers = entries.filter(::isActiveLocalOverlayUser)
-    if (localUsers.isEmpty()) return entries
+    if (localUsers.isEmpty()) return anchorLocalOutputsAfterConfirmedUsers(entries)
 
     val identitiesByUser = localUsers.associateWith { turnIdentitySet(it).toMutableSet() }
     val userForOutput = mutableMapOf<CanonicalTimelineEntry, CanonicalTimelineEntry>()
@@ -831,7 +875,60 @@ private fun projectUnconfirmedLocalTurns(
 
     val projectedEntries = projected.toSet()
     val base = entries.filter { it !in projectedEntries }
-    return base + projected
+    return anchorLocalOutputsAfterConfirmedUsers(base + projected)
+}
+
+private fun anchorLocalOutputsAfterConfirmedUsers(
+    entries: List<CanonicalTimelineEntry>
+): List<CanonicalTimelineEntry> {
+    val confirmedUsers = entries.filter { entry ->
+        entry.role == MessageRole.user && relayTimelineOrderKey(entry) != null
+    }
+    if (confirmedUsers.isEmpty()) return entries
+
+    val identitiesByUser = confirmedUsers.associateWith(::turnIdentitySet)
+    val outputsByAnchor = mutableMapOf<CanonicalTimelineEntry, MutableList<CanonicalTimelineEntry>>()
+    entries.filter(::isLocalOutputOverlay).forEach { output ->
+        val outputIdentities = turnIdentitySet(output)
+        if (outputIdentities.isEmpty()) return@forEach
+        val matchingUser = confirmedUsers.singleOrNull { user ->
+            identitiesByUser.getValue(user).any(outputIdentities::contains)
+        } ?: return@forEach
+        val userIdentities = identitiesByUser.getValue(matchingUser)
+        val anchor = entries.lastOrNull { candidate ->
+            candidate == matchingUser || (
+                candidate.role in setOf(MessageRole.assistant, MessageRole.tool) &&
+                    !isLocalOutputOverlay(candidate) &&
+                    turnIdentitySet(candidate).any(userIdentities::contains)
+                )
+        } ?: matchingUser
+        outputsByAnchor.getOrPut(anchor, ::mutableListOf).add(output)
+    }
+    if (outputsByAnchor.isEmpty()) return entries
+
+    val physicalIndex = entries.withIndex().associate { (index, entry) -> entry to index }
+    val movedOutputs = outputsByAnchor.values.flatten().toSet()
+    return buildList {
+        entries.forEach { entry ->
+            if (entry in movedOutputs) return@forEach
+            add(entry)
+            outputsByAnchor[entry]
+                ?.sortedWith(
+                    compareBy<CanonicalTimelineEntry>(::localTurnProjectionPhase)
+                        .thenBy { output -> physicalIndex.getValue(output) }
+                )
+                ?.let(::addAll)
+        }
+    }
+}
+
+private fun isLocalOutputOverlay(entry: CanonicalTimelineEntry): Boolean {
+    if (entry.role !in setOf(MessageRole.assistant, MessageRole.tool)) return false
+    if (relayTimelineOrderKey(entry) != null) return false
+    if (entry.timelineItemKind.equals("waiting", ignoreCase = true)) return true
+    if (entry.state != MessageState.streaming) return false
+    val rawOrderKey = entry.timelineOrderKey.trim()
+    return rawOrderKey.isEmpty() || rawOrderKey.startsWith("local:")
 }
 
 private data class LocalTurnProjection(

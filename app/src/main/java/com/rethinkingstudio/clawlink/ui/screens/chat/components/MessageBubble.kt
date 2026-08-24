@@ -88,11 +88,14 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-internal val messageFooterMinimumItemGap = 20.dp
+internal val messageFooterMinimumItemGap = 16.dp
+internal val messageBubbleCornerRadius = 22.dp
+internal val messageBubbleFooterSpacing = 8.dp
 
 @Composable
 internal fun MessageBubble(
     message: ChatMessage,
+    streamingProgressLabel: String? = null,
     showInvocationProcess: Boolean,
     relayBaseUrl: String,
     accessToken: String,
@@ -176,7 +179,7 @@ internal fun MessageBubble(
         if (shouldShowStreamingWaitState(message.role, message.state) &&
             shouldUseStandaloneStreamingIndicator(displayText, fileBlocks.isNotEmpty(), voiceBlocks.isNotEmpty())
         ) {
-            StreamingIndicatorBubble()
+            StreamingIndicatorBubble(progressLabel = streamingProgressLabel.orEmpty())
             return@Column
         }
         BoxWithConstraints(modifier = Modifier.fillMaxWidth(), contentAlignment = if (isUser) Alignment.CenterEnd else Alignment.CenterStart) {
@@ -237,7 +240,7 @@ internal fun MessageBubble(
             } else 0.dp
             Surface(
                 color = if (isUser) ChatColors.userBubble else MaterialTheme.colorScheme.surface.copy(alpha = 0.96f),
-                shape = RoundedCornerShape(28.dp),
+                shape = RoundedCornerShape(messageBubbleCornerRadius),
                 border = androidx.compose.foundation.BorderStroke(1.dp, if (isUser) Color.White.copy(alpha = 0.08f) else MaterialTheme.colorScheme.outline.copy(alpha = 0.12f)),
                 tonalElevation = 0.dp, shadowElevation = 0.dp,
                 modifier = if (useExpandedMixedMediaBubble) {
@@ -246,12 +249,47 @@ internal fun MessageBubble(
                     Modifier.width(IntrinsicSize.Max).widthIn(max = 326.dp)
                 }
             ) {
-                Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 13.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    if (orderedMixedBlocks.isNotEmpty()) {
-                        orderedMixedBlocks.forEachIndexed { index, block ->
-                            key(block.contentBlockId ?: block.stableAttachmentId ?: "legacy-mixed-content-block-$index") {
-                                when {
-                                    block.isVoiceMessageBlock -> VoiceBlock(
+                Column(
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 13.dp),
+                    verticalArrangement = Arrangement.spacedBy(messageBubbleFooterSpacing)
+                ) {
+                    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        if (orderedMixedBlocks.isNotEmpty()) {
+                            orderedMixedBlocks.forEachIndexed { index, block ->
+                                key(block.contentBlockId ?: block.stableAttachmentId ?: "legacy-mixed-content-block-$index") {
+                                    when {
+                                        block.isVoiceMessageBlock -> VoiceBlock(
+                                            block,
+                                            isUser,
+                                            relayBaseUrl = relayBaseUrl,
+                                            accessToken = accessToken,
+                                            readVoicePlaybackIdentifiers = readVoicePlaybackIdentifiers,
+                                            onVoicePlaybackStart = onVoicePlaybackStart,
+                                            gatewayId = gatewayId,
+                                            sessionKey = sessionKey
+                                        )
+                                        block.isFileBlock -> FileBlock(
+                                            block,
+                                            isUser,
+                                            message.state,
+                                            relayBaseUrl = relayBaseUrl,
+                                            accessToken = accessToken,
+                                            imageMaxWidth = if (useExpandedMixedMediaBubble) embeddedImageMaxWidth else 290.dp,
+                                            onImageClick = onImageClick,
+                                            onFileClick = onFileClick
+                                        )
+                                        block.isTextBlock -> MixedContentMarkdownText(
+                                            text = block.text.orEmpty(),
+                                            isUser = isUser,
+                                            isStreaming = message.state == MessageState.streaming
+                                        )
+                                    }
+                                }
+                            }
+                        } else {
+                            voiceBlocks.forEachIndexed { index, block ->
+                                key(block.contentBlockId ?: block.stableAttachmentId ?: "legacy-voice-block-$index") {
+                                    VoiceBlock(
                                         block,
                                         isUser,
                                         relayBaseUrl = relayBaseUrl,
@@ -261,7 +299,11 @@ internal fun MessageBubble(
                                         gatewayId = gatewayId,
                                         sessionKey = sessionKey
                                     )
-                                    block.isFileBlock -> FileBlock(
+                                }
+                            }
+                            fileBlocks.forEachIndexed { index, block ->
+                                key(block.contentBlockId ?: block.stableAttachmentId ?: "legacy-file-block-$index") {
+                                    FileBlock(
                                         block,
                                         isUser,
                                         message.state,
@@ -271,53 +313,19 @@ internal fun MessageBubble(
                                         onImageClick = onImageClick,
                                         onFileClick = onFileClick
                                     )
-                                    block.isTextBlock -> MixedContentMarkdownText(
-                                        text = block.text.orEmpty(),
-                                        isUser = isUser,
-                                        isStreaming = message.state == MessageState.streaming
-                                    )
                                 }
                             }
-                        }
-                    } else {
-                        voiceBlocks.forEachIndexed { index, block ->
-                            key(block.contentBlockId ?: block.stableAttachmentId ?: "legacy-voice-block-$index") {
-                                VoiceBlock(
-                                    block,
-                                    isUser,
-                                    relayBaseUrl = relayBaseUrl,
-                                    accessToken = accessToken,
-                                    readVoicePlaybackIdentifiers = readVoicePlaybackIdentifiers,
-                                    onVoicePlaybackStart = onVoicePlaybackStart,
-                                    gatewayId = gatewayId,
-                                    sessionKey = sessionKey
+                            if (displayText.isNotEmpty()) {
+                                MixedContentMarkdownText(
+                                    text = displayText,
+                                    isUser = isUser,
+                                    isStreaming = message.state == MessageState.streaming
                                 )
                             }
                         }
-                        fileBlocks.forEachIndexed { index, block ->
-                            key(block.contentBlockId ?: block.stableAttachmentId ?: "legacy-file-block-$index") {
-                                FileBlock(
-                                    block,
-                                    isUser,
-                                    message.state,
-                                    relayBaseUrl = relayBaseUrl,
-                                    accessToken = accessToken,
-                                    imageMaxWidth = if (useExpandedMixedMediaBubble) embeddedImageMaxWidth else 290.dp,
-                                    onImageClick = onImageClick,
-                                    onFileClick = onFileClick
-                                )
-                            }
+                        if (shouldShowInlineStreamingIndicator(message.role, message.state, displayText, fileBlocks.isNotEmpty(), voiceBlocks.isNotEmpty())) {
+                            InlineStreamingIndicator()
                         }
-                        if (displayText.isNotEmpty()) {
-                            MixedContentMarkdownText(
-                                text = displayText,
-                                isUser = isUser,
-                                isStreaming = message.state == MessageState.streaming
-                            )
-                        }
-                    }
-                    if (shouldShowInlineStreamingIndicator(message.role, message.state, displayText, fileBlocks.isNotEmpty(), voiceBlocks.isNotEmpty())) {
-                        InlineStreamingIndicator()
                     }
                     if (shouldShowMessageFooter(message.role, message.state, displayText, fileBlocks.isNotEmpty(), voiceBlocks.isNotEmpty(), isTool)) {
                         MessageFooter(
@@ -477,12 +485,11 @@ internal fun MessageFooter(
     createdAt: String,
     isUser: Boolean,
     modifier: Modifier = Modifier,
-    fillsAvailableWidth: Boolean = false,
     deliveryState: String = ""
 ) {
-    // 气泡本身先按正文/媒体/最小 footer 宽度收缩；footer 再在该宽度内两端对齐。
+    // Footer 的固有宽度是气泡的动态最小宽度；正文更宽时填满气泡并把时间推到右下角，与 iOS 一致。
     Row(
-        modifier = if (fillsAvailableWidth) modifier.fillMaxWidth() else modifier,
+        modifier = modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.Start
     ) {
@@ -494,9 +501,7 @@ internal fun MessageFooter(
             fontWeight = FontWeight.Medium
         )
         Spacer(Modifier.width(messageFooterMinimumItemGap))
-        if (fillsAvailableWidth) {
-            Spacer(Modifier.weight(1f))
-        }
+        Spacer(Modifier.weight(1f))
         Text(formatChatTimestamp(createdAt), style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp), color = footerColor, fontWeight = FontWeight.Medium)
     }
 }

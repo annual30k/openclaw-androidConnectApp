@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -14,9 +15,11 @@ import androidx.compose.ui.draw.scale
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.lerp
+import androidx.compose.ui.unit.sp
 import com.rethinkingstudio.clawlink.ui.screens.chat.ChatColors
 
 internal object StreamingIndicatorMotion {
@@ -38,9 +41,11 @@ internal object StreamingIndicatorMotion {
 
 @Composable
 fun StreamingIndicatorBubble(
+    progressLabel: String = "正在思考…",
     modifier: Modifier = Modifier
 ) {
-    Row(
+    val statusLabel = progressLabel.trim().ifEmpty { "正在思考…" }
+    Box(
         modifier = modifier
             .shadow(
                 elevation = 4.dp,
@@ -52,44 +57,16 @@ fun StreamingIndicatorBubble(
                 color = MaterialTheme.colorScheme.surface.copy(alpha = 0.96f),
                 shape = RoundedCornerShape(22.dp)
             )
-            .padding(horizontal = 20.dp, vertical = 14.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-        verticalAlignment = Alignment.CenterVertically
+            .padding(horizontal = 18.dp, vertical = 12.dp),
+        contentAlignment = Alignment.CenterStart
     ) {
-        val infiniteTransition = rememberInfiniteTransition(label = "dots")
-        
-        repeat(3) { index ->
-            val animationProgress by infiniteTransition.animateFloat(
-                initialValue = 0f,
-                targetValue = 1f,
-                animationSpec = infiniteRepeatable(
-                    animation = tween(durationMillis = StreamingIndicatorMotion.durationMillis, easing = LinearEasing),
-                    repeatMode = RepeatMode.Reverse,
-                    initialStartOffset = StartOffset(index * StreamingIndicatorMotion.staggerMillis)
-                ),
-                label = "dot-$index"
-            )
-
-            Box(
-                modifier = Modifier
-                    .size(11.dp)
-                    // 三个点必须有实际纵向位移；仅缩放和透明度变化会看起来像静止。
-                    .offset(y = StreamingIndicatorMotion.verticalOffset(animationProgress))
-                    .testTag("streaming_indicator_dot_$index")
-                    .scale(
-                        StreamingIndicatorMotion.initialScale +
-                            ((StreamingIndicatorMotion.targetScale - StreamingIndicatorMotion.initialScale) * animationProgress)
-                    )
-                    .alpha(
-                        StreamingIndicatorMotion.initialAlpha +
-                            ((StreamingIndicatorMotion.targetAlpha - StreamingIndicatorMotion.initialAlpha) * animationProgress)
-                    )
-                    .background(
-                        color = ChatColors.secondaryText.copy(alpha = 0.72f),
-                        shape = CircleShape
-                    )
-            )
-        }
+        Text(
+            text = statusLabel,
+            style = MaterialTheme.typography.labelLarge.copy(fontSize = 12.sp),
+            fontWeight = FontWeight.Medium,
+            color = ChatColors.secondaryText,
+            maxLines = 1
+        )
     }
 }
 

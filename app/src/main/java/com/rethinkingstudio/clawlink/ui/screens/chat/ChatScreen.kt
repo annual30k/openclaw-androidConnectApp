@@ -6,6 +6,7 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
+import androidx.compose.foundation.interaction.DragInteraction
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.WindowInsets
@@ -29,6 +30,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.blur
@@ -71,6 +73,7 @@ import com.rethinkingstudio.clawlink.ui.screens.chat.components.SlashCommandPane
 import com.rethinkingstudio.clawlink.ui.screens.chat.components.VoiceInputOverlay
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.yield
 
@@ -147,6 +150,9 @@ fun ChatScreen(
     var lastObservedUserMessageIds by remember { mutableStateOf<Set<String>>(emptySet()) }
     var hasCompletedInitialAutoScroll by remember { mutableStateOf(false) }
     var hasPendingMessagesBelow by remember { mutableStateOf(false) }
+    var hasLockedBottomForLocalSend by remember { mutableStateOf(false) }
+    var localSendBottomPinRequest by remember { mutableStateOf(0L) }
+    var localSendBottomPinScopeKey by remember { mutableStateOf<String?>(null) }
     var activeGatewaySwitchId by remember { mutableStateOf<String?>(null) }
     val autoHistoryRequestGate = remember { GatewayHistoryRequestGate() }
     val visibleMessagesForScroll = remember(
@@ -192,6 +198,10 @@ fun ChatScreen(
     }
 
     suspend fun scrollChatToBottom(animated: Boolean = true) {
+        // Message state is published before LazyColumn completes the matching measure pass.
+        // Reading totalItemsCount immediately can target the previous last index, which becomes
+        // the newly inserted message and aligns it to the top of the viewport.
+        withFrameNanos { }
         val totalItems = listState.layoutInfo.totalItemsCount
         if (totalItems <= 0) return
         if (animated) {
@@ -200,6 +210,42 @@ fun ChatScreen(
             listState.scrollToItem(totalItems - 1)
         }
         hasPendingMessagesBelow = false
+    }
+
+    LaunchedEffect(localSendBottomPinRequest, gatewayId, chatState.currentSessionKey) {
+        if (localSendBottomPinRequest == 0L) return@LaunchedEffect
+        val requestScopeKey = localSendBottomPinScopeKey
+        val currentScopeKey = "${gatewayId.orEmpty()}::${chatState.currentSessionKey}"
+        if (requestScopeKey != currentScopeKey) {
+            hasLockedBottomForLocalSend = false
+            return@LaunchedEffect
+        }
+        hasLockedBottomForLocalSend = true
+        try {
+            // Match iOS's finite post-layout pin. Image decoding and the first assistant
+            // placeholder can resize the tail across several frames, but an open-ended pin
+            // would fight deliberate user scrolling during a long response.
+            scrollChatToBottom(animated = false)
+            delay(120)
+            if (!hasLockedBottomForLocalSend) return@LaunchedEffect
+            scrollChatToBottom(animated = false)
+            delay(300)
+            if (!hasLockedBottomForLocalSend) return@LaunchedEffect
+            scrollChatToBottom(animated = false)
+        } finally {
+            if (localSendBottomPinScopeKey == requestScopeKey) {
+                hasLockedBottomForLocalSend = false
+            }
+        }
+    }
+
+    LaunchedEffect(listState) {
+        listState.interactionSource.interactions.collect { interaction ->
+            if (interaction is DragInteraction.Start) {
+                // A real drag immediately transfers scroll ownership back to the user.
+                hasLockedBottomForLocalSend = false
+            }
+        }
     }
 
     fun requestBottomScrollForComposerFocus() {
@@ -393,7 +439,11 @@ fun ChatScreen(
             return@LaunchedEffect
         }
 
-        if (isInitialLoad || isOwnNewMessage || isNearListBottom) {
+        if (isOwnNewMessage) {
+            hasLockedBottomForLocalSend = true
+            localSendBottomPinScopeKey = "${gatewayId.orEmpty()}::${chatState.currentSessionKey}"
+            localSendBottomPinRequest += 1L
+        } else if (isInitialLoad || isNearListBottom) {
             scrollChatToBottom(animated = !isInitialLoad)
             if (isInitialLoad) {
                 hasCompletedInitialAutoScroll = true
@@ -476,6 +526,7 @@ fun ChatScreen(
                         gatewayId = gatewayId,
                         hasSelectedGateway = hasSelectedGateway,
                         canAutoLoadOlderHistory = hasCompletedInitialAutoScroll,
+                        hasLocalSendBottomLock = hasLockedBottomForLocalSend,
                         onOpenUsageGuide = onOpenUsageGuide,
                         onOpenSettings = onOpenSettings,
                         onLoadOlderHistory = {

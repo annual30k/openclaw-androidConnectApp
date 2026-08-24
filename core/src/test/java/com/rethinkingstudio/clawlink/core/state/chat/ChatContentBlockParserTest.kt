@@ -61,4 +61,30 @@ class ChatContentBlockParserTest {
 
         assertEquals("att_source_run_sha", block.attachmentId)
     }
+
+    @Test
+    fun parsesDurableLocalPathFromVoiceContentBlocks() {
+        val payload = json.parseToJsonElement(
+            """
+            {
+              "message": {
+                "role": "user",
+                "content": [
+                  {
+                    "type": "voice",
+                    "fileId": "file_voice",
+                    "downloadUrl": "/api/mobile/files/file_voice",
+                    "local_path": "file:///data/user/0/clawlink/cache/voice.m4a"
+                  }
+                ]
+              }
+            }
+            """.trimIndent()
+        ) as JsonObject
+
+        val block = parseContentBlocks(payload).single()
+
+        assertEquals("file:///data/user/0/clawlink/cache/voice.m4a", block.localPath)
+        assertEquals("/api/mobile/files/file_voice", block.downloadUrl)
+    }
 }
