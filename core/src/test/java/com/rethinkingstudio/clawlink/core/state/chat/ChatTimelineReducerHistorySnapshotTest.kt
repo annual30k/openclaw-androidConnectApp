@@ -432,15 +432,15 @@ class ChatTimelineReducerHistorySnapshotTest {
         val ordered = sortTimelineMessagesV3(reduction.messages, "mobile-hermes")
 
         assertEquals(
-            listOf("local-new", "server-new-answer", "local-ping", "server-ping-answer"),
+            listOf("local-ping", "server-ping-answer", "local-new", "server-new-answer"),
             ordered.map(ChatMessage::id)
         )
         assertEquals(
-            listOf("server-new-user", "server-new-answer", "server-ping-user", "server-ping-answer"),
+            listOf("server-ping-user", "server-ping-answer", "server-new-user", "server-new-answer"),
             ordered.map(ChatMessage::timelineMessageId)
         )
         assertEquals(
-            listOf(0L, 1L),
+            listOf(1L, 0L),
             ordered.filter { it.role == MessageRole.user }.mapNotNull(ChatMessage::localTurnOrder)
         )
         assertTrue(reduction.messages.none { it.timelineOrderKey.startsWith("local:") })

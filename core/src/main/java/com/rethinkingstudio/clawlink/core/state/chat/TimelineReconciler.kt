@@ -612,6 +612,14 @@ private fun previouslyAdoptedDisplayMatches(
 }
 
 private fun CanonicalTimelineEntry.isUnconfirmedLocalProjection(): Boolean {
+    // A Relay row can keep the original local display ID/run ID to avoid Compose
+    // churn, but its canonical order key means it is already confirmed. It must
+    // never be moved again as a pending local turn.
+    if (relayTimelineOrderKey(this) != null &&
+        !(source.equals("local", ignoreCase = true) && state in setOf(MessageState.pending, MessageState.streaming))
+    ) {
+        return false
+    }
     val hasProvisionalConversationLifecycle = role == MessageRole.user && (
         conversationSeqState.equals("provisional", ignoreCase = true) ||
             (conversationSeqState.isBlank() && source.equals("local", ignoreCase = true))
@@ -739,6 +747,13 @@ private fun CanonicalTimelineEntry.isAssistantAnswerTimelineItem(): Boolean {
 
 internal fun sortTimelineMessagesV3(messages: List<ChatMessage>, sessionKey: String = "main"): List<ChatMessage> {
     val inputEntries = messages.mapIndexedNotNull { index, message -> message.toEntry(sessionKey, index) }
+    // Before the Relay assigns canonical keys, the explicitly supplied event
+    // sort timestamp is the only ordering source. Preserve input order only
+    // when that authoritative metadata is absent or tied.
+    if (inputEntries.none { relayTimelineOrderKey(it) != null }) {
+        return projectUnconfirmedLocalTurns(inputEntries.sortedWith(::compareUnconfirmedRealtimeEntries))
+            .map { it.toChatMessage() }
+    }
     val canonicalEntries = inputEntries
         .filter { relayTimelineOrderKey(it) != null }
         .sortedWith(::compareEntries)
@@ -749,6 +764,21 @@ internal fun sortTimelineMessagesV3(messages: List<ChatMessage>, sessionKey: Str
     // Relay canonical key 是已确认消息的唯一顺序来源。只有真正未确认的本地 user
     // 及其唯一身份命中的输出可以作为尾部 overlay；确认消息禁止二次按 turn 重排。
     return projectUnconfirmedLocalTurns(orderCanonicalTurns(canonicalSlotted)).map { it.toChatMessage() }
+}
+
+private fun compareUnconfirmedRealtimeEntries(
+    left: CanonicalTimelineEntry,
+    right: CanonicalTimelineEntry
+): Int {
+    val leftTimestamp = left.sortTimestamp
+    val rightTimestamp = right.sortTimestamp
+    if (leftTimestamp != null && rightTimestamp != null) {
+        val timestampCompare = leftTimestamp.compareTo(rightTimestamp)
+        if (timestampCompare != 0) return timestampCompare
+    }
+    val inputCompare = left.originalIndex.compareTo(right.originalIndex)
+    if (inputCompare != 0) return inputCompare
+    return left.stableKey.compareTo(right.stableKey)
 }
 
 private fun orderCanonicalTurns(entries: List<CanonicalTimelineEntry>): List<CanonicalTimelineEntry> {
@@ -838,6 +868,7 @@ private fun projectUnconfirmedLocalTurns(
             }
         }
     } while (identitiesExpanded)
+    val usersWithOutputs = userForOutput.values.toSet()
     // Older persisted rows did not have localTurnOrder. If any such row is present,
     // keep the physical user order instead of mixing incomparable order domains.
     val orderedUsers = if (localUsers.all { it.localTurnOrder != null }) {
@@ -854,8 +885,10 @@ private fun projectUnconfirmedLocalTurns(
             entry in identitiesByUser -> entry
             else -> userForOutput[entry]
         } ?: return@mapIndexedNotNull null
+        if (user !in usersWithOutputs) return@mapIndexedNotNull null
         LocalTurnProjection(
             entry = entry,
+            user = user,
             physicalIndex = physicalIndex,
             userOrder = userOrder.getValue(user),
             phase = localTurnProjectionPhase(entry)
@@ -871,11 +904,27 @@ private fun projectUnconfirmedLocalTurns(
             return@sortedWith compareCanonicalTimelineOrderKeys(leftOrder, rightOrder)
         }
         left.physicalIndex.compareTo(right.physicalIndex)
-    }.map(LocalTurnProjection::entry)
+    }
 
-    val projectedEntries = projected.toSet()
-    val base = entries.filter { it !in projectedEntries }
-    return anchorLocalOutputsAfterConfirmedUsers(base + projected)
+    if (entries.any { relayTimelineOrderKey(it) != null }) {
+        val projectedEntries = projected.map(LocalTurnProjection::entry).toSet()
+        return anchorLocalOutputsAfterConfirmedUsers(entries.filter { it !in projectedEntries } + projected.map(LocalTurnProjection::entry))
+    }
+
+    val projectionsByEntry = projected.associateBy(LocalTurnProjection::entry)
+    val projectionsByUser = projected.groupBy(LocalTurnProjection::user)
+    val emittedUsers = mutableSetOf<CanonicalTimelineEntry>()
+    val grouped = buildList {
+        entries.forEach { entry ->
+            val projection = projectionsByEntry[entry]
+            if (projection == null) {
+                add(entry)
+            } else if (emittedUsers.add(projection.user)) {
+                addAll(projectionsByUser.getValue(projection.user).map(LocalTurnProjection::entry))
+            }
+        }
+    }
+    return anchorLocalOutputsAfterConfirmedUsers(grouped)
 }
 
 private fun anchorLocalOutputsAfterConfirmedUsers(
@@ -933,6 +982,7 @@ private fun isLocalOutputOverlay(entry: CanonicalTimelineEntry): Boolean {
 
 private data class LocalTurnProjection(
     val entry: CanonicalTimelineEntry,
+    val user: CanonicalTimelineEntry,
     val physicalIndex: Int,
     val userOrder: Int,
     val phase: Int

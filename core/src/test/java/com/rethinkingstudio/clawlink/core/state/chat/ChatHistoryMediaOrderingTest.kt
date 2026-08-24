@@ -167,10 +167,10 @@ class ChatHistoryMediaOrderingTest {
             clientMessageId = turnID,
             idempotencyKey = turnID,
             sortTimestamp = 200.0,
-            conversationSeq = 54L,
+            conversationSeq = 9_001L,
             conversationSeqState = "committed",
             timelineMessageId = "acknowledged-user",
-            timelineOrderKey = "v5|0|00000000000000004787|00000000000000000000|10|acknowledged-user",
+            timelineOrderKey = "v5|0|00000000000000009001|00000000000000000000|10|acknowledged-user",
             timelineIdentityKey = "message:user:acknowledged-user",
             timelineItemKind = "message:user",
             source = "history"
@@ -184,7 +184,7 @@ class ChatHistoryMediaOrderingTest {
             turnId = turnID,
             clientMessageId = turnID,
             sortTimestamp = 201.0,
-            timelineOrderKey = "v5|0|00000000000000004788|00000000000000000000|50|streaming-assistant",
+            timelineOrderKey = "v5|0|00000000000000009002|00000000000000000000|50|streaming-assistant",
             timelineIdentityKey = "message:assistant:streaming-assistant",
             timelineItemKind = "message:assistant",
             source = "local"
